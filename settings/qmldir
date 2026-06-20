@@ -1,0 +1,3 @@
+module settings
+plugin quickshell
+typeinfo settings.qmldir
