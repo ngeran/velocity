@@ -1,0 +1,9 @@
+# hyprlock color tokens — sourced by ~/.config/hypr/hyprlock.conf
+$accentColor = rgb(00dce5)
+$textColor = rgb(e0e0e0)
+$surfaceColor = rgb(000000)
+$successColor = rgb(34d399)
+$errorColor = rgb(f87171)
+$warningColor = rgb(fbbf24)
+$secondaryTextColor = rgb(e0e0e0)
+$tertiaryTextColor = rgb(e0e0e0)

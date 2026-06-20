@@ -1,0 +1,15 @@
+# qmldir for components module
+
+module components
+ArchLogo 1.0 ArchLogo.qml
+ClockWidget 1.0 ClockWidget.qml
+WorkspaceWidget 1.0 WorkspaceWidget.qml
+WorkspaceButton 1.0 WorkspaceButton.qml
+NetworkIcon 1.0 NetworkIcon.qml
+BluetoothIcon 1.0 BluetoothIcon.qml
+VolumeIcon 1.0 VolumeIcon.qml
+BatteryIcon 1.0 BatteryIcon.qml
+SettingsIcon 1.0 SettingsIcon.qml
+PowerIcon 1.0 PowerIcon.qml
+PowerMenu 1.0 PowerMenu.qml
+PowerMenuItem 1.0 PowerMenuItem.qml

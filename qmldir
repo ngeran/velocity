@@ -1,0 +1,2 @@
+# qmldir for top-level QuickShell components
+LockScreen 1.0 LockScreen.qml

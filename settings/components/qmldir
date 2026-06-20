@@ -1,0 +1,21 @@
+SettingsWindow 1.0 SettingsWindow.qml
+PowerMenu 1.0 PowerMenu.qml
+PowerTile 1.0 PowerTile.qml
+ModernDashboard 1.0 ModernDashboard.qml
+Sidebar 1.0 Sidebar.qml
+SidebarItem 1.0 SidebarItem.qml
+ThemeModule 1.0 ThemeModule.qml
+ThemePresetCard 1.0 ThemePresetCard.qml
+GlassCard 1.0 GlassCard.qml
+BentoCard 1.0 BentoCard.qml
+PulseDot 1.0 PulseDot.qml
+NetworkRing 1.0 NetworkRing.qml
+singleton Colors 1.0 Colors.qml
+IdentityWidget 1.0 IdentityWidget.qml
+NetworkWidget 1.0 NetworkWidget.qml
+WeatherWidget 1.0 WeatherWidget.qml
+TopNavBar 1.0 TopNavBar.qml
+FooterBar 1.0 FooterBar.qml
+ClockWidget 1.0 ClockWidget.qml
+ResourcesWidget 1.0 ResourcesWidget.qml
+CalendarWidget 1.0 CalendarWidget.qml

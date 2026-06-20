@@ -1,0 +1,5 @@
+# qmldir for config module
+
+module config
+singleton BarConfig 1.0 BarConfig.qml
+singleton ThemeConfig 1.0 ThemeConfig.qml
