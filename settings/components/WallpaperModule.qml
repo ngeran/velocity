@@ -192,6 +192,33 @@ Item {
         scanner.running = true
     }
 
+    // =========================================================================
+    // FILE WATCHER — Auto-refresh when wallpapers are added
+    // =========================================================================
+
+    Process {
+        id: fileWatcher
+
+        command: ["sh", "-c", "inotifywait -m -e create,delete,modify,move " + root.wallpaperDir + " 2>/dev/null || echo"]
+
+        stdout: SplitParser {
+            onRead: function(data) {
+                // Debounce rapid file system events
+                refreshTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: refreshTimer
+        interval: 1000  // 1 second debounce
+        onTriggered: refreshWallpapers()
+    }
+
+    // =========================================================================
+    // WALLPAPER SCANNER
+    // =========================================================================
+
     Process {
         id: scanner
 
@@ -677,14 +704,14 @@ Item {
                 anchors.fill: parent
                 visible: root.wallpaperList.length > 0
 
-                cellWidth: 100
-                cellHeight: 72
+                cellWidth: 200
+                cellHeight: 144
                 clip: true
                 model: root.wallpaperList.length
 
                 delegate: Item {
-                    width: 96
-                    height: 68
+                    width: 192
+                    height: 136
 
                     property bool isCurrent: root.currentWallpaper === root.wallpaperList[index]
 

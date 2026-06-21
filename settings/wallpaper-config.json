@@ -1,7 +1,7 @@
 {
   "cycleInterval": 300,
-  "cyclingEnabled": false,
-  "transitionType": "fade",
+  "cyclingEnabled": true,
+  "transitionType": "wave",
   "wallpaperDir": "/home/nikos/Pictures/Wallpapers/",
-  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/earth.png"
+  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/knight.jpeg"
 }

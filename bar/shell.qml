@@ -76,22 +76,22 @@ ShellRoot {
 
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 1
             }
 
             Components.BluetoothIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 1
             }
 
             Components.VolumeIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 1
             }
 
             Components.BatteryIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 1
             }
 
             Item {

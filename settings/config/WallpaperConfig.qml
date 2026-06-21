@@ -107,10 +107,10 @@ QtObject {
     readonly property int gridColumns: 4
 
     /// Thumbnail cell width
-    readonly property int cellWidth: 96
+    readonly property int cellWidth: 192
 
     /// Thumbnail cell height
-    readonly property int cellHeight: 68
+    readonly property int cellHeight: 136
 
     /// Grid spacing
     readonly property int gridSpacing: 8
