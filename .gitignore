@@ -1,0 +1,50 @@
+# AI and Claude related files
+*.md
+!README.md
+!bar/README.md
+.plans/
+
+# Git hooks (local development)
+.git/hooks/*.sample
+.git/hooks/pre-commit
+
+# Quickshell runtime files
+*.qslog
+qslog/
+
+# System configuration validation (not needed for repo)
+validate-system-config.sh
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Build artifacts (if any)
+*.o
+*.so
+
+# Environment files
+*.env
+.env.*
+!.env.example
+
+# Local configuration overrides
+*.local
+
+# Generated files
+node_modules/
+__pycache__/
+*.pyc
+
+# OS specific
+Thumbs.db
+.DS_Store

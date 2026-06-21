@@ -189,9 +189,26 @@ Rectangle {
         }
     }
 
-    Process {
-        id: toggleProc
-        command: ["quickshell", "ipc", "-c", "settings", "call", "powerMenu", "toggle"]
+    // ── Power menu toggle (direct shell access) ───────────────────────────
+    property bool menuVisible: false
+
+    // Walk up the parent chain to the ShellRoot and toggle its power menu.
+    // (Direct call is reliable; the old IPC Process call failed because the
+    //  bar runs under a full-path config with no "default" target.)
+    function togglePowerMenu() {
+        var node = icon.parent
+        var depth = 0
+        while (node) {
+            depth++
+            console.log("[PowerIcon] Depth", depth, "node:", node.constructor.name, "togglePowerMenu?", typeof node.togglePowerMenu === "function")
+            if (typeof node.togglePowerMenu === "function") {
+                console.log("[PowerIcon] Found togglePowerMenu at depth", depth)
+                node.togglePowerMenu()
+                return
+            }
+            node = node.parent
+        }
+        console.log("[PowerIcon] Could not find ShellRoot! Searched", depth, "levels")
     }
 
     // ── Power icon glyph ──────────────────────────────────────────────────
@@ -205,12 +222,25 @@ Rectangle {
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
+    Component.onCompleted: {
+        console.log("[PowerIcon] Component loaded - width:", width, "height:", height, "x:", x, "y:", y)
+        console.log("[PowerIcon] Expected size:", Config.BarConfig.iconSize)
+    }
+
     MouseArea {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: toggleProc.running = true
+        acceptedButtons: Qt.LeftButton
+        onClicked: {
+            console.log("[PowerIcon] CLICK REGISTERED!")
+            console.log("[PowerIcon] Toggling power menu...")
+            icon.togglePowerMenu()
+        }
+        onPressAndHold: {
+            console.log("[PowerIcon] PRESS AND HOLD!")
+        }
     }
 
     // ── Drop-up panel ─────────────────────────────────────────────────────

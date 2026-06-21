@@ -1,7 +1,7 @@
 {
   "cycleInterval": 300,
-  "cyclingEnabled": true,
+  "cyclingEnabled": false,
   "transitionType": "fade",
   "wallpaperDir": "/home/nikos/Pictures/Wallpapers/",
-  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/bike.png"
+  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/earth.png"
 }

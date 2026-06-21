@@ -57,8 +57,10 @@ QtObject {
     function updateTheme(name, author, isOLED, primary, secondary, text) { }
 
     function updateWallpaper(path) {
+        console.log("[SharedState] updateWallpaper called with path:", path)
         stateEngine.wallpaperPath = path !== undefined ? path : ""
         stateEngine.wallpaperName = basename(stateEngine.wallpaperPath)
+        console.log("[SharedState] wallpaperPath set to:", stateEngine.wallpaperPath)
     }
 
     function updateResources(cpu, mem, gpu, disk) {

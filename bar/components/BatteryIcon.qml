@@ -1,5 +1,5 @@
 // =============================================================================
-// BatteryIcon.qml — Battery status indicator with popup
+// BatteryIcon.qml — Battery status indicator with shell-level hover popup
 // =============================================================================
 //
 // Displays battery charge level and charging status using Nerd Font icons.
@@ -10,7 +10,7 @@
 // Changes color based on charge level
 //
 // INTERACTION
-//   Click to show battery info popup
+//   Hover to show battery info popup
 // =============================================================================
 
 import QtQuick
@@ -22,10 +22,27 @@ Item {
     id: icon
     width: Config.BarConfig.iconSize
     height: Config.BarConfig.iconSize
+    objectName: "batteryIcon"
 
     property int percentage: Services.BatteryService.percentage
     property bool charging: Services.BatteryService.charging
-    property bool popupVisible: false
+    property var shellRoot: null
+
+    Component.onCompleted: {
+        // Find ShellRoot by traversing up the parent hierarchy
+        function findShellRoot(item) {
+            if (!item) return null
+            // Check if this item has the hoverPopupData property (ShellRoot marker)
+            if (item.hoverPopupData !== undefined) return item
+            if (item.parent) return findShellRoot(item.parent)
+            return null
+        }
+        shellRoot = findShellRoot(icon.parent)
+        if (!shellRoot) {
+            console.log("[BatteryIcon] Could not find ShellRoot!")
+        }
+        console.log("[BatteryIcon] percentage:", percentage, "charging:", charging)
+    }
 
     Row {
         anchors.centerIn: parent
@@ -52,105 +69,39 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
-            console.log("[BatteryIcon] Clicked! popupVisible:", icon.popupVisible)
-            icon.popupVisible = !icon.popupVisible
-            console.log("[BatteryIcon] After toggle popupVisible:", icon.popupVisible)
-        }
-    }
-
-    // Battery Info Popup (custom Item-based popup)
-    Item {
-        id: batteryPopup
-        parent: icon  // Set parent explicitly
-
-        visible: icon.popupVisible
-        x: icon.width / 2 - 100  // width/2 centered
-        y: icon.height + 8
-
-        width: 200
-        height: 120
-
-        Rectangle {
-            anchors.fill: parent
-            color: "#000000"
-            border.color: Config.BarConfig.colorAccent
-            border.width: 1
-            radius: 8
-
-            // Fade in/out animation
-            opacity: icon.popupVisible ? 1.0 : 0.0
-            Behavior on opacity {
-                NumberAnimation { duration: 120 }
-            }
+            // Optional: Click could toggle a more detailed view or open a battery tool
         }
 
-        Column {
-            anchors {
-                fill: parent
-                margins: 12
-            }
-            spacing: 8
-
-            Text {
-                text: "Battery Status"
-                font.family: "JetBrains Mono"
-                font.pixelSize: 14
-                font.bold: true
-                color: "#ffffff"
-            }
-
-            Text {
-                text: icon.percentage + "% Charged"
-                font.family: "JetBrains Mono"
-                font.pixelSize: 16
-                color: icon._batteryColor()
-            }
-
-            Text {
-                text: icon.charging ? "⚡ Charging" : "🔋 Discharging"
-                font.family: "JetBrains Mono"
-                font.pixelSize: 12
-                color: "#ffffff"
-            }
-
-            // Battery level bar
-            Rectangle {
-                width: parent.width
-                height: 8
-                radius: 4
-                color: "#333333"
-
-                Rectangle {
-                    width: parent.width * (icon.percentage / 100)
-                    height: parent.height
-                    radius: 4
-                    color: icon._batteryColor()
-
-                    Behavior on width {
-                        NumberAnimation { duration: 300 }
-                    }
+        onEntered: {
+            if (icon.shellRoot) {
+                // Get the icon's position relative to the shell (screen coordinates)
+                var pos = icon.parent.mapToItem(icon.shellRoot, icon.x, icon.y)
+                var timeEstimate = icon.charging ? "Charging" : "Discharging"
+                icon.shellRoot.hoverPopupData = {
+                    visible: true,
+                    text: "Battery",
+                    subtext: icon.percentage + "%" + (icon.charging ? " ⚡" : ""),
+                    details: [
+                        timeEstimate,
+                        icon.percentage <= 20 ? "⚠️ Low battery" : ""
+                    ].filter(function(d) { return d !== "" }),
+                    x: pos.x + icon.width/2 - 60,  // Center the popup horizontally
+                    y: pos.y  // Icon's Y position (popup adds bar offset)
                 }
             }
         }
 
-        // Close popup when clicking outside
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                console.log("[BatteryIcon] Popup clicked, closing...")
-                icon.popupVisible = false
+        onExited: {
+            if (icon.shellRoot) {
+                icon.shellRoot.hoverPopupData.visible = false
             }
         }
     }
 
-    Component.onCompleted: {
-        console.log("[BatteryIcon] percentage:", percentage, "charging:", charging)
-    }
-
     function _batteryColor() {
-        if (icon.charging) return "#ffffff"
-        if (icon.percentage <= 20) return "#f87171"
-        if (icon.percentage <= 50) return "#fbbf24"
-        return "#ffffff"
+        if (icon.charging) return "#68d391"  // Green when charging
+        if (icon.percentage <= 20) return "#f87171"  // Red when low
+        if (icon.percentage <= 50) return "#fbbf24"  // Yellow at half
+        return "#ffffff"  // White otherwise
     }
 }

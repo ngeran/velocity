@@ -126,7 +126,7 @@ Rectangle {
                     width:  14
                     height: 14
                     color:  modelData
-                    border.color: Config.ThemeConfig.colors.border
+                    border.color: "#1a1a1a"
                     border.width: 1
                     radius: 0
                 }

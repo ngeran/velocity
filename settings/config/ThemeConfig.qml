@@ -72,6 +72,9 @@ Item {
     id: root
     visible: false
 
+    // Flag to prevent polling from overwriting user-initiated changes
+    property bool userInitiatedChange: false
+
     // =========================================================================
     // TIER 1 + TIER 2 — COLOR TOKEN OBJECT
     // -------------------------------------------------------------------------
@@ -153,8 +156,23 @@ Item {
     // `source` and stamps `applied` when absent.
     // =========================================================================
 
-    function applyTheme(data) {
-        if (!data) return
+    function applyTheme(data, isUserInitiated) {
+        console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
+        console.log("[applyTheme] Input data:", JSON.stringify(data))
+        console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
+
+        // Set flag if this is a user-initiated change
+        if (isUserInitiated === true) {
+            root.userInitiatedChange = true
+            console.log("[applyTheme] Set userInitiatedChange flag")
+        }
+
+        if (!data) {
+            console.log("[applyTheme] ERROR: No data provided")
+            return
+        }
+
+        console.log("[applyTheme] Current metadata.oledClamp BEFORE:", root.metadata.oledClamp)
 
         if (data.colors) {
             var c = data.colors
@@ -178,18 +196,30 @@ Item {
                 "error":            c.error            || root.colors.error,
                 "info":             c.info             || root.colors.info
             }
+            console.log("[applyTheme] Colors applied. New background:", root.colors.background)
         }
 
         if (data.metadata) {
             var m = data.metadata
+            console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
+            console.log("[applyTheme] Current root.metadata.oledClamp:", root.metadata.oledClamp)
+
+            var newOledClamp = (m.oledClamp !== undefined) ? m.oledClamp : root.metadata.oledClamp
+            console.log("[applyTheme] NEW oledClamp will be:", newOledClamp)
+
             root.metadata = {
                 "name":           m.name           || root.metadata.name,
                 "source":         m.source         || (m.mode || root.metadata.source),
                 "applied":        m.applied        || root.metadata.applied,
-                "oledClamp":      (m.oledClamp !== undefined) ? m.oledClamp : root.metadata.oledClamp,
+                "oledClamp":      newOledClamp,
                 "matugenEnabled": (m.matugenEnabled !== undefined) ? m.matugenEnabled : root.metadata.matugenEnabled
             }
+
+            console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
         }
+
+        console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
+        console.log("=== Config.ThemeConfig.applyTheme COMPLETE ===")
     }
 
     // =========================================================================
@@ -204,6 +234,9 @@ Item {
     // build; strip it via .replace so `cat` gets a real path (a literal
     // "file://..." name doesn't exist → empty buffer → theme never restored).
     readonly property string externalCachePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
+
+    // Track last cached data to avoid redundant re-application
+    property string lastCachedData: ""
 
     Process {
         id: catProc
@@ -220,9 +253,24 @@ Item {
             if (!running) {
                 if (catProc.buffer.trim().length > 0) {
                     try {
-                        root.applyTheme(JSON.parse(catProc.buffer))
+                        var newData = catProc.buffer.trim()
+                        // Only apply if data has actually changed AND not a user-initiated change
+                        if (newData !== root.lastCachedData) {
+                            if (!root.userInitiatedChange) {
+                                console.log("[ThemeConfig] Cache data changed (external), re-applying theme")
+                                root.lastCachedData = newData
+                                root.applyTheme(JSON.parse(newData))
+                            } else {
+                                console.log("[ThemeConfig] Cache data changed but user initiated, skipping")
+                                root.lastCachedData = newData  // Update last cached data but don't apply
+                                root.userInitiatedChange = false  // Reset flag
+                            }
+                        } else {
+                            console.log("[ThemeConfig] Cache data unchanged, skipping re-application")
+                        }
                     } catch (e) {
                         // Silently ignore parse errors — keep last good theme
+                        console.log("[ThemeConfig] Parse error reading cache:", e)
                     }
                 }
                 catProc.buffer = ""

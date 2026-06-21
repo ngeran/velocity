@@ -6,6 +6,8 @@ Sidebar 1.0 Sidebar.qml
 SidebarItem 1.0 SidebarItem.qml
 ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
+ThemeInfoCard 1.0 ThemeInfoCard.qml
+ManualThemeEditor 1.0 ManualThemeEditor.qml
 GlassCard 1.0 GlassCard.qml
 BentoCard 1.0 BentoCard.qml
 PulseDot 1.0 PulseDot.qml
@@ -19,3 +21,5 @@ FooterBar 1.0 FooterBar.qml
 ClockWidget 1.0 ClockWidget.qml
 ResourcesWidget 1.0 ResourcesWidget.qml
 CalendarWidget 1.0 CalendarWidget.qml
+SysInfoCard 1.0 SysInfoCard.qml
+QuickTogglesGrid 1.0 QuickTogglesGrid.qml

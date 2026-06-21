@@ -1,3 +1,1 @@
 module login
-plugin quickshell
-typeinfo login.qmldir

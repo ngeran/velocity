@@ -1,20 +1,14 @@
 // =============================================================================
 // FILE: LockScreen.qml
-// PROJECT: Obsidian Core — Quickshell Desktop Environment
-// PURPOSE: Session lock screen (loginctl lock-session integration)
+// PROJECT: Quickshell Desktop Environment
+// PURPOSE: Session lock screen overlay
 // DESIGN: Full-screen overlay with theme background, large clock, unlock button
-// LAYER: WlrLayerShell.Overlay — exclusive keyboard focus
-// TRIGGER: Bind to loginctl lock-session in Hyprland config
-// AUTHOR: ngeran
-// VERSION: 0.1.0
-// UPDATED: 2025-06
+// TRIGGER: Via IPC (lockScreenToggle, lock, unlock)
 // =============================================================================
 
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Wayland
-import Quickshell.Io
 import "../config" as Config
 
 PanelWindow {
@@ -25,21 +19,18 @@ PanelWindow {
     // =========================================================================
     property bool locked: false
 
-    // Layer-shell configuration
-    WlrLayerShell.layer: WlrLayerShell.Layer.Overlay
-    WlrLayerShell.keyboardFocus: WlrLayerShell.KeyboardFocus.Exclusive
-    WlrLayerShell.namespace: "obsidian-lock-screen"
-
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
+    // =========================================================================
+    // WINDOW CONFIGURATION
+    // =========================================================================
+    // Show on all screens by using Variants pattern in shell
+    color: Config.ThemeConfig.colors.background
     visible: locked
 
-    // Close on Escape or click background
-    Keys.onEscapePressed: root.locked = false
-
-    MouseArea {
+    // Focus handling - wrap in Item since PanelWindow doesn't support Keys directly
+    Item {
         anchors.fill: parent
-        onClicked: root.locked = false
+        focus: true
+        Keys.onEscapePressed: { if (root.locked) root.locked = false }
     }
 
     // =========================================================================
@@ -49,7 +40,7 @@ PanelWindow {
         anchors.fill: parent
         color: Config.ThemeConfig.colors.background
 
-        // Subtle grid overlay (optional - can match login screen)
+        // Subtle grid overlay
         Canvas {
             anchors.fill: parent
             opacity: 0.015
@@ -67,14 +58,6 @@ PanelWindow {
                 }
             }
         }
-
-        // Blur overlay using multiple layers for performance
-        Rectangle {
-            anchors.fill: parent
-            color: "transparent"
-            layer.enabled: true
-            layer.effect: null  // Attach MultiEffect if available for blur
-        }
     }
 
     // =========================================================================
@@ -82,29 +65,6 @@ PanelWindow {
     // =========================================================================
     Item {
         anchors.fill: parent
-
-        // Logo placeholder
-        Item {
-            anchors.centerIn: parent
-            width: 120
-            height: 120
-
-            Rectangle {
-                anchors.fill: parent
-                color: "transparent"
-                border.color: Config.ThemeConfig.colors.primary
-                border.width: 2
-                radius: 24
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "◉"
-                    font.family: "JetBrains Mono"
-                    font.pixelSize: 48
-                    color: Config.ThemeConfig.colors.primary
-                }
-            }
-        }
 
         // Large clock
         ColumnLayout {
@@ -137,26 +97,26 @@ PanelWindow {
                 bottom: parent.bottom
                 bottomMargin: 80
                 left: parent.left
-                right: parent.left
+                right: parent.right
             }
-            width: parent.width
             height: 60
             radius: 12
             color: Config.ThemeConfig.colors.surface
 
             HoverHandler { id: unlockHover }
+
             TapHandler {
                 onTapped: root.locked = false
             }
 
             Text {
                 anchors.centerIn: parent
-                text: "UNLOCK"
+                text: "UNLOCK (ESC)"
                 font.family: "JetBrains Mono"
                 font.pixelSize: 14
                 font.weight: Font.SemiBold
                 font.letterSpacing: 2
-                color: unlockHover.pressed
+                color: unlockHover.hovered
                     ? Config.ThemeConfig.colors.primary
                     : Config.ThemeConfig.colors.text
             }
@@ -179,5 +139,13 @@ PanelWindow {
             var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
             clockDate.text = days[now.getDay()] + ", " + months[now.getMonth()] + " " + now.getDate()
         }
+    }
+
+    // =========================================================================
+    // BACKGROUND CLICK TO UNLOCK
+    // =========================================================================
+    MouseArea {
+        anchors.fill: parent
+        onClicked: root.locked = false
     }
 }

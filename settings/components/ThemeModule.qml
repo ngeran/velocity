@@ -16,8 +16,8 @@ Item {
     // STATE SYNCHRONIZATION (HYGIENE CONSOLIDATION & TYPO FIXES)
     // =========================================================================
     property string themeMode:        "curated"
-    property string currentTheme:     Services.ThemeService.currentThemeName || "OLED Pure Black"
-    property bool   oledClampEnabled: Services.ThemeService.isOledClampActive // Typo fixed from oedClamp
+    property string currentTheme:     Config.ThemeConfig.metadata.name || "OLED Pure Black"
+    property bool   oledClampEnabled: Config.ThemeConfig.metadata.oledClamp || false
 
     // Array map defining the 6 canonical corporate preset targets for the matrix repeater
     readonly property var extendedThemes: [
@@ -176,8 +176,9 @@ Item {
                         isActive:  root.currentTheme === modelData
                         onClicked: {
                             Services.ThemeService.applyPreset(modelData, root.oledClampEnabled)
-                            root.currentTheme = modelData
-                            root.updateSharedState()
+                            // Note: root.currentTheme is bound to Config.ThemeConfig.metadata.name,
+                            // so it updates automatically when applyPreset() updates the metadata.
+                            // No manual assignment needed - that would break the binding!
                         }
                     }
                 }
@@ -257,85 +258,12 @@ Item {
             }
 
             // -----------------------------------------------------------------
-            // SECTION 4: HARDWARE ACCENT-OVERRIDE MONITORING CONSOLE
             // -----------------------------------------------------------------
-            ColumnLayout {
-                spacing: 6
-
-                Text {
-                    text:           "MANUAL ACCENT TOKENS"
-                    font.pixelSize: 11
-                    font.family:    "monospace"
-                    color:          "#ffffff"
-                }
-
-                Text {
-                    text:           "Each swatch sets ONE accent token to the shown color — primary, secondary, or accent. Pick a curated theme above to recolor the whole shell at once."
-                    font.pixelSize: 9
-                    font.family:    "monospace"
-                    color:          Config.ThemeConfig.colors.textDim
-                    Layout.fillWidth: true
-                }
-
-                Item { height: 4 }
-
-                RowLayout {
-                    spacing: 8
-
-                    Text {
-                        text:           "Token:"
-                        font.pixelSize: 10
-                        font.family:    "monospace"
-                        color:          Config.ThemeConfig.colors.textDim
-                    }
-
-                    // One chip per accent token — each sets a DIFFERENT token,
-                    // so they're individually meaningful (not all "secondary").
-                    Repeater {
-                        model: [
-                            { name: "PRIMARY",   token: "primary",   hex: "#bd93f9" },
-                            { name: "SECONDARY", token: "secondary", hex: "#50fa7b" },
-                            { name: "ACCENT",    token: "accent",    hex: "#ff79c6" }
-                        ]
-                        delegate: Rectangle {
-                            width:        54
-                            height:       22
-                            color:        "transparent"
-                            border.color: Config.ThemeConfig.colors.border
-                            border.width: 1
-                            radius:       0
-
-                            Rectangle {
-                                anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                width: 4
-                                color: modelData.hex
-                            }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text:            modelData.name.toUpperCase()
-                                font.pixelSize:  8
-                                font.family:    "monospace"
-                                color:           "#ffffff"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape:  Qt.PointingHandCursor
-                                onClicked: {
-                                    if (/^#[0-9A-Fa-f]{6}$/.test(modelData.hex)) {
-                                        Services.ThemeService.applyManualOverride(modelData.token, modelData.hex)
-                                        root.currentTheme = "Custom Modification"
-                                        root.updateSharedState()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Item { Layout.fillHeight: true }
+            // SECTION 4: MANUAL THEME EDITOR
+            // -----------------------------------------------------------------
+            Components.ManualThemeEditor {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
             }
         }
 
@@ -385,11 +313,46 @@ Item {
                         anchors.fill: parent
                         cursorShape:  Qt.PointingHandCursor
                         onClicked: {
-                            root.oledClampEnabled = !root.oledClampEnabled
-                            if (root.themeMode === "curated") {
-                                Services.ThemeService.applyPreset(root.currentTheme, root.oledClampEnabled)
+                            console.log("=== QD-OLED TOGGLE CLICKED ===")
+
+                            // Show current state BEFORE toggle
+                            console.log("[TOGGLE] Current oledClampEnabled:", root.oledClampEnabled)
+                            console.log("[TOGGLE] Current Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
+                            console.log("[TOGGLE] Current themeMode:", root.themeMode)
+                            console.log("[TOGGLE] Current currentTheme:", root.currentTheme)
+
+                            // Toggle the OLED clamp state
+                            var newClampValue = !root.oledClampEnabled
+                            console.log("[TOGGLE] New clamp value will be:", newClampValue)
+
+                            // Apply the current theme with the new clamp value
+                            // This will update Config.ThemeConfig.metadata.oledClamp
+                            if (root.themeMode === "curated" && root.currentTheme) {
+                                console.log("[TOGGLE] Calling applyPreset with theme:", root.currentTheme, "and clamp:", newClampValue)
+                                Services.ThemeService.applyPreset(root.currentTheme, newClampValue)
+
+                                // Check state after applyPreset
+                                console.log("[TOGGLE] After applyPreset - oledClampEnabled:", root.oledClampEnabled)
+                                console.log("[TOGGLE] After applyPreset - Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
+                            } else {
+                                console.log("[TOGGLE] Not in curated mode, updating metadata directly")
+                                // If no current theme or not in curated mode, just update the metadata directly
+                                var currentMetadata = Config.ThemeConfig.metadata
+                                console.log("[TOGGLE] Current metadata before update:", JSON.stringify(currentMetadata))
+                                // Create a NEW metadata object to avoid reference issues
+                                Config.ThemeConfig.metadata = {
+                                    name: currentMetadata.name || "Unknown",
+                                    source: currentMetadata.source || "manual",
+                                    applied: new Date().toISOString(),
+                                    oledClamp: newClampValue,
+                                    matugenEnabled: currentMetadata.matugenEnabled || false
+                                }
+                                console.log("[TOGGLE] New metadata after update:", JSON.stringify(Config.ThemeConfig.metadata))
                             }
-                            root.updateSharedState()
+
+                            console.log("[TOGGLE] Final oledClampEnabled:", root.oledClampEnabled)
+                            console.log("[TOGGLE] Final Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
+                            console.log("=== TOGGLE CLICK COMPLETE ===")
                         }
                     }
                 }
@@ -397,16 +360,6 @@ Item {
         }
     }
 
-    // Baseline internal synchronization clock loop
-    Timer {
-        interval:    1000
-        running:     true
-        repeat:      true
-        triggeredOnStart: true
-        onTriggered: {
-            root.currentTheme     = Services.ThemeService.currentThemeName
-            root.oledClampEnabled = Services.ThemeService.isOledClampActive
-            root.updateSharedState()
-        }
-    }
+    // Removed aggressive Timer that was overwriting user actions
+    // State is now bound directly to Config.ThemeConfig.metadata
 }

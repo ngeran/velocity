@@ -33,7 +33,9 @@ Item {
     // =========================================================================
 
     width: menuWidth
-    height: menuColumn.height + (menuPadding * 2)
+    // Deterministic height so the menu is sized correctly even before the
+    // Column finishes laying out (avoids the "200 x 16" zero-content state).
+    height: itemCount * buttonHeight + (itemCount - 1) * buttonSpacing + (menuPadding * 2)
 
     Rectangle {
         anchors.fill: parent

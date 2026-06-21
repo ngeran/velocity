@@ -21,6 +21,7 @@ QtObject {
 
     property bool matugenAvailable: false
     property bool isRegenerating:    false
+    property bool pendingOLEDClamp:  false
 
     // theme-switcher lives in ~/.local/bin, which is NOT on the quickshell
     // process's PATH — invoke it by absolute path or Process reports
@@ -129,7 +130,7 @@ QtObject {
     // SHELL UTILITY EXECUTORS
     // =========================================================================
     property var themeSwitcherRunner: Process {
-        id: runner
+        id: themeSwitcherRunnerId
         onExited: (code) => {
             themeService.isRegenerating = false;
             if (code !== 0) {
@@ -165,6 +166,11 @@ QtObject {
      * Executes internal structural preset modification pipeline updates
      */
     function applyPreset(presetName, applyOLEDClamp) {
+        console.log("=== applyPreset CALLED ===")
+        console.log("[applyPreset] presetName:", presetName)
+        console.log("[applyPreset] applyOLEDClamp:", applyOLEDClamp, "(type:", typeof applyOLEDClamp, ")")
+        console.log("[applyPreset] Current Config.ThemeConfig.metadata.oledClamp BEFORE:", Config.ThemeConfig.metadata.oledClamp)
+
         // NOTE: no isRegenerating early-return guard — a stuck flag (e.g. a prior
         // theme-switcher run whose onExited never fired during a reload) would
         // otherwise brick ALL theme switches. Set true here for UI; onExited clears.
@@ -176,17 +182,28 @@ QtObject {
         var palette = themeService.presetPalettes[presetName];
         if (!palette) {
             themeService.isRegenerating = false;
-            console.warn("ThemeService: unknown preset (not in presetPalettes):", presetName);
+            console.warn("[applyPreset] ERROR: unknown preset (not in presetPalettes):", presetName);
             return;
         }
+
+        console.log("[applyPreset] Palette found for:", presetName)
         var bundle = {};
         for (var k in palette) {
             if (Object.prototype.hasOwnProperty.call(palette, k)) bundle[k] = palette[k];
         }
+
+        console.log("[applyPreset] Background before clamp:", bundle.background)
+        console.log("[applyPreset] Surface before clamp:", bundle.surface)
+
         if (applyOLEDClamp) {
             bundle.background = "#000000";
             bundle.surface = "#000000";
+            console.log("[applyPreset] OLED clamp APPLIED - background set to #000000")
+        } else {
+            console.log("[applyPreset] OLED clamp NOT applied - using theme colors")
         }
+
+        console.log("[applyPreset] Calling Config.ThemeConfig.applyTheme with metadata.oledClamp:", applyOLEDClamp ? true : false)
         Config.ThemeConfig.applyTheme({
             colors: bundle,
             metadata: {
@@ -196,40 +213,146 @@ QtObject {
                 oledClamp: applyOLEDClamp ? true : false,
                 matugenEnabled: false
             }
-        });
+        }, true);  // Mark as user-initiated change
 
-        // --- SECONDARY: theme-switcher for GLOBAL targets (hyprland/terminals/ ---
-        // fastfetch). apply_quickshell is a no-op; quickshell already recolored.
-        var args = [themeService._themeSwitcherBin, "--mode", "curated", "--theme", presetName];
-        if (applyOLEDClamp) args.push("--oled-clamp");
-        args.push("--apply", "all");
+        console.log("[applyPreset] Config.ThemeConfig.metadata.oledClamp AFTER applyTheme:", Config.ThemeConfig.metadata.oledClamp)
+
+        // --- SECONDARY: write to cache file for bar and other shells ---
+        var cachePath = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme";
+        var colorsJsonPath = cachePath + "/colors.json";
+
+        // Ensure cache directory exists
+        var mkdirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        mkdirProc.command = ["sh", "-c", "mkdir -p " + cachePath];
+        mkdirProc.running = true;
+
+        // Write colors to cache file for bar to pick up
+        var colorsPayload = {
+            colors: bundle,
+            metadata: {
+                name: presetName,
+                source: "preset",
+                oledClamp: applyOLEDClamp
+            }
+        };
+
+        console.log("[applyPreset] Writing to cache file with oledClamp:", applyOLEDClamp)
+        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.running = true;
+
+        // Sync to external apps
+        themeService.syncToExternalApps(bundle);
+
         themeService.writeActiveThemeToken(presetName, "preset", applyOLEDClamp);
-        runner.command = args;
-        runner.running = true;
+        themeService.isRegenerating = false;
+        console.log("[applyPreset] Function complete. Final metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
+        console.log("=== applyPreset COMPLETE ===")
     }
 
     /**
      * Triggers external automated Matugen wallpaper extraction workflows
      */
+    property var matugenRunner: Process {
+        id: runner
+        stdout: SplitParser {
+            onRead: function(data) {
+                try {
+                    var matugenOutput = data.trim();
+                    if (matugenOutput.length > 0) {
+                        var colors = JSON.parse(matugenOutput);
+
+                        // Map matugen colors to our theme format
+                        var mappedColors = {
+                            background: themeService.pendingOLEDClamp ? "#000000" : (colors.colors.background || "#000000"),
+                            surface: colors.colors.surface || "#0a0a0a",
+                            surfaceVariant: colors.colors.surface_variant || "#111111",
+                            surfaceContainer: colors.colors.surface_container || "#111111",
+                            text: colors.colors.on_background || "#e0e0e0",
+                            textDim: colors.colors.on_surface_variant || "#808080",
+                            border: colors.colors.outline || "#1a1a1a",
+                            outline: colors.colors.outline || "#2a2a2a",
+                            outlineVariant: colors.colors.outline_variant || "#1a1a1a",
+                            primary: colors.colors.primary || "#7c6bf0",
+                            secondary: colors.colors.secondary || "#00dce5",
+                            accent: colors.colors.tertiary || "#f87171",
+                            success: colors.colors.primary || "#34d399",
+                            warning: colors.colors.secondary || "#fbbf24",
+                            error: colors.colors.error || "#f87171",
+                            info: colors.colors.primary || "#00dce5"
+                        };
+
+                        Config.ThemeConfig.applyTheme({
+                            colors: mappedColors,
+                            metadata: {
+                                name: "Dynamic Wallpaper",
+                                source: "matugen",
+                                applied: new Date().toISOString(),
+                                oledClamp: themeService.pendingOLEDClamp,
+                                matugenEnabled: true
+                            }
+                        });
+
+                        // Write to cache file
+                        var cachePath = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme";
+                        var colorsJsonPath = cachePath + "/colors.json";
+                        var colorsPayload = {
+                            colors: mappedColors,
+                            metadata: Config.ThemeConfig.metadata
+                        };
+                        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+                        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+                        writer.running = true;
+
+                        // Sync to external apps
+                        themeService.syncToExternalApps(mappedColors);
+                        themeService.writeActiveThemeToken("Dynamic Wallpaper", "matugen", themeService.pendingOLEDClamp);
+                    }
+                } catch (e) {
+                    console.warn("ThemeService: Failed to parse matugen output:", e);
+                }
+                themeService.isRegenerating = false;
+            }
+        }
+        onExited: function(code) {
+            if (code !== 0) {
+                console.warn("ThemeService: matugen failed with exit code:", code);
+                themeService.isRegenerating = false;
+            }
+        }
+    }
+
     function applyDynamicTheme(wallpaperPath, applyOLEDClamp) {
-        if (themeService.isRegenerating) return;
+        console.log("=== applyDynamicTheme CALLED ===")
+        console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
+        console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp)
+        console.log("[applyDynamicTheme] SharedState.wallpaperPath:", Config.SharedState.wallpaperPath)
+
+        if (themeService.isRegenerating) {
+            console.log("[applyDynamicTheme] Already regenerating, skipping")
+            return;
+        }
+
+        // Use the provided wallpaper path, or fall back to SharedState
+        var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
+        console.log("[applyDynamicTheme] actualPath to use:", actualPath)
+
+        if (!actualPath || actualPath === "") {
+            console.log("[applyDynamicTheme] ERROR: No wallpaper path available")
+            console.log("[applyDynamicTheme] Please select a wallpaper first")
+            return;
+        }
+
         themeService.isRegenerating = true;
+        themeService.pendingOLEDClamp = applyOLEDClamp;
 
-        let args = [themeService._themeSwitcherBin, "--mode", "dynamic", "--wallpaper", wallpaperPath];
-        if (applyOLEDClamp) args.push("--oled-clamp");
-        args.push("--apply", "all");
+        // Run matugen to generate colors from wallpaper
+        // Strip file:// prefix if present
+        var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
+        console.log("[applyDynamicTheme] Running matugen with path:", cleanPath)
 
-        Config.ThemeConfig.metadata = {
-            "name": "Dynamic Wallpaper",
-            "source": "matugen",
-            "applied": new Date().toISOString(),
-            "oledClamp": applyOLEDClamp,
-            "matugenEnabled": true
-        };
-
-        themeService.writeActiveThemeToken("Dynamic Wallpaper", "matugen", applyOLEDClamp);
-        runner.command = args;
-        runner.running = true;
+        matugenRunner.command = ["matugen", "image", cleanPath, "--json", "hex", "--mode", "dark", "--type", "scheme-tonal-spot", "-j", "hex", "--source-color-index", "0", "-q"];
+        matugenRunner.running = true;
     }
 
     /**
@@ -248,7 +371,73 @@ QtObject {
             "matugenEnabled": false
         };
 
+        // Write to cache file
+        var cachePath = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme";
+        var colorsJsonPath = cachePath + "/colors.json";
+        var mkdirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        mkdirProc.command = ["sh", "-c", "mkdir -p " + cachePath];
+        mkdirProc.running = true;
+
+        var colorsPayload = {
+            colors: Config.ThemeConfig.colors,
+            metadata: Config.ThemeConfig.metadata
+        };
+
+        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.running = true;
+
+        // Sync to external apps
+        themeService.syncToExternalApps(Config.ThemeConfig.colors);
+
         themeService.writeActiveThemeToken("Custom Modification", "manual", themeService.isOledClampActive);
+    }
+
+    /**
+     * Sync theme to external apps (ghostty, terminal TUIs)
+     * This generates config files for apps that support custom theming
+     */
+    function syncToExternalApps(colors) {
+        if (!colors) colors = Config.ThemeConfig.colors;
+
+        // Generate ghostty theme config
+        var ghosttyConf = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.config/ghostty/theme.conf";
+        var ghosttyContent =
+            "# Theme: " + Config.ThemeConfig.metadata.name + "\n" +
+            "# Generated by Quickshell ThemeService\n" +
+            "foreground = " + colors.text + "\n" +
+            "background = " + colors.background + "\n" +
+            "cursor = " + colors.primary + "\n" +
+            "selection-foreground = " + colors.background + "\n" +
+            "selection-background = " + colors.primary + "\n" +
+            "palette = 0=" + colors.background + "\n" +
+            "palette = 1=" + colors.error + "\n" +
+            "palette = 2=" + colors.success + "\n" +
+            "palette = 3=" + colors.warning + "\n" +
+            "palette = 4=" + colors.primary + "\n" +
+            "palette = 5=" + colors.secondary + "\n" +
+            "palette = 6=" + colors.info + "\n" +
+            "palette = 7=" + colors.text + "\n" +
+            "palette = 8=" + colors.textDim + "\n" +
+            "palette = 9=" + colors.error + "\n" +
+            "palette = 10=" + colors.success + "\n" +
+            "palette = 11=" + colors.warning + "\n" +
+            "palette = 12=" + colors.primary + "\n" +
+            "palette = 13=" + colors.secondary + "\n" +
+            "palette = 14=" + colors.info + "\n" +
+            "palette = 15=" + colors.text + "\n";
+
+        var ghosttyDirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        ghosttyDirProc.command = ["sh", "-c", "mkdir -p ~/.config/ghostty"];
+        ghosttyDirProc.running = true;
+
+        var ghosttyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        ghosttyWriter.command = ["sh", "-c", "printf '%s' '" + ghosttyContent.replace(/'/g, "'\\''") + "' > " + ghosttyConf];
+        ghosttyWriter.running = true;
+
+        // Terminal TUI apps typically use terminal colors, so ghostty theming covers them
+        // For apps with custom themes (impala, wiremix, bluetui), they would need specific configs
+        // This is a placeholder for future expansion
     }
 
     function refreshTheme() {

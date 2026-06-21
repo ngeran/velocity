@@ -26,7 +26,7 @@ QtObject {
 
     readonly property int barHeight: 26
     readonly property int barPadding: 12
-    readonly property int iconSize: 20
+    readonly property int iconSize: 32  // Increased from 20 for better clickability
     readonly property int iconSpacing: 4
 
     // =========================================================================

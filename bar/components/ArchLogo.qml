@@ -1,54 +1,74 @@
 // =============================================================================
-// ArchLogo.qml — Arch Linux glyph (theme-aware)
+// ArchLogo.qml — Arch Linux icon with fastfetch action
 // =============================================================================
 //
-// Vector Arch logo drawn on a Canvas and filled with BarConfig.colorAccent,
-// so it recolors live with the active theme (the same accent the workspace
-// dots use). Placed top-left of the bar, before the workspace dots.
+// Displays the Arch Linux Nerd Font icon (󰣇) in the bar.
 //
-// PUBLIC API
-//   (none) — sized to BarConfig.iconSize; color follows BarConfig.colorAccent.
-//
-// THEME
-//   Reads Config.BarConfig.colorAccent (→ ThemeConfig.colors.primary), so it
-//   tracks the global theme via the bar's ThemeConfig poll of colors.json.
-//
+// INTERACTION
+//   Click to launch fastfetch in a centered floating kitty window
 // =============================================================================
 
 import QtQuick
+import Quickshell.Io
 import "../config" as Config
 
-Canvas {
-    id: root
-
+Item {
+    id: icon
     width: Config.BarConfig.iconSize
     height: Config.BarConfig.iconSize
 
-    // --- SECTION: THEME BINDING ---
-    // Repaint whenever the accent changes (theme switch) or the icon resizes.
-    property color glyphColor: Config.BarConfig.colorAccent
-    onGlyphColorChanged: requestPaint()
-    onWidthChanged: requestPaint()
-    onHeightChanged: requestPaint()
+    Text {
+        anchors.centerIn: parent
+        text: "󰣇"
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 16
+        color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.text
 
-    // --- SECTION: GLYPH RENDER ---
-    // Arch logo: an upward triangle with a notch cut from the bottom centre
-    // (the distinctive Arch "wedge"). Coordinates are normalised to the
-    // Canvas size so it scales cleanly with BarConfig.iconSize.
-    onPaint: {
-        var ctx = getContext("2d")
-        ctx.reset()
-        ctx.fillStyle = root.glyphColor
-        var w = root.width
-        var h = root.height
-        ctx.beginPath()
-        ctx.moveTo(0.50 * w, 0.08 * h)   // apex
-        ctx.lineTo(0.08 * w, 0.92 * h)   // bottom-left
-        ctx.lineTo(0.37 * w, 0.92 * h)   // left foot
-        ctx.lineTo(0.50 * w, 0.60 * h)   // notch peak (Arch wedge)
-        ctx.lineTo(0.63 * w, 0.92 * h)   // right foot
-        ctx.lineTo(0.92 * w, 0.92 * h)   // bottom-right
-        ctx.closePath()
-        ctx.fill()
+        Behavior on color {
+            ColorAnimation { duration: 120 }
+        }
+    }
+
+    MouseArea {
+        id: mouseArea
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: {
+            fastfetchProc.running = true
+        }
+    }
+
+    // Tooltip on hover
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.bottom
+        anchors.topMargin: 4
+        text: "System Info"
+        font.family: "JetBrains Mono"
+        font.pixelSize: 10
+        color: Config.ThemeConfig.colors.textDim
+        visible: mouseArea.containsMouse
+
+        opacity: mouseArea.containsMouse ? 1.0 : 0.0
+        Behavior on opacity {
+            NumberAnimation { duration: 120 }
+        }
+    }
+
+    Process {
+        id: fastfetchProc
+        // Launch fastfetch in a centered floating kitty window
+        command: [
+            "kitty",
+            "--class=fastfetch-float",
+            "--title=fastfetch",
+            "-o",
+            "font_size=14",
+            "-o",
+            "background_opacity=0.9",
+            "--hold",
+            "fastfetch"
+        ]
     }
 }

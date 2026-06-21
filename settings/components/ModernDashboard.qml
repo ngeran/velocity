@@ -1227,7 +1227,7 @@ Item {
         }
 
         // =====================================================================
-        // TAB 3: ENGINE CONFIGURATION PANEL
+        // TAB 3: SETTINGS PANEL WITH QUICK TOGGLES
         // =====================================================================
 
         Item {
@@ -1236,32 +1236,38 @@ Item {
             anchors.fill: parent
 
             Column {
-                anchors.centerIn: parent
-                spacing: 12
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                    margins: 24
+                }
+                spacing: 24
 
+                // Header
                 Text {
-                    text: "SETTINGS"
+                    text: "QUICK SETTINGS"
                     font.pixelSize: 11
                     font.family: "JetBrains Mono"
                     font.letterSpacing: 2.5
                     font.weight: Font.Bold
                     color: Config.ThemeConfig.colors.textDim
-                    horizontalAlignment: Text.AlignHCenter
                 }
 
                 Rectangle {
-                    width: 40
+                    width: parent.width
                     height: 1
                     color: Config.ThemeConfig.colors.border
+                }
+
+                // Quick Toggles Grid
+                Components.QuickTogglesGrid {
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
-                Text {
-                    text: "SYSTEM CONFIGURATION OFFLINE"
-                    font.pixelSize: 12
-                    font.family: "JetBrains Mono"
-                    color: Config.ThemeConfig.colors.textDim
-                    horizontalAlignment: Text.AlignHCenter
+                // System Info Card
+                Components.SysInfoCard {
+                    anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
         }

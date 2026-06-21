@@ -67,9 +67,11 @@ Item {
             if (!running) {
                 try {
                     if (catProc.buffer.trim() !== "") {
+                        console.log("[Bar ThemeConfig] Cache file read, applying theme")
                         ThemeConfig.applyTheme(JSON.parse(catProc.buffer))
                     }
                 } catch (e) {
+                    console.log("[Bar ThemeConfig] Parse error:", e)
                     // ignore parse errors — keep last good theme
                 }
                 catProc.buffer = ""
@@ -90,6 +92,7 @@ Item {
     // =========================================================================
 
     function applyTheme(data) {
+        console.log("[Bar ThemeConfig] applyTheme called with theme:", data.metadata ? data.metadata.name : "unknown")
         if (data.colors) {
             colors = {
                 background: data.colors.background || "#000000",
