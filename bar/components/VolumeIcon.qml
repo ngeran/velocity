@@ -60,7 +60,7 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
-            wiremixProc.command = ["kitty", "--class=wiremix-float", "wiremix"]
+            wiremixProc.command = ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "audio"]
             wiremixProc.running = true
         }
 
@@ -74,7 +74,7 @@ Item {
                     subtext: muted ? "Muted" : volume + "%",
                     details: [
                         "Scroll to adjust",
-                        "Click for wiremix"
+                        "Click for control"
                     ],
                     x: pos.x + icon.width/2 - 60,  // Center the popup horizontally
                     y: pos.y  // Icon's Y position (popup adds bar offset)

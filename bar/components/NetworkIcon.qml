@@ -88,6 +88,6 @@ Item {
 
     Process {
         id: netProc
-        command: ["kitty", "--class=impala-float", "impala"]
+        command: ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "network"]
     }
 }

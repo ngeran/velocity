@@ -58,7 +58,7 @@ Item {
                     visible: true,
                     text: "Bluetooth",
                     subtext: powered ? "Powered On" : "Powered Off",
-                    details: ["Click to open bluetui"],
+                    details: ["Click to open control"],
                     x: pos.x + icon.width/2 - 60,  // Center the popup horizontally
                     y: pos.y  // Icon's Y position (popup adds bar offset)
                 }
@@ -74,6 +74,6 @@ Item {
 
     Process {
         id: bluetuiProc
-        command: ["kitty", "--class=bluetui-float", "bluetui"]
+        command: ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "bluetooth"]
     }
 }

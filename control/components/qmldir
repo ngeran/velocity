@@ -1,0 +1,16 @@
+ControlDashboard 1.0 ControlDashboard.qml
+AppBar 1.0 AppBar.qml
+SideNav 1.0 SideNav.qml
+StatusCardRow 1.0 StatusCardRow.qml
+StatusCard 1.0 StatusCard.qml
+TerminalBody 1.0 TerminalBody.qml
+TerminalLogLine 1.0 TerminalLogLine.qml
+ScanlineOverlay 1.0 ScanlineOverlay.qml
+CommandInputBar 1.0 CommandInputBar.qml
+WifiListView 1.0 WifiListView.qml
+WifiListRow 1.0 WifiListRow.qml
+BtDeviceListView 1.0 BtDeviceListView.qml
+BtDeviceRow 1.0 BtDeviceRow.qml
+SinkListView 1.0 SinkListView.qml
+SinkRow 1.0 SinkRow.qml
+SinkInputRow 1.0 SinkInputRow.qml

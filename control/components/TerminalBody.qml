@@ -1,0 +1,104 @@
+// =============================================================================
+// TerminalBody.qml — scrollable terminal canvas
+// =============================================================================
+//
+// Renders the active section's header + section view (phases 3-5 swap the
+// placeholder for WifiListView / BtDeviceListView / SinkListView) followed by
+// the live console log from CommandService.
+// =============================================================================
+
+import QtQuick
+import "../config" as Config
+import "../services" as Services
+
+Rectangle {
+    id: body
+    property string activeSection: "network"
+
+    color: "#000000"
+    border.color: Config.ThemeConfig.colors.border
+    border.width: 1
+    radius: Config.ControlConfig.radius
+    clip: true
+
+    Flickable {
+        id: flick
+        anchors.fill: parent
+        anchors.margins: 12
+        contentWidth: width
+        contentHeight: content.implicitHeight
+        flickableDirection: Flickable.VerticalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        Column {
+            id: content
+            width: flick.width
+            spacing: 10
+
+            // --- Section header ---
+            Text {
+                text: "[ " + body.activeSection.toUpperCase() + "_DATA ]"
+                font.family: Config.ControlConfig.fontMono
+                font.pixelSize: 11
+                font.bold: true
+                color: Config.ControlConfig.accent
+                Rectangle {
+                    anchors.left: parent.right
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: flick.width - parent.implicitWidth - 6
+                    height: 1
+                    color: Config.ControlConfig.accentDim
+                    opacity: 0.4
+                }
+            }
+
+            // --- Section views (populated per phase) ---
+            WifiListView {
+                visible: body.activeSection === "network"
+                width: content.width
+            }
+
+            BtDeviceListView {
+                visible: body.activeSection === "bluetooth"
+                width: content.width
+            }
+
+            SinkListView {
+                visible: body.activeSection === "audio"
+                width: content.width
+            }
+
+            Text {
+                visible: body.activeSection === "system"
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: "// system view — pending"
+                font.family: Config.ControlConfig.fontMono
+                font.pixelSize: 11
+                color: Config.ThemeConfig.colors.textDim
+            }
+
+            // --- Console log ---
+            Item { width: 1; height: 6 }
+
+            Text {
+                text: "[ CONSOLE ]"
+                font.family: Config.ControlConfig.fontMono
+                font.pixelSize: 11
+                font.bold: true
+                color: Config.ControlConfig.accent
+            }
+
+            Repeater {
+                model: Services.CommandService.logLines
+                delegate: TerminalLogLine {
+                    width: content.width
+                    text: model.text
+                    kind: model.kind
+                }
+            }
+        }
+    }
+}
