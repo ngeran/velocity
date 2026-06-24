@@ -88,6 +88,6 @@ Item {
 
     Process {
         id: netProc
-        command: ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "network"]
+        command: ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "openControlNetwork"]
     }
 }

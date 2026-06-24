@@ -1,4 +1,0 @@
-singleton CommandService 1.0 CommandService.qml
-singleton NetworkControlService 1.0 NetworkControlService.qml
-singleton BluetoothControlService 1.0 BluetoothControlService.qml
-singleton AudioControlService 1.0 AudioControlService.qml

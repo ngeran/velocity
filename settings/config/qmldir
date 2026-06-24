@@ -1,3 +1,4 @@
 singleton SettingsConfig 1.0 SettingsConfig.qml
 singleton ThemeConfig 1.0 ThemeConfig.qml
 singleton SharedState 1.0 SharedState.qml
+singleton ControlConfig 1.0 ControlConfig.qml

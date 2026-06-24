@@ -218,6 +218,17 @@ Item {
             console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
         }
 
+        // QD-OLED Safe: force pure-black backgrounds
+        if (root.metadata.oledClamp) {
+            var cs = {}
+            for (var ks in root.colors) cs[ks] = root.colors[ks]
+            cs.background = "#000000"
+            cs.surface = "#000000"
+            cs.surfaceVariant = "#000000"
+            cs.surfaceContainer = "#000000"
+            root.colors = cs
+        }
+
         console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
         console.log("=== Config.ThemeConfig.applyTheme COMPLETE ===")
     }

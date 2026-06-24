@@ -60,7 +60,7 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
-            wiremixProc.command = ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "audio"]
+            wiremixProc.command = ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "openControl", "audio"]
             wiremixProc.running = true
         }
 

@@ -36,6 +36,33 @@ ShellRoot {
         function hide() {
             panelWindow.visible = false
         }
+
+        // Deep-link to Control tab sections (Quickshell IPC doesn't support
+        // arbitrary arguments, so individual functions per section)
+        function openControlNetwork() {
+            panelWindow.visible = true
+            dashboard.openControlTab("network")
+        }
+
+        function openControlBluetooth() {
+            panelWindow.visible = true
+            dashboard.openControlTab("bluetooth")
+        }
+
+        function openControlAudio() {
+            panelWindow.visible = true
+            dashboard.openControlTab("audio")
+        }
+
+        function openControlPower() {
+            panelWindow.visible = true
+            dashboard.openControlTab("power")
+        }
+
+        function openControlSystem() {
+            panelWindow.visible = true
+            dashboard.openControlTab("system")
+        }
     }
 
     // =========================================================================
@@ -69,6 +96,7 @@ ShellRoot {
         // MAIN DASHBOARD — owns nav bar + tab content (loaded once, kept alive)
         // =====================================================================
         Components.ModernDashboard {
+            id: dashboard
             anchors.fill: parent
         }
     }

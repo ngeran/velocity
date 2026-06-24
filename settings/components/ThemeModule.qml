@@ -326,20 +326,18 @@ Item {
                             console.log("[TOGGLE] New clamp value will be:", newClampValue)
 
                             // Apply the current theme with the new clamp value
-                            // This will update Config.ThemeConfig.metadata.oledClamp
-                            if (root.themeMode === "curated" && root.currentTheme) {
-                                console.log("[TOGGLE] Calling applyPreset with theme:", root.currentTheme, "and clamp:", newClampValue)
+                            // This will update Config.ThemeConfig.metadata.oledClamp AND re-clamp the colors
+                            if (root.currentTheme) {
+                                console.log("[TOGGLE] Re-applying theme:", root.currentTheme, "with new clamp:", newClampValue)
                                 Services.ThemeService.applyPreset(root.currentTheme, newClampValue)
 
                                 // Check state after applyPreset
                                 console.log("[TOGGLE] After applyPreset - oledClampEnabled:", root.oledClampEnabled)
                                 console.log("[TOGGLE] After applyPreset - Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
                             } else {
-                                console.log("[TOGGLE] Not in curated mode, updating metadata directly")
-                                // If no current theme or not in curated mode, just update the metadata directly
+                                console.log("[TOGGLE] No current theme; updating metadata only (colors won't re-clamp)")
+                                // Fallback: if somehow no current theme, just update metadata
                                 var currentMetadata = Config.ThemeConfig.metadata
-                                console.log("[TOGGLE] Current metadata before update:", JSON.stringify(currentMetadata))
-                                // Create a NEW metadata object to avoid reference issues
                                 Config.ThemeConfig.metadata = {
                                     name: currentMetadata.name || "Unknown",
                                     source: currentMetadata.source || "manual",

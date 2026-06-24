@@ -1,7 +1,7 @@
 {
   "cycleInterval": 120,
-  "cyclingEnabled": false,
+  "cyclingEnabled": true,
   "transitionType": "fade",
   "wallpaperDir": "/home/nikos/Pictures/Wallpapers/",
-  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/ghost.jpeg"
+  "currentWallpaper": "/home/nikos/Pictures/Wallpapers/lighthouse.png"
 }

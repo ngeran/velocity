@@ -13,6 +13,23 @@ BentoCard 1.0 BentoCard.qml
 PulseDot 1.0 PulseDot.qml
 NetworkRing 1.0 NetworkRing.qml
 singleton Colors 1.0 Colors.qml
+ControlModule 1.0 ControlModule.qml
+AppBar 1.0 AppBar.qml
+ControlDashboard 1.0 ControlDashboard.qml
+SideNav 1.0 SideNav.qml
+StatusCard 1.0 StatusCard.qml
+StatusCardRow 1.0 StatusCardRow.qml
+TerminalBody 1.0 TerminalBody.qml
+TerminalLogLine 1.0 TerminalLogLine.qml
+WifiListView 1.0 WifiListView.qml
+WifiListRow 1.0 WifiListRow.qml
+BtDeviceListView 1.0 BtDeviceListView.qml
+BtDeviceRow 1.0 BtDeviceRow.qml
+SinkListView 1.0 SinkListView.qml
+SinkRow 1.0 SinkRow.qml
+SinkInputRow 1.0 SinkInputRow.qml
+PowerView 1.0 PowerView.qml
+SystemView 1.0 SystemView.qml
 IdentityWidget 1.0 IdentityWidget.qml
 NetworkWidget 1.0 NetworkWidget.qml
 WeatherWidget 1.0 WeatherWidget.qml
@@ -23,3 +40,5 @@ ResourcesWidget 1.0 ResourcesWidget.qml
 CalendarWidget 1.0 CalendarWidget.qml
 SysInfoCard 1.0 SysInfoCard.qml
 QuickTogglesGrid 1.0 QuickTogglesGrid.qml
+CommandInputBar 1.0 CommandInputBar.qml
+ScanlineOverlay 1.0 ScanlineOverlay.qml

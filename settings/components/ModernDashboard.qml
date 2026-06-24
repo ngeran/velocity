@@ -36,6 +36,16 @@ Item {
     property int currentTab: 0
 
     // =========================================================================
+    // PUBLIC FUNCTIONS
+    // =========================================================================
+
+    // Open the Control tab and switch to a specific sub-section
+    function openControlTab(section) {
+        root.currentTab = 4  // Switch to Control tab
+        controlModule.activeSection = section  // Set the sub-section
+    }
+
+    // =========================================================================
     // PRIVATE PROPERTIES — bound to real device data via NetworkService
     // =========================================================================
 
@@ -1270,6 +1280,19 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
+        }
+
+        // =====================================================================
+        // TAB 4: CONTROL MODULE (network/bluetooth/audio/power/system)
+        // =====================================================================
+
+        Components.ControlModule {
+            id: controlModule
+            visible: root.currentTab === 4
+            anchors.fill: parent
+
+            // Expose activeSection for IPC deep-link
+            property alias activeSection: controlModule.activeSection
         }
     }
 }

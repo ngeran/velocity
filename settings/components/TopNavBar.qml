@@ -16,6 +16,8 @@
 //   index 1 → Themes      (palette    "◑")
 //   index 2 → Wallpapers  (image      "⬚")
 //   index 3 → Settings    (gear       "⚙")
+//   index 4 → Control     (menu       "⋮")
+//   index 4 → Control     (menu       "⋮")
 //
 // HTML REFERENCE:
 //   .nav-item.active { background: #ffffff; color: #000000 }
@@ -67,7 +69,8 @@ Rectangle {
         { label: "DASHBOARD",   icon: "⊞" },   // index 0 — bento overview
         { label: "THEMES",      icon: "◑" },   // index 1 — ThemeModule
         { label: "WALLPAPERS",  icon: "⬚" },   // index 2 — WallpaperModule
-        { label: "SETTINGS",    icon: "⚙" }    // index 3 — Settings placeholder
+        { label: "SETTINGS",    icon: "⚙" },   // index 3 — Settings placeholder
+        { label: "CONTROL",     icon: "⋮" }    // index 4 — Control module (network/bt/audio/power/system)
     ]
 
     // =========================================================================

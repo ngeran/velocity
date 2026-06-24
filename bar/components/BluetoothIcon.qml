@@ -74,6 +74,6 @@ Item {
 
     Process {
         id: bluetuiProc
-        command: ["quickshell", "ipc", "-c", "control", "call", "ControlWindow", "open", "bluetooth"]
+        command: ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "openControl", "bluetooth"]
     }
 }

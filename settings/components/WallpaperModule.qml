@@ -50,12 +50,27 @@ Item {
         )
     }
 
+    // Start/stop/restart the auto-cycle timer to match the current state.
+    // Called whenever cyclingEnabled / cycleInterval / the wallpaper list change.
+    function _applyCycleTimer() {
+        if (root.cyclingEnabled && root.wallpaperList.length > 1) {
+            if (cycleTimer.running) cycleTimer.restart()
+            else cycleTimer.start()
+        } else {
+            cycleTimer.stop()
+        }
+    }
+
     // Update shared state when these properties change
     onCurrentWallpaperChanged: updateSharedState()
-    onCyclingEnabledChanged: updateSharedState()
-    onCycleIntervalChanged: updateSharedState()
+    onCyclingEnabledChanged: { updateSharedState(); root._applyCycleTimer() }
+    onCycleIntervalChanged: {
+        updateSharedState()
+        cycleTimer.interval = Math.max(10, root.cycleInterval) * 1000
+        root._applyCycleTimer()
+    }
     onTransitionTypeChanged: updateSharedState()
-    onWallpaperListChanged: updateSharedState()
+    onWallpaperListChanged: { updateSharedState(); root._applyCycleTimer() }
 
     // =========================================================================
     // CONFIG PERSISTENCE
@@ -97,6 +112,17 @@ Item {
         onTriggered: saveSettings()
     }
 
+    // Auto-cycle timer — rotates to a random wallpaper every cycleInterval when
+    // cycling is enabled. Controlled imperatively via _applyCycleTimer() (running
+    // is intentionally NOT bound, to avoid binding/restart() conflicts).
+    Timer {
+        id: cycleTimer
+        interval: Math.max(10, root.cycleInterval) * 1000
+        repeat: true
+        running: false
+        onTriggered: { console.log("[timer] auto-cycle fired"); root.cycleNow() }
+    }
+
     function saveSettings() {
         var data = {
             cycleInterval: root.cycleInterval,
@@ -125,6 +151,7 @@ Item {
                 root.currentWallpaper = data.currentWallpaper
 
             console.log("[WallpaperModule] Settings loaded")
+            root._applyCycleTimer()
         }
         configPers.load()
     }
@@ -251,8 +278,8 @@ Item {
     // =========================================================================
 
     function applyWallpaper(path) {
+        console.log("[apply] enter path=" + path)
         if (!path || path.length === 0) return
-        if (root.applyInProgress) return
 
         console.log("[WallpaperModule] Applying:", path)
 
@@ -264,7 +291,6 @@ Item {
         ]
         applyProc.running     = true
         root.currentWallpaper = path
-        root.applyInProgress  = true
         saveTimer.restart()
     }
 
@@ -279,6 +305,7 @@ Item {
     }
 
     function cycleNow() {
+        console.log("[cycle] manual cycle called")
         if (root.wallpaperList.length === 0) return
 
         var newIndex
@@ -773,7 +800,7 @@ Item {
                                 right: parent.right
                                 margins: 4
                             }
-                            visible: parent.isCurrent
+                            visible: parent.parent.isCurrent
                             width: 6
                             height: 6
                             radius: 3
@@ -785,7 +812,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: applyWallpaper(root.wallpaperList[index])
+                        onClicked: { console.log("[click] thumbnail idx=" + index); applyWallpaper(root.wallpaperList[index]) }
                     }
                 }
             }

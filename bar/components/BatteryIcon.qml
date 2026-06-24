@@ -1,16 +1,10 @@
 // =============================================================================
-// BatteryIcon.qml — Battery status indicator with shell-level hover popup
+// BatteryIcon.qml — Power status indicator with shell-level hover popup
 // =============================================================================
 //
-// Displays battery charge level and charging status using Nerd Font icons.
-//
-// ICONS (nf-md-*)
-//   "󰂄" - Battery + charging indicator
-//   "󰁹" - Battery (discharging)
-// Changes color based on charge level
-//
-// INTERACTION
-//   Hover to show battery info popup
+// Shows the live power glyph from BatteryService (battery level on a laptop,
+// power-plug on a desktop on AC). Click opens the Control Center POWER section,
+// the same as the other tray icons (network / bluetooth / audio).
 // =============================================================================
 
 import QtQuick
@@ -24,42 +18,31 @@ Item {
     height: Config.BarConfig.iconSize
     objectName: "batteryIcon"
 
+    property bool hasBattery: Services.BatteryService.hasBattery
     property int percentage: Services.BatteryService.percentage
     property bool charging: Services.BatteryService.charging
     property var shellRoot: null
 
     Component.onCompleted: {
-        // Find ShellRoot by traversing up the parent hierarchy
         function findShellRoot(item) {
             if (!item) return null
-            // Check if this item has the hoverPopupData property (ShellRoot marker)
             if (item.hoverPopupData !== undefined) return item
             if (item.parent) return findShellRoot(item.parent)
             return null
         }
         shellRoot = findShellRoot(icon.parent)
-        if (!shellRoot) {
-            console.log("[BatteryIcon] Could not find ShellRoot!")
-        }
-        console.log("[BatteryIcon] percentage:", percentage, "charging:", charging)
+        if (!shellRoot) console.log("[BatteryIcon] Could not find ShellRoot!")
     }
 
-    Row {
+    Text {
         anchors.centerIn: parent
-        spacing: 4
+        text: Services.BatteryService.glyph
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 14
+        color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : icon._color()
 
-        Text {
-            // Battery icon glyph
-            text: icon.charging ? "󰂄" : "󰁹"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : icon._batteryColor()
-            opacity: 1.0
-            visible: true
-
-            Behavior on color {
-                ColorAnimation { duration: 120 }
-            }
+        Behavior on color {
+            ColorAnimation { duration: 120 }
         }
     }
 
@@ -68,40 +51,45 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            // Optional: Click could toggle a more detailed view or open a battery tool
-        }
+        onClicked: openProc.running = true
 
         onEntered: {
             if (icon.shellRoot) {
-                // Get the icon's position relative to the shell (screen coordinates)
                 var pos = icon.parent.mapToItem(icon.shellRoot, icon.x, icon.y)
-                var timeEstimate = icon.charging ? "Charging" : "Discharging"
+                var subtext = icon.hasBattery
+                    ? (icon.percentage + "%" + (icon.charging ? " ⚡" : ""))
+                    : "AC POWER"
                 icon.shellRoot.hoverPopupData = {
                     visible: true,
-                    text: "Battery",
-                    subtext: icon.percentage + "%" + (icon.charging ? " ⚡" : ""),
+                    text: "Power",
+                    subtext: subtext,
                     details: [
-                        timeEstimate,
-                        icon.percentage <= 20 ? "⚠️ Low battery" : ""
+                        Services.BatteryService.stateLabel,
+                        icon.hasBattery && icon.percentage <= 20 ? "⚠️ Low battery" : ""
                     ].filter(function(d) { return d !== "" }),
-                    x: pos.x + icon.width/2 - 60,  // Center the popup horizontally
-                    y: pos.y  // Icon's Y position (popup adds bar offset)
+                    x: pos.x + icon.width/2 - 60,
+                    y: pos.y
                 }
             }
         }
 
         onExited: {
-            if (icon.shellRoot) {
-                icon.shellRoot.hoverPopupData.visible = false
-            }
+            if (icon.shellRoot) icon.shellRoot.hoverPopupData.visible = false
         }
     }
 
-    function _batteryColor() {
-        if (icon.charging) return "#68d391"  // Green when charging
-        if (icon.percentage <= 20) return "#f87171"  // Red when low
-        if (icon.percentage <= 50) return "#fbbf24"  // Yellow at half
-        return "#ffffff"  // White otherwise
+    // Open the Control Center on the POWER section (same pattern as the other
+    // tray icons: network / bluetooth / audio).
+    Process {
+        id: openProc
+        command: ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "openControl", "power"]
+    }
+
+    function _color() {
+        if (!icon.hasBattery) return "#ffffff"        // desktop on AC — neutral white
+        if (icon.charging) return "#68d391"           // green while charging
+        if (icon.percentage <= 20) return "#f87171"   // red when low
+        if (icon.percentage <= 50) return "#fbbf24"   // yellow at half
+        return "#ffffff"
     }
 }
