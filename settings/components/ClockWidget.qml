@@ -17,7 +17,7 @@
 
 import QtQuick
 import QtQuick.Layouts
-import "." as UI
+import "../config" as Config
 
 ColumnLayout {
     id: clockRoot
@@ -57,7 +57,7 @@ ColumnLayout {
         // Hours
         Text {
             text:           Qt.formatDateTime(clockRoot._now, "HH")
-            color:          UI.Colors.primary
+            color:          Config.ThemeConfig.colors.primary
             font.pixelSize: 48
             font.bold:      true
             font.family:    "monospace"
@@ -66,7 +66,7 @@ ColumnLayout {
         // Separator
         Text {
             text:           ":"
-            color:          UI.Colors.outlineVariant
+            color:          Config.ThemeConfig.colors.outlineVariant
             font.pixelSize: 48
             font.bold:      true
             font.family:    "monospace"
@@ -77,7 +77,7 @@ ColumnLayout {
         // Minutes
         Text {
             text:           Qt.formatDateTime(clockRoot._now, "mm")
-            color:          UI.Colors.accentCyan
+            color:          Config.ThemeConfig.colors.secondary
             font.pixelSize: 48
             font.bold:      true
             font.family:    "monospace"
@@ -90,7 +90,7 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         height:           1
-        color:            UI.Colors.outlineVariant
+        color:            Config.ThemeConfig.colors.outlineVariant
         Layout.topMargin: 12
         Layout.bottomMargin: 10
     }
@@ -103,7 +103,7 @@ ColumnLayout {
 
         Text {
             text:           Qt.formatDateTime(clockRoot._now, "MMM dd yyyy").toUpperCase()
-            color:          UI.Colors.textMuted
+            color:          Config.ThemeConfig.colors.textDim
             font.pixelSize: 10
             font.family:    "monospace"
             font.letterSpacing: 1.2
@@ -113,7 +113,7 @@ ColumnLayout {
 
         Text {
             text:           Qt.formatDateTime(clockRoot._now, "dddd").toUpperCase()
-            color:          UI.Colors.accentCyan
+            color:          Config.ThemeConfig.colors.secondary
             font.pixelSize: 9
             font.bold:      true
             font.family:    "monospace"

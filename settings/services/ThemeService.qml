@@ -9,7 +9,7 @@ import Qt.labs.platform
 import Quickshell.Io
 import "../config" as Config
 
-QtObject {
+Item {
     id: themeService
 
     // =========================================================================
@@ -263,23 +263,29 @@ QtObject {
                         var colors = JSON.parse(matugenOutput);
 
                         // Map matugen colors to our theme format
+                        // matugen 4.1.0 emits base16 format: base16.base00.dark.color
+                        function pickBase16(b16Key) {
+                            var e = colors.base16 && colors.base16[b16Key]
+                            if (!e) return null
+                            return (e.default && e.default.color) || (e.dark && e.dark.color) || (e.light && e.light.color) || null
+                        }
                         var mappedColors = {
-                            background: themeService.pendingOLEDClamp ? "#000000" : (colors.colors.background || "#000000"),
-                            surface: colors.colors.surface || "#0a0a0a",
-                            surfaceVariant: colors.colors.surface_variant || "#111111",
-                            surfaceContainer: colors.colors.surface_container || "#111111",
-                            text: colors.colors.on_background || "#e0e0e0",
-                            textDim: colors.colors.on_surface_variant || "#808080",
-                            border: colors.colors.outline || "#1a1a1a",
-                            outline: colors.colors.outline || "#2a2a2a",
-                            outlineVariant: colors.colors.outline_variant || "#1a1a1a",
-                            primary: colors.colors.primary || "#7c6bf0",
-                            secondary: colors.colors.secondary || "#00dce5",
-                            accent: colors.colors.tertiary || "#f87171",
-                            success: colors.colors.primary || "#34d399",
-                            warning: colors.colors.secondary || "#fbbf24",
-                            error: colors.colors.error || "#f87171",
-                            info: colors.colors.primary || "#00dce5"
+                            background: themeService.pendingOLEDClamp ? "#000000" : (pickBase16("base00") || "#000000"),
+                            surface: pickBase16("base01") || "#0a0a0a",
+                            surfaceVariant: pickBase16("base02") || "#111111",
+                            surfaceContainer: pickBase16("base03") || "#111111",
+                            text: pickBase16("base06") || "#e0e0e0",
+                            textDim: pickBase16("base07") || "#808080",
+                            border: pickBase16("base04") || "#1a1a1a",
+                            outline: pickBase16("base04") || "#2a2a2a",
+                            outlineVariant: pickBase16("base05") || "#1a1a1a",
+                            primary: pickBase16("base08") || "#7c6bf0",
+                            secondary: pickBase16("base09") || "#00dce5",
+                            accent: pickBase16("base0a") || "#f87171",
+                            success: pickBase16("base0b") || "#34d399",
+                            warning: pickBase16("base0c") || "#fbbf24",
+                            error: pickBase16("base0d") || "#f87171",
+                            info: pickBase16("base0e") || "#00dce5"
                         };
 
                         Config.ThemeConfig.applyTheme({
@@ -322,6 +328,21 @@ QtObject {
         }
     }
 
+    // Safety timeout: clear isRegenerating after ~8s if matugen hangs
+    // This prevents the Run Extraction button from being permanently disabled
+    Timer {
+        id: matugenTimeout
+        interval: 8000
+        running: false
+        repeat: false
+        onTriggered: {
+            if (themeService.isRegenerating) {
+                console.warn("ThemeService: matugen timeout - clearing isRegenerating flag")
+                themeService.isRegenerating = false
+            }
+        }
+    }
+
     function applyDynamicTheme(wallpaperPath, applyOLEDClamp) {
         console.log("=== applyDynamicTheme CALLED ===")
         console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
@@ -345,13 +366,14 @@ QtObject {
 
         themeService.isRegenerating = true;
         themeService.pendingOLEDClamp = applyOLEDClamp;
+        matugenTimeout.restart();
 
         // Run matugen to generate colors from wallpaper
         // Strip file:// prefix if present
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
         console.log("[applyDynamicTheme] Running matugen with path:", cleanPath)
 
-        matugenRunner.command = ["matugen", "image", cleanPath, "--json", "hex", "--mode", "dark", "--type", "scheme-tonal-spot", "-j", "hex", "--source-color-index", "0", "-q"];
+        matugenRunner.command = ["matugen", "image", cleanPath, "-j", "hex", "--mode", "dark", "--type", "scheme-tonal-spot", "--prefer=lightness", "-q"];
         matugenRunner.running = true;
     }
 

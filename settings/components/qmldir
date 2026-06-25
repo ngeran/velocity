@@ -9,6 +9,7 @@ ThemePresetCard 1.0 ThemePresetCard.qml
 ThemeInfoCard 1.0 ThemeInfoCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 GlassCard 1.0 GlassCard.qml
+DashboardCard 1.0 DashboardCard.qml
 BentoCard 1.0 BentoCard.qml
 PulseDot 1.0 PulseDot.qml
 NetworkRing 1.0 NetworkRing.qml
@@ -42,3 +43,6 @@ SysInfoCard 1.0 SysInfoCard.qml
 QuickTogglesGrid 1.0 QuickTogglesGrid.qml
 CommandInputBar 1.0 CommandInputBar.qml
 ScanlineOverlay 1.0 ScanlineOverlay.qml
+ThemeQuickSwitch 1.0 ThemeQuickSwitch.qml
+PowerCard 1.0 PowerCard.qml
+DashboardOverviewTab 1.0 DashboardOverviewTab.qml

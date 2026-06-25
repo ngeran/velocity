@@ -27,29 +27,13 @@ Item {
     Rectangle {
         id: baseBg
         anchors.fill: parent
-        color: Config.ThemeConfig.colors.background
-    }
-
-    AppBar {
-        id: appBar
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Config.ControlConfig.appbarHeight
-    }
-
-    CommandInputBar {
-        id: commandBar
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Config.ControlConfig.commandBarHeight
+        color: "#000000"
     }
 
     SideNav {
         id: sideNav
-        anchors.top: appBar.bottom
-        anchors.bottom: commandBar.top
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.left: parent.left
         width: Config.ControlConfig.sidenavWidth
         activeSection: root.activeSection
@@ -58,7 +42,7 @@ Item {
 
     StatusCardRow {
         id: statusRow
-        anchors.top: appBar.bottom
+        anchors.top: parent.top
         anchors.left: sideNav.right
         anchors.right: parent.right
         anchors.topMargin: Config.ControlConfig.padding
@@ -70,7 +54,7 @@ Item {
     TerminalBody {
         id: terminalBody
         anchors.top: statusRow.bottom
-        anchors.bottom: commandBar.top
+        anchors.bottom: parent.bottom
         anchors.left: sideNav.right
         anchors.right: parent.right
         anchors.topMargin: Config.ControlConfig.padding

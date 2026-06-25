@@ -20,7 +20,7 @@
 
 import QtQuick
 import QtQuick.Layouts
-import "." as UI
+import "../config" as Config
 
 ColumnLayout {
     id: calRoot
@@ -60,7 +60,7 @@ ColumnLayout {
 
         Text {
             text:           calRoot._monthLabel
-            color:          UI.Colors.primary
+            color:          Config.ThemeConfig.colors.primary
             font.pixelSize: 11
             font.bold:      true
             font.family:    "monospace"
@@ -85,7 +85,7 @@ ColumnLayout {
             delegate: Text {
                 Layout.alignment:   Qt.AlignHCenter
                 text:               modelData
-                color:              UI.Colors.textMuted
+                color:              Config.ThemeConfig.colors.textDim
                 font.pixelSize:     9
                 font.bold:          true
                 font.family:        "monospace"
@@ -98,7 +98,7 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth:  true
         height:            1
-        color:             UI.Colors.outlineVariant
+        color:             Config.ThemeConfig.colors.outlineVariant
         Layout.topMargin:  6
         Layout.bottomMargin: 6
     }
@@ -135,7 +135,7 @@ ColumnLayout {
                 Rectangle {
                     anchors.fill: parent
                     radius:       0
-                    color:        parent.isToday ? UI.Colors.primary : "transparent"
+                    color:        parent.isToday ? Config.ThemeConfig.colors.primary : "transparent"
                     visible:      !parent.isBlank
                 }
 
@@ -143,7 +143,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible:         !parent.isBlank
                     text:            parent.dayNumber.toString()
-                    color:           parent.isToday ? UI.Colors.background : UI.Colors.textMuted
+                    color:           parent.isToday ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
                     font.pixelSize:  10
                     font.bold:       parent.isToday
                     font.family:     "monospace"

@@ -28,6 +28,7 @@ import QtQuick
 import QtQuick.Shapes
 import QtQuick.Layouts
 import "." as UI
+import "../config" as Config
 
 Item {
     id: ringRoot
@@ -77,7 +78,7 @@ Item {
         // ----- VALUE ARC (active fill — driven by integrityValue) ------------
         ShapePath {
             id: valueArc
-            strokeColor: UI.Colors.accentCyan
+            strokeColor: Config.ThemeConfig.colors.secondary
             strokeWidth: 8
             fillColor:   "transparent"
             // SquareCap gives a sharp terminal edge — matches the bento aesthetic.

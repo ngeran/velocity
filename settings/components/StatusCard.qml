@@ -14,8 +14,7 @@ Rectangle {
 
     radius: Config.ControlConfig.radius
     color: "#050505"
-    border.width: 1
-    border.color: card.active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+    border.width: 0
 
     Column {
         anchors.fill: parent

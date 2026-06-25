@@ -16,8 +16,6 @@ Rectangle {
     property string activeSection: "network"
 
     color: "#000000"
-    border.color: Config.ThemeConfig.colors.border
-    border.width: 1
     radius: Config.ControlConfig.radius
     clip: true
 
@@ -43,15 +41,6 @@ Rectangle {
                 font.pixelSize: 11
                 font.bold: true
                 color: Config.ControlConfig.accent
-                Rectangle {
-                    anchors.left: parent.right
-                    anchors.leftMargin: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: flick.width - parent.implicitWidth - 6
-                    height: 1
-                    color: Config.ControlConfig.accentDim
-                    opacity: 0.4
-                }
             }
 
             // --- Section views (populated per phase) ---

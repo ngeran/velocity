@@ -17,7 +17,7 @@
 
 import QtQuick
 import QtQuick.Layouts
-import "." as UI
+import "../config" as Config
 
 RowLayout {
     id: identityRoot
@@ -41,7 +41,7 @@ RowLayout {
         height: 64
 
         color:        "transparent"
-        border.color: UI.Colors.outline
+        border.color: Config.ThemeConfig.colors.outline
         border.width: 1
         radius:       0
 
@@ -49,7 +49,7 @@ RowLayout {
         Text {
             anchors.centerIn: parent
             text:             identityRoot.userName.substring(0, 2)
-            color:            UI.Colors.textMuted
+            color:            Config.ThemeConfig.colors.textDim
             font.pixelSize:   18
             font.bold:        true
             font.family:      "monospace"
@@ -65,7 +65,7 @@ RowLayout {
         // Username display
         Text {
             text:           identityRoot.userName
-            color:          UI.Colors.primary
+            color:          Config.ThemeConfig.colors.primary
             font.pixelSize: 22
             font.bold:      true
             font.family:    "monospace"
@@ -80,12 +80,12 @@ RowLayout {
                 width:  8
                 height: 8
                 radius: 0   // Square dot — matches bento sharp-corner theme
-                color:  identityRoot.online ? UI.Colors.accentCyan : UI.Colors.textMuted
+                color:  identityRoot.online ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
             }
 
             Text {
                 text:           identityRoot.statusText
-                color:          UI.Colors.textMuted
+                color:          Config.ThemeConfig.colors.textDim
                 font.pixelSize: 10
                 font.family:    "monospace"
                 font.letterSpacing: 1.2

@@ -40,6 +40,12 @@ Row {
         title: "AUDIO"
         active: Services.AudioControlService.defaultSink.length > 0
         line1: Services.AudioControlService.defaultSink.length > 0 ? "PIPEWIRE: ACTIVE" : "PIPEWIRE: IDLE"
-        line2: Services.AudioControlService.defaultSink || "no sink"
+        line2: {
+            var sink = Services.AudioControlService.defaultSink
+            if (!sink || sink.length === 0) return "no sink"
+            // Elide long sink names to fit in the card
+            if (sink.length > 25) return sink.substring(0, 22) + "..."
+            return sink
+        }
     }
 }

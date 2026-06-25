@@ -16,7 +16,8 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
-import "." as UI
+import "../config" as Config
+import "." as Components
 
 ColumnLayout {
     id: netRoot
@@ -101,7 +102,7 @@ ColumnLayout {
 
         Text {
             text:           "NETWORK COMMAND"
-            color:          UI.Colors.textMuted
+            color:          Config.ThemeConfig.colors.textDim
             font.pixelSize: 10
             font.bold:      true
             font.family:    "monospace"
@@ -113,7 +114,7 @@ ColumnLayout {
         // Live status badge
         Text {
             text:           netRoot._integrity >= 0.5 ? "ACTIVE" : "DEGRADED"
-            color:          netRoot._integrity >= 0.5 ? UI.Colors.accentCyan : UI.Colors.accentWarn
+            color:          netRoot._integrity >= 0.5 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.warning
             font.pixelSize: 10
             font.family:    "monospace"
             font.letterSpacing: 1.2
@@ -129,7 +130,7 @@ ColumnLayout {
         Layout.fillWidth:    true
 
         // Ring gauge — drives from _integrity property
-        UI.NetworkRing {
+        Components.NetworkRing {
             id: liveRing
             width:          160
             height:         160
@@ -147,14 +148,14 @@ ColumnLayout {
                 spacing: 4
                 Text {
                     text:           "SSID"
-                    color:          UI.Colors.textMuted
+                    color:          Config.ThemeConfig.colors.textDim
                     font.pixelSize: 8
                     font.family:    "monospace"
                     font.letterSpacing: 1.5
                 }
                 Text {
                     text:           netRoot._ssid
-                    color:          UI.Colors.primary
+                    color:          Config.ThemeConfig.colors.primary
                     font.bold:      true
                     font.family:    "monospace"
                     elide:          Text.ElideRight
@@ -167,14 +168,14 @@ ColumnLayout {
                 spacing: 4
                 Text {
                     text:           "IP ADDRESS"
-                    color:          UI.Colors.textMuted
+                    color:          Config.ThemeConfig.colors.textDim
                     font.pixelSize: 8
                     font.family:    "monospace"
                     font.letterSpacing: 1.5
                 }
                 Text {
                     text:           netRoot._ipAddr
-                    color:          UI.Colors.accentCyan
+                    color:          Config.ThemeConfig.colors.secondary
                     font.family:    "monospace"
                 }
             }
@@ -184,14 +185,14 @@ ColumnLayout {
                 spacing: 4
                 Text {
                     text:           "INTERFACE"
-                    color:          UI.Colors.textMuted
+                    color:          Config.ThemeConfig.colors.textDim
                     font.pixelSize: 8
                     font.family:    "monospace"
                     font.letterSpacing: 1.5
                 }
                 Text {
                     text:           netRoot._iface
-                    color:          UI.Colors.textVariant
+                    color:          Config.ThemeConfig.colors.text
                     font.family:    "monospace"
                 }
             }

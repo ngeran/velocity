@@ -12,30 +12,20 @@
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
+import "../services" as Services
 
 Rectangle {
     id: root
 
-    property real cpuUsage:  42
-    property real memUsage:  68
-    property real gpuUsage:  85
-    property real diskUsage: 58
+    // Bind to live SysInfoService metrics instead of fake Math.random()
+    property real cpuUsage: Services.SysInfoService.cpuPercent
+    property real memUsage: Services.SysInfoService.memPercent
+    property real gpuUsage: Services.SysInfoService.gpuPercent
+    property real diskUsage: Services.SysInfoService.diskPercent
 
     color:  "#000000"
     radius: 0
 
-    Timer {
-        interval: 2000; running: true; repeat: true
-        onTriggered: updateResources()
-    }
-
-    Component.onCompleted: updateResources()
-
-    function updateResources() {
-        cpuUsage  = Math.min(100, Math.max(0, cpuUsage  + (Math.random() - 0.5) * 10))
-        memUsage  = Math.min(100, Math.max(0, memUsage  + (Math.random() - 0.5) * 5))
-        gpuUsage  = Math.min(100, Math.max(0, gpuUsage  + (Math.random() - 0.5) * 15))
-    }
 
     function barColor(pct) {
         if (pct >= 90) return "#e05555"

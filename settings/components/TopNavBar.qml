@@ -15,9 +15,8 @@
 //   index 0 → Dashboard   (grid icon  "⊞")
 //   index 1 → Themes      (palette    "◑")
 //   index 2 → Wallpapers  (image      "⬚")
-//   index 3 → Settings    (gear       "⚙")
-//   index 4 → Control     (menu       "⋮")
-//   index 4 → Control     (menu       "⋮")
+//   index 3 → Control     (menu       "⋮")
+//   index 4 → Settings    (gear       "⚙")
 //
 // HTML REFERENCE:
 //   .nav-item.active { background: #ffffff; color: #000000 }
@@ -66,11 +65,11 @@ Rectangle {
     // Index order MUST match the tab content mapping in ModernDashboard.qml.
     // =========================================================================
     readonly property var tabModel: [
-        { label: "DASHBOARD",   icon: "⊞" },   // index 0 — bento overview
-        { label: "THEMES",      icon: "◑" },   // index 1 — ThemeModule
-        { label: "WALLPAPERS",  icon: "⬚" },   // index 2 — WallpaperModule
-        { label: "SETTINGS",    icon: "⚙" },   // index 3 — Settings placeholder
-        { label: "CONTROL",     icon: "⋮" }    // index 4 — Control module (network/bt/audio/power/system)
+        { key: "dashboard",  label: "DASHBOARD",   icon: "⊞" },   // index 0
+        { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
+        { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
+        { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3 — Control module
+        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 4 — Settings
     ]
 
     // =========================================================================
