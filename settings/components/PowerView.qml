@@ -23,7 +23,7 @@ Column {
         width: parent.width
         height: 72
         radius: Config.ControlConfig.radius
-        color: "#000000"
+        color: Config.ThemeConfig.colors.background
         border.color: view._accent
         border.width: 1
 
@@ -69,7 +69,7 @@ Column {
         width: parent.width
         height: 8
         radius: 2
-        color: "#1a1a1a"
+        color: Config.ThemeConfig.colors.border
         Rectangle {
             width: parent.width * Math.max(0, Math.min(1, Services.PowerControlService.percent / 100))
             height: parent.height

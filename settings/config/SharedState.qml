@@ -49,12 +49,9 @@ QtObject {
     // MUTATION HANDLERS
     // =========================================================================
 
-    // DEPRECATED — intentional no-op. The theme* properties above are now
-    // reactive bindings into ThemeConfig (the single source of truth), so
-    // manual mirroring is neither needed nor permitted — assigning here
-    // would break those bindings. The signature is retained only so the
-    // existing call site in ThemeModule.qml does not error.
-    function updateTheme(name, author, isOLED, primary, secondary, text) { }
+    // Theme properties are now reactive bindings into ThemeConfig (the
+    // single source of truth). The deprecated updateTheme() no-op function
+    // was removed in Phase 0 cleanup — no call sites existed.
 
     function updateWallpaper(path) {
         console.log("[SharedState] updateWallpaper called with path:", path)

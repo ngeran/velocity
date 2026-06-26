@@ -50,39 +50,12 @@ QtObject {
     ]
 
     // =========================================================================
-    // OLED-MINIMAL COLOR SCHEME
-    // =========================================================================
-
-    /// Pure black background
-    readonly property color background: "#000000"
-
-    /// Divider color (1px rules)
-    readonly property color divider: "#1a1a1a"
-
-    /// Primary text color
-    readonly property color textPrimary: "#cccccc"
-
-    /// Secondary text color
-    readonly property color textSecondary: "#2e2e2e"
-
-    /// Accent color (teal/cyan)
-    readonly property color accent: "#00dfe5"
-
-    /// Dim text color
-    readonly property color textDim: "#2a2a2a"
-
-    /// Success color
-    readonly property color success: "#34d399"
-
-    /// Warning color
-    readonly property color warning: "#fbbf24"
-
-    /// Error color
-    readonly property color error: "#f87171"
-
-    // =========================================================================
     // UI DIMENSIONS
     // =========================================================================
+
+    // NOTE: Color tokens have been migrated to ThemeConfig to eliminate duplication.
+    // WallpaperModule now uses Config.ThemeConfig.colors.* for all theming.
+    // behavioral constants below remain.
 
     /// Section header font size
     readonly property int headerFontSize: 9

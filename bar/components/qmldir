@@ -10,7 +10,6 @@ BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
 BatteryIcon 1.0 BatteryIcon.qml
 SettingsIcon 1.0 SettingsIcon.qml
-PowerIcon 1.0 PowerIcon.qml
 PowerMenu 1.0 PowerMenu.qml
 PowerMenuItem 1.0 PowerMenuItem.qml
 LockScreen 1.0 LockScreen.qml

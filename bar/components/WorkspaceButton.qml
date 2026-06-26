@@ -4,6 +4,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "../config" as Config
 
 Rectangle {
     id: button
@@ -11,19 +12,20 @@ Rectangle {
     property int workspaceId: 1
     property bool isActive: false
     property bool isOccupied: false
+    property bool isHovered: false
 
     signal clicked()
 
     width: 24
     height: 24
     radius: 4
-    color: "transparent"
+    color: isHovered ? "#111111" : "transparent"
 
     // Active highlight
     Rectangle {
         anchors.fill: parent
         radius: parent.radius
-        color: isActive ? "#00dce5" : "transparent"
+        color: isActive ? Config.BarConfig.colorAccent : "transparent"
         opacity: isActive ? 0.3 : 1.0
     }
 
@@ -31,17 +33,18 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: button.workspaceId
-        color: isActive ? "#ffffff" : isOccupied ? "#e0e0e0" : "#4a4a4a"
+        color: isActive ? Config.BarConfig.colorText : isOccupied ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
         font.pixelSize: 11
         font.family: "JetBrains Mono, monospace"
     }
 
     // Hover
     MouseArea {
+        id: mouseArea
         anchors.fill: parent
-        onClicked: button.clicked()
         hoverEnabled: true
-        onEntered: button.color = "#111111"
-        onExited: button.color = "transparent"
+        onClicked: button.clicked()
+        onEntered: button.isHovered = true
+        onExited: button.isHovered = false
     }
 }

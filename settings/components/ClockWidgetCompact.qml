@@ -23,7 +23,7 @@ Rectangle {
     property string dateString:   ""
     property bool   colonVisible: true
 
-    color:        "#000000"
+    color:        Config.ThemeConfig.colors.background
     radius:       0
 
     Timer {
@@ -65,7 +65,7 @@ Rectangle {
                 font.family:       Config.SettingsConfig.fontFamily
                 font.weight:       Font.Medium
                 font.letterSpacing: -1
-                color:             "#e0e0e0"
+                color:             Config.ThemeConfig.colors.text
                 lineHeight:        0.95
             }
 
@@ -74,7 +74,7 @@ Rectangle {
                 font.pixelSize: 24
                 font.family:    Config.SettingsConfig.fontFamily
                 font.weight:    Font.Medium
-                color:          colonVisible ? "#00dce5" : "#1a1a1a"
+                color:          colonVisible ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border
                 lineHeight:     0.95
                 Behavior on color { ColorAnimation { duration: 80 } }
             }
@@ -85,7 +85,7 @@ Rectangle {
                 font.family:       Config.SettingsConfig.fontFamily
                 font.weight:       Font.Medium
                 font.letterSpacing: -1
-                color:             "#e0e0e0"
+                color:             Config.ThemeConfig.colors.text
                 lineHeight:        0.95
             }
         }
@@ -99,14 +99,14 @@ Rectangle {
             text:           padZero(seconds)
             font.pixelSize: 12
             font.family:    Config.SettingsConfig.fontFamily
-            color:          "#252525"
+            color:          Config.ThemeConfig.colors.textDim
         }
 
         Item { Layout.preferredHeight: 8 }
 
         // ── Divider ───────────────────────────────────────────────────────────
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant }
 
         Item { Layout.preferredHeight: 8 }
 
@@ -118,7 +118,7 @@ Rectangle {
             font.pixelSize:     7
             font.family:        Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.5
-            color:              "#333333"
+            color:              Config.ThemeConfig.colors.textDim
         }
 
         Item { Layout.preferredHeight: 2 }
@@ -128,7 +128,7 @@ Rectangle {
             text:               dateString
             font.pixelSize:     8
             font.family:        Config.SettingsConfig.fontFamily
-            color:              "#3a3a3a"
+            color:              Config.ThemeConfig.colors.textDim
         }
 
         Item { Layout.fillHeight: true }

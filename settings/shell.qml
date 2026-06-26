@@ -27,6 +27,14 @@ ShellRoot {
 
     property bool shown: false
 
+    // Screen-adaptive sizing - scale based on available window width
+    // PanelWindow width spans the full screen, so we can use that directly
+    readonly property real availableWidth: panelWindow.width || 1920
+
+    // Base dimensions (1100×640) scaled to fit screen with margins
+    readonly property real cardWidth: Math.min(1100, availableWidth - 80)
+    readonly property real cardHeight: 640  // Fixed height for consistency
+
     // =========================================================================
     // HIDE TIMER — defer visible=false until slide-up completes
     // =========================================================================
@@ -131,8 +139,8 @@ ShellRoot {
             right: true
         }
 
-        // Height = bar (26) + card (640) + margin (14) = 680
-        implicitHeight: Config.SettingsConfig.barHeight + 640 + 14
+        // Height = bar + adaptive card + margin
+        implicitHeight: Config.SettingsConfig.barHeight + root.cardHeight + 14
         implicitWidth:  1920
 
         // Transparent stage — card provides the background
@@ -170,14 +178,14 @@ ShellRoot {
         Components.ModernDashboard {
             id: dashboard
 
-            width: 1100
-            height: 640
+            width: root.cardWidth
+            height: root.cardHeight
 
             // Center horizontally, animate vertically
             anchors.horizontalCenter: parent.horizontalCenter
 
-            // Hidden: y = barHeight - height = 26 - 640 = -614 (above stage)
-            // Shown:  y = barHeight = 26 (top edge flush with bar bottom)
+            // Hidden: y = barHeight - height (above stage)
+            // Shown:  y = barHeight (top edge flush with bar bottom)
             y: root.shown ? Config.SettingsConfig.barHeight : (Config.SettingsConfig.barHeight - height)
 
             // Smooth slide animation

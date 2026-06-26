@@ -24,7 +24,7 @@ Rectangle {
     // =========================================================================
     width:        220
     height:       130
-    color:        "#000000" // Hard-pinned pure black containment layout
+    color:        Config.ThemeConfig.colors.surfaceContainer
     border.color: Config.ThemeConfig.colors.border
     border.width: 1
     radius:       0 // Hard sharp corners asset enforcement
@@ -34,7 +34,7 @@ Rectangle {
             fill:    parent
             margins: 14
         }
-        spacing: 10
+        spacing: 8
 
         // Module Context Header Label Component
         Text {
@@ -54,7 +54,7 @@ Rectangle {
                 font.pixelSize: 14
                 font.family:    "monospace"
                 font.bold:      true
-                color:          "#ffffff"
+                color:          Config.ThemeConfig.colors.text
 
                 // Monospace accent baseline border line block matrix
                 Rectangle {

@@ -12,7 +12,7 @@ Item {
         onPaint: {
             var ctx = getContext("2d")
             ctx.reset()
-            ctx.strokeStyle = "#FFFFFF"
+            ctx.strokeStyle = Config.ThemeConfig.colors.primary
             ctx.lineWidth = 1
             for (var y = 0; y <= height; y += Config.ControlConfig.scanlineSpacing) {
                 ctx.beginPath()

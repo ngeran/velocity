@@ -27,8 +27,8 @@ Rectangle {
     readonly property string transitionType: SharedConfig.SharedState.wallpaperTransitionType
     readonly property int wallpaperCount: SharedConfig.SharedState.wallpaperCount
 
-    color: "#000000"
-    border.color: "#1a1a1a"
+    color: Config.ThemeConfig.colors.background
+    border.color: Config.ThemeConfig.colors.border
     border.width: 1
     radius: 0
 
@@ -60,15 +60,15 @@ Rectangle {
             text: "WALLPAPER"
             font.pixelSize: 7
             font.letterSpacing: 2.0
-            color: "#222222"
+            color: Config.ThemeConfig.colors.textDim
         }
 
         // Thumbnail preview
         Rectangle {
             width: parent.width - 24
             height: 60
-            color: "#0a0a0a"
-            border.color: "#1a1a1a"
+            color: Config.ThemeConfig.colors.surface
+            border.color: Config.ThemeConfig.colors.border
             border.width: 1
 
             Image {
@@ -83,13 +83,13 @@ Rectangle {
                 Rectangle {
                     anchors.fill: parent
                     visible: parent.status === Image.Loading || parent.status === Image.Error || wallpaperPath.length === 0
-                    color: "#0a0a0a"
+                    color: Config.ThemeConfig.colors.surface
 
                     Text {
                         anchors.centerIn: parent
                         text: wallpaperPath.length === 0 ? "—" : "…"
                         font.pixelSize: 10
-                        color: "#2e2e2e"
+                        color: Config.ThemeConfig.colors.textDim
                     }
                 }
             }
@@ -101,7 +101,7 @@ Rectangle {
             text: basename(wallpaperPath)
             font.pixelSize: 8
             font.letterSpacing: 0.5
-            color: "#cccccc"
+            color: Config.ThemeConfig.colors.text
             elide: Text.ElideMiddle
         }
 
@@ -115,7 +115,7 @@ Rectangle {
                 text: cyclingEnabled ? "AUTO" : "MANUAL"
                 font.pixelSize: 7
                 font.letterSpacing: 1.5
-                color: cyclingEnabled ? "#34d399" : "#f87171"
+                color: cyclingEnabled ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
             }
 
             Text {
@@ -123,14 +123,14 @@ Rectangle {
                 text: "NEXT " + formatTime(countdown)
                 font.pixelSize: 7
                 font.letterSpacing: 1.5
-                color: "#00dfe5"
+                color: Config.ThemeConfig.colors.secondary
             }
 
             Text {
                 text: "󰉩 " + wallpaperCount
                 font.pixelSize: 7
                 font.letterSpacing: 1.5
-                color: "#2a2a2a"
+                color: Config.ThemeConfig.colors.textDim
             }
         }
     }

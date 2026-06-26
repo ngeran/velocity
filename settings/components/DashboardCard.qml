@@ -53,6 +53,21 @@ Rectangle {
         id: contentItem
         anchors.fill: parent
         anchors.margins: 16
+        // CRITICAL: clip prevents ColumnLayout/RowLayout children from
+        // driving their implicitHeight back up through the parent chain
+        // and expanding the card beyond its assigned bento-grid size.
+        clip: true
+    }
+
+    // Faint accent top-edge highlight — brightens on hover for depth.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 1
+        color: Config.ThemeConfig.colors.secondary
+        opacity: root.isHovered ? 0.55 : 0.12
+        Behavior on opacity { NumberAnimation { duration: 200 } }
     }
 
     // =========================================================================
@@ -75,7 +90,7 @@ Rectangle {
     // Apply hover state
     onIsHoveredChanged: {
         border.color = isHovered
-            ? Config.ThemeConfig.colors.outline
+            ? Config.ThemeConfig.colors.secondary
             : Config.ThemeConfig.colors.outlineVariant
     }
 }

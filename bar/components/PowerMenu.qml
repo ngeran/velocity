@@ -39,7 +39,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "#000000"
+        color: Config.BarConfig.colorBackground
         border.color: Config.BarConfig.colorAccent
         border.width: 1
         radius: 0

@@ -1,133 +1,108 @@
 // =============================================================================
-// DashboardOverviewTab.qml — Rebuilt tab-0 with bento grid
-// =============================================================================
+// DashboardOverviewTab.qml — Explicit Pixel-Perfect Bento Grid
+// VERSION: V1.06 — No Column/anchors.fill conflict; pure explicit geometry
 //
-// This is the new overviewTab (tab 0) for ModernDashboard.
-// Replaces the old complex layout with a clean bento grid:
-// - Row 1: ClockWidget · ThemeQuickSwitch · IdentityWidget · ResourcesWidget
-// - Row 2: CalendarWidget · NetworkWidget · PowerCard
-//
-// All wrapped in DashboardCard containers for theme-reactive glass cards.
-//
+// ROOT CAUSE (V1.04/V1.05): Using Column{anchors.fill} + Row{height:parent.height}
+// creates a circular binding — Column height depends on children, children depend
+// on Column height. QML resolves this unpredictably, causing Row 1 to consume
+// all available height. Fix: explicit y-placement on an Item, zero parent refs.
 // =============================================================================
 
 import "." as Components
 import QtQuick
-import QtQuick.Layouts
 import "../config" as Config
 
 Item {
     id: root
-    visible: parent.currentTab === 0
     anchors.fill: parent
 
-    // Top margin for content area
-    property real cardMargin: 16
-    property real cardSpacing: 16
-    property real rowSpacing: 16
-
-    // Row heights
-    property real row1Height: parent.height * 0.52
-    property real row2Height: parent.height * 0.44
+    readonly property string layoutVersion: "V1.06"
 
     // =========================================================================
-    // ROW 1 — Clock, Theme, Identity, Resources
+    // DIMENSION CONSTANTS — all derived from root.width / root.height only
+    // =========================================================================
+    readonly property real pad:     20          // outer margin on all sides
+    readonly property real gap:     14          // gap between rows and between cards
+
+    // Usable canvas
+    readonly property real cw: root.width  - pad * 2
+    readonly property real ch: root.height - pad * 2
+
+    // Row heights: two rows + one inter-row gap must fill ch exactly
+    readonly property real r1h: (ch - gap) * 0.54
+    readonly property real r2h: (ch - gap) * 0.46
+
+    // Per-row available widths (innerWidth minus inter-card gaps)
+    // Row 1: 4 cards → 3 gaps
+    readonly property real r1w: cw - gap * 3
+    // Row 2: 3 cards → 2 gaps
+    readonly property real r2w: cw - gap * 2
+
+    // Y origins (no Column involved — pure coordinate math)
+    readonly property real row1Y: pad
+    readonly property real row2Y: pad + r1h + gap
+
+    // =========================================================================
+    // ROW 1 — Clock | ThemeSwitch | Identity | Resources
     // =========================================================================
     Row {
-        id: row1
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-            margins: cardMargin
-        }
-        height: row1Height
-        spacing: cardSpacing
+        x: root.pad
+        y: root.row1Y
+        width: root.cw
+        height: root.r1h
+        spacing: root.gap
 
-        // ── CLOCK WIDGET (30% width) ───────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.30
-            height: parent.height
-
-            Components.ClockWidget {
-                anchors.fill: parent
-            }
+            width: root.r1w * 0.29
+            height: root.r1h
+            Components.ClockWidget { anchors.fill: parent }
         }
 
-        // ── THEME QUICK-SWITCH (22% width) ────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.22
-            height: parent.height
-
-            Components.ThemeQuickSwitch {
-                anchors.fill: parent
-            }
+            width: root.r1w * 0.21
+            height: root.r1h
+            Components.ThemeQuickSwitch { anchors.fill: parent }
         }
 
-        // ── IDENTITY WIDGET (24% width) ────────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.24
-            height: parent.height
-
-            Components.IdentityWidget {
-                anchors.fill: parent
-            }
+            width: root.r1w * 0.25
+            height: root.r1h
+            Components.IdentityWidget { anchors.fill: parent }
         }
 
-        // ── RESOURCES WIDGET (24% width - right column) ───────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.24
-            height: parent.height
-
-            Components.ResourcesWidget {
-                anchors.fill: parent
-            }
+            width: root.r1w * 0.25
+            height: root.r1h
+            Components.ResourcesWidget { anchors.fill: parent }
         }
     }
 
     // =========================================================================
-    // ROW 2 — Calendar, Network, Power
+    // ROW 2 — Calendar | Network | Power
     // =========================================================================
     Row {
-        id: row2
-        anchors {
-            left: parent.left
-            right: parent.right
-            margins: cardMargin
-        }
-        anchors.top: row1.bottom
-        anchors.topMargin: rowSpacing
-        height: row2Height
-        spacing: cardSpacing
+        x: root.pad
+        y: root.row2Y
+        width: root.cw
+        height: root.r2h
+        spacing: root.gap
 
-        // ── CALENDAR WIDGET (40% width) ────────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.40
-            height: parent.height
-
-            Components.CalendarWidget {
-                anchors.fill: parent
-            }
+            width: root.r2w * 0.40
+            height: root.r2h
+            Components.CalendarWidget { anchors.fill: parent }
         }
 
-        // ── NETWORK WIDGET (30% width) ────────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.30
-            height: parent.height
-
-            Components.NetworkWidget {
-                anchors.fill: parent
-            }
+            width: root.r2w * 0.32
+            height: root.r2h
+            Components.NetworkWidget { anchors.fill: parent }
         }
 
-        // ── POWER CARD (30% width) ─────────────────────────────────────────────
         Components.DashboardCard {
-            width: parent.width * 0.30
-            height: parent.height
-
-            Components.PowerCard {
-                anchors.fill: parent
-            }
+            width: root.r2w * 0.28
+            height: root.r2h
+            Components.PowerCard { anchors.fill: parent }
         }
     }
 }

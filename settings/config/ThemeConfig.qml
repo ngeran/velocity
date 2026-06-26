@@ -67,6 +67,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
+import "./" as Config
 
 Item {
     id: root
@@ -148,6 +149,22 @@ Item {
     }
 
     // =========================================================================
+    // COLOR UTILITY — hex + alpha → translucent color
+    // -------------------------------------------------------------------------
+    // Lets widgets derive translucent accents (glows, ring backings, tints) from
+    // theme tokens, so alpha-based highlights follow the theme too. Accepts a
+    // "#rrggbb" string (any colors.* token) and an alpha in 0..1.
+    // =========================================================================
+    function tint(hex, alpha) {
+        var h = (hex || "#000000").replace("#", "")
+        if (h.length !== 6) return Qt.rgba(0, 0, 0, alpha)
+        return Qt.rgba(parseInt(h.substring(0, 2), 16) / 255,
+                       parseInt(h.substring(2, 4), 16) / 255,
+                       parseInt(h.substring(4, 6), 16) / 255,
+                       alpha)
+    }
+
+    // =========================================================================
     // BULK INTAKE — apply a parsed JSON payload
     // -------------------------------------------------------------------------
     // Accepts the historical { colors: {...}, metadata: {...} } schema emitted
@@ -157,22 +174,24 @@ Item {
     // =========================================================================
 
     function applyTheme(data, isUserInitiated) {
-        console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
-        console.log("[applyTheme] Input data:", JSON.stringify(data))
-        console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
+        if (Config.DebugConfig.debugTheme) {
+            console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
+            console.log("[applyTheme] Input data:", JSON.stringify(data))
+            console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
+        }
 
         // Set flag if this is a user-initiated change
         if (isUserInitiated === true) {
             root.userInitiatedChange = true
-            console.log("[applyTheme] Set userInitiatedChange flag")
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Set userInitiatedChange flag")
         }
 
         if (!data) {
-            console.log("[applyTheme] ERROR: No data provided")
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] ERROR: No data provided")
             return
         }
 
-        console.log("[applyTheme] Current metadata.oledClamp BEFORE:", root.metadata.oledClamp)
+        if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Current metadata.oledClamp BEFORE:", root.metadata.oledClamp)
 
         if (data.colors) {
             var c = data.colors
@@ -196,16 +215,18 @@ Item {
                 "error":            c.error            || root.colors.error,
                 "info":             c.info             || root.colors.info
             }
-            console.log("[applyTheme] Colors applied. New background:", root.colors.background)
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Colors applied. New background:", root.colors.background)
         }
 
         if (data.metadata) {
             var m = data.metadata
-            console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
-            console.log("[applyTheme] Current root.metadata.oledClamp:", root.metadata.oledClamp)
+            if (Config.DebugConfig.debugTheme) {
+                console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
+                console.log("[applyTheme] Current root.metadata.oledClamp:", root.metadata.oledClamp)
+            }
 
             var newOledClamp = (m.oledClamp !== undefined) ? m.oledClamp : root.metadata.oledClamp
-            console.log("[applyTheme] NEW oledClamp will be:", newOledClamp)
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] NEW oledClamp will be:", newOledClamp)
 
             root.metadata = {
                 "name":           m.name           || root.metadata.name,
@@ -215,7 +236,7 @@ Item {
                 "matugenEnabled": (m.matugenEnabled !== undefined) ? m.matugenEnabled : root.metadata.matugenEnabled
             }
 
-            console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
         }
 
         // QD-OLED Safe: force pure-black backgrounds
@@ -229,74 +250,88 @@ Item {
             root.colors = cs
         }
 
-        console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
-        console.log("=== Config.ThemeConfig.applyTheme COMPLETE ===")
+        if (Config.DebugConfig.debugTheme) {
+            console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
+            console.log("=== Config.ThemeConfig.applyTheme COMPLETE ===")
+        }
     }
 
     // =========================================================================
-    // EXTERNAL INTAKE — poll ~/.cache/theme/colors.json
+    // EXTERNAL INTAKE — FileView.onFileChanged watching colors.json
     // -------------------------------------------------------------------------
-    // Keeps the settings shell reactive to the pre-existing theme-switcher CLI
-    // and any external tool that writes the canonical cache file. ThemeService
-    // owns the in-process mutation path and the theme-active.json write-back.
+    // Event-driven sync (replaces 1s poll). Reacts to external writes from
+    // ThemeService (settings writes) and external tools (theme-switcher CLI).
+    // ThemeService owns the in-process mutation path and theme-active.json write-back.
     // =========================================================================
 
     // Plain filesystem path. StandardPaths returns a file:// URL in this Qt
-    // build; strip it via .replace so `cat` gets a real path (a literal
-    // "file://..." name doesn't exist → empty buffer → theme never restored).
+    // build; strip it via .replace so FileView gets a real path (a literal
+    // "file://..." name doesn't exist → onFileChanged never fires).
     readonly property string externalCachePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
 
-    // Track last cached data to avoid redundant re-application
+    // Track last cached data and timestamp to avoid redundant re-application
     property string lastCachedData: ""
+    property string lastCachedTimestamp: ""
 
-    Process {
-        id: catProc
-        // sh -c (not bare cat) — mirrors the bar's working poll; this is the
-        // pattern that reliably delivers stdout in this quickshell build.
-        command: ["sh", "-c", "cat " + root.externalCachePath]
-        property string buffer: ""
+    // FileView watcher for event-driven theme sync
+    property var cacheWatcher: FileView {
+        path: root.externalCachePath
 
-        stdout: SplitParser {
-            onRead: function(data) { catProc.buffer += data }
-        }
+        onFileChanged: {
+            // FileView.text is a METHOD (not a property) in this Quickshell build
+            let raw = cacheWatcher.text();
+            if (!raw || raw.trim() === "") return;
 
-        onRunningChanged: {
-            if (!running) {
-                if (catProc.buffer.trim().length > 0) {
-                    try {
-                        var newData = catProc.buffer.trim()
-                        // Only apply if data has actually changed AND not a user-initiated change
-                        if (newData !== root.lastCachedData) {
-                            if (!root.userInitiatedChange) {
-                                console.log("[ThemeConfig] Cache data changed (external), re-applying theme")
-                                root.lastCachedData = newData
-                                root.applyTheme(JSON.parse(newData))
-                            } else {
-                                console.log("[ThemeConfig] Cache data changed but user initiated, skipping")
-                                root.lastCachedData = newData  // Update last cached data but don't apply
-                                root.userInitiatedChange = false  // Reset flag
-                            }
-                        } else {
-                            console.log("[ThemeConfig] Cache data unchanged, skipping re-application")
-                        }
-                    } catch (e) {
-                        // Silently ignore parse errors — keep last good theme
-                        console.log("[ThemeConfig] Parse error reading cache:", e)
-                    }
+            try {
+                var newData = raw.trim();
+                var data = JSON.parse(newData);
+
+                // Check if data actually changed by comparing timestamps
+                var newTimestamp = data.metadata && data.metadata.applied ? data.metadata.applied : "";
+                if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
+                    return;  // No actual change
                 }
-                catProc.buffer = ""
+
+                // Update timestamp
+                if (newTimestamp) {
+                    root.lastCachedTimestamp = newTimestamp;
+                }
+
+                // Only apply if not a user-initiated change in the last 100ms
+                // This window prevents race conditions where an external write
+                // during a user action would silently drop the user's intent
+                var timeSinceUserChange = Date.now() - (root.metadata.applied ? new Date(root.metadata.applied).getTime() : 0);
+                if (timeSinceUserChange < 100 && root.userInitiatedChange) {
+                    if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] External write during user action, skipping");
+                    root.lastCachedData = newData;  // Update tracking but don't apply
+                    return;
+                }
+
+                if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Cache file changed, re-applying theme");
+                root.lastCachedData = newData;
+                root.applyTheme(data);
+
+                // Reset user-initiated flag after applying
+                root.userInitiatedChange = false;
+            } catch (e) {
+                // Silently ignore parse errors — keep last good theme
+                if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Parse error reading cache:", e);
             }
         }
     }
 
-    // Poll for external changes every second; populate immediately on load.
+    // Fallback: if FileView isn't working, check every minute
     Timer {
-        interval: 1000
+        interval: 60000
         running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            if (!catProc.running) catProc.running = true
+            // If we haven't seen any data yet, FileView might not be working
+            if (root.lastCachedData.length === 0) {
+                var fallback = Qt.createQmlObject('import Quickshell.Io; Process { command: ["sh", "-c", "cat ' + root.externalCachePath + '"] }', root);
+                fallback.running = true;
+            }
         }
     }
 }

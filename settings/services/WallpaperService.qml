@@ -5,7 +5,7 @@
 // Background service for wallpaper rotation via awww (swww-compatible).
 // Exposes IPC interface for control from Settings UI without duplicating state.
 //
-// IPC Commands (quickshell ipc call wallpaper-service <fn>):
+// IPC Commands (quickshell ipc call settings call wallpaper-service <fn>):
 //   cycleNow            — Apply a random wallpaper immediately
 //   refreshList         — Re-scan the wallpaper directory
 //   getList             — Returns newline-separated list of wallpaper paths
@@ -22,11 +22,13 @@
 //   getTransition       — Returns current transition type
 // =============================================================================
 
+pragma Singleton
+
 import QtQuick
 import Quickshell
 import Quickshell.Io
 
-ShellRoot {
+Item {
     id: root
 
     // =========================================================================
@@ -228,6 +230,74 @@ ShellRoot {
     }
 
     // =========================================================================
+    // PUBLIC CONTROL API (callable directly from in-process UI)
+    // --------------------------------------------------------------------------
+    // These mirror the IpcHandler interface below. The IPC handlers delegate
+    // here so behavior is identical whether called from WallpaperModule (a
+    // direct singleton method call) or over `quickshell ipc`.
+    //
+    // GOTCHA: functions declared inside an IpcHandler{} block are NOT callable
+    // as methods on this singleton from other QML files — they only answer IPC
+    // requests. Anything the UI must invoke has to live here on the root object.
+    // =========================================================================
+
+    /// Apply a wallpaper by absolute path.
+    function setWallpaperByPath(path: string) {
+        console.log("[WallpaperService] setWallpaperByPath", path)
+        applyWallpaper(path)
+    }
+
+    /// Flip auto-cycling on/off.
+    function toggleCycling() {
+        console.log("[WallpaperService] toggleCycling")
+        root.cyclingEnabled = !root.cyclingEnabled
+        cycleTimer.running  = root.cyclingEnabled && root.wallpaperList.length > 0
+        console.log("[WallpaperService] toggleCycling ->", root.cyclingEnabled,
+                    "timer running:", cycleTimer.running)
+    }
+
+    /// Set auto-cycle interval (seconds; minimum 10).
+    function setInterval(seconds: int) {
+        console.log("[WallpaperService] setInterval", seconds, "s")
+        if (seconds < 10) {
+            console.log("[WallpaperService] Interval too small, must be >= 10 seconds")
+            return
+        }
+        root.cycleInterval  = seconds * 1000
+        cycleTimer.interval = root.cycleInterval
+        console.log("[WallpaperService] Interval set to", seconds,
+                    "seconds (", root.cycleInterval, "ms)")
+    }
+
+    /// Set transition type (any|outer|inner|fade|wipe|simple|wave).
+    function setTransition(type: string) {
+        console.log("[WallpaperService] setTransition", type)
+        if (type.length > 0)
+            root.transitionType = type
+    }
+
+    /// Re-scan the wallpaper directory.
+    function refreshList() {
+        console.log("[WallpaperService] refreshList")
+        startScan()
+    }
+
+    /// Change the wallpaper directory and re-scan immediately.
+    function setWallpaperDir(dir: string) {
+        console.log("[WallpaperService] setWallpaperDir", dir)
+        if (dir.length === 0) {
+            console.log("[WallpaperService] Empty directory, ignoring")
+            return
+        }
+        root.wallpaperDir     = dir.endsWith("/") ? dir : dir + "/"
+        root.wallpaperList    = []
+        root.currentWallpaper = ""
+        root.lastIndex        = -1
+        console.log("[WallpaperService] Wallpaper directory set to", root.wallpaperDir)
+        startScan()
+    }
+
+    // =========================================================================
     // AUTO-CYCLE TIMER
     // =========================================================================
 
@@ -254,14 +324,13 @@ ShellRoot {
 
         /// Immediately cycle to a random wallpaper
         function cycleNow() {
-            console.log("[WallpaperService] IPC: cycleNow")
+            console.log("[WallpaperService] FUNCTION CALL: cycleNow")
             applyWallpaper(selectRandomWallpaper())
         }
 
         /// Re-scan the wallpaper directory
         function refreshList() {
-            console.log("[WallpaperService] IPC: refreshList")
-            startScan()
+            root.refreshList()
         }
 
         /// Return newline-separated list of all discovered wallpapers
@@ -281,23 +350,19 @@ ShellRoot {
 
         /// Apply wallpaper by absolute path
         function setWallpaperByPath(path: string) {
-            console.log("[WallpaperService] IPC: setWallpaperByPath", path)
-            applyWallpaper(path)
+            root.setWallpaperByPath(path)
         }
 
         /// Apply wallpaper by 0-based index
         function setWallpaperByIndex(index: int) {
-            console.log("[WallpaperService] IPC: setWallpaperByIndex", index)
+            console.log("[WallpaperService] FUNCTION CALL: setWallpaperByIndex", index)
             if (index >= 0 && index < root.wallpaperList.length)
                 applyWallpaper(root.wallpaperList[index])
         }
 
         /// Set auto-cycle interval (seconds; minimum 10)
         function setInterval(seconds: int) {
-            if (seconds < 10) return
-            root.cycleInterval    = seconds * 1000
-            cycleTimer.interval   = root.cycleInterval
-            console.log("[WallpaperService] IPC: setInterval", seconds, "s")
+            root.setInterval(seconds)
         }
 
         /// Return current interval in seconds
@@ -307,9 +372,7 @@ ShellRoot {
 
         /// Flip auto-cycling on/off
         function toggleCycling() {
-            root.cyclingEnabled  = !root.cyclingEnabled
-            cycleTimer.running   = root.cyclingEnabled && root.wallpaperList.length > 0
-            console.log("[WallpaperService] IPC: toggleCycling ->", root.cyclingEnabled)
+            root.toggleCycling()
         }
 
         /// Return whether auto-cycling is active
@@ -326,10 +389,7 @@ ShellRoot {
 
         /// Set transition type
         function setTransition(type: string) {
-            if (type.length > 0) {
-                root.transitionType = type
-                console.log("[WallpaperService] IPC: setTransition", type)
-            }
+            root.setTransition(type)
         }
 
         /// Return current transition type
@@ -344,13 +404,7 @@ ShellRoot {
 
         /// Change the wallpaper directory and re-scan immediately
         function setWallpaperDir(dir: string) {
-            if (dir.length === 0) return
-            root.wallpaperDir = dir.endsWith("/") ? dir : dir + "/"
-            root.wallpaperList  = []
-            root.currentWallpaper = ""
-            root.lastIndex      = -1
-            console.log("[WallpaperService] IPC: setWallpaperDir ->", root.wallpaperDir)
-            startScan()
+            root.setWallpaperDir(dir)
         }
     }
 }

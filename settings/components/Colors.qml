@@ -32,18 +32,18 @@ QtObject {
     readonly property color border:           Config.ThemeConfig.colors.border
 
     // =========================================================================
-    // TYPOGRAPHY / TEXT GRAPH SEMANTICS (RESOLVES PRIMARY COLLISION)
+    // TYPOGRAPHY / TEXT GRAPH SEMANTICS
     // =========================================================================
-    // Hard-pinned to pure white text styling for legacy prototype layout blocks:
-    readonly property color primary:          "#ffffff"
+    // Primary now binds to the canonical text token (strong text role)
+    readonly property color primary:          Config.ThemeConfig.colors.text
     readonly property color textMuted:        Config.ThemeConfig.colors.textDim
     readonly property color textVariant:      Config.ThemeConfig.colors.text
 
     // =========================================================================
-    // TIER 2 — ACCENT PIPELINE MAPPINGS (REACTIVE)
+    // ACCENT COLORS (semantic mappings to ThemeConfig)
     // =========================================================================
-    readonly property color accentCyan:  Config.ThemeConfig.colors.secondary
-    readonly property color accentBlue:  Config.ThemeConfig.colors.info
-    readonly property color accentWarn:  Config.ThemeConfig.colors.warning
-    readonly property color accentErr:   Config.ThemeConfig.colors.error
+    readonly property color secondary:  Config.ThemeConfig.colors.secondary
+    readonly property color info:       Config.ThemeConfig.colors.info
+    readonly property color warning:    Config.ThemeConfig.colors.warning
+    readonly property color error:     Config.ThemeConfig.colors.error
 }

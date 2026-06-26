@@ -19,14 +19,14 @@ Rectangle {
     property real memUsage: Services.SysInfoService.memPercent
     property real gpuUsage: Services.SysInfoService.gpuPercent
 
-    color:  "#000000"
+    color:  Config.ThemeConfig.colors.background
     radius: 0
 
 
     function barColor(pct) {
-        if (pct >= 90) return "#e05555"
-        if (pct >= 70) return "#d4a435"
-        return "#00dce5"
+        if (pct >= 90) return Config.ThemeConfig.colors.error
+        if (pct >= 70) return Config.ThemeConfig.colors.warning
+        return Config.ThemeConfig.colors.secondary
     }
 
     ColumnLayout {
@@ -38,7 +38,7 @@ Rectangle {
             text:               "SYS"
             font.pixelSize:     6
             font.letterSpacing: 1.5
-            color:              "#222222"
+            color:              Config.ThemeConfig.colors.textDim
             Layout.bottomMargin: 8
         }
 
@@ -52,7 +52,7 @@ Rectangle {
                 text:               "CPU"
                 font.pixelSize:     7
                 font.letterSpacing: 1.0
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -68,8 +68,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.cpuUsage / 100)
@@ -81,7 +81,7 @@ Rectangle {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111"; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         // ── MEM ───────────────────────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ Rectangle {
                 text:               "MEM"
                 font.pixelSize:     7
                 font.letterSpacing: 1.0
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -109,8 +109,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.memUsage / 100)
@@ -122,7 +122,7 @@ Rectangle {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111"; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         // ── GPU ───────────────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ Rectangle {
                 text:               "GPU"
                 font.pixelSize:     7
                 font.letterSpacing: 1.0
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -150,8 +150,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.gpuUsage / 100)

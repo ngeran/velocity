@@ -10,6 +10,7 @@
 pragma Singleton
 
 import QtQuick
+import "./" as LocalConfig
 
 QtObject {
     // =========================================================================
@@ -26,74 +27,77 @@ QtObject {
     readonly property int barHeight: 26
 
     // =========================================================================
-    // COLORS - Modern Dark Theme
+    // COLORS — Derive from ThemeConfig (single source of truth)
     // =========================================================================
+    // NOTE: SettingsConfig colors are now reactive bindings to ThemeConfig.
+    // This eliminates the dual palette problem — ThemeConfig is the SSOT,
+    // SettingsConfig provides backwards-compatible aliases for existing components.
 
-    // Background colors
-    readonly property color background: "#000000"
-    readonly property color surface: "#131313"
-    readonly property color surfaceLow: "#0A0A0A"
-    readonly property color surfaceLowest: "#0E0E0E"
-    readonly property color surfaceDim: "#131313"
-    readonly property color surfaceBright: "#393939"
-    readonly property color surfaceVariant: "#353535"
-    readonly property color surfaceContainer: "#1F1F1F"
-    readonly property color surfaceContainerLow: "#1B1B1B"
-    readonly property color surfaceContainerHigh: "#2A2A2A"
-    readonly property color surfaceContainerHighest: "#353535"
+    // Background colors (mapped to ThemeConfig tokens)
+    readonly property color background:           LocalConfig.ThemeConfig.colors.background
+    readonly property color surface:              LocalConfig.ThemeConfig.colors.surface
+    readonly property color surfaceLow:            LocalConfig.ThemeConfig.colors.surfaceVariant
+    readonly property color surfaceLowest:        LocalConfig.ThemeConfig.colors.background
+    readonly property color surfaceDim:           LocalConfig.ThemeConfig.colors.surface
+    readonly property color surfaceBright:        LocalConfig.ThemeConfig.colors.surfaceVariant
+    readonly property color surfaceVariant:       LocalConfig.ThemeConfig.colors.surfaceVariant
+    readonly property color surfaceContainer:     LocalConfig.ThemeConfig.colors.surfaceContainer
+    readonly property color surfaceContainerLow:   LocalConfig.ThemeConfig.colors.surfaceContainer
+    readonly property color surfaceContainerHigh:  LocalConfig.ThemeConfig.colors.surfaceVariant
+    readonly property color surfaceContainerHighest: LocalConfig.ThemeConfig.colors.surfaceVariant
 
-    // Primary colors
-    readonly property color primary: "#FFFFFF"
-    readonly property color colorOnPrimary: "#2F3131"
-    readonly property color primaryContainer: "#E2E2E2"
-    readonly property color colorOnPrimaryContainer: "#636565"
-    readonly property color primaryFixed: "#E2E2E2"
-    readonly property color primaryFixedDim: "#C6C6C7"
+    // Primary colors (mapped to text token)
+    readonly property color primary:              LocalConfig.ThemeConfig.colors.text
+    readonly property color colorOnPrimary:        LocalConfig.ThemeConfig.colors.background
+    readonly property color primaryContainer:     LocalConfig.ThemeConfig.colors.surfaceContainer
+    readonly property color colorOnPrimaryContainer: LocalConfig.ThemeConfig.colors.textDim
+    readonly property color primaryFixed:         LocalConfig.ThemeConfig.colors.text
+    readonly property color primaryFixedDim:      LocalConfig.ThemeConfig.colors.textDim
 
-    // Secondary colors (accent blue)
-    readonly property color secondary: "#A6C8FF"
-    readonly property color colorOnSecondary: "#00315F"
-    readonly property color secondaryContainer: "#3192FC"
-    readonly property color colorOnSecondaryContainer: "#002A53"
-    readonly property color secondaryFixed: "#D5E3FF"
-    readonly property color secondaryFixedDim: "#A6C8FF"
+    // Secondary colors (mapped to secondary token)
+    readonly property color secondary:             LocalConfig.ThemeConfig.colors.secondary
+    readonly property color colorOnSecondary:       LocalConfig.ThemeConfig.colors.background
+    readonly property color secondaryContainer:    LocalConfig.ThemeConfig.colors.secondary
+    readonly property color colorOnSecondaryContainer: LocalConfig.ThemeConfig.colors.background
+    readonly property color secondaryFixed:        LocalConfig.ThemeConfig.colors.secondary
+    readonly property color secondaryFixedDim:     LocalConfig.ThemeConfig.colors.secondary
 
-    // Text colors
-    readonly property color text: "#E2E2E2"
-    readonly property color textDim: "#8E9192"
-    readonly property color colorOnBackground: "#E2E2E2"
-    readonly property color colorOnSurface: "#E2E2E2"
-    readonly property color colorOnSurfaceVariant: "#C4C7C8"
+    // Text colors (mapped to ThemeConfig tokens)
+    readonly property color text:                  LocalConfig.ThemeConfig.colors.text
+    readonly property color textDim:               LocalConfig.ThemeConfig.colors.textDim
+    readonly property color colorOnBackground:     LocalConfig.ThemeConfig.colors.text
+    readonly property color colorOnSurface:         LocalConfig.ThemeConfig.colors.text
+    readonly property color colorOnSurfaceVariant:  LocalConfig.ThemeConfig.colors.textDim
 
-    // Border & outline
-    readonly property color border: "#262626"
-    readonly property color borderDim: "#1A1A1A"
-    readonly property color outline: "#8E9192"
-    readonly property color outlineVariant: "#444748"
+    // Border & outline (mapped to ThemeConfig tokens)
+    readonly property color border:                LocalConfig.ThemeConfig.colors.border
+    readonly property color borderDim:             LocalConfig.ThemeConfig.colors.outlineVariant
+    readonly property color outline:               LocalConfig.ThemeConfig.colors.outline
+    readonly property color outlineVariant:        LocalConfig.ThemeConfig.colors.outlineVariant
 
-    // Semantic colors
-    readonly property color success: "#4ADE80"
-    readonly property color warning: "#FBBF24"
-    readonly property color error: "#FFB4AB"
-    readonly property color errorContainer: "#93000A"
-    readonly property color info: "#A6C8FF"
+    // Semantic colors (mapped to ThemeConfig tokens)
+    readonly property color success:               LocalConfig.ThemeConfig.colors.success
+    readonly property color warning:               LocalConfig.ThemeConfig.colors.warning
+    readonly property color error:                 LocalConfig.ThemeConfig.colors.error
+    readonly property color errorContainer:        LocalConfig.ThemeConfig.colors.error
+    readonly property color info:                  LocalConfig.ThemeConfig.colors.info
 
-    // Tertiary colors
-    readonly property color tertiary: "#FFFFFF"
-    readonly property color colorOnTertiary: "#313030"
-    readonly property color tertiaryContainer: "#E5E2E1"
-    readonly property color tertiaryFixed: "#E5E2E1"
-    readonly property color tertiaryFixedDim: "#C8C6C5"
-    readonly property color colorOnTertiaryContainer: "#656464"
+    // Tertiary colors (mapped to accent token)
+    readonly property color tertiary:              LocalConfig.ThemeConfig.colors.accent
+    readonly property color colorOnTertiary:        LocalConfig.ThemeConfig.colors.background
+    readonly property color tertiaryContainer:     LocalConfig.ThemeConfig.colors.surfaceContainer
+    readonly property color tertiaryFixed:         LocalConfig.ThemeConfig.colors.accent
+    readonly property color tertiaryFixedDim:      LocalConfig.ThemeConfig.colors.accent
+    readonly property color colorOnTertiaryContainer: LocalConfig.ThemeConfig.colors.textDim
 
-    // Error colors
-    readonly property color colorOnError: "#690005"
-    readonly property color colorOnErrorContainer: "#FFDAD6"
+    // Error colors (mapped to error token)
+    readonly property color colorOnError:           LocalConfig.ThemeConfig.colors.background
+    readonly property color colorOnErrorContainer:  LocalConfig.ThemeConfig.colors.error
 
-    // Inverse colors
-    readonly property color inverseSurface: "#E2E2E2"
-    readonly property color inverseOnSurface: "#303030"
-    readonly property color inversePrimary: "#5D5F5F"
+    // Inverse colors (mapped to appropriate tokens)
+    readonly property color inverseSurface:         LocalConfig.ThemeConfig.colors.text
+    readonly property color inverseOnSurface:       LocalConfig.ThemeConfig.colors.surface
+    readonly property color inversePrimary:         LocalConfig.ThemeConfig.colors.textDim
 
     // =========================================================================
     // TYPOGRAPHY - Modern Font Stack

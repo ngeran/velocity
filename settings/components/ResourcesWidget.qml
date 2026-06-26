@@ -23,14 +23,14 @@ Rectangle {
     property real gpuUsage: Services.SysInfoService.gpuPercent
     property real diskUsage: Services.SysInfoService.diskPercent
 
-    color:  "#000000"
+    color:  Config.ThemeConfig.colors.background
     radius: 0
 
 
     function barColor(pct) {
-        if (pct >= 90) return "#e05555"
-        if (pct >= 70) return "#d4a435"
-        return "#00dce5"
+        if (pct >= 90) return Config.ThemeConfig.colors.error
+        if (pct >= 70) return Config.ThemeConfig.colors.warning
+        return Config.ThemeConfig.colors.secondary
     }
 
     ColumnLayout {
@@ -43,7 +43,7 @@ Rectangle {
             font.pixelSize:     7
             font.family:        Config.SettingsConfig.fontFamily
             font.letterSpacing: 2.0
-            color:              "#222222"
+            color:              Config.ThemeConfig.colors.textDim
             Layout.bottomMargin: 14
         }
 
@@ -57,7 +57,7 @@ Rectangle {
                 font.pixelSize:     8
                 font.family:        Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.2
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -74,8 +74,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.cpuUsage / 100)
@@ -87,7 +87,7 @@ Rectangle {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111"; Layout.topMargin: 8; Layout.bottomMargin: 8 }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant; Layout.topMargin: 8; Layout.bottomMargin: 8 }
 
         // ── MEM ───────────────────────────────────────────────────────────────
         RowLayout {
@@ -99,7 +99,7 @@ Rectangle {
                 font.pixelSize:     8
                 font.family:        Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.2
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -116,8 +116,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.memUsage / 100)
@@ -129,7 +129,7 @@ Rectangle {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111"; Layout.topMargin: 8; Layout.bottomMargin: 8 }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant; Layout.topMargin: 8; Layout.bottomMargin: 8 }
 
         // ── GPU ───────────────────────────────────────────────────────────────
         RowLayout {
@@ -141,7 +141,7 @@ Rectangle {
                 font.pixelSize:     8
                 font.family:        Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.2
-                color:              "#3a3a3a"
+                color:              Config.ThemeConfig.colors.textDim
                 Layout.fillWidth:   true
             }
 
@@ -158,8 +158,8 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.gpuUsage / 100)
@@ -174,14 +174,14 @@ Rectangle {
         // ── Push DISK to bottom ───────────────────────────────────────────────
         Item { Layout.fillHeight: true }
 
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#111111"; Layout.bottomMargin: 10 }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.surfaceVariant; Layout.bottomMargin: 10 }
 
         Text {
             text:               "DISK"
             font.pixelSize:     7
             font.family:        Config.SettingsConfig.fontFamily
             font.letterSpacing: 2.0
-            color:              "#222222"
+            color:              Config.ThemeConfig.colors.textDim
             Layout.bottomMargin: 6
         }
 
@@ -193,7 +193,7 @@ Rectangle {
                 text:           "/ root"
                 font.pixelSize: 8
                 font.family:    Config.SettingsConfig.fontFamily
-                color:          "#2e2e2e"
+                color:          Config.ThemeConfig.colors.textDim
                 Layout.fillWidth: true
             }
 
@@ -201,7 +201,7 @@ Rectangle {
                 text:           Math.round(diskUsage) + "%"
                 font.pixelSize: 10
                 font.family:    Config.SettingsConfig.fontFamily
-                color:          "#2a2a2a"
+                color:          Config.ThemeConfig.colors.textDim
             }
         }
 
@@ -209,13 +209,13 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            height: 2; color: "#0d0d0d"; radius: 0
-            border.color: "#111"; border.width: 1
+            height: 2; color: Config.ThemeConfig.colors.border; radius: 0
+            border.color: Config.ThemeConfig.colors.outline; border.width: 1
 
             Rectangle {
                 width:  parent.width * (root.diskUsage / 100)
                 height: parent.height
-                color:  "#2a2a2a"
+                color:  Config.ThemeConfig.colors.textDim
                 radius: 0
             }
         }

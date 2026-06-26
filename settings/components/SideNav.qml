@@ -7,7 +7,7 @@ import "../config" as Config
 
 Rectangle {
     id: nav
-    color: "#0e0e0e"
+    color: Config.ThemeConfig.colors.surface
 
     signal sectionSelected(string key)
     property string activeSection: "network"

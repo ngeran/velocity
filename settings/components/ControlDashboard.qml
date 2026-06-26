@@ -27,7 +27,7 @@ Item {
     Rectangle {
         id: baseBg
         anchors.fill: parent
-        color: "#000000"
+        color: Config.ThemeConfig.colors.background
     }
 
     SideNav {

@@ -2,10 +2,11 @@
 // ControlConfig.qml — Terminal Command Dashboard design tokens
 // =============================================================================
 //
-// Fixed "OBSIDIAN_CORE_OS" terminal aesthetic. The cyan accent (#2E90FA) and
-// scanline are DELIBERATELY fixed and do NOT follow the active theme — only the
-// structural chrome (background/text/border) reads from ThemeConfig so the panel
-// stays consistent with the rest of the shell.
+// "OBSIDIAN_CORE_OS" terminal aesthetic. The accent + log colors now follow the
+// active theme (bound to the sibling ThemeConfig singleton — same pattern
+// SharedState uses), so the control panel recolors with the rest of the shell.
+// Only the scanline strength stays fixed. Structural chrome (background/text/
+// border) already reads from ThemeConfig.
 //
 // Sections drive the side-nav + content view selection.
 // =============================================================================
@@ -19,10 +20,10 @@ QtObject {
     readonly property int windowWidth: 680
     readonly property int windowHeight: 680
 
-    // --- Fixed terminal accent (NOT themed) ---
-    readonly property color accent: "#2E90FA"
-    readonly property color accentDim: "#1c5fa8"
-    readonly property color accentSoft: Qt.rgba(0.180, 0.564, 0.980, 0.15)
+    // --- Terminal accent — follows the active theme (was a fixed #2E90FA) ---
+    readonly property color accent:     ThemeConfig.colors.secondary
+    readonly property color accentDim:  ThemeConfig.tint(ThemeConfig.colors.secondary, 0.6)
+    readonly property color accentSoft: ThemeConfig.tint(ThemeConfig.colors.secondary, 0.15)
 
     // --- Typography ---
     readonly property string fontMono: "JetBrains Mono"
@@ -51,11 +52,11 @@ QtObject {
         { key: "system",    label: "SYSTEM",    icon: "󰒋" }
     ]
 
-    // --- Console log colors by kind (accent/error fixed) ---
-    readonly property color logInput: "#2E90FA"
-    readonly property color logSuccess: "#4ade80"
-    readonly property color logWarning: "#fbbf24"
-    readonly property color logError: "#f87171"
+    // --- Console log colors by kind (theme-aware) ---
+    readonly property color logInput:   ThemeConfig.colors.secondary
+    readonly property color logSuccess: ThemeConfig.colors.success
+    readonly property color logWarning: ThemeConfig.colors.warning
+    readonly property color logError:   ThemeConfig.colors.error
 
     // --- Scanline overlay ---
     readonly property real scanlineOpacity: 0.05

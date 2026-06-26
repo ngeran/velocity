@@ -6,3 +6,4 @@ singleton BluetoothControlService 1.0 BluetoothControlService.qml
 singleton AudioControlService 1.0 AudioControlService.qml
 singleton PowerControlService 1.0 PowerControlService.qml
 singleton CommandService 1.0 CommandService.qml
+singleton WallpaperService 1.0 WallpaperService.qml

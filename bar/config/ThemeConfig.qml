@@ -1,11 +1,13 @@
 // =============================================================================
-// ThemeConfig.qml — Dynamic Theme Singleton
+// bar/config/ThemeConfig.qml — Dynamic Theme Singleton
 // =============================================================================
 //
 // This singleton provides dynamic theme configuration by watching
 // ~/.cache/theme/colors.json for changes. When the theme file changes,
 // all properties automatically update, triggering reactive updates across
 // all QuickShell components.
+//
+// TEMPORARY: Using polling instead of FileView to debug crash
 //
 // =============================================================================
 
@@ -14,6 +16,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
+import "." as Config
 
 Item {
     id: root
@@ -56,21 +59,14 @@ Item {
     })
 
     // =========================================================================
-    // FILE WATCHING VIA PROCESS
+    // THEME FILE PATH
     // =========================================================================
 
-    // Plain filesystem path. StandardPaths returns a file:// URL in this Qt
-    // build; strip it via .replace so `cat` gets a real path (a literal
-    // "file://..." name doesn't exist → empty buffer → applyTheme never fires).
-    property string themeFilePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
+    readonly property string themeFilePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
     property string lastCachedData: ""
 
     // =========================================================================
     // SINGLE-TOKEN MUTATION HELPER
-    // -------------------------------------------------------------------------
-    // Nested var keys do not emit change signals on in-place edit, so the whole
-    // object is rebuilt and reassigned. This forces QML to re-evaluate every
-    // binding that reads colors.<key>.
     // =========================================================================
 
     function updateColorToken(key, value) {
@@ -85,67 +81,21 @@ Item {
         root.colors = next
     }
 
-    // Poll colors.json every second. Mirrors NetworkService's PROVEN pattern
-    // EXACTLY: `sh -c "cat <file>"` (a bare `cat`/onExited combo failed to
-    // deliver stdout in this build), SplitParser accumulates, onRunningChanged
-    // parses + applies when cat finishes.
-    Process {
-        id: catProc
-        command: ["sh", "-c", "cat " + ThemeConfig.themeFilePath]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { catProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                if (catProc.buffer.trim().length > 0) {
-                    try {
-                        var newData = catProc.buffer.trim()
-                        // Only apply if data has actually changed AND not a user-initiated change
-                        if (newData !== root.lastCachedData) {
-                            if (!root.userInitiatedChange) {
-                                console.log("[Bar ThemeConfig] Cache data changed (external), re-applying theme")
-                                root.lastCachedData = newData
-                                ThemeConfig.applyTheme(JSON.parse(newData))
-                            } else {
-                                console.log("[Bar ThemeConfig] Cache data changed but user initiated, skipping")
-                                root.lastCachedData = newData  // Update last cached data but don't apply
-                                root.userInitiatedChange = false  // Reset flag
-                            }
-                        } else {
-                            console.log("[Bar ThemeConfig] Cache data unchanged, skipping re-application")
-                        }
-                    } catch (e) {
-                        console.log("[Bar ThemeConfig] Parse error:", e)
-                        // ignore parse errors — keep last good theme
-                    }
-                }
-                catProc.buffer = ""
-            }
-        }
-    }
-
-    Timer {
-        interval: 300   // poll every 300ms so the bar follows theme switches with minimal lag
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: { if (!catProc.running) catProc.running = true }
-    }
-
     // =========================================================================
     // THEME APPLICATION
     // =========================================================================
 
     function applyTheme(data, isUserInitiated) {
-        console.log("[Bar ThemeConfig] applyTheme called with theme:", data.metadata ? data.metadata.name : "unknown")
+        if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] applyTheme called with theme:", data.metadata ? data.metadata.name : "unknown")
 
         // Set flag if this is a user-initiated change
         if (isUserInitiated === true) {
             root.userInitiatedChange = true
-            console.log("[Bar ThemeConfig] Set userInitiatedChange flag")
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Set userInitiatedChange flag")
         }
 
         if (!data) {
-            console.log("[Bar ThemeConfig] ERROR: No data provided")
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] ERROR: No data provided")
             return
         }
 
@@ -171,7 +121,7 @@ Item {
                 "error":            c.error            || root.colors.error,
                 "info":             c.info             || root.colors.info
             }
-            console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
         }
 
         if (data.metadata) {
@@ -185,7 +135,7 @@ Item {
                 "oledClamp":      newOledClamp,
                 "matugenEnabled": (m.matugenEnabled !== undefined) ? m.matugenEnabled : root.metadata.matugenEnabled
             }
-            console.log("[Bar ThemeConfig] Metadata applied. oledClamp:", root.metadata.oledClamp)
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Metadata applied. oledClamp:", root.metadata.oledClamp)
         }
 
         // QD-OLED Safe: force pure-black backgrounds
@@ -197,7 +147,51 @@ Item {
             cb.surfaceVariant = "#000000"
             cb.surfaceContainer = "#000000"
             root.colors = cb
-            console.log("[Bar ThemeConfig] OLED clamp applied")
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] OLED clamp applied")
+        }
+    }
+
+    // =========================================================================
+    // POLLING-BASED FILE WATCHING (replacing FileView to debug crash)
+    // =========================================================================
+
+    Process {
+        id: catProc
+        command: ["sh", "-c", "cat " + root.themeFilePath]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { catProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                if (catProc.buffer.trim().length > 0) {
+                    try {
+                        var newData = catProc.buffer.trim();
+                        // Only apply if data has actually changed AND not a user-initiated change
+                        if (newData !== root.lastCachedData) {
+                            if (!root.userInitiatedChange) {
+                                if (Config.DebugConfig.debugFile) console.log("[Bar ThemeConfig] Cache data changed (external), re-applying theme")
+                                root.lastCachedData = newData
+                                root.applyTheme(JSON.parse(newData))
+                            } else {
+                                root.lastCachedData = newData
+                                root.userInitiatedChange = false
+                            }
+                        }
+                    } catch (e) {
+                        if (Config.DebugConfig.debugFile) console.log("[Bar ThemeConfig] Parse error:", e)
+                    }
+                    catProc.buffer = ""
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 300
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (!catProc.running) catProc.running = true;
         }
     }
 }

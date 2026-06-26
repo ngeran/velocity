@@ -86,10 +86,10 @@ Item {
     }
 
     function _color() {
-        if (!icon.hasBattery) return "#ffffff"        // desktop on AC — neutral white
+        if (!icon.hasBattery) return Config.BarConfig.colorText        // desktop on AC — neutral white
         if (icon.charging) return "#68d391"           // green while charging
         if (icon.percentage <= 20) return "#f87171"   // red when low
         if (icon.percentage <= 50) return "#fbbf24"   // yellow at half
-        return "#ffffff"
+        return Config.BarConfig.colorText
     }
 }

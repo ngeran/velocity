@@ -93,8 +93,26 @@ Item {
 
         Components.DashboardOverviewTab {
             id: overviewTab
+
+            // Animate opacity and position on tab change
             visible: root.currentTab === 0
+            opacity: root.currentTab === 0 ? 1.0 : 0.0
+            x: root.currentTab === 0 ? 0 : -20
             anchors.fill: parent
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
 
         // =====================================================================
@@ -103,9 +121,26 @@ Item {
 
         Components.ThemeModule {
             id: themeTab
+
             visible: root.currentTab === 1
+            opacity: root.currentTab === 1 ? 1.0 : 0.0
+            x: root.currentTab === 1 ? 0 : (root.currentTab < 1 ? 20 : -20)
             anchors.fill: parent
             anchors.margins: 24
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
 
         // =====================================================================
@@ -114,8 +149,25 @@ Item {
 
         Components.WallpaperModule {
             id: wallpaperTab
+
             visible: root.currentTab === 2
+            opacity: root.currentTab === 2 ? 1.0 : 0.0
+            x: root.currentTab === 2 ? 0 : (root.currentTab < 2 ? 20 : -20)
             anchors.fill: parent
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
 
         // =====================================================================
@@ -124,11 +176,28 @@ Item {
 
         Components.ControlModule {
             id: controlModule
+
             visible: root.currentTab === 3
+            opacity: root.currentTab === 3 ? 1.0 : 0.0
+            x: root.currentTab === 3 ? 0 : (root.currentTab < 3 ? 20 : -20)
             anchors.fill: parent
 
             // Expose activeSection for IPC deep-link
             property alias activeSection: controlModule.activeSection
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
 
         // =====================================================================
@@ -137,9 +206,27 @@ Item {
 
         Item {
             id: settingsTab
+
             visible: root.currentTab === 4
+            opacity: root.currentTab === 4 ? 1.0 : 0.0
+            x: root.currentTab === 4 ? 0 : 20
             anchors.fill: parent
 
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.SettingsConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            // Settings content with proper layout
             Column {
                 anchors.fill: parent
                 anchors.margins: 24
@@ -161,12 +248,19 @@ Item {
                     color: Config.ThemeConfig.colors.border
                 }
 
-                // Settings content placeholder
-                Text {
-                    text: "Settings panel content will be added here."
-                    font.pixelSize: 12
-                    font.family: "Inter"
-                    color: Config.ThemeConfig.colors.textDim
+                // Settings content
+                Item {
+                    width: parent.width
+                    height: parent.height - 50
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Settings panel content will be added here."
+                        font.pixelSize: 12
+                        font.family: "Inter"
+                        color: Config.ThemeConfig.colors.textDim
+                        horizontalAlignment: Text.AlignHCenter
+                    }
                 }
             }
         }

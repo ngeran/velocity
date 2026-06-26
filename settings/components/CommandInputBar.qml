@@ -43,7 +43,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: 30
             radius: Config.ControlConfig.radius
-            color: "#0e0e0e"
+            color: Config.ThemeConfig.colors.surface
             border.width: 1
             border.color: input.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
             Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -80,7 +80,7 @@ Rectangle {
             Layout.preferredWidth: 72
             Layout.preferredHeight: 30
             radius: Config.ControlConfig.radius
-            color: execMa.containsMouse ? "#ffffff" : Config.ThemeConfig.colors.text
+            color: execMa.containsMouse ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.text
             Behavior on color { ColorAnimation { duration: 100 } }
 
             Text {
@@ -90,7 +90,7 @@ Rectangle {
                 font.pixelSize: 10
                 font.bold: true
                 font.letterSpacing: 1
-                color: "#000000"
+                color: Config.ThemeConfig.colors.background
             }
 
             MouseArea {

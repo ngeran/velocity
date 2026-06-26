@@ -46,3 +46,4 @@ ScanlineOverlay 1.0 ScanlineOverlay.qml
 ThemeQuickSwitch 1.0 ThemeQuickSwitch.qml
 PowerCard 1.0 PowerCard.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml
+WallpaperModule 1.0 WallpaperModule.qml

@@ -43,7 +43,7 @@ Rectangle {
         text: root.text
         font.pixelSize: Config.SettingsConfig.fontSizeBody
         font.family: Config.SettingsConfig.fontFamily
-        color: root.isActive ? "#ffffff" : Config.SettingsConfig.text
+        color: root.isActive ? Config.ThemeConfig.colors.background : Config.SettingsConfig.text
 
         Behavior on color {
             ColorAnimation { duration: Config.SettingsConfig.animDurationFast }

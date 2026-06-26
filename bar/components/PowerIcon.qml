@@ -36,15 +36,15 @@ Rectangle {
     color: "transparent"
 
     // ── Theme tokens (no inline hex in logic below) ───────────────────────
-    readonly property color colorBg:      "#000000"
+    readonly property color colorBg:      Config.BarConfig.colorBackground
     readonly property color colorSurface: "#0d0d0d"
     readonly property color colorAccent:  Config.BarConfig.colorAccent   // #00dce5
     readonly property color colorMuted:   "#4a5568"
-    readonly property color colorText:    "#e2e8f0"
+    readonly property color colorText:    Config.BarConfig.colorText
     readonly property color colorWarn:    "#f6ad55"
     readonly property color colorDanger:  "#fc8181"
     readonly property color colorGood:    "#68d391"
-    readonly property color colorBorder:  "#1a1a1a"
+    readonly property color colorBorder:  Config.BarConfig.colorBorder
 
     // ── Live data state ───────────────────────────────────────────────────
     property int    batteryPct:    -1        // -1 = unknown
@@ -218,7 +218,7 @@ Rectangle {
         text: "󰐦"
         font.family: "JetBrainsMono Nerd Font"
         font.pixelSize: 14
-        color: icon.hovered ? colorAccent : "#ffffff"
+        color: icon.hovered ? colorAccent : Config.BarConfig.colorText
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 

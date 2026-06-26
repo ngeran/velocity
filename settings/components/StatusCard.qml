@@ -13,7 +13,7 @@ Rectangle {
     property bool active: false
 
     radius: Config.ControlConfig.radius
-    color: "#050505"
+    color: Config.ThemeConfig.colors.surface
     border.width: 0
 
     Column {

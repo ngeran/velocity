@@ -3,3 +3,4 @@
 module config
 singleton BarConfig 1.0 BarConfig.qml
 singleton ThemeConfig 1.0 ThemeConfig.qml
+singleton DebugConfig 1.0 DebugConfig.qml

@@ -1,0 +1,7 @@
+# settings/components/shared/qmldir
+# Shared UI Primitives — Reusable components for consistent design
+
+singleton SettingsPage 1.0 SettingsPage.qml
+SectionHeader 1.0 SectionHeader.qml
+ToggleSwitch 1.0 ToggleSwitch.qml
+HoverLabel 1.0 HoverLabel.qml

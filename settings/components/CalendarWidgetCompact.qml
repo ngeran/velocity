@@ -28,8 +28,8 @@ Rectangle {
 
     readonly property var dayNames: ["S","M","T","W","T","F","S"]
 
-    color:        "#000000"
-    border.color: "#1a1a1a"
+    color:        Config.ThemeConfig.colors.background
+    border.color: Config.ThemeConfig.colors.border
     border.width: 1
     radius: 0
 
@@ -52,7 +52,7 @@ Rectangle {
                 font.family:       Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.5
                 font.weight:       Font.Medium
-                color:             "#888888"
+                color:             Config.ThemeConfig.colors.text
             }
 
             Item { Layout.fillWidth: true }
@@ -65,7 +65,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text:           "‹"
                     font.pixelSize: 12
-                    color:          prevHover.containsMouse ? "#00dce5" : "#333333"
+                    color:          prevHover.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
 
                     Behavior on color { ColorAnimation { duration: 100 } }
                 }
@@ -90,7 +90,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text:           "›"
                     font.pixelSize: 12
-                    color:          nextHover.containsMouse ? "#00dce5" : "#333333"
+                    color:          nextHover.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
 
                     Behavior on color { ColorAnimation { duration: 100 } }
                 }
@@ -123,7 +123,7 @@ Rectangle {
                     text:               modelData
                     font.pixelSize:     7
                     font.letterSpacing: 0.8
-                    color:              "#2a2a2a"
+                    color:              Config.ThemeConfig.colors.textDim
                     horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth:   true
                 }
@@ -154,9 +154,9 @@ Rectangle {
                         font.pixelSize: 9
                         font.weight:    modelData.isToday ? Font.Medium : Font.Normal
                         color: {
-                            if (modelData.isToday)       return "#e0e0e0"
-                            if (modelData.isOtherMonth)  return "#222222"
-                            return "#666666"
+                            if (modelData.isToday)       return Config.ThemeConfig.colors.text
+                            if (modelData.isOtherMonth)  return Config.ThemeConfig.colors.textDim
+                            return Config.ThemeConfig.colors.textDim
                         }
                     }
 
@@ -169,7 +169,7 @@ Rectangle {
                         }
                         width:  3
                         height: 2
-                        color:  "#00dce5"
+                        color:  Config.ThemeConfig.colors.secondary
                     }
                 }
             }

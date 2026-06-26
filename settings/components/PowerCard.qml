@@ -1,114 +1,152 @@
 // =============================================================================
-// PowerCard.qml — Power icon row for dashboard
-// =============================================================================
+// PowerCard.qml — Full-bleed power action grid for bento dashboard
+// VERSION: V2.0
 //
-// Four power buttons: Suspend ☾ / Lock 🔒 / Restart ↺ / PowerOff ⏻
-// Runs actual systemctl/hyprlock commands through a deferred Process.
-//
+// FIXES vs V1:
+//   - No longer extends DashboardCard (was causing double-card nesting)
+//   - Root is Item — parent card controls size
+//   - Buttons fill available height via Layout.fillHeight
+//   - Larger icons (28px), cleaner label, teal hover border accent
+//   - Power Off gets a red tint on hover to signal destructive action
+//   - radius: 0 everywhere per Obsidian Core constraints
 // =============================================================================
-
 
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
 import "../config" as Config
 
-DashboardCard {
+Item {
     id: root
 
+    // -------------------------------------------------------------------------
+    // PROCESS — deferred power command execution
+    // -------------------------------------------------------------------------
+    Process {
+        id: powerExec
+        command: ["sh", "-c", ""]
+        onRunningChanged: {
+            if (!running && exitCode !== 0)
+                console.log("[PowerCard] failed: " + command.join(" "))
+        }
+    }
+
+    function execCmd(cmd) {
+        powerExec.command = ["sh", "-c", cmd]
+        powerExec.running = true
+    }
+
+    // -------------------------------------------------------------------------
+    // LAYOUT
+    // -------------------------------------------------------------------------
     ColumnLayout {
         anchors.fill: parent
-        spacing: 12
+        spacing: 0
 
-        // Section label
-        Text {
-            text:               "POWER"
-            font.pixelSize:     7
-            font.family:        Config.SettingsConfig.fontFamily
-            font.letterSpacing: 2.0
-            color:              Config.ThemeConfig.colors.textDim
-            Layout.bottomMargin: 4
-        }
-
-        // Power button row
+        // ── HEADER ────────────────────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
+            Layout.bottomMargin: 12
+
+            Text {
+                text: "POWER"
+                color: Config.ThemeConfig.colors.textDim
+                font.pixelSize: 9
+                font.bold: true
+                font.family: Config.SettingsConfig.fontFamily
+                font.letterSpacing: 2.5
+            }
+
+            Item { Layout.fillWidth: true }
+
+            // Uptime badge (static label — replace with Process probe if desired)
+            Text {
+                text: "UPTIME"
+                color: Config.ThemeConfig.colors.secondary
+                font.pixelSize: 8
+                font.family: Config.SettingsConfig.fontFamily
+                font.letterSpacing: 1.5
+                opacity: 0.6
+            }
+        }
+
+        // Thin rule
+        Rectangle {
+            Layout.fillWidth: true
+            height: 1
+            color: Config.ThemeConfig.colors.outlineVariant
+            Layout.bottomMargin: 12
+        }
+
+        // ── BUTTON GRID — 2×2 ────────────────────────────────────────────────
+        GridLayout {
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 8
+            columns: 2
+            rowSpacing: 8
+            columnSpacing: 8
 
             Repeater {
                 model: [
-                    { label: "Suspend", icon: "☾", cmd: "systemctl suspend" },
-                    { label: "Lock",   icon: "🔒", cmd: "hyprlock" },
-                    { label: "Restart", icon: "↺", cmd: "systemctl reboot" },
-                    { label: "Power Off", icon: "⏻", cmd: "systemctl poweroff" }
+                    { label: "SUSPEND",   icon: "󰒲",  cmd: "systemctl suspend",  danger: false },
+                    { label: "LOCK",      icon: "󰌾",  cmd: "hyprlock",           danger: false },
+                    { label: "RESTART",   icon: "󰜉",  cmd: "systemctl reboot",   danger: false },
+                    { label: "POWER OFF", icon: "⏻",  cmd: "systemctl poweroff", danger: true  }
                 ]
 
-                Rectangle {
+                delegate: Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: btnHover.containsMouse
-                           ? Config.ThemeConfig.colors.surfaceVariant
+                    color: btnArea.containsMouse
+                           ? (modelData.danger ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.15) : Config.ThemeConfig.colors.surfaceVariant)
                            : Config.ThemeConfig.colors.surface
-                    radius: 6
+                    radius: 0
                     border.width: 1
-                    border.color: Config.ThemeConfig.colors.border
+                    border.color: btnArea.containsMouse
+                                  ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.secondary)
+                                  : Config.ThemeConfig.colors.border
 
-                    Behavior on color {
-                        ColorAnimation { duration: 150; easing.type: Easing.OutQuad }
-                    }
+                    Behavior on color       { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
 
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: 6
 
-                        // Icon (JetBrains Mono Nerd Font)
                         Text {
-                            text:             modelData.icon
-                            font.pixelSize:   20
-                            font.family:      "JetBrains Mono Nerd Font Mono"
-                            color:            Config.ThemeConfig.colors.primary
+                            text: modelData.icon
+                            font.pixelSize: 24
+                            font.family: "JetBrains Mono Nerd Font Mono"
+                            color: btnArea.containsMouse
+                                   ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.secondary)
+                                   : Config.ThemeConfig.colors.textDim
                             Layout.alignment: Qt.AlignHCenter
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
 
-                        // Label (Inter)
                         Text {
-                            text:             modelData.label
-                            font.pixelSize:   9
-                            font.bold:        true
-                            font.family:      "Inter"
-                            font.letterSpacing: 0.5
-                            color:            Config.ThemeConfig.colors.text
+                            text: modelData.label
+                            font.pixelSize: 8
+                            font.bold: true
+                            font.family: Config.SettingsConfig.fontFamily
+                            font.letterSpacing: 1.5
+                            color: btnArea.containsMouse
+                                   ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.primary)
+                                   : Config.ThemeConfig.colors.textDim
                             Layout.alignment: Qt.AlignHCenter
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
 
                     MouseArea {
-                        id: btnHover
+                        id: btnArea
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: powerExecCmd(modelData.cmd)
+                        onClicked: root.execCmd(modelData.cmd)
                     }
                 }
             }
         }
-    }
-
-    // Execute power command (deferred, like PowerMenu.qml)
-    Process {
-        id: powerExec
-        command: ["sh", "-c", ""]
-
-        onRunningChanged: {
-            if (!running && exitCode !== 0) {
-                console.log("[PowerCard] Command failed: " + command.join(" "))
-            }
-        }
-    }
-
-    function powerExecCmd(cmd) {
-        powerExec.command = ["sh", "-c", cmd]
-        powerExec.running = true
     }
 }

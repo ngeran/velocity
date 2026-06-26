@@ -14,7 +14,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "#00000000"
+        color: "transparent"
     }
 
     Row {
@@ -48,7 +48,7 @@ Item {
             height: 18
             anchors.verticalCenter: parent.verticalCenter
             radius: 3
-            color: muteMa.containsMouse ? "#1a1a1a" : "transparent"
+            color: muteMa.containsMouse ? Config.ThemeConfig.colors.border : "transparent"
             border.color: Config.ThemeConfig.colors.border
             border.width: 1
             Text {
@@ -78,7 +78,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 120
                 height: 6
-                color: "#1a1a1a"
+                color: Config.ThemeConfig.colors.border
                 Rectangle {
                     width: parent.width * Math.max(0, Math.min(1, row.stream.volume / 100))
                     height: parent.height

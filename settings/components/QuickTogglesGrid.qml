@@ -29,7 +29,7 @@ Rectangle {
     // Colours that definitely exist in the ThemeConfig palette (the old code
     // referenced colors.onPrimary, which is undefined → QColor warnings).
     readonly property color checkedBg:    Config.ThemeConfig.colors.primary      // #7c6bf0
-    readonly property color checkedFg:    "#ffffff"
+    readonly property color checkedFg:    Config.ThemeConfig.colors.background
     readonly property color uncheckedBg:  Config.ThemeConfig.colors.surfaceVariant
     readonly property color uncheckedIcon:Config.ThemeConfig.colors.text
     readonly property color uncheckedFg:  Config.ThemeConfig.colors.textDim
@@ -157,7 +157,7 @@ Rectangle {
         Text {
             text: "QUICK TOGGLES"
             font.pixelSize: 8
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.5
             color: Config.ThemeConfig.colors.textDim
         }
@@ -231,7 +231,7 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: tile.label
                 font.pixelSize: 8
-                font.family: "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 color: tile.checked ? root.checkedFg : root.uncheckedFg
             }
         }

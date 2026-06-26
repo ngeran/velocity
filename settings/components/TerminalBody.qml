@@ -15,7 +15,7 @@ Rectangle {
     id: body
     property string activeSection: "network"
 
-    color: "#000000"
+    color: Config.ThemeConfig.colors.background
     radius: Config.ControlConfig.radius
     clip: true
 

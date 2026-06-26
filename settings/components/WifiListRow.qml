@@ -52,7 +52,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 60
                 height: 4
-                color: "#1a1a1a"
+                color: Config.ThemeConfig.colors.border
                 Rectangle {
                     width: parent.width * Math.max(0, Math.min(1, row.net.signal / 100))
                     height: parent.height

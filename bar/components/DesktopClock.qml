@@ -31,15 +31,15 @@ Item {
 
     // Primary color based on theme brightness
     readonly property color primaryColor: {
-        if (colorTheme === "light") return "#000000"
-        if (colorTheme === "dark") return "#ffffff"
+        if (colorTheme === "light") return Config.BarConfig.colorBackground
+        if (colorTheme === "dark") return Config.BarConfig.colorText
         // Auto: determine based on theme
         var bg = Config.ThemeConfig.colors.background
         var r = parseInt(bg.substring(1, 3), 16)
         var g = parseInt(bg.substring(3, 5), 16)
         var b = parseInt(bg.substring(5, 7), 16)
         var brightness = (r * 0.299 + g * 0.587 + b * 0.114)
-        return brightness > 128 ? "#000000" : "#ffffff"
+        return brightness > 128 ? Config.BarConfig.colorBackground : Config.BarConfig.colorText
     }
 
     // Secondary color

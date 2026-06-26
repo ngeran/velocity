@@ -28,7 +28,7 @@ Rectangle {
         Text {
             text: "SYSTEM INFORMATION"
             font.pixelSize: 8
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.5
             color: Config.ThemeConfig.colors.textDim
         }
@@ -42,14 +42,14 @@ Rectangle {
                 Text {
                     text: "OS:"
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.textDim
                     width: 40
                 }
                 Text {
                     text: Services.SysInfoService.osPrettyName
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                 }
             }
@@ -59,14 +59,14 @@ Rectangle {
                 Text {
                     text: "Kernel:"
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.textDim
                     width: 40
                 }
                 Text {
                     text: Services.SysInfoService.kernel
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                 }
             }
@@ -76,14 +76,14 @@ Rectangle {
                 Text {
                     text: "Host:"
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.textDim
                     width: 40
                 }
                 Text {
                     text: Services.SysInfoService.hostname
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                 }
             }
@@ -93,14 +93,14 @@ Rectangle {
                 Text {
                     text: "Uptime:"
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.textDim
                     width: 40
                 }
                 Text {
                     text: Services.SysInfoService.uptime
                     font.pixelSize: 9
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                 }
             }
@@ -114,13 +114,13 @@ Rectangle {
             Text {
                 text: "User:"
                 font.pixelSize: 9
-                font.family: "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 color: Config.ThemeConfig.colors.textDim
             }
             Text {
                 text: Services.SysInfoService.userName
                 font.pixelSize: 9
-                font.family: "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 color: Config.ThemeConfig.colors.secondary
             }
         }

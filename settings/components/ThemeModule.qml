@@ -19,19 +19,13 @@ Item {
     property string currentTheme:     Config.ThemeConfig.metadata.name || "OLED Pure Black"
     property bool   oledClampEnabled: Config.ThemeConfig.metadata.oledClamp || false
 
-    // Array map defining the 6 canonical corporate preset targets for the matrix repeater
-    readonly property var extendedThemes: [
-        "OLED Pure Black", "Nord", "Catppuccin Mocha",
-        "Tokyo Night", "Gruvbox Dark", "Dracula"
-    ]
+    // Array map defining the 6 canonical preset targets for the matrix repeater
+    // Derived from ThemePresets (single source of truth) to eliminate duplication
+    readonly property var extendedThemes: Config.ThemePresets.paletteNames
 
-    // DEPRECATED — intentional no-op. SharedState.theme* now bind reactively
-    // to Config.ThemeConfig, so the manual mirror push is redundant (and
-    // would fight the bindings). Retained so the existing call sites — preset
-    // click, override chip, OLED toggle, and the 1s Timer below — stay valid
-    // without per-site edits. The 1s Timer still syncs the LOCAL
-    // root.currentTheme / root.oledClampEnabled used for preset highlighting.
-    function updateSharedState() { }
+    // SharedState.theme* now bind reactively to Config.ThemeConfig, so the
+    // manual mirror push is redundant. The deprecated updateSharedState() no-op
+    // function was removed in Phase 0 cleanup — no call sites existed.
 
     // =========================================================================
     // HOUSING GRID STRUCTURE LAYOUT
@@ -50,14 +44,14 @@ Item {
             Components.ThemeInfoCard {
                 id: activeThemeInfoCard
                 Layout.preferredWidth:  240
-                Layout.preferredHeight: 110
+                Layout.preferredHeight: 144
             }
 
             // Live Swatch Mockup Dashboard Container Box
             Rectangle {
                 Layout.fillWidth:       true
-                Layout.preferredHeight: 110
-                color:                  "#000000"
+                Layout.preferredHeight: 144
+                color:                  Config.ThemeConfig.colors.surfaceContainer
                 border.color:           Config.ThemeConfig.colors.border
                 border.width:           1
                 radius:                 0
@@ -92,7 +86,7 @@ Item {
                                 width:  22
                                 height: 40
                                 color:  modelData
-                                border.color: "#1a1a1a"
+                                border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
                                 radius: 0
                             }
@@ -118,7 +112,7 @@ Item {
                 font.pixelSize:  9
                 font.family:     "monospace"
                 font.bold:       true
-                color:           "#ffffff"
+                color:           Config.ThemeConfig.colors.text
             }
 
             Item { Layout.fillWidth: true }
@@ -141,7 +135,7 @@ Item {
                             text:            modelData.toUpperCase()
                             font.pixelSize:  8
                             font.family:    "monospace"
-                            color:           root.themeMode === modelData ? "#ffffff" : Config.ThemeConfig.colors.textDim
+                            color:           root.themeMode === modelData ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                         }
 
                         MouseArea {
@@ -194,7 +188,7 @@ Item {
                     text:           "DYNAMIC MATUGEN COLOR HARVESTER"
                     font.pixelSize: 11
                     font.family:    "monospace"
-                    color:          "#ffffff"
+                    color:          Config.ThemeConfig.colors.text
                 }
 
                 RowLayout {
@@ -204,7 +198,7 @@ Item {
                     Rectangle {
                         Layout.preferredWidth:  12
                         Layout.preferredHeight: 12
-                        color:        Services.ThemeService.matugenAvailable ? "#00ff66" : "#ff3333"
+                        color:        Services.ThemeService.matugenAvailable ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
                         radius:       0
                     }
 
@@ -212,7 +206,7 @@ Item {
                         text:           Services.ThemeService.matugenAvailable ? "MATUGEN PROTOCOL: OPERATIONAL" : "MATUGEN PROTOCOL: ABSENT"
                         font.pixelSize: 10
                         font.family:    "monospace"
-                        color:          "#ffffff"
+                        color:          Config.ThemeConfig.colors.text
                     }
                 }
 
@@ -242,7 +236,7 @@ Item {
                         font.pixelSize:  10
                         font.family:    "monospace"
                         font.bold:       true
-                        color:           (!Services.ThemeService.matugenAvailable || Services.ThemeService.isRegenerating) ? Config.ThemeConfig.colors.textDim : "#ffffff"
+                        color:           (!Services.ThemeService.matugenAvailable || Services.ThemeService.isRegenerating) ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.text
                     }
 
                     MouseArea {
@@ -250,10 +244,26 @@ Item {
                         enabled:      Services.ThemeService.matugenAvailable && !Services.ThemeService.isRegenerating
                         cursorShape:  Qt.PointingHandCursor
                         onClicked: {
-                            Services.ThemeService.applyDynamicTheme(Config.SharedState.wallpaperPath, root.oledClampEnabled)
+                            // Use the active wallpaper tracked by WallpaperService
+                            // (SharedState.wallpaperPath is never populated and was
+                            // always "" here, so matugen silently never ran).
+                            Services.ThemeService.applyDynamicTheme(Services.WallpaperService.currentWallpaper, root.oledClampEnabled)
                         }
                     }
                 }
+
+                // Matugen error display (visible only when extraction fails)
+                Text {
+                    Layout.fillWidth: true
+                    visible:          Services.ThemeService.matugenFailed && Services.ThemeService.matugenError !== ""
+                    text:             "⚠ " + Services.ThemeService.matugenError
+                    font.pixelSize:   9
+                    font.family:      "monospace"
+                    color:            Config.ThemeConfig.colors.error
+                    wrapMode:         Text.Wrap
+                    Layout.topMargin: 8
+                }
+
                 Item { Layout.fillHeight: true }
             }
 
@@ -306,51 +316,16 @@ Item {
                         font.pixelSize:  9
                         font.family:    "monospace"
                         font.bold:       true
-                        color:           root.oledClampEnabled ? "#000000" : Config.ThemeConfig.colors.textDim
+                        color:           root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         cursorShape:  Qt.PointingHandCursor
                         onClicked: {
-                            console.log("=== QD-OLED TOGGLE CLICKED ===")
-
-                            // Show current state BEFORE toggle
-                            console.log("[TOGGLE] Current oledClampEnabled:", root.oledClampEnabled)
-                            console.log("[TOGGLE] Current Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
-                            console.log("[TOGGLE] Current themeMode:", root.themeMode)
-                            console.log("[TOGGLE] Current currentTheme:", root.currentTheme)
-
-                            // Toggle the OLED clamp state
+                            // Toggle OLED clamp through the single ThemeService API
                             var newClampValue = !root.oledClampEnabled
-                            console.log("[TOGGLE] New clamp value will be:", newClampValue)
-
-                            // Apply the current theme with the new clamp value
-                            // This will update Config.ThemeConfig.metadata.oledClamp AND re-clamp the colors
-                            if (root.currentTheme) {
-                                console.log("[TOGGLE] Re-applying theme:", root.currentTheme, "with new clamp:", newClampValue)
-                                Services.ThemeService.applyPreset(root.currentTheme, newClampValue)
-
-                                // Check state after applyPreset
-                                console.log("[TOGGLE] After applyPreset - oledClampEnabled:", root.oledClampEnabled)
-                                console.log("[TOGGLE] After applyPreset - Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
-                            } else {
-                                console.log("[TOGGLE] No current theme; updating metadata only (colors won't re-clamp)")
-                                // Fallback: if somehow no current theme, just update metadata
-                                var currentMetadata = Config.ThemeConfig.metadata
-                                Config.ThemeConfig.metadata = {
-                                    name: currentMetadata.name || "Unknown",
-                                    source: currentMetadata.source || "manual",
-                                    applied: new Date().toISOString(),
-                                    oledClamp: newClampValue,
-                                    matugenEnabled: currentMetadata.matugenEnabled || false
-                                }
-                                console.log("[TOGGLE] New metadata after update:", JSON.stringify(Config.ThemeConfig.metadata))
-                            }
-
-                            console.log("[TOGGLE] Final oledClampEnabled:", root.oledClampEnabled)
-                            console.log("[TOGGLE] Final Config.ThemeConfig.metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
-                            console.log("=== TOGGLE CLICK COMPLETE ===")
+                            Services.ThemeService.setOledClamp(newClampValue)
                         }
                     }
                 }
