@@ -37,7 +37,7 @@ Item {
     Text {
         anchors.centerIn: parent
         text: Services.BatteryService.glyph
-        font.family: "JetBrainsMono Nerd Font"
+        font.family: Config.BarConfig.fontNerd
         font.pixelSize: 14
         color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : icon._color()
 

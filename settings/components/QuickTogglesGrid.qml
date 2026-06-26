@@ -24,11 +24,11 @@ Rectangle {
     color: Config.ThemeConfig.colors.surface
     border.color: Config.ThemeConfig.colors.border
     border.width: 1
-    radius: 8
+    radius: 0
 
     // Colours that definitely exist in the ThemeConfig palette (the old code
     // referenced colors.onPrimary, which is undefined → QColor warnings).
-    readonly property color checkedBg:    Config.ThemeConfig.colors.primary      // #7c6bf0
+    readonly property color checkedBg:    Config.ThemeConfig.colors.secondary
     readonly property color checkedFg:    Config.ThemeConfig.colors.background
     readonly property color uncheckedBg:  Config.ThemeConfig.colors.surfaceVariant
     readonly property color uncheckedIcon:Config.ThemeConfig.colors.text
@@ -208,7 +208,7 @@ Rectangle {
 
         Layout.fillWidth: true
         Layout.preferredHeight: 64
-        radius: 8
+        radius: 0
         color: tile.checked ? root.checkedBg : root.uncheckedBg
         border.color: Config.ThemeConfig.colors.border
         border.width: 1

@@ -66,7 +66,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             text: root.icon
             font.pixelSize: 32
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             color: Config.ThemeConfig.colors.text
         }
 
@@ -76,7 +76,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             text: Math.round(root.tempNow) + "°"
             font.pixelSize: 20
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.weight: Font.Bold
             color: Config.ThemeConfig.colors.text
         }
@@ -96,7 +96,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             text: root.city
             font.pixelSize: 9
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.0
             color: Config.ThemeConfig.colors.textDim
             horizontalAlignment: Text.AlignHCenter
@@ -108,7 +108,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             text: root.condition
             font.pixelSize: 7
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 0.5
             color: Config.ThemeConfig.colors.textDim
             horizontalAlignment: Text.AlignHCenter

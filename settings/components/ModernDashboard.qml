@@ -236,7 +236,7 @@ Item {
                 Text {
                     text: "QUICK SETTINGS"
                     font.pixelSize: 11
-                    font.family: "JetBrains Mono"
+                    font.family: Config.SettingsConfig.fontFamily
                     font.letterSpacing: 2.5
                     font.weight: Font.Bold
                     color: Config.ThemeConfig.colors.textDim
@@ -257,7 +257,7 @@ Item {
                         anchors.centerIn: parent
                         text: "Settings panel content will be added here."
                         font.pixelSize: 12
-                        font.family: "Inter"
+                        font.family: Config.SettingsConfig.fontFamily
                         color: Config.ThemeConfig.colors.textDim
                         horizontalAlignment: Text.AlignHCenter
                     }

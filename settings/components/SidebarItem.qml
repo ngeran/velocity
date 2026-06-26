@@ -28,7 +28,7 @@ Rectangle {
     color: isActive ? Config.SettingsConfig.primary : "transparent"
     implicitHeight: 40
 
-    radius: Config.SettingsConfig.radiusSmall
+    radius: 0
 
     // =========================================================================
     // CONTENT
@@ -65,7 +65,7 @@ Rectangle {
         anchors.fill: parent
         color: Config.SettingsConfig.border
         opacity: mouseArea.containsMouse && !root.isActive ? 0.3 : 0
-        radius: Config.SettingsConfig.radiusSmall
+        radius: 0
 
         Behavior on opacity {
             NumberAnimation { duration: Config.SettingsConfig.animDurationFast }

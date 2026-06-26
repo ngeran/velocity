@@ -83,7 +83,7 @@ Rectangle {
             Layout.fillWidth: true
             text:            root.themeName
             font.pixelSize:  12
-            font.family:     "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.bold:       isActive
             color:           isActive ? Config.ThemeConfig.colors.text : themeColors.text
             elide:           Text.ElideRight
@@ -128,7 +128,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text:            "ACTIVE"
                     font.pixelSize:  8
-                    font.family:     "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     font.letterSpacing: 1.0
                     color:           themeColors.accent
                 }

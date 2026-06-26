@@ -20,7 +20,7 @@ Item {
     Text {
         anchors.centerIn: parent
         text: "󰣇"
-        font.family: "JetBrainsMono Nerd Font"
+        font.family: Config.BarConfig.fontNerd
         font.pixelSize: 16
         color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.text
 
@@ -45,7 +45,7 @@ Item {
         anchors.top: parent.bottom
         anchors.topMargin: 4
         text: "System Info"
-        font.family: "JetBrains Mono"
+        font.family: Config.BarConfig.fontFamily
         font.pixelSize: 10
         color: Config.ThemeConfig.colors.textDim
         visible: mouseArea.containsMouse

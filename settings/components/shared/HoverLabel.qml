@@ -28,7 +28,7 @@ Text {
 
     // Default typography (can be overridden)
     font.pixelSize: 9
-    font.family: "monospace"
+    font.family: Config.SettingsConfig.fontFamily
     font.letterSpacing: 1.8
 
     // Color based on hover state

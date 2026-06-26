@@ -145,7 +145,7 @@ Item {
         Text {
             text: "MANUAL THEME COLOR EDITOR"
             font.pixelSize: 13
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.bold: true
             color: Config.ThemeConfig.colors.text
             Layout.fillWidth: true
@@ -154,7 +154,7 @@ Item {
         Text {
             text: "Click a swatch to pick, or type a hex value. Changes apply live to QuickShell + ghostty."
             font.pixelSize: 9
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             color: Config.ThemeConfig.colors.textDim
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
@@ -188,7 +188,7 @@ Item {
                         Text {
                             text: modelData.name
                             font.pixelSize: 9
-                            font.family: "monospace"
+                            font.family: Config.SettingsConfig.fontFamily
                             color: Config.ThemeConfig.colors.text
                             Layout.preferredWidth: 52
                         }
@@ -222,7 +222,7 @@ Item {
                                 anchors.leftMargin: 6
                                 verticalAlignment: TextInput.AlignVCenter
                                 font.pixelSize: 9
-                                font.family: "monospace"
+                                font.family: Config.SettingsConfig.fontFamily
                                 color: Config.ThemeConfig.colors.text
                                 selectByMouse: true
                                 text: (Config.ThemeConfig.colors[modelData.key] || "#000000").toUpperCase()
@@ -242,6 +242,116 @@ Item {
             }
         }
 
+        // ── Save current scheme ──
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant; Layout.topMargin: 6; Layout.bottomMargin: 8 }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 24
+                color: Config.ThemeConfig.colors.background
+                border.color: Config.ThemeConfig.colors.border
+                border.width: 1
+
+                TextInput {
+                    id: schemeNameInput
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.pixelSize: 9
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.text
+                    selectByMouse: true
+                    text: ""
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 64
+                Layout.preferredHeight: 24
+                color: saveSchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : "transparent"
+                border.color: Config.ThemeConfig.colors.secondary
+                border.width: 1
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "SAVE"
+                    font.pixelSize: 9; font.bold: true
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: saveSchemeArea.containsMouse ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.secondary
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+                MouseArea {
+                    id: saveSchemeArea
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        Services.ThemeService.saveCustomTheme(schemeNameInput.text)
+                        schemeNameInput.text = ""
+                    }
+                }
+            }
+        }
+
+        // ── Saved schemes (max 5) ──
+        Repeater {
+            model: Services.ThemeService.customThemes
+            delegate: RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    text: modelData.name
+                    color: Config.ThemeConfig.colors.text
+                    font.pixelSize: 9
+                    font.family: Config.SettingsConfig.fontFamily
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+
+                Row {
+                    spacing: 2
+                    Layout.alignment: Qt.AlignVCenter
+                    Repeater {
+                        model: [modelData.colors.secondary, modelData.colors.primary, modelData.colors.accent]
+                        delegate: Rectangle { width: 10; height: 10; color: modelData }
+                    }
+                }
+
+                Text {
+                    text: "APPLY"
+                    color: applySchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                    font.pixelSize: 8; font.bold: true
+                    font.family: Config.SettingsConfig.fontFamily
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    MouseArea {
+                        id: applySchemeArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
+                    }
+                }
+
+                Text {
+                    text: "✕"
+                    color: delSchemeArea.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
+                    font.pixelSize: 11
+                    font.family: Config.SettingsConfig.fontFamily
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    MouseArea {
+                        id: delSchemeArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
+                    }
+                }
+            }
+        }
+
         // Reset
         Rectangle {
             Layout.alignment: Qt.AlignRight
@@ -255,7 +365,7 @@ Item {
                 anchors.centerIn: parent
                 text: "RESET TO DEFAULT"
                 font.pixelSize: 9
-                font.family: "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 color: Config.ThemeConfig.colors.textDim
             }
 
@@ -305,7 +415,7 @@ Item {
                 Text {
                     text: "PICK COLOR  ·  " + (root.selectedToken || "").toUpperCase()
                     font.pixelSize: 10
-                    font.family: "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                     Layout.fillWidth: true
                 }
@@ -420,7 +530,7 @@ Item {
                             anchors.leftMargin: 8
                             verticalAlignment: TextInput.AlignVCenter
                             font.pixelSize: 11
-                            font.family: "monospace"
+                            font.family: Config.SettingsConfig.fontFamily
                             color: Config.ThemeConfig.colors.text
                             selectByMouse: true
                             text: root.currentHex.toUpperCase()
@@ -461,7 +571,7 @@ Item {
                             anchors.centerIn: parent
                             text: "CANCEL"
                             font.pixelSize: 9
-                            font.family: "monospace"
+                            font.family: Config.SettingsConfig.fontFamily
                             color: Config.ThemeConfig.colors.textDim
                         }
                         MouseArea {
@@ -482,7 +592,7 @@ Item {
                             anchors.centerIn: parent
                             text: "APPLY"
                             font.pixelSize: 9
-                            font.family: "monospace"
+                            font.family: Config.SettingsConfig.fontFamily
                             font.bold: true
                             color: "#000000"
                         }

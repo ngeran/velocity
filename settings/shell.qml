@@ -70,11 +70,15 @@ ShellRoot {
             }
             root.shown = !root.shown
             panelWindow.visible = true
+            // Reset to the Dashboard tab each time the panel is opened.
+            if (root.shown) dashboard.currentTab = 0
         }
 
         function show() {
             root.shown = true
             panelWindow.visible = true
+            // Reset to the Dashboard tab each time the panel is opened.
+            dashboard.currentTab = 0
         }
 
         function hide() {

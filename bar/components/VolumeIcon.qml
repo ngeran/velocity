@@ -35,7 +35,7 @@ Item {
     Text {
         anchors.centerIn: parent
         text: muted ? "󰝟" : "󰕾"
-        font.family: "JetBrainsMono Nerd Font"
+        font.family: Config.BarConfig.fontNerd
         font.pixelSize: 14
         color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : (muted ? Config.BarConfig.colorMuted : "#ffffff")
 

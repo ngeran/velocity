@@ -58,28 +58,25 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // ── HEADER ────────────────────────────────────────────────────────────
-        RowLayout {
+        // Header + status badge
+        Item {
             Layout.fillWidth: true
-            Layout.bottomMargin: 12
+            Layout.bottomMargin: 14
+            height: 18
 
-            Text {
-                text: "NETWORK"
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 9
-                font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 2.5
+            Components.WidgetHeader {
+                icon: "󰖩"
+                label: "NETWORK"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
             }
 
-            Item { Layout.fillWidth: true }
-
-            // Status badge
             Rectangle {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 height: 18
                 width: statusLabel.implicitWidth + 16
                 color: netRoot._integrity >= 0.5 ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.12) : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.12)
-                radius: 0
                 border.width: 1
                 border.color: netRoot._integrity >= 0.5 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.error
 
@@ -88,20 +85,11 @@ Item {
                     anchors.centerIn: parent
                     text: netRoot._integrity >= 0.5 ? "ACTIVE" : "DEGRADED"
                     color: netRoot._integrity >= 0.5 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.error
-                    font.pixelSize: 8
-                    font.bold: true
+                    font.pixelSize: 8; font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
                     font.letterSpacing: 1.5
                 }
             }
-        }
-
-        // Thin rule
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.ThemeConfig.colors.outlineVariant
-            Layout.bottomMargin: 14
         }
 
         // ── RING + METADATA ───────────────────────────────────────────────────

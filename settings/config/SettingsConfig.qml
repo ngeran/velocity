@@ -133,10 +133,10 @@ QtObject {
     // BORDER RADIUS
     // =========================================================================
 
-    readonly property int radiusSm: 4
-    readonly property int radiusMd: 8
-    readonly property int radiusLg: 12
-    readonly property int radiusXl: 16
+    readonly property int radiusSm: 0
+    readonly property int radiusMd: 0
+    readonly property int radiusLg: 0
+    readonly property int radiusXl: 0
     readonly property int radiusFull: 9999
 
     // =========================================================================

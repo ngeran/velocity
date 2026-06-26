@@ -1,11 +1,11 @@
 // =============================================================================
-// IdentityWidget.qml — Full-bleed identity card for bento dashboard
-// VERSION: V2.0 — Item root, vertical layout, fills card height
+// IdentityWidget.qml — Identity card for the dashboard bento grid
 // =============================================================================
 
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
+import "." as Components
 
 Item {
     id: identityRoot
@@ -20,36 +20,32 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // ── HEADER ────────────────────────────────────────────────────────────
-        RowLayout {
+        // Header + online indicator
+        Item {
             Layout.fillWidth: true
-            Layout.bottomMargin: 12
+            Layout.bottomMargin: 14
+            height: 18
 
-            Text {
-                text: "IDENTITY"
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 9
-                font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 2.5
+            Components.WidgetHeader {
+                icon: "󰀄"
+                label: "IDENTITY"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
             }
 
-            Item { Layout.fillWidth: true }
-
-            // Online indicator
             Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 5
                 Rectangle {
                     width: 6; height: 6
-                    radius: 0
                     color: identityRoot.online ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     text: identityRoot.online ? "ONLINE" : "OFFLINE"
                     color: identityRoot.online ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 8
-                    font.bold: true
+                    font.pixelSize: 8; font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
                     font.letterSpacing: 1.5
                     anchors.verticalCenter: parent.verticalCenter
@@ -57,71 +53,45 @@ Item {
             }
         }
 
-        // Thin rule
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.ThemeConfig.colors.outlineVariant
-            Layout.bottomMargin: 14
-        }
-
-        // ── AVATAR + NAME ROW ─────────────────────────────────────────────────
+        // Avatar + name/role
         RowLayout {
             Layout.fillWidth: true
-            spacing: 14
+            spacing: 12
             Layout.bottomMargin: 14
 
-            // Avatar square — teal corner accent
             Item {
-                width: 52; height: 52
+                width: 48; height: 48
+                Layout.alignment: Qt.AlignTop
 
                 Rectangle {
                     anchors.fill: parent
-                    color: Config.ThemeConfig.colors.surface
-                    radius: 0
+                    color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.12)
                     border.width: 1
                     border.color: Config.ThemeConfig.colors.outlineVariant
                 }
-
-                // Teal corner accent
-                Rectangle {
-                    width: 10; height: 2
-                    color: Config.ThemeConfig.colors.secondary
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                }
-                Rectangle {
-                    width: 2; height: 10
-                    color: Config.ThemeConfig.colors.secondary
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                }
+                Rectangle { width: 12; height: 2; color: Config.ThemeConfig.colors.secondary; anchors.top: parent.top; anchors.left: parent.left }
+                Rectangle { width: 2; height: 12; color: Config.ThemeConfig.colors.secondary; anchors.top: parent.top; anchors.left: parent.left }
 
                 Text {
                     anchors.centerIn: parent
                     text: identityRoot.userName.substring(0, 2).toUpperCase()
                     color: Config.ThemeConfig.colors.secondary
-                    font.pixelSize: 18
-                    font.bold: true
+                    font.pixelSize: 18; font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
                 }
             }
 
-            // Name + role column
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 4
-
                 Text {
                     text: identityRoot.userName.toUpperCase()
                     color: Config.ThemeConfig.colors.primary
-                    font.pixelSize: 18
-                    font.bold: true
+                    font.pixelSize: 16; font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
-
                 Text {
                     text: identityRoot.roleText
                     color: Config.ThemeConfig.colors.textDim
@@ -132,10 +102,10 @@ Item {
             }
         }
 
-        // ── STAT ROWS ─────────────────────────────────────────────────────────
+        // Stats
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: 6
 
             Repeater {
                 model: [
@@ -143,33 +113,22 @@ Item {
                     { label: "SHELL", value: "ZSH" },
                     { label: "WM",    value: "HYPRLAND" }
                 ]
-
                 delegate: RowLayout {
                     Layout.fillWidth: true
-                    spacing: 0
-
+                    spacing: 8
                     Text {
                         text: modelData.label
                         color: Config.ThemeConfig.colors.textDim
                         font.pixelSize: 8
                         font.family: Config.SettingsConfig.fontFamily
                         font.letterSpacing: 1.5
-                        Layout.preferredWidth: 52
+                        Layout.preferredWidth: 48
                     }
-
-                    Rectangle {
-                        width: 1; height: 10
-                        color: Config.ThemeConfig.colors.outlineVariant
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
                     Text {
-                        text: "  " + modelData.value
-                        color: Config.ThemeConfig.colors.primary
-                        font.pixelSize: 9
-                        font.bold: true
+                        text: modelData.value
+                        color: Config.ThemeConfig.colors.text
+                        font.pixelSize: 9; font.bold: true
                         font.family: Config.SettingsConfig.fontFamily
-                        font.letterSpacing: 0.5
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
@@ -179,22 +138,14 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        // ── STATUS BAR ────────────────────────────────────────────────────────
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.ThemeConfig.colors.outlineVariant
-            Layout.bottomMargin: 10
-        }
-
+        // Status footer
         Text {
             text: identityRoot.statusText
             color: Config.ThemeConfig.colors.secondary
-            font.pixelSize: 8
-            font.bold: true
+            font.pixelSize: 8; font.bold: true
             font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 2.5
-            opacity: 0.8
+            opacity: 0.85
         }
     }
 }

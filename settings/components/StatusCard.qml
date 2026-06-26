@@ -43,7 +43,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 8
                 height: 8
-                radius: 4
+                radius: 0
                 color: card.active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
             }
         }

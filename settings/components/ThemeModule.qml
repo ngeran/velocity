@@ -64,7 +64,7 @@ Item {
                     Text {
                         text:           "LIVE SPECTRUM MONITOR"
                         font.pixelSize: 8
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         color:          Config.ThemeConfig.colors.textDim
                     }
 
@@ -96,7 +96,7 @@ Item {
                     Text {
                         text:           "Active Canvas: " + Config.ThemeConfig.colors.background + " // Accent: " + Config.ThemeConfig.colors.secondary
                         font.pixelSize: 8
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         color:          Config.ThemeConfig.colors.textDim
                     }
                 }
@@ -110,7 +110,7 @@ Item {
             Text {
                 text:            "INTERFACE CHANNELS"
                 font.pixelSize:  9
-                font.family:     "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 font.bold:       true
                 color:           Config.ThemeConfig.colors.text
             }
@@ -134,7 +134,7 @@ Item {
                             anchors.centerIn: parent
                             text:            modelData.toUpperCase()
                             font.pixelSize:  8
-                            font.family:    "monospace"
+                            font.family: Config.SettingsConfig.fontFamily
                             color:           root.themeMode === modelData ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                         }
 
@@ -187,7 +187,7 @@ Item {
                 Text {
                     text:           "DYNAMIC MATUGEN COLOR HARVESTER"
                     font.pixelSize: 11
-                    font.family:    "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color:          Config.ThemeConfig.colors.text
                 }
 
@@ -205,7 +205,7 @@ Item {
                     Text {
                         text:           Services.ThemeService.matugenAvailable ? "MATUGEN PROTOCOL: OPERATIONAL" : "MATUGEN PROTOCOL: ABSENT"
                         font.pixelSize: 10
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         color:          Config.ThemeConfig.colors.text
                     }
                 }
@@ -215,7 +215,7 @@ Item {
                                     "System binary maps wallpaper palettes dynamically onto active configuration arrays automatically." :
                                     "Dependency error detected. To initialize extraction routines, install the binary locally via host package engine using: \n$ paru -S matugen"
                     font.pixelSize: 9
-                    font.family:    "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color:          Config.ThemeConfig.colors.textDim
                     Layout.fillWidth: true
                 }
@@ -234,7 +234,7 @@ Item {
                         anchors.centerIn: parent
                         text:            Services.ThemeService.isRegenerating ? "GENERATING..." : "RUN EXTRACTION"
                         font.pixelSize:  10
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         font.bold:       true
                         color:           (!Services.ThemeService.matugenAvailable || Services.ThemeService.isRegenerating) ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.text
                     }
@@ -258,7 +258,7 @@ Item {
                     visible:          Services.ThemeService.matugenFailed && Services.ThemeService.matugenError !== ""
                     text:             "⚠ " + Services.ThemeService.matugenError
                     font.pixelSize:   9
-                    font.family:      "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color:            Config.ThemeConfig.colors.error
                     wrapMode:         Text.Wrap
                     Layout.topMargin: 8
@@ -296,7 +296,7 @@ Item {
                 Text {
                     text:           "QD-OLED SAFE SCREEN LUMINANCE SHIELD"
                     font.pixelSize: 9
-                    font.family:    "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     color:          root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
                 }
 
@@ -314,7 +314,7 @@ Item {
                         anchors.centerIn: parent
                         text:            root.oledClampEnabled ? "ON" : "OFF"
                         font.pixelSize:  9
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         font.bold:       true
                         color:           root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
                     }

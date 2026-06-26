@@ -28,7 +28,7 @@
 //
 // CONSTRAINTS:
 //   radius: 0 everywhere
-//   font.family: "monospace" on all Text
+//   font.family: Config.SettingsConfig.fontFamily on all Text
 //   ColorAnimation { duration: 100 } on background transitions
 //   Config.ThemeConfig.colors.* for all colors
 // =============================================================================
@@ -130,7 +130,7 @@ Rectangle {
                     Text {
                         text:           modelData.icon
                         font.pixelSize: 13
-                        font.family:    "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         color:          tabItem.isActive
                                         ? Config.ThemeConfig.colors.background  // black on white
                                         : hoverArea.containsMouse
@@ -147,7 +147,7 @@ Rectangle {
                         text:               modelData.label
                         font.pixelSize:     11
                         font.bold:          true
-                        font.family:        "monospace"
+                        font.family: Config.SettingsConfig.fontFamily
                         font.letterSpacing: 1.2
 
                         color: tabItem.isActive
@@ -204,7 +204,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text:             "⌕"
                 font.pixelSize:   16
-                font.family:      "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 color:            Config.ThemeConfig.colors.textDim
             }
 

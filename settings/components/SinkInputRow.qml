@@ -47,7 +47,7 @@ Item {
             width: 26
             height: 18
             anchors.verticalCenter: parent.verticalCenter
-            radius: 3
+            radius: 0
             color: muteMa.containsMouse ? Config.ThemeConfig.colors.border : "transparent"
             border.color: Config.ThemeConfig.colors.border
             border.width: 1

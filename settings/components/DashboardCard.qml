@@ -30,7 +30,7 @@ Rectangle {
     // =========================================================================
     // VISUALS — theme-reactive glass card
     // =========================================================================
-    color: Config.ThemeConfig.colors.surfaceContainer
+    color: "transparent"
     radius: Config.SettingsConfig.radiusMd
     border.color: Config.ThemeConfig.colors.outlineVariant
     border.width: 1

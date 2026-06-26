@@ -8,12 +8,9 @@ ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ThemeInfoCard 1.0 ThemeInfoCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
-GlassCard 1.0 GlassCard.qml
 DashboardCard 1.0 DashboardCard.qml
-BentoCard 1.0 BentoCard.qml
 PulseDot 1.0 PulseDot.qml
 NetworkRing 1.0 NetworkRing.qml
-singleton Colors 1.0 Colors.qml
 ControlModule 1.0 ControlModule.qml
 AppBar 1.0 AppBar.qml
 ControlDashboard 1.0 ControlDashboard.qml
@@ -29,8 +26,6 @@ BtDeviceRow 1.0 BtDeviceRow.qml
 SinkListView 1.0 SinkListView.qml
 SinkRow 1.0 SinkRow.qml
 SinkInputRow 1.0 SinkInputRow.qml
-PowerView 1.0 PowerView.qml
-SystemView 1.0 SystemView.qml
 IdentityWidget 1.0 IdentityWidget.qml
 NetworkWidget 1.0 NetworkWidget.qml
 WeatherWidget 1.0 WeatherWidget.qml
@@ -47,3 +42,4 @@ ThemeQuickSwitch 1.0 ThemeQuickSwitch.qml
 PowerCard 1.0 PowerCard.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml
 WallpaperModule 1.0 WallpaperModule.qml
+WidgetHeader 1.0 WidgetHeader.qml

@@ -40,7 +40,7 @@ Rectangle {
         Text {
             text:               "ACTIVE STATE INDEX"
             font.pixelSize:      8
-            font.family:         "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing:  1.5
             color:               Config.ThemeConfig.colors.textDim
         }
@@ -52,7 +52,7 @@ Rectangle {
             Text {
                 text:           root.themeName
                 font.pixelSize: 14
-                font.family:    "monospace"
+                font.family: Config.SettingsConfig.fontFamily
                 font.bold:      true
                 color:          Config.ThemeConfig.colors.text
 
@@ -78,7 +78,7 @@ Rectangle {
         Text {
             text:           "source: " + root.themeAuthor
             font.pixelSize: 9
-            font.family:    "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             color:          Config.ThemeConfig.colors.textDim
         }
 
@@ -127,7 +127,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text:            "OLED"
                     font.pixelSize:  8
-                    font.family:     "monospace"
+                    font.family: Config.SettingsConfig.fontFamily
                     font.bold:       true
                     color:           root.secondaryColor
                     font.letterSpacing: 0.5

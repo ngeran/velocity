@@ -40,16 +40,14 @@ QtObject {
     readonly property int statusCardHeight: 76
     readonly property int statusCardWidth: 190
     readonly property int padding: 16
-    readonly property int radius: 4
+    readonly property int radius: 0
 
     // --- Sections (side-nav model) ---
     // Nerd Font glyphs verified to render elsewhere in this config.
     readonly property var sections: [
         { key: "network",   label: "NETWORK",   icon: "󰖩" },
         { key: "bluetooth", label: "BLUETOOTH", icon: "󰂯" },
-        { key: "audio",     label: "AUDIO",     icon: "󰕾" },
-        { key: "power",     label: "POWER",     icon: "󰐦" },
-        { key: "system",    label: "SYSTEM",    icon: "󰒋" }
+        { key: "audio",     label: "AUDIO",     icon: "󰕾" }
     ]
 
     // --- Console log colors by kind (theme-aware) ---

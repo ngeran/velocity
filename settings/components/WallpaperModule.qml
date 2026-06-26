@@ -79,18 +79,18 @@ Item {
             Layout.fillWidth: true
             Text {
                 text: "WALLPAPER MANAGEMENT"
-                font.pixelSize: 11; font.bold: true; color: "#666"
+                font.pixelSize: 11; font.bold: true; color: Config.ThemeConfig.colors.textDim
                 Layout.fillWidth: true
             }
 
             Rectangle {
-                width: 120; height: 32; radius: 4
-                color: root.cyclingEnabled ? "#34d399" : "#1f2937"
+                width: 120; height: 32; radius: 0
+                color: root.cyclingEnabled ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
 
                 Text {
                     anchors.centerIn: parent
                     text: root.cyclingEnabled ? "CYCLING: ON" : "CYCLING: OFF"
-                    color: root.cyclingEnabled ? "#000" : "#fff"; font.pixelSize: 10; font.bold: true
+                    color: root.cyclingEnabled ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text; font.pixelSize: 10; font.bold: true
                 }
 
                 MouseArea {
@@ -111,20 +111,20 @@ Item {
             height: 40; spacing: 10
 
             Rectangle {
-                Layout.fillWidth: true; height: 40; color: "#111"; border.color: "#333"
+                Layout.fillWidth: true; height: 40; color: Config.ThemeConfig.colors.surfaceVariant; border.color: Config.ThemeConfig.colors.border
                 TextInput {
                     id: dirInput
                     anchors.fill: parent; anchors.leftMargin: 12
                     verticalAlignment: TextInput.AlignVCenter
-                    font.family: "JetBrains Mono"; font.pixelSize: 11; color: "#fff"
+                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 11; color: Config.ThemeConfig.colors.text
                     text: root.wallpaperDir
                     clip: true
                 }
             }
 
             Rectangle {
-                width: 80; height: 40; color: "#3b82f6"
-                Text { anchors.centerIn: parent; text: "LOAD"; font.bold: true; color: "#fff" }
+                width: 80; height: 40; color: Config.ThemeConfig.colors.secondary
+                Text { anchors.centerIn: parent; text: "LOAD"; font.bold: true; color: Config.ThemeConfig.colors.text }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -143,21 +143,21 @@ Item {
             // Interval
             Row {
                 spacing: 10
-                Text { text: "INTERVAL"; color: "#666"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: "INTERVAL"; color: Config.ThemeConfig.colors.textDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
 
                 // Decrease button
                 Rectangle {
-                    width: 24; height: 24; color: "#222"; radius: 4
-                    Text { anchors.centerIn: parent; text: "[-]"; color: "#fff"; font.bold: true; font.pixelSize: 10 }
+                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: 0
+                    Text { anchors.centerIn: parent; text: "[-]"; color: Config.ThemeConfig.colors.text; font.bold: true; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; onClicked: { root.debugLog("Interval [-]", root.cycleInterval - 60); setInterval(root.cycleInterval - 60); } cursorShape: Qt.PointingHandCursor }
                 }
 
-                Text { text: (root.cycleInterval / 60).toFixed(0) + "m"; color: "#3b82f6"; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: (root.cycleInterval / 60).toFixed(0) + "m"; color: Config.ThemeConfig.colors.secondary; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
 
                 // Increase button
                 Rectangle {
-                    width: 24; height: 24; color: "#222"; radius: 4
-                    Text { anchors.centerIn: parent; text: "[+]"; color: "#fff"; font.bold: true; font.pixelSize: 10 }
+                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: 0
+                    Text { anchors.centerIn: parent; text: "[+]"; color: Config.ThemeConfig.colors.text; font.bold: true; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; onClicked: { root.debugLog("Interval [+]", root.cycleInterval + 60); setInterval(root.cycleInterval + 60); } cursorShape: Qt.PointingHandCursor }
                 }
             }
@@ -168,9 +168,9 @@ Item {
                 Repeater {
                     model: ["fade", "wipe", "outer"]
                     Rectangle {
-                        width: 50; height: 24; color: root.transitionType === modelData ? "#3b82f6" : "#111"
-                        border.color: "#333"
-                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 9; color: "#fff" }
+                        width: 50; height: 24; color: root.transitionType === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
+                        border.color: Config.ThemeConfig.colors.border
+                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 9; color: Config.ThemeConfig.colors.text }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -194,8 +194,8 @@ Item {
                 model: root.wallpaperList
                 clip: true
                 delegate: Rectangle {
-                    width: 150; height: 110; color: "#000"
-                    border.color: root.currentWallpaper === modelData ? "#3b82f6" : "#333"
+                    width: 150; height: 110; color: Config.ThemeConfig.colors.background
+                    border.color: root.currentWallpaper === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border
                     border.width: root.currentWallpaper === modelData ? 2 : 1
 
                     Image {

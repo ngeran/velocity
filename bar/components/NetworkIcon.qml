@@ -45,7 +45,7 @@ Item {
                 if (icon.connectionType === "ethernet") return "󰈀"
                 return "󰖩"
             }
-            font.family: "JetBrainsMono Nerd Font"
+            font.family: Config.BarConfig.fontNerd
             font.pixelSize: 14
             color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : (icon.isConnected ? "#ffffff" : "#f87171")
 

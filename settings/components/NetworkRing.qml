@@ -27,7 +27,6 @@
 import QtQuick
 import QtQuick.Shapes
 import QtQuick.Layouts
-import "." as UI
 import "../config" as Config
 
 Item {
@@ -60,7 +59,7 @@ Item {
         // ----- TRACK ARC (background ring — always full 360°) ----------------
         ShapePath {
             id: trackArc
-            strokeColor: UI.Colors.surfaceContainer
+            strokeColor: Config.ThemeConfig.colors.surfaceContainer
             strokeWidth: 8
             fillColor:   "transparent"
             capStyle:    ShapePath.FlatCap
@@ -106,19 +105,19 @@ Item {
         Text {
             Layout.alignment: Qt.AlignHCenter
             text:             ringRoot.valueText
-            color:            UI.Colors.primary
+            color:            Config.ThemeConfig.colors.secondary
             font.pixelSize:   Math.round(ringRoot.width * 0.18)  // Scale with ring size
             font.bold:        true
-            font.family:      "monospace"
+            font.family: Config.SettingsConfig.fontFamily
         }
 
         Text {
             Layout.alignment: Qt.AlignHCenter
             visible:          ringRoot.label !== ""
             text:             ringRoot.label
-            color:            UI.Colors.textMuted
+            color:            Config.ThemeConfig.colors.textDim
             font.pixelSize:   9
-            font.family:      "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.5
         }
     }

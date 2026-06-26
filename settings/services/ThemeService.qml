@@ -62,6 +62,15 @@ Item {
     readonly property var presetPalettes: Config.ThemePresets.palettes
 
     // =========================================================================
+    // CUSTOM SCHEMES — user-saved palettes (max 5), persisted to
+    // ~/.config/quickshell/custom-themes.json so they survive reboot.
+    // =========================================================================
+    property var customThemes: []
+    readonly property string customThemesPath: themeService.homeDir + "/.config/quickshell/custom-themes.json"
+
+    Component.onCompleted: themeService.loadCustomThemes()
+
+    // =========================================================================
     // ASYNCHRONOUS TOOL DETECTION INFRASTRUCTURE
     // =========================================================================
     property var matugenCheck: Process {
@@ -69,27 +78,6 @@ Item {
         running: true
         onExited: (code) => {
             themeService.matugenAvailable = (code === 0);
-        }
-    }
-
-    // =========================================================================
-    // FILESYSTEM SYNCHRONIZATION RUNTIME NODE (LOOP BACK PROTECTION)
-    // =========================================================================
-    property var activeThemeWatcher: FileView {
-        path: themeService.homeDir + "/.config/quickshell/theme-active.json"
-
-        onFileChanged: {
-            // FileView.text is a METHOD (not a property) in this Quickshell build.
-            let raw = activeThemeWatcher.text();
-            if (!raw || raw.trim() === "") return;
-            try {
-                let data = JSON.parse(raw);
-                if (data.name && data.name !== Config.ThemeConfig.metadata.name) {
-                    Config.ThemeConfig.applyTheme(data);
-                }
-            } catch (e) {
-                // Silently trap incomplete parse cycles during atomic write overlaps
-            }
         }
     }
 
@@ -121,17 +109,76 @@ Item {
      * @param clamp - If true, force surface tokens to #000000
      * @returns The clamped bundle (same object, modified in-place for efficiency)
      */
+    // =========================================================================
+    // NORMALIZATION + CONTRAST HELPERS (shared by preset + matugen paths)
+    // -------------------------------------------------------------------------
+    // normalizeBundle() emits the canonical 16-token shape from any raw color
+    // object so presets and matugen output are structurally identical; missing
+    // tokens fall back to defaultBundle. luminance() powers the OLED-clamp text
+    // safeguard in clampOLED().
+    // =========================================================================
+
+    readonly property var defaultBundle: ({
+        background: "#000000", surface: "#0a0a0a", surfaceVariant: "#111111",
+        surfaceContainer: "#111111", text: "#e0e0e0", textDim: "#808080",
+        border: "#1a1a1a", outline: "#2a2a2a", outlineVariant: "#1a1a1a",
+        primary: "#7c6bf0", secondary: "#00dce5", accent: "#f87171",
+        success: "#34d399", warning: "#fbbf24", error: "#f87171", info: "#00dce5"
+    })
+
+    // Relative luminance (0..1, sRGB) of a "#rrggbb" string; invalid → 0.
+    function luminance(hex) {
+        var h = (hex || "#000000").replace("#", "")
+        if (h.length !== 6) return 0
+        var ch = function (s) {
+            var v = parseInt(s, 16) / 255
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * ch(h.substring(0, 2)) + 0.7152 * ch(h.substring(2, 4)) + 0.0722 * ch(h.substring(4, 6))
+    }
+
+    // Canonical 16-token bundle from a raw/partial color object.
+    function normalizeBundle(raw) {
+        var d = themeService.defaultBundle
+        var has = function (k) { return raw && typeof raw[k] === "string" && raw[k].charAt(0) === "#" }
+        var pick = function (k, fb) { return has(k) ? raw[k] : fb }
+        return {
+            background:       pick("background", d.background),
+            surface:          pick("surface", d.surface),
+            surfaceVariant:   pick("surfaceVariant", d.surfaceVariant),
+            surfaceContainer: pick("surfaceContainer", has("surfaceVariant") ? raw.surfaceVariant : d.surfaceContainer),
+            text:             pick("text", d.text),
+            textDim:          pick("textDim", d.textDim),
+            border:           pick("border", d.border),
+            outline:          pick("outline", d.outline),
+            outlineVariant:   pick("outlineVariant", d.outlineVariant),
+            primary:          pick("primary", d.primary),
+            secondary:        pick("secondary", d.secondary),
+            accent:           pick("accent", d.accent),
+            success:          pick("success", d.success),
+            warning:          pick("warning", d.warning),
+            error:            pick("error", d.error),
+            info:             pick("info", d.info)
+        }
+    }
+
     function clampOLED(bundle, clamp) {
         if (!clamp) {
             return bundle;  // No clamping needed, return as-is
         }
 
         // Force ONLY the four surface tokens to pure black
-        // All other tokens (text, accents, etc.) remain untouched
         bundle.background = "#000000";
         bundle.surface = "#000000";
         bundle.surfaceVariant = "#000000";
         bundle.surfaceContainer = "#000000";
+
+        // Pure-black bg: guarantee text legibility. If the source palette's text
+        // is too dim to read on #000, fall back to the default light tokens.
+        if (themeService.luminance(bundle.text) < 0.18)
+            bundle.text = themeService.defaultBundle.text;
+        if (themeService.luminance(bundle.textDim) < 0.12)
+            bundle.textDim = themeService.defaultBundle.textDim;
 
         return bundle;
     }
@@ -146,12 +193,10 @@ Item {
      * @param clamp - New OLED clamp state (true = ON, false = OFF)
      */
     function setOledClamp(clamp) {
-        if (Config.DebugConfig.debugTheme) {
-            console.log("=== setOledClamp CALLED ===")
-            console.log("[setOledClamp] New clamp state:", clamp)
-            console.log("[setOledClamp] Current theme:", Config.ThemeConfig.metadata.name)
-            console.log("[setOledClamp] Current source:", Config.ThemeConfig.metadata.source)
-        }
+        if (Config.DebugConfig.debugTheme) console.log("=== setOledClamp CALLED ===")
+        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] New clamp state:", clamp)
+        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] Current theme:", Config.ThemeConfig.metadata.name)
+        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] Current source:", Config.ThemeConfig.metadata.source)
 
         var currentName = Config.ThemeConfig.metadata.name || "OLED Pure Black";
         var currentSource = Config.ThemeConfig.metadata.source || "preset";
@@ -201,10 +246,10 @@ Item {
      * Executes internal structural preset modification pipeline updates
      */
     function applyPreset(presetName, applyOLEDClamp) {
-        console.log("=== applyPreset CALLED ===")
-        console.log("[applyPreset] presetName:", presetName)
-        console.log("[applyPreset] applyOLEDClamp:", applyOLEDClamp, "(type:", typeof applyOLEDClamp, ")")
-        console.log("[applyPreset] Current Config.ThemeConfig.metadata.oledClamp BEFORE:", Config.ThemeConfig.metadata.oledClamp)
+        if (Config.DebugConfig.debugTheme) console.log("=== applyPreset CALLED ===")
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] presetName:", presetName)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] applyOLEDClamp:", applyOLEDClamp, "(type:", typeof applyOLEDClamp, ")")
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Current Config.ThemeConfig.metadata.oledClamp BEFORE:", Config.ThemeConfig.metadata.oledClamp)
 
         // NOTE: no isRegenerating early-return guard — a stuck flag (e.g. a prior
         // theme-switcher run whose onExited never fired during a reload) would
@@ -221,20 +266,17 @@ Item {
             return;
         }
 
-        console.log("[applyPreset] Palette found for:", presetName)
-        var bundle = {};
-        for (var k in palette) {
-            if (Object.prototype.hasOwnProperty.call(palette, k)) bundle[k] = palette[k];
-        }
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Palette found for:", presetName)
+        var bundle = themeService.normalizeBundle(palette);
 
-        console.log("[applyPreset] Background before clamp:", bundle.background)
-        console.log("[applyPreset] Surface before clamp:", bundle.surface)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Background before clamp:", bundle.background)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Surface before clamp:", bundle.surface)
 
         // Apply OLED clamp through the single clampOLED function
         themeService.clampOLED(bundle, applyOLEDClamp);
-        console.log("[applyPreset] OLED clamp", applyOLEDClamp ? "APPLIED" : "NOT applied")
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] OLED clamp", applyOLEDClamp ? "APPLIED" : "NOT applied")
 
-        console.log("[applyPreset] Calling Config.ThemeConfig.applyTheme with metadata.oledClamp:", applyOLEDClamp ? true : false)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Calling Config.ThemeConfig.applyTheme with metadata.oledClamp:", applyOLEDClamp ? true : false)
         Config.ThemeConfig.applyTheme({
             colors: bundle,
             metadata: {
@@ -246,7 +288,7 @@ Item {
             }
         }, true);  // Mark as user-initiated change
 
-        console.log("[applyPreset] Config.ThemeConfig.metadata.oledClamp AFTER applyTheme:", Config.ThemeConfig.metadata.oledClamp)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Config.ThemeConfig.metadata.oledClamp AFTER applyTheme:", Config.ThemeConfig.metadata.oledClamp)
 
         // --- SECONDARY: write to cache file for bar and other shells ---
         var cachePath = themeService.homeDir + "/.cache/theme";
@@ -267,7 +309,7 @@ Item {
             }
         };
 
-        console.log("[applyPreset] Writing to cache file with oledClamp:", applyOLEDClamp)
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Writing to cache file with oledClamp:", applyOLEDClamp)
         var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
         writer.running = true;
@@ -277,8 +319,8 @@ Item {
 
         themeService.writeActiveThemeToken(presetName, "preset", applyOLEDClamp);
         themeService.isRegenerating = false;
-        console.log("[applyPreset] Function complete. Final metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
-        console.log("=== applyPreset COMPLETE ===")
+        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Function complete. Final metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
+        if (Config.DebugConfig.debugTheme) console.log("=== applyPreset COMPLETE ===")
     }
 
     /**
@@ -319,58 +361,58 @@ Item {
                     if (matugenOutput.length > 0) {
                         var colors = JSON.parse(matugenOutput);
 
-                        // Validate palette completeness - check for required base16 keys
-                        var requiredKeys = ["base00", "base01", "base02", "base03", "base04",
-                                           "base05", "base06", "base07", "base08", "base09",
-                                           "base0a", "base0b", "base0c", "base0d", "base0e"];
-                        var missingKeys = [];
-                        for (var i = 0; i < requiredKeys.length; i++) {
-                            var key = requiredKeys[i];
-                            if (!colors.base16 || !colors.base16[key]) {
-                                missingKeys.push(key);
-                            }
+                        // Validate the Material palette — the vivid source we map from.
+                        // base16 slots are tonal and render near-black on dark wallpapers,
+                        // so we map from colors.* (Material You) for vivid accents.
+                        var m = colors.colors || {}
+                        var requiredM = ["primary", "secondary", "tertiary", "error", "surface", "on_surface"]
+                        var missingM = []
+                        for (var i = 0; i < requiredM.length; i++) {
+                            if (!m[requiredM[i]]) missingM.push(requiredM[i])
+                        }
+                        if (missingM.length > 0) {
+                            console.error("ThemeService: Matugen Material palette incomplete - missing:", missingM.join(", "))
+                            themeService.matugenError = "Incomplete palette from wallpaper: missing " + missingM.length + " color(s)"
+                            themeService.matugenFailed = true
+                            themeService.isRegenerating = false
+                            return
                         }
 
-                        if (missingKeys.length > 0) {
-                            // Palette incomplete - surface visible error
-                            console.error("ThemeService: Matugen palette incomplete - missing keys:", missingKeys.join(", "));
-                            themeService.matugenError = "Incomplete palette from wallpaper: missing " + missingKeys.length + " color(s)";
-                            themeService.matugenFailed = true;
-                            themeService.isRegenerating = false;
-                            return;
-                        }
-
-                        // Map matugen colors to our theme format
-                        // matugen 4.1.0 emits base16 format: base16.base00.dark.color
-                        function pickBase16(b16Key) {
-                            var e = colors.base16 && colors.base16[b16Key]
+                        // Map matugen Material colors → canonical tokens. Brand accents
+                        // come from colors.primary/secondary/tertiary; secondary (the
+                        // unified accent) is driven by colors.primary — the vivid
+                        // saturated swatch. success/warning/info stay as fixed semantic
+                        // colors (Material has no equivalents). normalizeBundle() fills
+                        // gaps and guarantees the same 16-token shape as presets.
+                        function pickM(key) {
+                            var e = m[key]
                             if (!e) return null
                             return (e.default && e.default.color) || (e.dark && e.dark.color) || (e.light && e.light.color) || null
                         }
-                        var mappedColors = {
-                            background: pickBase16("base00") || "#000000",
-                            surface: pickBase16("base01") || "#0a0a0a",
-                            surfaceVariant: pickBase16("base02") || "#111111",
-                            surfaceContainer: pickBase16("base03") || "#111111",
-                            text: pickBase16("base06") || "#e0e0e0",
-                            textDim: pickBase16("base07") || "#808080",
-                            border: pickBase16("base04") || "#1a1a1a",
-                            outline: pickBase16("base04") || "#2a2a2a",
-                            outlineVariant: pickBase16("base05") || "#1a1a1a",
-                            primary: pickBase16("base08") || "#7c6bf0",
-                            secondary: pickBase16("base09") || "#00dce5",
-                            accent: pickBase16("base0a") || "#f87171",
-                            success: pickBase16("base0b") || "#34d399",
-                            warning: pickBase16("base0c") || "#fbbf24",
-                            error: pickBase16("base0d") || "#f87171",
-                            info: pickBase16("base0e") || "#00dce5"
-                        };
+                        var bundle = themeService.normalizeBundle({
+                            background: pickM("background"),
+                            surface: pickM("surface"),
+                            surfaceVariant: pickM("surface_variant"),
+                            surfaceContainer: pickM("surface_container"),
+                            text: pickM("on_surface"),
+                            textDim: pickM("on_surface_variant"),
+                            border: pickM("outline_variant"),
+                            outline: pickM("outline"),
+                            outlineVariant: pickM("outline_variant"),
+                            primary: pickM("tertiary"),
+                            secondary: pickM("primary"),
+                            accent: pickM("secondary"),
+                            success: "#34d399",
+                            warning: "#fbbf24",
+                            error: pickM("error"),
+                            info: "#00dce5"
+                        })
 
                         // Apply OLED clamp through the single clampOLED function
-                        themeService.clampOLED(mappedColors, themeService.pendingOLEDClamp);
+                        themeService.clampOLED(bundle, themeService.pendingOLEDClamp);
 
                         Config.ThemeConfig.applyTheme({
-                            colors: mappedColors,
+                            colors: bundle,
                             metadata: {
                                 name: "Dynamic Wallpaper",
                                 source: "matugen",
@@ -384,7 +426,7 @@ Item {
                         var cachePath = themeService.homeDir + "/.cache/theme";
                         var colorsJsonPath = cachePath + "/colors.json";
                         var colorsPayload = {
-                            colors: mappedColors,
+                            colors: bundle,
                             metadata: Config.ThemeConfig.metadata
                         };
                         var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
@@ -392,7 +434,7 @@ Item {
                         writer.running = true;
 
                         // Sync to external apps
-                        themeService.syncToExternalApps(mappedColors);
+                        themeService.syncToExternalApps(bundle);
                         themeService.writeActiveThemeToken("Dynamic Wallpaper", "matugen", themeService.pendingOLEDClamp);
 
                         // Success - clear any previous error
@@ -434,19 +476,19 @@ Item {
     }
 
     function applyDynamicTheme(wallpaperPath, applyOLEDClamp) {
-        console.log("=== applyDynamicTheme CALLED ===")
-        console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
-        console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp)
+        if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme CALLED ===")
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp)
 
         if (themeService.isRegenerating) {
-            console.log("[applyDynamicTheme] Already regenerating, skipping")
+            if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Already regenerating, skipping")
             return;
         }
 
         // Use the provided wallpaper path (the active wallpaper from
         // WallpaperService.currentWallpaper), or fall back to SharedState.
         var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
-        console.log("[applyDynamicTheme] actualPath to use:", actualPath)
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] actualPath to use:", actualPath)
 
         if (!actualPath || actualPath === "") {
             // Surface a visible error instead of silently returning — otherwise
@@ -469,7 +511,7 @@ Item {
         // Run matugen to generate colors from wallpaper
         // Strip file:// prefix if present
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
-        console.log("[applyDynamicTheme] Running matugen with path:", cleanPath)
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Running matugen with path:", cleanPath)
 
         matugenRunner.command = ["matugen", "image", cleanPath, "-j", "hex", "--mode", "dark", "--type", "scheme-tonal-spot", "--prefer=lightness", "-q"];
         matugenRunner.running = true;
@@ -513,6 +555,91 @@ Item {
         themeService.writeActiveThemeToken("Custom Modification", "manual", themeService.isOledClampActive);
     }
 
+    // =========================================================================
+    // CUSTOM SCHEME PERSISTENCE + API
+    // =========================================================================
+
+    // Reads saved custom schemes from disk (called on startup + after writes).
+    property var customThemeLoader: Process {
+        id: customLoader
+        property string buffer: ""
+        command: ["sh", "-c", "cat " + themeService.customThemesPath + " 2>/dev/null"]
+        stdout: SplitParser { onRead: function(data) { customLoader.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                try {
+                    var raw = customLoader.buffer.trim()
+                    if (raw.length > 0) {
+                        var arr = JSON.parse(raw)
+                        themeService.customThemes = Array.isArray(arr) ? arr : []
+                    }
+                } catch (e) { /* no/invalid file yet */ }
+                customLoader.buffer = ""
+            }
+        }
+    }
+
+    function loadCustomThemes() { customLoader.running = true }
+
+    // Snapshot the current palette as a named scheme (max 5; oldest dropped).
+    function saveCustomTheme(name) {
+        var n = (name || "").trim()
+        if (n.length === 0) return
+        var entry = { name: n, colors: {} }
+        var c = Config.ThemeConfig.colors
+        for (var k in c) {
+            if (Object.prototype.hasOwnProperty.call(c, k)) entry.colors[k] = c[k]
+        }
+        var arr = themeService.customThemes.filter(function(e) { return e.name !== n })
+        arr.unshift(entry)
+        if (arr.length > 5) arr = arr.slice(0, 5)
+        themeService.customThemes = arr
+        themeService._writeCustomThemes()
+    }
+
+    function deleteCustomTheme(name) {
+        themeService.customThemes = themeService.customThemes.filter(function(e) { return e.name !== name })
+        themeService._writeCustomThemes()
+    }
+
+    // Apply a saved scheme through the standard pipeline (bar/ghostty/nvim update).
+    function applyCustomTheme(name) {
+        var found = null
+        for (var i = 0; i < themeService.customThemes.length; i++) {
+            if (themeService.customThemes[i].name === name) { found = themeService.customThemes[i]; break }
+        }
+        if (!found || !found.colors) return
+
+        var bundle = themeService.normalizeBundle(found.colors)
+        themeService.clampOLED(bundle, themeService.isOledClampActive)
+        Config.ThemeConfig.applyTheme({
+            colors: bundle,
+            metadata: {
+                name: found.name,
+                source: "custom",
+                applied: new Date().toISOString(),
+                oledClamp: themeService.isOledClampActive,
+                matugenEnabled: false
+            }
+        }, true)
+
+        var cachePath = themeService.homeDir + "/.cache/theme"
+        var colorsJsonPath = cachePath + "/colors.json"
+        var colorsPayload = { colors: bundle, metadata: Config.ThemeConfig.metadata }
+        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService)
+        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath]
+        writer.running = true
+        themeService.syncToExternalApps(bundle)
+        themeService.writeActiveThemeToken(found.name, "custom", themeService.isOledClampActive)
+    }
+
+    function _writeCustomThemes() {
+        var payload = JSON.stringify(themeService.customThemes)
+        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService)
+        writer.command = ["sh", "-c", "printf '%s' '" + payload.replace(/'/g, "'\\''") + "' > " + themeService.customThemesPath]
+        writer.running = true
+    }
+
     /**
      * Sync theme to external apps (ghostty, terminal TUIs)
      * This generates config files for apps that support custom theming
@@ -520,70 +647,47 @@ Item {
     function syncToExternalApps(colors) {
         if (!colors) colors = Config.ThemeConfig.colors;
 
-        // Generate ghostty theme config.
-        // ghostty's config loads this exact file via:
-        //   config-file = ~/.config/ngeran/theme/ghostty.conf
-        var ghosttyConf = themeService.homeDir + "/.config/ngeran/theme/ghostty.conf";
-        var ghosttyContent =
-            "# Theme: " + Config.ThemeConfig.metadata.name + "\n" +
-            "# Generated by Quickshell ThemeService\n" +
-            "foreground = " + colors.text + "\n" +
-            "background = " + colors.background + "\n" +
-            "cursor = " + colors.primary + "\n" +
-            "selection-foreground = " + colors.background + "\n" +
-            "selection-background = " + colors.primary + "\n" +
-            "palette = 0=" + colors.background + "\n" +
-            "palette = 1=" + colors.error + "\n" +
-            "palette = 2=" + colors.success + "\n" +
-            "palette = 3=" + colors.warning + "\n" +
-            "palette = 4=" + colors.primary + "\n" +
-            "palette = 5=" + colors.secondary + "\n" +
-            "palette = 6=" + colors.info + "\n" +
-            "palette = 7=" + colors.text + "\n" +
-            "palette = 8=" + colors.textDim + "\n" +
-            "palette = 9=" + colors.error + "\n" +
-            "palette = 10=" + colors.success + "\n" +
-            "palette = 11=" + colors.warning + "\n" +
-            "palette = 12=" + colors.primary + "\n" +
-            "palette = 13=" + colors.secondary + "\n" +
-            "palette = 14=" + colors.info + "\n" +
-            "palette = 15=" + colors.text + "\n";
-
-        var ghosttyDirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        ghosttyDirProc.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme"];
-        ghosttyDirProc.running = true;
-
+        // ghostty: write a managed palette block directly into the MAIN config.
+        // ghostty reliably watches + reloads its main config on content change
+        // (not config-file imports), and a trailing managed block overrides
+        // anything earlier — so open terminals pick up the new colors live.
+        // python3 does the read→strip→append (avoids shell quoting issues).
+        var ghosttyMain = themeService.homeDir + "/.config/ghostty/config";
+        var ghosttyLines = [
+            "background = " + colors.background,
+            "foreground = " + colors.text,
+            "cursor-color = " + colors.primary,
+            "selection-background = " + colors.primary,
+            "selection-foreground = " + colors.background,
+            "palette = 0=" + colors.background,
+            "palette = 1=" + colors.error,
+            "palette = 2=" + colors.success,
+            "palette = 3=" + colors.warning,
+            "palette = 4=" + colors.primary,
+            "palette = 5=" + colors.secondary,
+            "palette = 6=" + colors.info,
+            "palette = 7=" + colors.text,
+            "palette = 8=" + colors.textDim,
+            "palette = 9=" + colors.error,
+            "palette = 10=" + colors.success,
+            "palette = 11=" + colors.warning,
+            "palette = 12=" + colors.primary,
+            "palette = 13=" + colors.secondary,
+            "palette = 14=" + colors.info,
+            "palette = 15=" + colors.text
+        ].join("\n");
+        var ghosttyPy = [
+            "import os",
+            "f = " + JSON.stringify(ghosttyMain),
+            "lines = " + JSON.stringify(ghosttyLines),
+            "orig = open(f).read() if os.path.exists(f) else ''",
+            "s = orig[:orig.find('# >>> quickshell-theme >>>')] if '# >>> quickshell-theme >>>' in orig else orig",
+            "s = '\\n'.join(l for l in s.split('\\n') if not l.startswith('# quickshell-theme-version:'))",
+            "s = s.rstrip()",
+            "open(f, 'w').write(s + '\\n\\n# >>> quickshell-theme >>>\\n' + lines + '\\n# <<< quickshell-theme <<<\\n')"
+        ].join("\n");
         var ghosttyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        ghosttyWriter.command = ["sh", "-c", "printf '%s' '" + ghosttyContent.replace(/'/g, "'\\''") + "' > " + ghosttyConf];
+        ghosttyWriter.command = ["python3", "-c", ghosttyPy];
         ghosttyWriter.running = true;
-
-        // Force already-open ghostty surfaces to pick up the new palette. The
-        // imported theme file above is correct and loads fine, but ghostty only
-        // re-reads config-file imports when the MAIN config changes. Bumping this
-        // marker rewrites the main config in place (same inode → inotify modify
-        // fires → ghostty reloads → import re-read → live recolor).
-        var ghosttyMainConf = themeService.homeDir + "/.config/ghostty/config";
-        var ghosttyReloader = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        ghosttyReloader.command = ["sh", "-c",
-            "f=" + JSON.stringify(ghosttyMainConf) + "; " +
-            "{ grep -v '^# quickshell-theme-version:' \"$f\" 2>/dev/null; " +
-            "printf '# quickshell-theme-version: %s\\n' \"$(date +%s)\"; } > \"$f.qs\"; " +
-            "cat \"$f.qs\" > \"$f\"; rm -f \"$f.qs\""];
-        ghosttyReloader.running = true;
-
-        // Terminal TUI apps typically use terminal colors, so ghostty theming covers them
-        // For apps with custom themes (impala, wiremix, bluetui), they would need specific configs
-        // This is a placeholder for future expansion
-    }
-
-    function refreshTheme() {
-        // Enforces atomic read validation tracking through ThemeConfig structure routines
-        if (typeof Config.ThemeConfig.applyTheme === "function") {
-             // Fallback query matching to verify pipeline sync structures
-        }
-    }
-
-    function syncWithThemeConfig() {
-        // Kept for signature tracking compatibility
     }
 }

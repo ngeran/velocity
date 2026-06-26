@@ -48,7 +48,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.text
             font.pixelSize: 9
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: root.letterSpacing
             color: Config.ThemeConfig.colors.textDim
         }

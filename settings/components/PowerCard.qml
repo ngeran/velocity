@@ -15,6 +15,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
 import "../config" as Config
+import "." as Components
 
 Item {
     id: root
@@ -43,39 +44,30 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // ── HEADER ────────────────────────────────────────────────────────────
-        RowLayout {
+        // Header + uptime label
+        Item {
             Layout.fillWidth: true
             Layout.bottomMargin: 12
+            height: 18
 
-            Text {
-                text: "POWER"
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 9
-                font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 2.5
+            Components.WidgetHeader {
+                icon: "󰐥"
+                label: "POWER"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
             }
 
-            Item { Layout.fillWidth: true }
-
-            // Uptime badge (static label — replace with Process probe if desired)
             Text {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 text: "UPTIME"
                 color: Config.ThemeConfig.colors.secondary
                 font.pixelSize: 8
+                font.bold: true
                 font.family: Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.5
-                opacity: 0.6
+                opacity: 0.7
             }
-        }
-
-        // Thin rule
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.ThemeConfig.colors.outlineVariant
-            Layout.bottomMargin: 12
         }
 
         // ── BUTTON GRID — 2×2 ────────────────────────────────────────────────

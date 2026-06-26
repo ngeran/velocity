@@ -40,20 +40,9 @@ Item {
         onSectionSelected: function(key) { root.activeSection = key }
     }
 
-    StatusCardRow {
-        id: statusRow
-        anchors.top: parent.top
-        anchors.left: sideNav.right
-        anchors.right: parent.right
-        anchors.topMargin: Config.ControlConfig.padding
-        anchors.leftMargin: Config.ControlConfig.padding
-        anchors.rightMargin: Config.ControlConfig.padding
-        height: Config.ControlConfig.statusCardHeight
-    }
-
     TerminalBody {
         id: terminalBody
-        anchors.top: statusRow.bottom
+        anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: sideNav.right
         anchors.right: parent.right
@@ -62,10 +51,5 @@ Item {
         anchors.rightMargin: Config.ControlConfig.padding
         anchors.bottomMargin: Config.ControlConfig.padding
         activeSection: root.activeSection
-    }
-
-    ScanlineOverlay {
-        anchors.fill: parent
-        z: 1000
     }
 }

@@ -65,7 +65,7 @@ Rectangle {
         Text {
             text: "SYSTEM SYNC ACTIVE"
             font.pixelSize: 9
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 2.0
             color: Config.ThemeConfig.colors.textDim
         }
@@ -76,7 +76,7 @@ Rectangle {
         Text {
             text: root._token
             font.pixelSize: 9
-            font.family: "monospace"
+            font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing: 1.0
             color: Config.ThemeConfig.colors.secondary
         }

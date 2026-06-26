@@ -20,34 +20,11 @@ Rectangle {
         color: Config.ThemeConfig.colors.border
     }
 
-    // Brand block
-    Column {
-        anchors.top: parent.top
-        anchors.topMargin: 18
-        anchors.left: parent.left
-        anchors.leftMargin: 14
-        spacing: 2
-
-        Text {
-            text: "ROOT@HYPR"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 14
-            font.bold: true
-            color: Config.ControlConfig.accent
-        }
-        Text {
-            text: "V0.4.2-STABLE"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-        }
-    }
-
     // Section buttons
     Column {
         id: navList
         anchors.top: parent.top
-        anchors.topMargin: 72
+        anchors.topMargin: 18
         anchors.left: parent.left
         anchors.right: parent.right
         spacing: 4

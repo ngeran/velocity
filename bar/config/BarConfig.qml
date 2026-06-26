@@ -34,7 +34,7 @@ QtObject {
     // =========================================================================
 
     readonly property color colorBackground: ThemeConfig.colors.background
-    readonly property color colorAccent: ThemeConfig.colors.primary
+    readonly property color colorAccent: ThemeConfig.colors.secondary
     readonly property color colorText: ThemeConfig.colors.text
     readonly property color colorTextDim: ThemeConfig.colors.textDim
     readonly property color colorMuted: ThemeConfig.colors.error
@@ -45,6 +45,7 @@ QtObject {
     // =========================================================================
 
     readonly property string fontFamily: "monospace"
+    readonly property string fontNerd: "JetBrainsMono Nerd Font"
     readonly property int fontSizeClock: 14
     readonly property int fontSizeIcon: 14
 

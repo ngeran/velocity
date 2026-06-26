@@ -52,7 +52,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 text: root.iconText
-                font.family: "JetBrainsMono Nerd Font"
+                font.family: Config.BarConfig.fontNerd
                 font.pixelSize: 14
                 color: root.isSelected ? Config.BarConfig.colorAccent : "#ffffff"
 
@@ -63,7 +63,7 @@ Rectangle {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: root.labelText.toUpperCase()
-            font.family: "JetBrains Mono"
+            font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
             font.letterSpacing: 1.5
             color: root.isSelected ? Config.BarConfig.colorAccent : "#e0e0e0"

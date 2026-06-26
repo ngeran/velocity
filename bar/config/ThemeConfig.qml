@@ -7,7 +7,7 @@
 // all properties automatically update, triggering reactive updates across
 // all QuickShell components.
 //
-// TEMPORARY: Using polling instead of FileView to debug crash
+// Reads ~/.cache/theme/colors.json via a 1s poll (settings is the sole writer).
 //
 // =============================================================================
 
@@ -21,9 +21,6 @@ import "." as Config
 Item {
     id: root
     visible: false
-
-    // Flag to prevent polling from overwriting user-initiated changes
-    property bool userInitiatedChange: false
 
     // =========================================================================
     // THEME COLORS (reactive - update when cache file changes)
@@ -85,14 +82,8 @@ Item {
     // THEME APPLICATION
     // =========================================================================
 
-    function applyTheme(data, isUserInitiated) {
+    function applyTheme(data) {
         if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] applyTheme called with theme:", data.metadata ? data.metadata.name : "unknown")
-
-        // Set flag if this is a user-initiated change
-        if (isUserInitiated === true) {
-            root.userInitiatedChange = true
-            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Set userInitiatedChange flag")
-        }
 
         if (!data) {
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] ERROR: No data provided")
@@ -152,7 +143,9 @@ Item {
     }
 
     // =========================================================================
-    // POLLING-BASED FILE WATCHING (replacing FileView to debug crash)
+    // FILE READING — poll colors.json every 1s. triggeredOnStart reads the
+    // existing file at launch (restore on boot); the repeat catches live writes
+    // from settings. (FileView proved unreliable for both live + initial load.)
     // =========================================================================
 
     Process {
@@ -161,37 +154,26 @@ Item {
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { catProc.buffer += data } }
         onRunningChanged: {
-            if (!running) {
-                if (catProc.buffer.trim().length > 0) {
-                    try {
-                        var newData = catProc.buffer.trim();
-                        // Only apply if data has actually changed AND not a user-initiated change
-                        if (newData !== root.lastCachedData) {
-                            if (!root.userInitiatedChange) {
-                                if (Config.DebugConfig.debugFile) console.log("[Bar ThemeConfig] Cache data changed (external), re-applying theme")
-                                root.lastCachedData = newData
-                                root.applyTheme(JSON.parse(newData))
-                            } else {
-                                root.lastCachedData = newData
-                                root.userInitiatedChange = false
-                            }
-                        }
-                    } catch (e) {
-                        if (Config.DebugConfig.debugFile) console.log("[Bar ThemeConfig] Parse error:", e)
+            if (!running && catProc.buffer.trim().length > 0) {
+                try {
+                    var newData = catProc.buffer.trim()
+                    if (newData !== root.lastCachedData) {
+                        root.lastCachedData = newData
+                        root.applyTheme(JSON.parse(newData))
                     }
-                    catProc.buffer = ""
+                } catch (e) {
+                    // keep last good theme on parse error
                 }
+                catProc.buffer = ""
             }
         }
     }
 
     Timer {
-        interval: 300
+        interval: 1000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: {
-            if (!catProc.running) catProc.running = true;
-        }
+        onTriggered: if (!catProc.running) catProc.running = true
     }
 }

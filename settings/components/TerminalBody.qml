@@ -59,16 +59,6 @@ Rectangle {
                 width: content.width
             }
 
-            Text {
-                visible: body.activeSection === "system"
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: "// system view — pending"
-                font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 11
-                color: Config.ThemeConfig.colors.textDim
-            }
-
             // --- Console log ---
             Item { width: 1; height: 6 }
 

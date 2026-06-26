@@ -9,11 +9,7 @@
 // ROLE
 //   The single canonical definition of every theme token for the settings
 //   shell — the ONLY place color/metadata token values are defined. Every
-//   other consumer reads them, directly or via a shim:
-//     • Components using the flat Colors.* namespace resolve through
-//       settings/components/Colors.qml — a pure re-export shim that binds each
-//       Colors.<x> to ThemeConfig.colors.<x> (BentoCard, NetworkRing,
-//       NetworkWidget, IdentityWidget, CalendarWidget, ClockWidget).
+//   other consumer reads them directly:
 //     • settings/config/SharedState.qml binds its theme* properties
 //       (themePrimaryColor, themeSecondaryColor, themeTextColor, themeName,
 //       themeIsOLED) directly to this singleton, so ThemeInfoCard and any other
@@ -320,17 +316,28 @@ Item {
         }
     }
 
-    // Fallback: if FileView isn't working, check every minute
-    Timer {
-        interval: 60000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            // If we haven't seen any data yet, FileView might not be working
-            if (root.lastCachedData.length === 0) {
-                var fallback = Qt.createQmlObject('import Quickshell.Io; Process { command: ["sh", "-c", "cat ' + root.externalCachePath + '"] }', root);
-                fallback.running = true;
+    // Startup restore: FileView doesn't fire for an already-existing file at
+    // launch, so explicitly read colors.json once on completion to restore the
+    // last-applied theme.
+    Component.onCompleted: startupReader.running = true
+
+    Process {
+        id: startupReader
+        command: ["sh", "-c", "cat " + root.externalCachePath]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data } }
+        onRunningChanged: {
+            if (!running && startupReader.buffer.trim().length > 0) {
+                try {
+                    var raw = startupReader.buffer.trim()
+                    var data = JSON.parse(raw)
+                    root.lastCachedData = raw
+                    if (data.metadata && data.metadata.applied) root.lastCachedTimestamp = data.metadata.applied
+                    root.applyTheme(data)
+                } catch (e) {
+                    // no/invalid cache yet — keep defaults
+                }
+                startupReader.buffer = ""
             }
         }
     }

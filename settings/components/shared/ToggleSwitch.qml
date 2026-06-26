@@ -34,7 +34,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 12
+        radius: 0
         color: root.checked ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
         border.color: root.hovered ? (root.checked ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.outline) : Config.ThemeConfig.colors.border
         border.width: 1
@@ -56,8 +56,8 @@ Item {
         id: thumb
         width: 18
         height: 18
-        radius: 9
-        color: root.checked ? "#ffffff" : Config.ThemeConfig.colors.textDim
+        radius: 0
+        color: root.checked ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
         anchors.verticalCenter: parent.verticalCenter
 
         x: root.checked ? parent.width - width - 3 : 3

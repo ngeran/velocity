@@ -35,7 +35,7 @@ Rectangle {
         text: button.workspaceId
         color: isActive ? Config.BarConfig.colorText : isOccupied ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
         font.pixelSize: 11
-        font.family: "JetBrains Mono, monospace"
+        font.family: Config.BarConfig.fontFamily
     }
 
     // Hover

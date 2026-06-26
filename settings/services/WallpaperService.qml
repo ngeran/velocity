@@ -39,7 +39,7 @@ Item {
     property int cycleInterval: 300000
 
     /// awww transition style: any | outer | inner | fade | wipe | simple | wave
-    property string transitionType: "outer"
+    property string transitionType: "fade"
 
     /// Target FPS for the transition animation
     readonly property int transitionFps: 60
