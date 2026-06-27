@@ -1,95 +1,36 @@
-// =============================================================================
-// BatteryIcon.qml — Power status indicator with shell-level hover popup
-// =============================================================================
-//
-// Shows the live power glyph from BatteryService (battery level on a laptop,
-// power-plug on a desktop on AC). Click opens the Control Center POWER section,
-// the same as the other tray icons (network / bluetooth / audio).
-// =============================================================================
-
+// BatteryIcon.qml — tray glyph; emits trayRequested on click.
+// The shared TrayCard (in shell.qml) shows the power info.
 import QtQuick
-import Quickshell.Io
 import "../services" as Services
 import "../config" as Config
 
 Item {
-    id: icon
+    id: root
     width: Config.BarConfig.iconSize
-    height: Config.BarConfig.iconSize
-    objectName: "batteryIcon"
+    height: Config.BarConfig.barHeight
 
-    property bool hasBattery: Services.BatteryService.hasBattery
-    property int percentage: Services.BatteryService.percentage
-    property bool charging: Services.BatteryService.charging
-    property var shellRoot: null
-
-    Component.onCompleted: {
-        function findShellRoot(item) {
-            if (!item) return null
-            if (item.hoverPopupData !== undefined) return item
-            if (item.parent) return findShellRoot(item.parent)
-            return null
-        }
-        shellRoot = findShellRoot(icon.parent)
-        if (!shellRoot) console.log("[BatteryIcon] Could not find ShellRoot!")
-    }
+    property bool isActive: false
+    signal trayRequested()
 
     Text {
         anchors.centerIn: parent
         text: Services.BatteryService.glyph
         font.family: Config.BarConfig.fontNerd
         font.pixelSize: 14
-        color: mouseArea.containsMouse ? Config.BarConfig.colorAccent : icon._color()
-
-        Behavior on color {
-            ColorAnimation { duration: 120 }
+        color: {
+            if (root.isActive) return Config.BarConfig.colorAccent
+            if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorText
+            if (Services.BatteryService.charging)       return "#68d391"
+            if (Services.BatteryService.percentage <= 20) return "#f87171"
+            if (Services.BatteryService.percentage <= 50) return "#fbbf24"
+            return Config.BarConfig.colorText
         }
+        Behavior on color { ColorAnimation { duration: 120 } }
     }
 
     MouseArea {
-        id: mouseArea
         anchors.fill: parent
-        hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: openProc.running = true
-
-        onEntered: {
-            if (icon.shellRoot) {
-                var pos = icon.parent.mapToItem(icon.shellRoot, icon.x, icon.y)
-                var subtext = icon.hasBattery
-                    ? (icon.percentage + "%" + (icon.charging ? " ⚡" : ""))
-                    : "AC POWER"
-                icon.shellRoot.hoverPopupData = {
-                    visible: true,
-                    text: "Power",
-                    subtext: subtext,
-                    details: [
-                        Services.BatteryService.stateLabel,
-                        icon.hasBattery && icon.percentage <= 20 ? "⚠️ Low battery" : ""
-                    ].filter(function(d) { return d !== "" }),
-                    x: pos.x + icon.width/2 - 60,
-                    y: pos.y
-                }
-            }
-        }
-
-        onExited: {
-            if (icon.shellRoot) icon.shellRoot.hoverPopupData.visible = false
-        }
-    }
-
-    // Open the Control Center on the POWER section (same pattern as the other
-    // tray icons: network / bluetooth / audio).
-    Process {
-        id: openProc
-        command: ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "openControl", "power"]
-    }
-
-    function _color() {
-        if (!icon.hasBattery) return Config.BarConfig.colorText        // desktop on AC — neutral white
-        if (icon.charging) return "#68d391"           // green while charging
-        if (icon.percentage <= 20) return "#f87171"   // red when low
-        if (icon.percentage <= 50) return "#fbbf24"   // yellow at half
-        return Config.BarConfig.colorText
+        onClicked: root.trayRequested()
     }
 }

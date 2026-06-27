@@ -1,4 +1,4 @@
-/** Version: 9.2 - Prefixed key=value output eliminates separator ambiguity **/
+/** Version: 21.1 - Fixed reset timing **/
 pragma Singleton
 import QtQuick
 import Quickshell.Io
@@ -12,52 +12,99 @@ Item {
     property string ssid: ""
     property string ipAddress: ""
 
+    // Simple command that just outputs everything
     Process {
         id: netProc
-        // Each value printed with an unambiguous prefix — order-independent parsing
-        command: ["sh", "-c", [
-            "DEV=$(nmcli -t -f TYPE,STATE,CONNECTION device | grep -E '^(wifi|ethernet):connected' | head -1);",
-            "[ -z \"$DEV\" ] && exit 0;",
-            "TYPE=$(echo \"$DEV\" | cut -d: -f1);",
-            "SSID=$(echo \"$DEV\" | cut -d: -f3-);",
-            "IP=$(ip -4 route get 1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}');",
-            "echo \"TYPE=$TYPE\";",
-            "echo \"SSID=$SSID\";",
-            "echo \"IP=$IP\""
-        ].join(" ")]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { netProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                const lines = netProc.buffer.trim().split("\n")
-                if (lines.length > 0 && lines[0] !== "") {
-                    let type = "", ssid = "", ip = ""
-                    for (const line of lines) {
-                        if (line.startsWith("TYPE=")) type = line.slice(5).trim()
-                        else if (line.startsWith("SSID=")) ssid = line.slice(5).trim()
-                        else if (line.startsWith("IP="))   ip   = line.slice(3).trim()
+        command: ["sh", "-c", "nmcli -t -f TYPE,NAME connection show --active 2>/dev/null | grep '^802-11-wireless\\|^802-3-ethernet' | head -1"]
+        stdout: SplitParser { 
+            onRead: function(data) { 
+                console.log("[NetworkService] OUTPUT:", data)
+                // Parse the output directly here
+                var trimmed = data.trim()
+                if (trimmed !== "") {
+                    if (trimmed.startsWith("802-11-wireless:")) {
+                        root.connectionType = "wifi"
+                        root.ssid = trimmed.substring("802-11-wireless:".length)
+                        root.isConnected = true
+                        console.log("[NetworkService] Found WiFi SSID:", root.ssid)
+                    } else if (trimmed.startsWith("802-3-ethernet:")) {
+                        root.connectionType = "ethernet"
+                        root.ssid = trimmed.substring("802-3-ethernet:".length)
+                        root.isConnected = true
+                        console.log("[NetworkService] Found Ethernet:", root.ssid)
                     }
-                    root.connectionType = type
-                    root.ssid           = ssid
-                    root.ipAddress      = ip
-                    root.isConnected    = true
                 } else {
+                    // No connection found
                     root._reset()
                 }
-                netProc.buffer = ""
+            } 
+        }
+        stderr: SplitParser { 
+            onRead: function(data) { 
+                console.warn("[NetworkService] ERROR:", data) 
+            } 
+        }
+        onRunningChanged: {
+            if (!running) {
+                console.log("[NetworkService] Process finished")
+                // If we didn't find a connection, reset
+                if (!root.isConnected) {
+                    root._reset()
+                }
+                // Now get IP if connected
+                if (root.isConnected) {
+                    getIP()
+                }
             }
         }
     }
 
+    // Separate process for IP
+    Process {
+        id: ipProc
+        command: ["sh", "-c", "ip -4 route get 1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}'"]
+        stdout: SplitParser { 
+            onRead: function(data) { 
+                var ip = data.trim()
+                if (ip !== "") {
+                    root.ipAddress = ip
+                    console.log("[NetworkService] Found IP:", ip)
+                }
+            } 
+        }
+        onRunningChanged: {
+            if (!running) {
+                console.log("[NetworkService] IP process finished")
+            }
+        }
+    }
+
+    function getIP() {
+        if (!ipProc.running) {
+            ipProc.running = true
+        }
+    }
+
     Timer {
-        interval: 4000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!netProc.running) netProc.running = true
+        interval: 5000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: { 
+            console.log("[NetworkService] Polling...")
+            // Only reset if we're not already connected (prevents flash)
+            if (!root.isConnected) {
+                // Keep current state until we get new data
+            }
+            if (!netProc.running) netProc.running = true 
+        }
     }
 
     function _reset() {
         root.connectionType = ""
-        root.isConnected    = false
-        root.ssid           = ""
-        root.ipAddress      = ""
+        root.isConnected = false
+        root.ssid = ""
+        root.ipAddress = ""
+        console.log("[NetworkService] Reset")
     }
 }

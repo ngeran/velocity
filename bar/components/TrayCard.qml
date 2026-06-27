@@ -42,12 +42,15 @@ PanelWindow {
             return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (activeTray === "volume")
             return Services.AudioService.muted ? "󰝟" : "󰕾"
+        if (activeTray === "power")
+            return Services.BatteryService.glyph
         return ""
     }
     readonly property string headerTitle: {
-        if (activeTray === "network") return "NETWORK"
+        if (activeTray === "network")   return "NETWORK"
         if (activeTray === "bluetooth") return "BLUETOOTH"
-        if (activeTray === "volume") return "VOLUME"
+        if (activeTray === "volume")    return "VOLUME"
+        if (activeTray === "power")     return "POWER"
         return ""
     }
 
@@ -127,7 +130,9 @@ PanelWindow {
             StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: card.activeTray === "bluetooth" ? 1 : (card.activeTray === "volume" ? 2 : 0)
+                currentIndex: card.activeTray === "bluetooth" ? 1
+                    : (card.activeTray === "volume" ? 2
+                    : (card.activeTray === "power"  ? 3 : 0))
 
                 // ── Network ──
                 ColumnLayout {
@@ -496,6 +501,134 @@ PanelWindow {
                             onClicked: Services.AudioService.toggleMute()
                         }
                     }
+                }
+
+                // ── Power ──
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    // Status badge row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        // Laptop: CHARGING / ON BATTERY / FULLY CHARGED
+                        // Desktop: AC POWER
+                        Rectangle {
+                            width: powerStatusLabel.implicitWidth + 16
+                            height: 20
+                            color: {
+                                if (!Services.BatteryService.hasBattery)
+                                    return Qt.rgba(0, 220, 229, 0.10)
+                                if (Services.BatteryService.charging)
+                                    return Qt.rgba(104, 211, 145, 0.15)   // green tint
+                                if (Services.BatteryService.percentage <= 20)
+                                    return Qt.rgba(248, 113, 113, 0.15)   // red tint
+                                return Qt.rgba(255,255,255,0.04)
+                            }
+                            border.color: {
+                                if (!Services.BatteryService.hasBattery)
+                                    return Config.BarConfig.colorAccent
+                                if (Services.BatteryService.charging)
+                                    return "#68d391"
+                                if (Services.BatteryService.percentage <= 20)
+                                    return "#f87171"
+                                return Config.BarConfig.colorBorder
+                            }
+                            border.width: 1
+                            radius: 10
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                            Text {
+                                id: powerStatusLabel
+                                anchors.centerIn: parent
+                                text: Services.BatteryService.stateLabel
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: {
+                                    if (!Services.BatteryService.hasBattery)
+                                        return Config.BarConfig.colorAccent
+                                    if (Services.BatteryService.charging)
+                                        return "#68d391"
+                                    if (Services.BatteryService.percentage <= 20)
+                                        return "#f87171"
+                                    return Config.BarConfig.colorTextDim
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Item { height: 12 }
+
+                    // Battery percentage row — laptop only
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        visible: Services.BatteryService.hasBattery
+                        Text {
+                            text: "CHARGE"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                            Layout.preferredWidth: 56
+                        }
+                        Text {
+                            text: Services.BatteryService.percentage + "%"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 12; font.bold: true
+                            color: {
+                                if (Services.BatteryService.charging)      return "#68d391"
+                                if (Services.BatteryService.percentage <= 20) return "#f87171"
+                                if (Services.BatteryService.percentage <= 50) return "#fbbf24"
+                                return Config.BarConfig.colorText
+                            }
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+                    }
+
+                    Item { height: 8; visible: Services.BatteryService.hasBattery }
+
+                    // Source row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            text: "SOURCE"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                            Layout.preferredWidth: 56
+                        }
+                        Text {
+                            text: Services.BatteryService.onAc ? "AC / Wall power" : "Battery"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 12
+                            color: Config.BarConfig.colorText
+                        }
+                    }
+
+                    // Low battery warning — laptop only, shown when ≤ 20 %
+                    Item { height: 8; visible: Services.BatteryService.hasBattery && Services.BatteryService.percentage <= 20 }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        visible: Services.BatteryService.hasBattery && Services.BatteryService.percentage <= 20
+                        Text {
+                            text: "󰀦"
+                            font.family: Config.BarConfig.fontNerd
+                            font.pixelSize: 13
+                            color: "#f87171"
+                        }
+                        Text {
+                            text: "LOW BATTERY"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: "#f87171"
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
                 }
             }
         }

@@ -26,7 +26,7 @@ ShellRoot {
     PanelWindow {
         id: panelWindow
 
-        property string activeTray: ""   // "network" | "bluetooth" | "volume" | "" (closed)
+        property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
 
         // =========================================================================
         // POSITIONING
@@ -105,6 +105,8 @@ ShellRoot {
             Components.BatteryIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
+                isActive: panelWindow.activeTray === "power"  // Changed from "battery" to "power"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
 
             Item {
@@ -125,7 +127,7 @@ ShellRoot {
     }
 
     // =========================================================================
-    // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume
+    // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume/Power
     // =========================================================================
     Components.TrayCard {
         activeTray: panelWindow.activeTray
