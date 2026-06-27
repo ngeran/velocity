@@ -1,4 +1,4 @@
-/** Version: 9.0 - Added SSID and IP parsing **/
+/** Version: 9.2 - Prefixed key=value output eliminates separator ambiguity **/
 pragma Singleton
 import QtQuick
 import Quickshell.Io
@@ -9,24 +9,38 @@ Item {
 
     property string connectionType: ""
     property bool isConnected: false
-    property string ssid: "Disconnected"
-    property string ipAddress: "0.0.0.0"
+    property string ssid: ""
+    property string ipAddress: ""
 
     Process {
         id: netProc
-        // Fetches SSID and IP Address in one pass
-        command: ["sh", "-c", "nmcli -t -f TYPE,STATE,CONNECTION device | grep -E '^(wifi|ethernet):connected' | head -1; ip -4 route get 1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}'"]
+        // Each value printed with an unambiguous prefix — order-independent parsing
+        command: ["sh", "-c", [
+            "DEV=$(nmcli -t -f TYPE,STATE,CONNECTION device | grep -E '^(wifi|ethernet):connected' | head -1);",
+            "[ -z \"$DEV\" ] && exit 0;",
+            "TYPE=$(echo \"$DEV\" | cut -d: -f1);",
+            "SSID=$(echo \"$DEV\" | cut -d: -f3-);",
+            "IP=$(ip -4 route get 1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}');",
+            "echo \"TYPE=$TYPE\";",
+            "echo \"SSID=$SSID\";",
+            "echo \"IP=$IP\""
+        ].join(" ")]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { netProc.buffer += data } }
         onRunningChanged: {
             if (!running) {
                 const lines = netProc.buffer.trim().split("\n")
-                if (lines.length >= 1 && lines[0].includes(":connected")) {
-                    const parts = lines[0].split(":")
-                    root.connectionType = parts[0]
-                    root.ssid = parts[2] || "Connected"
-                    root.isConnected = true
-                    root.ipAddress = lines[1] || "No IP"
+                if (lines.length > 0 && lines[0] !== "") {
+                    let type = "", ssid = "", ip = ""
+                    for (const line of lines) {
+                        if (line.startsWith("TYPE=")) type = line.slice(5).trim()
+                        else if (line.startsWith("SSID=")) ssid = line.slice(5).trim()
+                        else if (line.startsWith("IP="))   ip   = line.slice(3).trim()
+                    }
+                    root.connectionType = type
+                    root.ssid           = ssid
+                    root.ipAddress      = ip
+                    root.isConnected    = true
                 } else {
                     root._reset()
                 }
@@ -42,8 +56,8 @@ Item {
 
     function _reset() {
         root.connectionType = ""
-        root.isConnected = false
-        root.ssid = "Disconnected"
-        root.ipAddress = "0.0.0.0"
+        root.isConnected    = false
+        root.ssid           = ""
+        root.ipAddress      = ""
     }
 }

@@ -28,7 +28,7 @@ PanelWindow {
     margins.right: 0
 
     implicitWidth: 300
-    implicitHeight: 220
+    implicitHeight: 248
     color: "transparent"
 
     property string activeTray: ""
@@ -72,10 +72,10 @@ PanelWindow {
                 strokeWidth: 0
                 startX: 14; startY: 0
                 PathLine { x: 300; y: 0 }                                   // top edge → top-right (square)
-                PathLine { x: 300; y: 206 }                                 // right edge
-                PathArc { x: 286; y: 220; radiusX: 14; radiusY: 14 }        // bottom-right round
-                PathLine { x: 14; y: 220 }                                  // bottom edge
-                PathArc { x: 0; y: 206; radiusX: 14; radiusY: 14 }          // bottom-left round
+                PathLine { x: 300; y: 234 }                                 // right edge
+                PathArc { x: 286; y: 248; radiusX: 14; radiusY: 14 }        // bottom-right round
+                PathLine { x: 14; y: 248 }                                  // bottom edge
+                PathArc { x: 0; y: 234; radiusX: 14; radiusY: 14 }          // bottom-left round
                 PathLine { x: 0; y: 14 }                                    // left edge
                 PathArc { x: 14; y: 0; radiusX: 14; radiusY: 14 }           // top-left round
             }
@@ -132,95 +132,289 @@ PanelWindow {
                 // ── Network ──
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 0
 
-                    Text {
-                        text: Services.NetworkService.ssid
-                        color: Config.BarConfig.colorText
-                        font.pixelSize: 15; font.bold: true
-                        Layout.fillWidth: true; elide: Text.ElideRight
-                    }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.BarConfig.colorBorder }
-
+                    // Top row: type badge + filled status badge
                     RowLayout {
                         Layout.fillWidth: true
-                        Text {
-                            text: Services.NetworkService.isConnected ? "Connected" : "Disconnected"
-                            color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorMuted
-                            font.pixelSize: 11
+                        spacing: 6
+
+                        // WIFI / ETH / NONE type badge — outline only
+                        Rectangle {
+                            width: typeBadgeLabel.implicitWidth + 12
+                            height: 20
+                            color: Services.NetworkService.isConnected
+                                ? Qt.rgba(0, 220, 229, 0.10)
+                                : Qt.rgba(255,255,255,0.04)
+                            border.color: Services.NetworkService.isConnected
+                                ? Qt.rgba(0, 220, 229, 0.40)
+                                : Config.BarConfig.colorBorder
+                            border.width: 1
+                            radius: 0
+                            Text {
+                                id: typeBadgeLabel
+                                anchors.centerIn: parent
+                                text: !Services.NetworkService.isConnected ? "NONE"
+                                    : (Services.NetworkService.connectionType === "wifi" ? "WIFI" : "ETH")
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: Services.NetworkService.isConnected
+                                    ? Config.BarConfig.colorAccent
+                                    : Config.BarConfig.colorTextDim
+                            }
                         }
+
+                        // CONNECTED filled badge / DISCONNECTED muted outline — rounded
+                        Rectangle {
+                            width: statusBadgeLabel.implicitWidth + 16
+                            height: 20
+                            color: Services.NetworkService.isConnected
+                                ? Config.BarConfig.colorAccent
+                                : Qt.rgba(255,255,255,0.04)
+                            border.color: Services.NetworkService.isConnected
+                                ? Config.BarConfig.colorAccent
+                                : Config.BarConfig.colorMuted
+                            border.width: 1
+                            radius: 10
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                            Text {
+                                id: statusBadgeLabel
+                                anchors.centerIn: parent
+                                text: Services.NetworkService.isConnected ? "CONNECTED" : "DISCONNECTED"
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: Services.NetworkService.isConnected
+                                    ? Config.BarConfig.colorBackground
+                                    : Config.BarConfig.colorMuted
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                            }
+                        }
+
                         Item { Layout.fillWidth: true }
+                    }
+
+                    Item { height: 12 }
+
+                    // SSID row — hidden when disconnected
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        visible: Services.NetworkService.isConnected
                         Text {
-                            text: Services.NetworkService.ipAddress
-                            color: Config.BarConfig.colorText; font.pixelSize: 12; font.bold: true
+                            text: "SSID"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                            Layout.preferredWidth: 44
+                        }
+                        Text {
+                            text: Services.NetworkService.ssid
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 12; font.bold: true
+                            color: Config.BarConfig.colorText
+                            Layout.fillWidth: true; elide: Text.ElideRight
                         }
                     }
+
+                    Item { height: 8 }
+
+                    // IP row — hidden when disconnected (no placeholder text)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        visible: Services.NetworkService.isConnected
+                        Text {
+                            text: "IP"
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                            Layout.preferredWidth: 44
+                        }
+                        Text {
+                            text: Services.NetworkService.ipAddress
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 12
+                            color: Config.BarConfig.colorText
+                            Layout.fillWidth: true; elide: Text.ElideRight
+                        }
+                    }
+
                     Item { Layout.fillHeight: true }
                 }
 
                 // ── Bluetooth ──
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 0
 
-                    Text {
-                        text: Services.BluetoothService.powered ? "Powered On" : "Powered Off"
-                        color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-                        font.pixelSize: 13; font.bold: true
-                    }
-                    Text {
-                        text: "Devices: " + Services.BluetoothService.deviceCount
-                        color: Config.BarConfig.colorText; font.pixelSize: 11
-                    }
-                    Text {
-                        text: Services.BluetoothService.connectedDeviceList
-                        color: Config.BarConfig.colorTextDim; font.pixelSize: 10
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap
-                    }
-                    Item { Layout.fillHeight: true; Layout.minimumHeight: 4 }
-                    Button {
-                        id: btToggle
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 120; Layout.preferredHeight: 30
-                        contentItem: Text {
-                            text: Services.BluetoothService.powered ? "Disable" : "Enable"
-                            color: "#ffffff"
-                            font.pixelSize: 11; font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                    // Power status badge row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        // POWERED ON filled / POWERED OFF outline badge
+                        Rectangle {
+                            width: btStatusLabel.implicitWidth + 12
+                            height: 20
+                            color: Services.BluetoothService.powered
+                                ? Config.BarConfig.colorAccent
+                                : Qt.rgba(255,255,255,0.04)
+                            border.color: Services.BluetoothService.powered
+                                ? Config.BarConfig.colorAccent
+                                : Config.BarConfig.colorMuted
+                            border.width: 1
+                            radius: 0
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                            Text {
+                                id: btStatusLabel
+                                anchors.centerIn: parent
+                                text: Services.BluetoothService.powered ? "POWERED ON" : "POWERED OFF"
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: Services.BluetoothService.powered
+                                    ? Config.BarConfig.colorBackground
+                                    : Config.BarConfig.colorMuted
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                            }
                         }
-                        background: Rectangle {
-                            color: Services.BluetoothService.powered ? "#3d3d3d" : Config.BarConfig.colorAccent
-                            radius: 6
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Item { height: 10 }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.BarConfig.colorBorder }
+                    Item { height: 8 }
+
+                    // Device count label
+                    Text {
+                        text: Services.BluetoothService.deviceCount + " DEVICE"
+                            + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"
+                        font.family: Config.BarConfig.fontFamily
+                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+
+                    Item { height: 6 }
+
+                    // Device list — one row per device
+                    Repeater {
+                        model: Services.BluetoothService.connectedDeviceList
+                            ? Services.BluetoothService.connectedDeviceList.split(",") : []
+                        delegate: RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            required property string modelData
+                            required property int index
+
+                            Text {
+                                text: "󰂱"
+                                font.family: Config.BarConfig.fontNerd
+                                font.pixelSize: 11
+                                color: Config.BarConfig.colorAccent
+                            }
+                            Text {
+                                text: modelData.trim()
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 11
+                                color: Config.BarConfig.colorText
+                                Layout.fillWidth: true; elide: Text.ElideRight
+                            }
                         }
-                        onClicked: Services.BluetoothService.togglePower()
+                    }
+
+                    // Empty state
+                    Text {
+                        visible: Services.BluetoothService.deviceCount === 0
+                        text: "No devices connected"
+                        font.family: Config.BarConfig.fontFamily
+                        font.pixelSize: 11
+                        color: Config.BarConfig.colorTextDim
+                        font.italic: true
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    // Full-width action button at bottom
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 28
+                        color: Services.BluetoothService.powered
+                            ? Qt.rgba(255,255,255,0.05)
+                            : Qt.rgba(0, 220, 229, 0.12)
+                        border.color: Services.BluetoothService.powered
+                            ? Config.BarConfig.colorBorder
+                            : Config.BarConfig.colorAccent
+                        border.width: 1
+                        radius: 0
+                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Text {
+                                text: Services.BluetoothService.powered ? "󰂲" : "󰂯"
+                                font.family: Config.BarConfig.fontNerd
+                                font.pixelSize: 13
+                                color: Services.BluetoothService.powered
+                                    ? Config.BarConfig.colorTextDim
+                                    : Config.BarConfig.colorAccent
+                            }
+                            Text {
+                                text: Services.BluetoothService.powered ? "DISABLE BLUETOOTH" : "ENABLE BLUETOOTH"
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: Services.BluetoothService.powered
+                                    ? Config.BarConfig.colorTextDim
+                                    : Config.BarConfig.colorAccent
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.BluetoothService.togglePower()
+                        }
                     }
                 }
 
                 // ── Volume ──
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 14
+                    spacing: 0
 
+                    // Large percentage display
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
 
+                        // Glyph — 3-state
                         Text {
-                            text: Services.AudioService.muted ? "󰝟" : "󰕾"
+                            text: Services.AudioService.muted ? "󰝟"
+                                : (Services.AudioService.volume > 66 ? "󰕾"
+                                : (Services.AudioService.volume > 33 ? "󰕿" : "󰕿"))
                             font.family: Config.BarConfig.fontNerd
-                            font.pixelSize: 22
-                            color: Services.AudioService.muted ? Config.BarConfig.colorMuted : Config.BarConfig.colorAccent
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMute() }
+                            font.pixelSize: 20
+                            color: Services.AudioService.muted
+                                ? Config.BarConfig.colorMuted
+                                : Config.BarConfig.colorAccent
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
+
+                        // Percentage — dimmed when muted
                         Text {
                             text: Math.round(Services.AudioService.volume) + "%"
-                            color: Config.BarConfig.colorText
-                            font.pixelSize: 18; font.bold: true
-                            Layout.fillWidth: true
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 26; font.bold: true
+                            color: Services.AudioService.muted
+                                ? Config.BarConfig.colorTextDim
+                                : Config.BarConfig.colorText
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
 
+                    Item { height: 12 }
+
+                    // Slider
                     Slider {
                         id: volSlider
                         Layout.fillWidth: true
@@ -230,28 +424,78 @@ PanelWindow {
                         onMoved: Services.AudioService.setVolume(value)
 
                         background: Rectangle {
-                            y: volSlider.topPadding + volSlider.availableHeight / 2 - 3
-                            implicitHeight: 6
+                            y: volSlider.topPadding + volSlider.availableHeight / 2 - 2
+                            implicitHeight: 4
                             width: volSlider.availableWidth
-                            radius: 3
+                            radius: 0
                             color: Config.BarConfig.colorBorder
                             Rectangle {
                                 height: parent.height
                                 width: volSlider.visualPosition * parent.width
-                                color: Config.BarConfig.colorAccent
-                                radius: 3
+                                color: Services.AudioService.muted
+                                    ? Config.BarConfig.colorTextDim
+                                    : Config.BarConfig.colorAccent
+                                radius: 0
+                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
                         }
                         handle: Rectangle {
                             x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
                             y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                            width: 16; height: 16; radius: 8
-                            color: Config.BarConfig.colorText
-                            border.color: Config.BarConfig.colorAccent
+                            width: 12; height: 12; radius: 0
+                            color: Services.AudioService.muted
+                                ? Config.BarConfig.colorTextDim
+                                : Config.BarConfig.colorText
+                            border.color: Services.AudioService.muted
+                                ? Config.BarConfig.colorTextDim
+                                : Config.BarConfig.colorAccent
                             border.width: 1
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
+
                     Item { Layout.fillHeight: true }
+
+                    // Full-width mute toggle button at bottom
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 28
+                        color: Services.AudioService.muted
+                            ? Qt.rgba(0, 220, 229, 0.12)
+                            : Qt.rgba(255,255,255,0.05)
+                        border.color: Services.AudioService.muted
+                            ? Config.BarConfig.colorAccent
+                            : Config.BarConfig.colorBorder
+                        border.width: 1
+                        radius: 0
+                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Text {
+                                text: Services.AudioService.muted ? "󰕾" : "󰝟"
+                                font.family: Config.BarConfig.fontNerd
+                                font.pixelSize: 13
+                                color: Services.AudioService.muted
+                                    ? Config.BarConfig.colorAccent
+                                    : Config.BarConfig.colorTextDim
+                            }
+                            Text {
+                                text: Services.AudioService.muted ? "UNMUTE" : "MUTE"
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                                color: Services.AudioService.muted
+                                    ? Config.BarConfig.colorAccent
+                                    : Config.BarConfig.colorTextDim
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.AudioService.toggleMute()
+                        }
+                    }
                 }
             }
         }
