@@ -26,6 +26,8 @@ ShellRoot {
     PanelWindow {
         id: panelWindow
 
+        property string activeTray: ""   // "network" | "bluetooth" | "volume" | "" (closed)
+
         // =========================================================================
         // POSITIONING
         // =========================================================================
@@ -46,6 +48,13 @@ ShellRoot {
         // =========================================================================
         // MAIN LAYOUT (Left and Right Sections)
         // =========================================================================
+
+        // Click on empty bar area closes the open tray card.
+        MouseArea {
+            anchors.fill: parent
+            enabled: panelWindow.activeTray !== ""
+            onClicked: panelWindow.activeTray = ""
+        }
 
         RowLayout {
             anchors.fill: parent
@@ -75,16 +84,22 @@ ShellRoot {
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
+                isActive: panelWindow.activeTray === "network"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
             }
 
             Components.BluetoothIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
+                isActive: panelWindow.activeTray === "bluetooth"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
             }
 
             Components.VolumeIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
+                isActive: panelWindow.activeTray === "volume"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
             }
 
             Components.BatteryIcon {
@@ -107,6 +122,14 @@ ShellRoot {
         Components.ClockWidget {
             anchors.centerIn: parent
         }
+    }
+
+    // =========================================================================
+    // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume
+    // =========================================================================
+    Components.TrayCard {
+        activeTray: panelWindow.activeTray
+        onCloseRequested: panelWindow.activeTray = ""
     }
 
     // =========================================================================

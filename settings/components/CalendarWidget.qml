@@ -1,8 +1,5 @@
 // =============================================================================
-// CalendarWidget.qml — Calendar for the dashboard bento grid
-// =============================================================================
-// Header · Month/Year title + today badge · day-of-week · date grid (today
-// accent-filled, weekends dimmed).
+// CalendarWidget.qml — Ultra-Minimalist Bento Calendar
 // =============================================================================
 
 import QtQuick
@@ -14,113 +11,92 @@ Item {
     id: calRoot
 
     // -------------------------------------------------------------------------
-    // DATE STATE
+    // Logic: Date Calculations
     // -------------------------------------------------------------------------
-    property var    _today:        new Date()
-    property int    _todayDay:     _today.getDate()
-    property int    _todayMonth:   _today.getMonth()
-    property int    _todayYear:    _today.getFullYear()
+    property var    _now:          new Date()
+    property int    _todayDay:     _now.getDate()
+    property int    _todayMonth:   _now.getMonth()
+    property int    _todayYear:    _now.getFullYear()
+    
     property var    _firstOfMonth: new Date(_todayYear, _todayMonth, 1)
-    property int    _startOffset:  _firstOfMonth.getDay()
+    property int    _startOffset:  _firstOfMonth.getDay() 
     property int    _daysInMonth:  new Date(_todayYear, _todayMonth + 1, 0).getDate()
-    property int    _cellCount:    _startOffset + _daysInMonth
-    property string _monthLabel:   Qt.formatDateTime(_today, "MMMM").toUpperCase()
-    property string _yearLabel:    Qt.formatDateTime(_today, "yyyy")
+    property int    _cellCount:    42 // Fixed 6-row grid for visual stability
 
     Timer {
-        interval: 60000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: calRoot._today = new Date()
+        interval: 60000; running: true; repeat: true
+        onTriggered: calRoot._now = new Date()
     }
 
-    // -------------------------------------------------------------------------
-    // LAYOUT
-    // -------------------------------------------------------------------------
     ColumnLayout {
         anchors.fill: parent
+        anchors.margins: 4
         spacing: 0
 
+        // --- SECTION: Widget Header ---
         Components.WidgetHeader {
             icon: "󰃭"
             label: "CALENDAR"
-            Layout.bottomMargin: 10
+            Layout.bottomMargin: 15
         }
 
-        // Month/Year title + today badge
+        // --- SECTION: Month/Year Display ---
         RowLayout {
             Layout.fillWidth: true
-            Layout.bottomMargin: 10
+            Layout.bottomMargin: 24 
+            spacing: 12
 
             Text {
-                text: calRoot._monthLabel
+                text: Qt.formatDateTime(calRoot._now, "MMMM").toUpperCase()
                 color: Config.ThemeConfig.colors.primary
-                font.pixelSize: 16; font.bold: true
+                font.pixelSize: 20
+                font.weight: Font.ExtraBold
                 font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 2.0
+                font.letterSpacing: 0.5
             }
+
             Text {
-                text: " " + calRoot._yearLabel
+                text: Qt.formatDateTime(calRoot._now, "yyyy")
                 color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 16
+                font.pixelSize: 20
+                font.weight: Font.Light
                 font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 1.5
+                opacity: 0.4
             }
 
             Item { Layout.fillWidth: true }
-
-            Rectangle {
-                width: 52; height: 20
-                color: Config.ThemeConfig.colors.secondary
-                Text {
-                    anchors.centerIn: parent
-                    text: "TODAY " + calRoot._todayDay
-                    color: Config.ThemeConfig.colors.background
-                    font.pixelSize: 9; font.bold: true
-                    font.family: Config.SettingsConfig.fontFamily
-                    font.letterSpacing: 1.0
-                }
-            }
         }
 
-        // Day-of-week header
+        // --- SECTION: Day Labels (S M T W T F S) ---
         GridLayout {
-            Layout.fillWidth: true
             columns: 7
-            columnSpacing: 3
-            rowSpacing: 0
-            Layout.bottomMargin: 4
-
+            Layout.fillWidth: true
+            Layout.bottomMargin: 10
+            
             Repeater {
-                model: ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+                model: ["S", "M", "T", "W", "T", "F", "S"]
                 delegate: Text {
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignHCenter
                     horizontalAlignment: Text.AlignHCenter
                     text: modelData
-                    color: (index === 0 || index === 6)
-                           ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.textDim, 0.6)
-                           : Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 9; font.bold: true
+                    color: Config.ThemeConfig.colors.secondary
+                    opacity: 0.5
+                    font.pixelSize: 10
+                    font.weight: Font.Bold
                     font.family: Config.SettingsConfig.fontFamily
-                    font.letterSpacing: 0.5
                 }
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.ThemeConfig.colors.outlineVariant
-            Layout.bottomMargin: 4
-        }
-
-        // Date grid
+        // --- SECTION: The Calendar Grid ---
         GridLayout {
-            id: calGrid
+            id: dateGrid
+            columns: 7
+            rows: 6
             Layout.fillWidth: true
             Layout.fillHeight: true
-            columns: 7
-            columnSpacing: 3
-            rowSpacing: 3
+            columnSpacing: 2
+            rowSpacing: 2
 
             Repeater {
                 model: calRoot._cellCount
@@ -129,31 +105,43 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
-                    readonly property int  dayNumber: (index < calRoot._startOffset) ? 0 : (index - calRoot._startOffset + 1)
-                    readonly property bool isToday:   dayNumber === calRoot._todayDay
-                    readonly property bool isBlank:   dayNumber === 0
-                    readonly property bool isWeekend: (index % 7 === 0) || (index % 7 === 6)
+                    readonly property int  dayNum:      index - calRoot._startOffset + 1
+                    readonly property bool isActualDay: dayNum > 0 && dayNum <= calRoot._daysInMonth
+                    readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay
+                    readonly property bool isWeekend:   (index % 7 === 0) || (index % 7 === 6)
 
+                    // 1. Today Highlight (Modern Squircle)
                     Rectangle {
                         anchors.centerIn: parent
-                        width: Math.min(parent.width, parent.height) - 2
-                        height: width
-                        color: parent.isToday ? Config.ThemeConfig.colors.secondary : "transparent"
-                        visible: !parent.isBlank
+                        width: parent.width * 0.88
+                        height: parent.height * 0.88
+                        radius: 7 
+                        color: isToday ? Config.ThemeConfig.colors.secondary : "transparent"
+                        
+                        scale: isToday ? 1.0 : 0.8
+                        Behavior on scale { NumberAnimation { duration: 400; easing.type: Easing.OutBack } }
                     }
 
+                    // 2. Day Number
                     Text {
                         anchors.centerIn: parent
-                        visible: !parent.isBlank
-                        text: parent.dayNumber.toString()
-                        color: parent.isToday
-                               ? Config.ThemeConfig.colors.background
-                               : parent.isWeekend
-                                 ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.textDim, 0.6)
-                                 : Config.ThemeConfig.colors.text
-                        font.pixelSize: 11; font.bold: parent.isToday
+                        text: isActualDay ? dayNum : ""
+                        font.pixelSize: 12
                         font.family: Config.SettingsConfig.fontFamily
+                        font.weight: isToday ? Font.Bold : Font.Normal
+                        
+                        color: {
+                            if (isToday) return Config.ThemeConfig.colors.background;
+                            if (isActualDay) {
+                                return isWeekend ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.primary;
+                            }
+                            return "transparent";
+                        }
+                        
+                        opacity: (isWeekend && !isToday) ? 0.35 : 1.0
                     }
+                    
+                    // The Indicator Dot has been removed to keep the numbers clear.
                 }
             }
         }

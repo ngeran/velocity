@@ -1,139 +1,64 @@
-// =============================================================================
-// AudioService.qml — Audio volume monitoring
-// =============================================================================
-//
-// This singleton service monitors PipeWire audio volume state.
-//
-// PROPERTIES
-//   muted: bool — True when default audio sink is muted
-//   volume: int — Current volume level (0-100)
-//
-// METHODS
-//   toggleMute() — Toggle mute state
-//   volumeUp() — Increase volume by 5%
-//   volumeDown() — Decrease volume by 5%
-//
-// IMPLEMENTATION
-//   - Polls pactl for volume/mute state every 3s
-//   - Uses pactl/wpctl for volume adjustments
-// =============================================================================
-
+/** Version: 7.0 **/
 pragma Singleton
-
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
-Item {
+Scope {
     id: root
-    visible: false
-
-    // =========================================================================
-    // PUBLIC PROPERTIES
-    // =========================================================================
-
-    property bool muted: false
     property int volume: 0
-    property string defaultSink: ""
-
-    // =========================================================================
-    // FIND DEFAULT SINK
-    // =========================================================================
+    property bool muted: false
+    property bool syncLock: false 
 
     Process {
-        id: findSinkProc
-        command: ["pactl", "get-default-sink"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { findSinkProc.buffer += data }
-        }
-        onRunningChanged: {
-            if (!running) {
-                root.defaultSink = findSinkProc.buffer.trim()
-                findSinkProc.buffer = ""
-            }
-        }
-    }
-
-    // =========================================================================
-    // VOLUME POLLING
-    // =========================================================================
-
-    Process {
-        id: volProc
-        command: ["pactl", "get-sink-volume", "@DEFAULT_SINK@"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { volProc.buffer += data }
-        }
-        onRunningChanged: {
-            if (!running) {
-                const line = volProc.buffer.trim()
-                // Parse volume from "Volume: front-left: 65536 /  100% / 0.00 dB"
-                const match = line.match(/(\d+)%/)
-                if (match) {
-                    root.volume = parseInt(match[1])
-                }
-                volProc.buffer = ""
-            }
-        }
-    }
-
-    Process {
-        id: muteProc
-        command: ["pactl", "get-sink-mute", "@DEFAULT_SINK@"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { muteProc.buffer += data }
-        }
-        onRunningChanged: {
-            if (!running) {
-                const line = muteProc.buffer.trim()
-                root.muted = line.indexOf("yes") !== -1
-                muteProc.buffer = ""
-            }
-        }
-    }
-
-    Timer {
-        interval: 3000
+        id: statusProc
+        command: ["sh", "-c", "pactl get-sink-volume @DEFAULT_SINK@; pactl get-sink-mute @DEFAULT_SINK@"]
         running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            if (!findSinkProc.running) findSinkProc.running = true
-            if (!volProc.running) volProc.running = true
-            if (!muteProc.running) muteProc.running = true
+        stdout: SplitParser {
+            onRead: data => {
+                // If we recently touched the UI, ignore the system's "old" status reports
+                if (root.syncLock) return; 
+                
+                const volMatch = data.match(/(\d+)%/);
+                if (volMatch) root.volume = parseInt(volMatch[1]);
+                
+                if (data.includes("Mute:")) {
+                    root.muted = data.includes("yes");
+                }
+            }
         }
     }
 
-    // =========================================================================
-    // VOLUME CONTROLS
-    // =========================================================================
-
-    Process {
-        id: toggleMuteProc
-        command: ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"]
+    // Polling timer
+    Timer {
+        interval: 2500; running: true; repeat: true
+        onTriggered: if (!root.syncLock) statusProc.running = true
     }
 
-    Process {
-        id: volUpProc
-        command: ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"]
+    // V7: Increased to 5 seconds to ensure pactl updates fully
+    Timer {
+        id: lockTimeout
+        interval: 5000 
+        onTriggered: {
+            root.syncLock = false;
+            statusProc.running = true; // Refresh now that lock is over
+        }
     }
 
-    Process {
-        id: volDownProc
-        command: ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"]
+    function setVolume(val) {
+        root.syncLock = true;
+        lockTimeout.restart();
+        root.volume = Math.round(val);
+        Quickshell.exec(["pactl", "set-sink-volume", "@DEFAULT_SINK@", root.volume + "%"]);
     }
 
     function toggleMute() {
-        toggleMuteProc.running = true
+        root.syncLock = true;
+        lockTimeout.restart();
+        root.muted = !root.muted;
+        Quickshell.exec(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"]);
     }
 
-    function volumeUp() {
-        volUpProc.running = true
-    }
-
-    function volumeDown() {
-        volDownProc.running = true
-    }
+    function volumeUp() { setVolume(Math.min(root.volume + 5, 100)); }
+    function volumeDown() { setVolume(Math.max(root.volume - 5, 0)); }
 }

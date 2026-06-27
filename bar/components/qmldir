@@ -9,5 +9,6 @@ NetworkIcon 1.0 NetworkIcon.qml
 BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
 BatteryIcon 1.0 BatteryIcon.qml
+TrayCard 1.0 TrayCard.qml
 PowerMenu 1.0 PowerMenu.qml
 PowerMenuItem 1.0 PowerMenuItem.qml
