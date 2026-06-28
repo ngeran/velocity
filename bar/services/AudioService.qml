@@ -1,4 +1,4 @@
-/** Version: 7.1 - Reduced syncLock timeout, guarded process re-entry **/
+/** Version: 8.0 - Replaced Quickshell.exec() with Process objects (exec doesn't exist) **/
 pragma Singleton
 import QtQuick
 import Quickshell
@@ -10,6 +10,9 @@ Scope {
     property bool muted: false
     property bool syncLock: false
 
+    // -------------------------------------------------------------------------
+    // STATUS PROBE — polls pactl for volume + mute state
+    // -------------------------------------------------------------------------
     Process {
         id: statusProc
         command: ["sh", "-c", "pactl get-sink-volume @DEFAULT_SINK@; pactl get-sink-mute @DEFAULT_SINK@"]
@@ -40,7 +43,7 @@ Scope {
         }
     }
 
-    // Lock expires after 1.5 s — enough for pactl to settle, short enough to feel responsive
+    // Lock expires after 1.5 s — enough for pactl to settle
     Timer {
         id: lockTimeout
         interval: 1500
@@ -50,18 +53,50 @@ Scope {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // VOLUME PROCESS — pactl set-sink-volume
+    // command is set dynamically before running = true
+    // -------------------------------------------------------------------------
+    Process {
+        id: volumeProc
+        property string buffer: ""
+        stderr: SplitParser { onRead: data => { volumeProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) volumeProc.buffer = ""
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MUTE PROCESS — pactl set-sink-mute toggle
+    // -------------------------------------------------------------------------
+    Process {
+        id: muteProc
+        command: ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"]
+        property string buffer: ""
+        stderr: SplitParser { onRead: data => { muteProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) muteProc.buffer = ""
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PUBLIC API
+    // -------------------------------------------------------------------------
     function setVolume(val) {
+        if (volumeProc.running) return   // don't stack calls mid-drag
         root.syncLock = true
         lockTimeout.restart()
-        root.volume = Math.round(val)
-        Quickshell.exec(["pactl", "set-sink-volume", "@DEFAULT_SINK@", root.volume + "%"])
+        root.volume = Math.max(0, Math.min(100, Math.round(val)))
+        volumeProc.command = ["pactl", "set-sink-volume", "@DEFAULT_SINK@", root.volume + "%"]
+        volumeProc.running = true
     }
 
     function toggleMute() {
+        if (muteProc.running) return
         root.syncLock = true
         lockTimeout.restart()
         root.muted = !root.muted
-        Quickshell.exec(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
+        muteProc.running = true
     }
 
     function volumeUp()   { setVolume(Math.min(root.volume + 5, 100)) }

@@ -35,6 +35,8 @@ Item {
     property bool powered: false
     property var devices: []
     property bool scanning: false
+    property string pairingTo: ""     // mac currently being paired; "" = idle
+    property string connectingTo: ""  // mac currently being connected; "" = idle
 
     // internal action queue (in-place mutation is fine; not signal-bound)
     property var _queue: []
@@ -95,19 +97,36 @@ Item {
     // SCAN
     // -------------------------------------------------------------------------
 
+    property int scanSecondsLeft: 0   // counts down while scanning
+
     Process {
         id: scanProc
         command: ["bluetoothctl", "--timeout", "8", "scan", "on"]
         onExited: function(code) {
             root.scanning = false
+            root.scanSecondsLeft = 0
+            scanCountdown.stop()
             CommandService.pushLog("[bluetooth] scan complete", "output")
             root.refresh()
         }
     }
 
+    Timer {
+        id: scanCountdown
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (root.scanSecondsLeft > 0) {
+                root.scanSecondsLeft -= 1
+                // Refresh device list every second during scan to pick up new devices
+                root.refresh()
+            }
+        }
+    }
+
     function scanDevices() {
         if (!root.powered) {
-            CommandService.pushLog("[bluetooth] adapter offline — run 'toggle bt' first", "warning")
+            CommandService.pushLog("[bluetooth] adapter offline — toggle power first", "warning")
             return
         }
         if (root.scanning) {
@@ -115,8 +134,10 @@ Item {
             return
         }
         root.scanning = true
+        root.scanSecondsLeft = 8
         CommandService.pushLog("[bluetooth] scanning for 8s...", "output")
         scanProc.running = true
+        scanCountdown.start()
     }
 
     // -------------------------------------------------------------------------
@@ -125,14 +146,19 @@ Item {
 
     Process {
         id: powerProc
-        command: ["bluetoothctl", "power", "toggle"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { powerProc.buffer += data } }
+        stderr: SplitParser { onRead: function(data) { powerProc.buffer += data } }
         onExited: function(code) {
+            powerProc.buffer = ""
             root.refresh()
-            CommandService.pushLog("[bluetooth] power toggled", "output")
+            CommandService.pushLog("[bluetooth] power " + (root.powered ? "on" : "off"), "output")
         }
     }
 
     function togglePower() {
+        powerProc.command = ["bluetoothctl", "power", root.powered ? "off" : "on"]
+        powerProc.buffer = ""
         powerProc.running = true
     }
 
@@ -162,6 +188,8 @@ Item {
     function _drainQueue() {
         if (root._queue.length === 0) {
             root._busy = false
+            root.pairingTo = ""
+            root.connectingTo = ""
             root.refresh()
             return
         }
@@ -173,10 +201,17 @@ Item {
         actionProc.running = true
     }
 
-    function pair(mac)       { CommandService.pushLog("[bluetooth] pair " + mac, "output");      root._enqueue("pair", mac) }
+    function pair(mac) {
+        root.pairingTo = mac
+        CommandService.pushLog("[bluetooth] pair " + mac, "output")
+        root._enqueue("pair", mac)
+        root._enqueue("trust", mac)
+        root._enqueue("connect", mac)
+    }
     function trust(mac)      { root._enqueue("trust", mac) }
-    function connect(mac)    { root._enqueue("connect", mac) }
+    function connect(mac)    { root.connectingTo = mac; root._enqueue("connect", mac) }
     function disconnect(mac) { root._enqueue("disconnect", mac) }
+    function remove(mac)     { CommandService.pushLog("[bluetooth] removing " + mac, "output"); root._enqueue("remove", mac) }
 
     // -------------------------------------------------------------------------
     // PARSER

@@ -119,13 +119,32 @@ Item {
         id: wifiListProc
         command: ["sh", "-c", "nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi 2>/dev/null"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { wifiListProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                root.wifiNetworks = root._parseWifiList(wifiListProc.buffer)
-                root.scanning = false
-                wifiListProc.buffer = ""
+        property bool isScanRefresh: false
+        stdout: SplitParser {
+            onRead: function(data) {
+                wifiListProc.buffer += data + "\n"
             }
+        }
+        onRunningChanged: {
+            // Process exited — give SplitParser one event-loop tick to finish
+            // delivering any buffered lines before we parse.
+            if (!running) wifiParseTimer.restart()
+        }
+    }
+
+    Timer {
+        id: wifiParseTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            var nets = root._parseWifiList(wifiListProc.buffer)
+            root.wifiNetworks = nets
+            if (wifiListProc.isScanRefresh) {
+                root.scanning = false
+                scanTimeoutTimer.stop()
+                wifiListProc.isScanRefresh = false
+            }
+            wifiListProc.buffer = ""
         }
     }
 
@@ -159,26 +178,53 @@ Item {
 
     Process {
         id: rescanProc
-        command: ["nmcli", "device", "wifi", "rescan"]
-        onExited: function(code) {
-            if (code !== 0) CommandService.pushLog("[network] rescan returned " + code, "warning")
+        property string buffer: ""
+        command: ["sh", "-c", "nmcli device wifi rescan 2>/dev/null; exit 0"]
+        stdout: SplitParser { onRead: function(data) { rescanProc.buffer += data } }
+        stderr: SplitParser { onRead: function(data) { rescanProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                rescanProc.buffer = ""
+                // Give kernel 2s to populate scan cache, then fetch
+                rescanSettleTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: rescanSettleTimer
+        interval: 2000
+        repeat: false
+        onTriggered: root.refreshList(true)
+    }
+
+    // Safety valve — if rescanProc never fires onRunningChanged, clear spinner
+    Timer {
+        id: scanTimeoutTimer
+        interval: 10000
+        repeat: false
+        onTriggered: {
+            if (root.scanning) {
+                root.scanning = false
+                CommandService.pushLog("[network] scan timed out", "warning")
+                root.refreshList(false)
+            }
         }
     }
 
     function scanWifi() {
-        if (root.scanning) {
-            CommandService.pushLog("[network] scan already in progress", "warning")
-            return
-        }
+        if (root.scanning) return   // silent — button already disabled in UI
         root.scanning = true
         CommandService.pushLog("[network] scanning wifi...", "output")
         rescanProc.running = true
-        // rescan is async; refresh the list shortly after to pick up new APs
-        refreshList()
+        scanTimeoutTimer.restart()
     }
 
-    function refreshList() {
-        if (!wifiListProc.running) wifiListProc.running = true
+    function refreshList(fromScan) {
+        if (!wifiListProc.running) {
+            if (fromScan) wifiListProc.isScanRefresh = true
+            wifiListProc.running = true
+        }
     }
 
     function refreshStatus() {

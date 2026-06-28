@@ -30,10 +30,6 @@ Item {
 
     property ListModel logLines: _log
 
-    Component.onCompleted: {
-        _log.append({ text: "OBSIDIAN_CORE_OS control v0.4.2 — type 'help'", kind: "output" })
-    }
-
     // -------------------------------------------------------------------------
     // PUBLIC API
     // -------------------------------------------------------------------------

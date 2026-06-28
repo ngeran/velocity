@@ -72,6 +72,9 @@ Rectangle {
 
             Repeater {
                 model: Services.CommandService.logLines
+                onCountChanged: Qt.callLater(function() {
+                    flick.contentY = Math.max(0, flick.contentHeight - flick.height)
+                })
                 delegate: TerminalLogLine {
                     width: content.width
                     text: model.text
