@@ -4,7 +4,9 @@
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell.Io
 import "../config" as Config
+import "../services" as Services
 import "." as Components
 
 Item {
@@ -14,7 +16,45 @@ Item {
     property string statusText: "CORE ACTIVE"
     property string hostName:   "obsidian"
     property string roleText:   "NETWORK ENGINEER"
+    property string shellName:  "ZSH"
+    property string wmName:     "HYPRLAND"
     property bool   online:     true
+
+    // User-defined identity, loaded from ~/.config/ngeran/identity/:
+    //   avatar.png     — shown if present (else falls back to initials)
+    //   identity.txt   — key=value lines: name=, role=, host=, status=
+    property bool   hasAvatar: false
+    readonly property string avatarSource: "file://" + Services.ThemeService.homeDir + "/.config/ngeran/identity/avatar.png"
+
+    Component.onCompleted: identityLoader.running = true
+
+    Process {
+        id: identityLoader
+        command: ["sh", "-c", "cat ~/.config/ngeran/identity/identity.txt 2>/dev/null; echo; test -f ~/.config/ngeran/identity/avatar.png && echo HAS_AVATAR"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { identityLoader.buffer += d } }
+        onRunningChanged: {
+            if (!running && identityLoader.buffer.length > 0) {
+                var lines = identityLoader.buffer.split("\n")
+                for (var i = 0; i < lines.length; i++) {
+                    var l = lines[i]
+                    if (l === "HAS_AVATAR") {
+                        identityRoot.hasAvatar = true
+                    } else if (l.indexOf("=") > 0) {
+                        var k = l.substring(0, l.indexOf("=")).trim()
+                        var v = l.substring(l.indexOf("=") + 1).trim()
+                        if (k === "name") identityRoot.userName = v
+                        else if (k === "role") identityRoot.roleText = v
+                        else if (k === "host") identityRoot.hostName = v
+                        else if (k === "status") identityRoot.statusText = v
+                        else if (k === "shell") identityRoot.shellName = v
+                        else if (k === "wm") identityRoot.wmName = v
+                    }
+                }
+                identityLoader.buffer = ""
+            }
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -72,8 +112,17 @@ Item {
                 Rectangle { width: 12; height: 2; color: Config.ThemeConfig.colors.secondary; anchors.top: parent.top; anchors.left: parent.left }
                 Rectangle { width: 2; height: 12; color: Config.ThemeConfig.colors.secondary; anchors.top: parent.top; anchors.left: parent.left }
 
+                Image {
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    source: identityRoot.hasAvatar ? identityRoot.avatarSource : ""
+                    fillMode: Image.PreserveAspectCrop
+                    visible: identityRoot.hasAvatar
+                }
+
                 Text {
                     anchors.centerIn: parent
+                    visible: !identityRoot.hasAvatar
                     text: identityRoot.userName.substring(0, 2).toUpperCase()
                     color: Config.ThemeConfig.colors.secondary
                     font.pixelSize: 18; font.bold: true
@@ -110,8 +159,8 @@ Item {
             Repeater {
                 model: [
                     { label: "HOST",  value: identityRoot.hostName },
-                    { label: "SHELL", value: "ZSH" },
-                    { label: "WM",    value: "HYPRLAND" }
+                    { label: "SHELL", value: identityRoot.shellName },
+                    { label: "WM",    value: identityRoot.wmName }
                 ]
                 delegate: RowLayout {
                     Layout.fillWidth: true

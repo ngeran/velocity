@@ -80,22 +80,22 @@ Item {
 
             Repeater {
                 model: [
-                    { label: "SUSPEND",   icon: "󰒲",  cmd: "systemctl suspend",  danger: false },
-                    { label: "LOCK",      icon: "󰌾",  cmd: "hyprlock",           danger: false },
-                    { label: "RESTART",   icon: "󰜉",  cmd: "systemctl reboot",   danger: false },
-                    { label: "POWER OFF", icon: "⏻",  cmd: "systemctl poweroff", danger: true  }
+                    { label: "SUSPEND",   icon: "󰒲",  cmd: "systemctl suspend",  hover: "warning" },
+                    { label: "LOCK",      icon: "󰌾",  cmd: "hyprlock",           hover: "primary" },
+                    { label: "RESTART",   icon: "󰜉",  cmd: "systemctl reboot",   hover: "accent" },
+                    { label: "POWER OFF", icon: "⏻",  cmd: "systemctl poweroff", hover: "error" }
                 ]
 
                 delegate: Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: btnArea.containsMouse
-                           ? (modelData.danger ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.15) : Config.ThemeConfig.colors.surfaceVariant)
+                           ? Config.ThemeConfig.tint(Config.ThemeConfig.colors[modelData.hover], 0.15)
                            : Config.ThemeConfig.colors.surface
                     radius: 0
                     border.width: 1
                     border.color: btnArea.containsMouse
-                                  ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.secondary)
+                                  ? Config.ThemeConfig.colors[modelData.hover]
                                   : Config.ThemeConfig.colors.border
 
                     Behavior on color       { ColorAnimation { duration: 120 } }
@@ -110,7 +110,7 @@ Item {
                             font.pixelSize: 24
                             font.family: "JetBrains Mono Nerd Font Mono"
                             color: btnArea.containsMouse
-                                   ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.secondary)
+                                   ? Config.ThemeConfig.colors[modelData.hover]
                                    : Config.ThemeConfig.colors.textDim
                             Layout.alignment: Qt.AlignHCenter
                             Behavior on color { ColorAnimation { duration: 120 } }
@@ -123,7 +123,7 @@ Item {
                             font.family: Config.SettingsConfig.fontFamily
                             font.letterSpacing: 1.5
                             color: btnArea.containsMouse
-                                   ? (modelData.danger ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.primary)
+                                   ? Config.ThemeConfig.colors[modelData.hover]
                                    : Config.ThemeConfig.colors.textDim
                             Layout.alignment: Qt.AlignHCenter
                             Behavior on color { ColorAnimation { duration: 120 } }

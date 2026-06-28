@@ -689,5 +689,35 @@ Item {
         var ghosttyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         ghosttyWriter.command = ["python3", "-c", ghosttyPy];
         ghosttyWriter.running = true;
+
+        // kitty: write the palette to the file kitty.conf already includes
+        // (include ~/.config/ngeran/theme/kitty.conf). Reload kitty (ctrl+shift+f5)
+        // to apply — kitty doesn't auto-reload config.
+        var kittyConf = themeService.homeDir + "/.config/ngeran/theme/kitty.conf";
+        var kittyContent =
+            "background " + colors.background + "\n" +
+            "foreground " + colors.text + "\n" +
+            "cursor " + colors.primary + "\n" +
+            "selection_background " + colors.primary + "\n" +
+            "selection_foreground " + colors.background + "\n" +
+            "color0 "  + colors.background + "\n" +
+            "color1 "  + colors.error + "\n" +
+            "color2 "  + colors.success + "\n" +
+            "color3 "  + colors.warning + "\n" +
+            "color4 "  + colors.primary + "\n" +
+            "color5 "  + colors.secondary + "\n" +
+            "color6 "  + colors.info + "\n" +
+            "color7 "  + colors.text + "\n" +
+            "color8 "  + colors.textDim + "\n" +
+            "color9 "  + colors.error + "\n" +
+            "color10 " + colors.success + "\n" +
+            "color11 " + colors.warning + "\n" +
+            "color12 " + colors.primary + "\n" +
+            "color13 " + colors.secondary + "\n" +
+            "color14 " + colors.info + "\n" +
+            "color15 " + colors.text + "\n";
+        var kittyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        kittyWriter.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme && printf '%s' '" + kittyContent + "' > " + kittyConf];
+        kittyWriter.running = true;
     }
 }

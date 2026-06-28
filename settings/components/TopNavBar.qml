@@ -174,47 +174,7 @@ Rectangle {
             }
         }
 
-        // Push search box to the far right
+        // Push tabs to the left (no right-end search box anymore).
         Item { Layout.fillWidth: true }
-
-        // --- SEARCH ICON BOX -------------------------------------------------
-        // Right-end bordered box. Left border separates from tab area.
-        Rectangle {
-            id: searchBox
-            Layout.fillHeight: true
-            width: 48
-            color: searchHover.containsMouse
-                   ? Config.ThemeConfig.colors.surfaceContainer
-                   : "transparent"
-            radius: 0
-
-            Behavior on color {
-                ColorAnimation { duration: 100; easing.type: Easing.OutQuad }
-            }
-
-            // Left border
-            Rectangle {
-                anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
-                width: 1
-                color: Config.ThemeConfig.colors.border
-            }
-
-            // Search icon — unicode magnifier glyph
-            Text {
-                anchors.centerIn: parent
-                text:             "⌕"
-                font.pixelSize:   16
-                font.family: Config.SettingsConfig.fontFamily
-                color:            Config.ThemeConfig.colors.textDim
-            }
-
-            MouseArea {
-                id: searchHover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape:  Qt.PointingHandCursor
-                // onClicked: emit a search signal if search functionality is added
-            }
-        }
     }
 }
