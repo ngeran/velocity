@@ -145,7 +145,7 @@ Rectangle {
                     // Label text
                     Text {
                         text:               modelData.label
-                        font.pixelSize:     11
+                        font.pixelSize:     13
                         font.bold:          true
                         font.family: Config.SettingsConfig.fontFamily
                         font.letterSpacing: 1.2

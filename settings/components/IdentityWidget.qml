@@ -30,28 +30,24 @@ Item {
 
     Process {
         id: identityLoader
-        command: ["sh", "-c", "cat ~/.config/ngeran/identity/identity.txt 2>/dev/null; echo; test -f ~/.config/ngeran/identity/avatar.png && echo HAS_AVATAR"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { identityLoader.buffer += d } }
-        onRunningChanged: {
-            if (!running && identityLoader.buffer.length > 0) {
-                var lines = identityLoader.buffer.split("\n")
-                for (var i = 0; i < lines.length; i++) {
-                    var l = lines[i]
-                    if (l === "HAS_AVATAR") {
-                        identityRoot.hasAvatar = true
-                    } else if (l.indexOf("=") > 0) {
-                        var k = l.substring(0, l.indexOf("=")).trim()
-                        var v = l.substring(l.indexOf("=") + 1).trim()
-                        if (k === "name") identityRoot.userName = v
-                        else if (k === "role") identityRoot.roleText = v
-                        else if (k === "host") identityRoot.hostName = v
-                        else if (k === "status") identityRoot.statusText = v
-                        else if (k === "shell") identityRoot.shellName = v
-                        else if (k === "wm") identityRoot.wmName = v
-                    }
+        command: ["sh", "-c", "cat ~/.config/ngeran/identity/identity.txt 2>/dev/null; test -f ~/.config/ngeran/identity/avatar.png && echo HAS_AVATAR"]
+        // SplitParser delivers one line per onRead (newline stripped), so parse
+        // each line directly — do NOT accumulate into a buffer (that concatenates
+        // lines without separators and garbles the values).
+        stdout: SplitParser {
+            onRead: function(line) {
+                if (line === "HAS_AVATAR") { identityRoot.hasAvatar = true; return }
+                var eq = line.indexOf("=")
+                if (eq > 0) {
+                    var k = line.substring(0, eq).trim()
+                    var v = line.substring(eq + 1).trim()
+                    if      (k === "name")   identityRoot.userName = v
+                    else if (k === "role")   identityRoot.roleText = v
+                    else if (k === "host")   identityRoot.hostName = v
+                    else if (k === "status") identityRoot.statusText = v
+                    else if (k === "shell")  identityRoot.shellName = v
+                    else if (k === "wm")     identityRoot.wmName = v
                 }
-                identityLoader.buffer = ""
             }
         }
     }
