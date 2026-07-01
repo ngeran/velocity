@@ -57,6 +57,9 @@
 //   resolving Config.ThemeConfig.colors.* and Config.ThemeConfig.metadata.*.
 //
 // =============================================================================
+// SYNC WITH: bar/config/ThemeConfig.qml — applyTheme(), updateColorToken(),
+// and colors/metadata defaults MUST match (bar + settings are separate processes).
+// =============================================================================
 
 pragma Singleton
 
@@ -310,7 +313,7 @@ Item {
                 // Reset user-initiated flag after applying
                 root.userInitiatedChange = false;
             } catch (e) {
-                // Silently ignore parse errors — keep last good theme
+                console.warn("[ThemeConfig] colors.json parse error:", e)
                 if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Parse error reading cache:", e);
             }
         }

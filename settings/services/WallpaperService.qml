@@ -27,6 +27,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -227,6 +228,7 @@ Item {
         ]
         awwwProcess.running  = true
         root.currentWallpaper = path
+        Config.SharedState.updateWallpaper(path)
     }
 
     // =========================================================================

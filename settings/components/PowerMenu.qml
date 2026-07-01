@@ -20,12 +20,12 @@
 //   [2]  PanelWindow / Layer-shell Setup
 //   [3]  Background Overlay Dimmer
 //   [4]  Main Container (680×680)
-//   [5]  Header: Branding + Icons
+//   [5]  Header: Branding
 //   [6]  Scanline Animation
 //   [7]  Power Grid: 2×2 Tile Layout
 //   [8]  PowerTile Component (inline)
 //   [9]  Central Clock Hub
-//   [10] Footer: Memory / CPU / Status
+//   [10] Footer: System Uptime
 //   [11] Clock Timer Logic
 //   [12] System Command Execution
 // =============================================================================
@@ -98,7 +98,7 @@ PanelWindow {
         // Prevent click-through to dimmer
         MouseArea { anchors.fill: parent }
 
-        // -- [5] Header: Branding + Icons -------------------------------------
+        // -- [5] Header: Branding ----------------------------------------------
         ColumnLayout {
             id: header
             anchors {
@@ -114,36 +114,17 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
 
-                // Left: Title + subtitle
-                ColumnLayout {
-                    spacing: 2
-                    Text {
-                        text: "Obsidian Core"
-                        font.family:      "JetBrainsMono Nerd Font"
-                        font.pixelSize:   18
-                        font.weight:      Font.DemiBold
-                        font.letterSpacing: -0.18
-                        color: Config.ThemeConfig.colors.text
-                        font.capitalization: Font.AllUppercase
-                    }
-                    Text {
-                        text: "GRID PULSE // V0.4.1_STABLE"
-                        font.family:      "JetBrainsMono Nerd Font"
-                        font.pixelSize:   11
-                        font.weight:      Font.DemiBold
-                        font.letterSpacing: 3.3
-                        color: Config.ThemeConfig.colors.outline
-                    }
+                Text {
+                    text: "Power Menu"
+                    font.family:      "JetBrainsMono Nerd Font"
+                    font.pixelSize:   18
+                    font.weight:      Font.DemiBold
+                    font.letterSpacing: -0.18
+                    color: Config.ThemeConfig.colors.text
+                    font.capitalization: Font.AllUppercase
                 }
 
                 Item { Layout.fillWidth: true }
-
-                // Right: Icon row (decorative — use Unicode fallbacks)
-                Row {
-                    spacing: 8
-                    Text { text: "⬡"; font.pixelSize: 16; color: Config.ThemeConfig.colors.outline }  // sensors proxy
-                    Text { text: ">_"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; color: Config.ThemeConfig.colors.outline }
-                }
             }
         }
 
@@ -279,7 +260,7 @@ PanelWindow {
             }
         }
 
-        // -- [10] Footer: Memory / CPU / Status --------------------------------
+        // -- [10] Footer: System Uptime -----------------------------------------
         RowLayout {
             id: footer
             anchors {
@@ -291,59 +272,27 @@ PanelWindow {
                 rightMargin:  24
             }
 
-            // Memory bar
             ColumnLayout {
                 spacing: 4
                 Text {
-                    text: "MEMORY_USAGE"
+                    text: "SYSTEM_UPTIME"
                     font.family:      "JetBrainsMono Nerd Font"
                     font.pixelSize:   11
                     font.letterSpacing: 3
                     color: Config.ThemeConfig.colors.outline
                 }
-                Rectangle {
-                    width: 128; height: 2
-                    color: Config.ThemeConfig.colors.surfaceContainer
-                    Rectangle {
-                        id: memBar
-                        width:  parent.width * 0.66   // updated by memProbe
-                        height: parent.height
-                        color:  Config.ThemeConfig.colors.info
-                    }
-                }
-            }
-
-            // CPU bar
-            ColumnLayout {
-                spacing: 4
                 Text {
-                    text: "CPU_LOAD"
+                    id: uptimeDisplay
+                    text: "--"
                     font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   11
-                    font.letterSpacing: 3
-                    color: Config.ThemeConfig.colors.outline
-                }
-                Rectangle {
-                    width: 128; height: 2
-                    color: Config.ThemeConfig.colors.surfaceContainer
-                    Rectangle {
-                        id: cpuBar
-                        width:  parent.width * 0.25   // updated by cpuProbe
-                        height: parent.height
-                        color:  Config.ThemeConfig.colors.info
-                    }
+                    font.pixelSize:   13
+                    font.weight:      Font.DemiBold
+                    font.letterSpacing: 0.5
+                    color: Config.ThemeConfig.colors.text
                 }
             }
 
             Item { Layout.fillWidth: true }
-
-            Text {
-                text: "Awaiting instruction..."
-                font.family:      "JetBrainsMono Nerd Font"
-                font.pixelSize:   11
-                font.letterSpacing: 1
-                color: Config.ThemeConfig.colors.textDim
-            }
         }
 
         // Top border line above footer
@@ -377,27 +326,24 @@ PanelWindow {
     }
 
     // -- [12] System Command Execution ----------------------------------------
-    // Polls /proc for real mem/cpu when menu is open
-    Process {
-        id: memProbe
-        running: root.showing
-        command: ["bash", "-c", "free | awk '/^Mem:/{printf \"%.2f\", $3/$2}'"]
-        stdout: SplitParser {
-            onRead: data => {
-                var v = parseFloat(data)
-                if (!isNaN(v)) memBar.width = 128 * v
-            }
-        }
+    // Reads real system uptime from /proc/uptime (independent of the live clock above)
+    Timer {
+        id: uptimeTimer
+        interval: 30000
+        running:  root.showing
+        repeat:   true
+        triggeredOnStart: true
+        onTriggered: uptimeProbe.running = true
     }
 
     Process {
-        id: cpuProbe
-        running: root.showing
-        command: ["bash", "-c", "grep 'cpu ' /proc/stat | awk '{u=$2+$4; t=$2+$3+$4+$5; if(NR==1){pu=u;pt=t}else printf \"%.2f\",(u-pu)/(t-pt)}'"]
+        id: uptimeProbe
+        command: ["bash", "-c", "uptime -p"]
         stdout: SplitParser {
             onRead: data => {
-                var v = parseFloat(data)
-                if (!isNaN(v)) cpuBar.width = 128 * v
+                // "up 3 hours, 12 minutes" -> "3 HOURS, 12 MINUTES"
+                var t = data.trim().replace(/^up\s+/i, "")
+                uptimeDisplay.text = t.toUpperCase()
             }
         }
     }

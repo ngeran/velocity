@@ -10,6 +10,9 @@
 // Reads ~/.cache/theme/colors.json via a 1s poll (settings is the sole writer).
 //
 // =============================================================================
+// SYNC WITH: settings/config/ThemeConfig.qml — applyTheme(), updateColorToken(),
+// and colors/metadata defaults MUST match (bar + settings are separate processes).
+// =============================================================================
 
 pragma Singleton
 
@@ -162,7 +165,7 @@ Item {
                         root.applyTheme(JSON.parse(newData))
                     }
                 } catch (e) {
-                    // keep last good theme on parse error
+                    console.warn("[Bar ThemeConfig] colors.json parse error:", e)
                 }
                 catProc.buffer = ""
             }

@@ -223,24 +223,7 @@ Item {
         if (Config.DebugConfig.debugTheme) console.log("=== setOledClamp COMPLETE ===")
     }
 
-    /**
-     * Serializes current state changes securely down into the tracked configuration file
-     */
-    function writeActiveThemeToken(name, source, clampValue) {
-        let payload = {
-            "name": name,
-            "source": source,
-            "applied": new Date().toISOString(),
-            "oledClamp": clampValue,
-            "matugenEnabled": (source === "matugen")
-        };
 
-        let path = themeService.homeDir + "/.config/quickshell/theme-active.json";
-        // Asynchronously dispatch the structural write stream through standard terminal interface shell
-        let writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(payload) + "' > " + path];
-        writer.running = true;
-    }
 
     /**
      * Executes internal structural preset modification pipeline updates
@@ -317,7 +300,6 @@ Item {
         // Sync to external apps
         themeService.syncToExternalApps(bundle);
 
-        themeService.writeActiveThemeToken(presetName, "preset", applyOLEDClamp);
         themeService.isRegenerating = false;
         if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Function complete. Final metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
         if (Config.DebugConfig.debugTheme) console.log("=== applyPreset COMPLETE ===")
@@ -435,7 +417,6 @@ Item {
 
                         // Sync to external apps
                         themeService.syncToExternalApps(bundle);
-                        themeService.writeActiveThemeToken("Dynamic Wallpaper", "matugen", themeService.pendingOLEDClamp);
 
                         // Success - clear any previous error
                         themeService.matugenError = "";
@@ -552,7 +533,6 @@ Item {
         // Sync to external apps
         themeService.syncToExternalApps(Config.ThemeConfig.colors);
 
-        themeService.writeActiveThemeToken("Custom Modification", "manual", themeService.isOledClampActive);
     }
 
     // =========================================================================
@@ -630,7 +610,6 @@ Item {
         writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath]
         writer.running = true
         themeService.syncToExternalApps(bundle)
-        themeService.writeActiveThemeToken(found.name, "custom", themeService.isOledClampActive)
     }
 
     function _writeCustomThemes() {
@@ -719,5 +698,19 @@ Item {
         var kittyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         kittyWriter.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme && printf '%s' '" + kittyContent + "' > " + kittyConf];
         kittyWriter.running = true;
+
+        // hyprlock: write theme colors to a sourced file. Add this to the END
+        // of ~/.config/hypr/hyprlock.conf:  source = ~/.config/hypr/quickshell-colors.conf
+        var hyprlockFile = themeService.homeDir + "/.config/hypr/quickshell-colors.conf";
+        var hyprlockContent =
+            "# Managed by QuickShell ThemeService — source at END of hyprlock.conf\n" +
+            "background {\n    color = rgba(" + colors.background.replace("#","") + "ff)\n}\n" +
+            "input-field {\n" +
+            "    inner_color = rgba(" + colors.surfaceContainer.replace("#","") + "ff)\n" +
+            "    outer_color = rgba(" + colors.secondary.replace("#","") + "ff)\n" +
+            "    font_color = rgba(" + colors.text.replace("#","") + "ff)\n}\n";
+        var hyprlockWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
+        hyprlockWriter.running = true;
     }
 }

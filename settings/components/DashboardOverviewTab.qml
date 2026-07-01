@@ -36,7 +36,7 @@ Item {
     // Row 1: 4 cards → 3 gaps
     readonly property real r1w: cw - gap * 3
     // Row 2: 3 cards → 2 gaps
-    readonly property real r2w: cw - gap * 2
+    readonly property real r2w: cw - gap * 1
 
     // Y origins (no Column involved — pure coordinate math)
     readonly property real row1Y: pad
@@ -78,7 +78,7 @@ Item {
     }
 
     // =========================================================================
-    // ROW 2 — Calendar | Network | Power
+    // ROW 2 — Calendar | Network
     // =========================================================================
     Row {
         x: root.pad
@@ -88,21 +88,15 @@ Item {
         spacing: root.gap
 
         Components.DashboardCard {
-            width: root.r2w * 0.40
+            width: root.r2w * 0.58
             height: root.r2h
             Components.CalendarWidget { anchors.fill: parent }
         }
 
         Components.DashboardCard {
-            width: root.r2w * 0.32
+            width: root.r2w * 0.42
             height: root.r2h
             Components.NetworkWidget { anchors.fill: parent }
-        }
-
-        Components.DashboardCard {
-            width: root.r2w * 0.28
-            height: root.r2h
-            Components.PowerCard { anchors.fill: parent }
         }
     }
 }

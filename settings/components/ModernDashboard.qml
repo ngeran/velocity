@@ -21,6 +21,7 @@ import Quickshell.Io
 import "." as Components
 import "../config" as Config
 import "../services" as Services
+import "../services" as Services
 
 Item {
     id: root
@@ -226,41 +227,58 @@ Item {
                 }
             }
 
-            // Settings content with proper layout
-            Column {
+            // System / About section
+            ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 24
-                spacing: 24
+                spacing: 16
 
-                // Header
-                Text {
-                    text: "QUICK SETTINGS"
-                    font.pixelSize: 11
-                    font.family: Config.SettingsConfig.fontFamily
-                    font.letterSpacing: 2.5
-                    font.weight: Font.Bold
-                    color: Config.ThemeConfig.colors.textDim
+                Components.WidgetHeader {
+                    icon: "󰒋"
+                    label: "SYSTEM"
+                    Layout.bottomMargin: 4
                 }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
-                Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: Config.ThemeConfig.colors.border
-                }
-
-                // Settings content
-                Item {
-                    width: parent.width
-                    height: parent.height - 50
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Settings panel content will be added here."
-                        font.pixelSize: 12
-                        font.family: Config.SettingsConfig.fontFamily
-                        color: Config.ThemeConfig.colors.textDim
-                        horizontalAlignment: Text.AlignHCenter
+                Repeater {
+                    model: [
+                        { label: "OS",     value: Services.SysInfoService.osPrettyName },
+                        { label: "KERNEL", value: Services.SysInfoService.kernel },
+                        { label: "HOST",   value: Services.SysInfoService.hostname },
+                        { label: "UPTIME", value: Services.SysInfoService.uptime },
+                        { label: "USER",   value: Services.SysInfoService.userName },
+                        { label: "THEME",  value: Config.ThemeConfig.metadata.name + " · " + Config.ThemeConfig.metadata.source }
+                    ]
+                    delegate: RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Text {
+                            text: modelData.label
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 10; font.bold: true
+                            font.family: Config.SettingsConfig.fontFamily
+                            font.letterSpacing: 1.5
+                            Layout.preferredWidth: 80
+                        }
+                        Text {
+                            text: modelData.value
+                            color: Config.ThemeConfig.colors.text
+                            font.pixelSize: 12
+                            font.family: Config.SettingsConfig.fontFamily
+                            Layout.fillWidth: true; elide: Text.ElideRight
+                        }
                     }
+                }
+
+                Item { Layout.fillHeight: true }
+
+                Text {
+                    text: "QUICKSHELL · OBSIDIAN CORE"
+                    color: Config.ThemeConfig.colors.textDim
+                    font.pixelSize: 9; font.letterSpacing: 2.5
+                    font.family: Config.SettingsConfig.fontFamily
+                    Layout.alignment: Qt.AlignHCenter
+                    opacity: 0.4
                 }
             }
         }
