@@ -94,11 +94,26 @@ Rectangle {
 
     Process {
         id: dndCheck
-        command: ["sh", "-c", "makoctl set-dnd 2>/dev/null; echo done"]
+        // Try makoctl first (mode output includes "do-not-disturb" when active),
+        // fallback to dunstctl (is-paused returns "true"/"false")
+        command: ["sh", "-c", "command -v makoctl >/dev/null && makoctl mode 2>/dev/null || dunstctl is-paused 2>/dev/null || echo 'unknown'"]
         property string buffer: ""
         stdout: SplitParser { onRead: function(d) { dndCheck.buffer += d } }
         onRunningChanged: {
-            if (!running) { dndCheck.buffer = "" }
+            if (!running) {
+                // makoctl mode output: "Mode: do-not-disturb" or "Mode: default"
+                // dunstctl is-paused output: "true" or "false"
+                const output = dndCheck.buffer.trim()
+                if (output.indexOf("do-not-disturb") !== -1 || output === "true") {
+                    root.dndOn = true
+                } else if (output.indexOf("default") !== -1 || output === "false") {
+                    root.dndOn = false
+                } else {
+                    // Unknown (neither daemon available) - leave as-is
+                    console.log("[QuickToggles] DND state unknown:", output)
+                }
+                dndCheck.buffer = ""
+            }
         }
     }
 
@@ -113,7 +128,7 @@ Rectangle {
         onRunningChanged: if (!running && _armed) { _armed = false; volCheck.running = true }
     }
     Process { id: dndToggleProc;  command: []; property bool _armed: false
-        onRunningChanged: if (!running && _armed) { _armed = false; dndOn = !dndOn }
+        onRunningChanged: if (!running && _armed) { _armed = false; dndCheck.running = true }
     }
 
     function toggleWifi() {
@@ -210,10 +225,10 @@ Rectangle {
         Layout.preferredHeight: 64
         radius: 0
         color: tile.checked ? root.checkedBg : root.uncheckedBg
-        border.color: Config.ThemeConfig.colors.border
-        border.width: 1
+        border.color: tileMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
+        border.width: tileMouseArea.activeFocus ? 2 : 1
 
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on color { ColorAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutQuad } }
 
         Column {
             anchors.centerIn: parent
@@ -237,8 +252,19 @@ Rectangle {
         }
 
         MouseArea {
+            id: tileMouseArea
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
+            focus: true
+            hoverEnabled: true
+
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
+                    tile.clicked()
+                    event.accepted = true
+                }
+            }
+
             onClicked: tile.clicked()
         }
     }

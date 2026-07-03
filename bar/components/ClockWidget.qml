@@ -17,6 +17,11 @@ Item {
 
     function _formattedTime() {
         var d = new Date()
+        // Apply timezone offset if configured
+        if (Config.BarConfig.clockOffset !== 0) {
+            var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
+            d = new Date(utc + (Config.BarConfig.clockOffset * 3600000))
+        }
         var h = String(d.getHours()).padStart(2, "0")
         var m = String(d.getMinutes()).padStart(2, "0")
         return h + ":" + m
@@ -24,7 +29,12 @@ Item {
 
     // e.g.  "MON · 29 JUN"
     function _formattedDate() {
-        var d   = new Date()
+        var d = new Date()
+        // Apply timezone offset if configured
+        if (Config.BarConfig.clockOffset !== 0) {
+            var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
+            d = new Date(utc + (Config.BarConfig.clockOffset * 3600000))
+        }
         var day = _days[d.getDay()]
         var num = String(d.getDate()).padStart(2, "0")
         var mon = _months[d.getMonth()]

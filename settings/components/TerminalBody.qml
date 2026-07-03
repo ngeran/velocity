@@ -59,6 +59,21 @@ Rectangle {
                 width: content.width
             }
 
+            SourceListView {
+                visible: body.activeSection === "audio"
+                width: content.width
+            }
+
+            MprisControlView {
+                visible: body.activeSection === "media"
+                width: content.width
+            }
+
+            BrightnessControlView {
+                visible: body.activeSection === "display"
+                width: content.width
+            }
+
             // --- Console log ---
             Item { width: 1; height: 6 }
 

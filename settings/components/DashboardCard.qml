@@ -39,11 +39,11 @@ Rectangle {
     property bool isHovered: false
 
     Behavior on color {
-        ColorAnimation { duration: 200; easing.type: Easing.OutQuad }
+        ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad }
     }
 
     Behavior on border.color {
-        ColorAnimation { duration: 200; easing.type: Easing.OutQuad }
+        ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad }
     }
 
     // =========================================================================
@@ -67,7 +67,7 @@ Rectangle {
         height: 1
         color: Config.ThemeConfig.colors.secondary
         opacity: root.isHovered ? 0.55 : 0.12
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
     }
 
     // =========================================================================

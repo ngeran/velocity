@@ -36,6 +36,26 @@ Item {
     // dirs instead of their real locations, so the bar/ghostty never updated.
     readonly property string homeDir: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "")
 
+    // =========================================================================
+    // PROCESS CREATION WITH ERROR HANDLING
+    // =========================================================================
+
+    function createProcess(cmd, label) {
+        var proc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        proc.command = cmd;
+
+        // Add error logging
+        proc.onExited.connect(function(code) {
+            if (code !== 0) {
+                var errorMsg = "Process failed with exit code " + code + ": " + (label || "unknown");
+                console.error("[ThemeService] " + errorMsg);
+                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+            }
+        });
+
+        return proc;
+    }
+
     // theme-switcher lives in ~/.local/bin, which is NOT on the quickshell
     // process's PATH — invoke it by absolute path or Process reports
     // "binary could not be found" and theme switches silently no-op.
@@ -277,12 +297,8 @@ Item {
         var cachePath = themeService.homeDir + "/.cache/theme";
         var colorsJsonPath = cachePath + "/colors.json";
 
-        // Ensure cache directory exists
-        var mkdirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        mkdirProc.command = ["sh", "-c", "mkdir -p " + cachePath];
-        mkdirProc.running = true;
-
-        // Write colors to cache file for bar to pick up
+        // Write colors to cache file for bar (mkdir + write in one sh -c to
+        // avoid the race where write beats mkdir on a fresh machine).
         var colorsPayload = {
             colors: bundle,
             metadata: {
@@ -294,7 +310,14 @@ Item {
 
         if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Writing to cache file with oledClamp:", applyOLEDClamp)
         var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.onExited.connect(function(code) {
+            if (code !== 0) {
+                var errorMsg = "Failed to write colors.json (exit " + code + "). Theme may not sync to bar.";
+                console.error("[ThemeService] " + errorMsg);
+                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+            }
+        });
         writer.running = true;
 
         // Sync to external apps
@@ -514,20 +537,23 @@ Item {
             "matugenEnabled": false
         };
 
-        // Write to cache file
+        // Write to cache file (mkdir + write in one sh -c — avoids the race)
         var cachePath = themeService.homeDir + "/.cache/theme";
         var colorsJsonPath = cachePath + "/colors.json";
-        var mkdirProc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        mkdirProc.command = ["sh", "-c", "mkdir -p " + cachePath];
-        mkdirProc.running = true;
-
         var colorsPayload = {
             colors: Config.ThemeConfig.colors,
             metadata: Config.ThemeConfig.metadata
         };
 
         var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.onExited.connect(function(code) {
+            if (code !== 0) {
+                var errorMsg = "Failed to write colors.json (exit " + code + "). Manual override may not sync to bar.";
+                console.error("[ThemeService] " + errorMsg);
+                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+            }
+        });
         writer.running = true;
 
         // Sync to external apps
@@ -616,6 +642,13 @@ Item {
         var payload = JSON.stringify(themeService.customThemes)
         var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService)
         writer.command = ["sh", "-c", "printf '%s' '" + payload.replace(/'/g, "'\\''") + "' > " + themeService.customThemesPath]
+        writer.onExited.connect(function(code) {
+            if (code !== 0) {
+                var errorMsg = "Failed to write custom themes (exit " + code + "). Custom theme may be lost.";
+                console.error("[ThemeService] " + errorMsg);
+                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+            }
+        });
         writer.running = true
     }
 
@@ -696,7 +729,7 @@ Item {
             "color14 " + colors.info + "\n" +
             "color15 " + colors.text + "\n";
         var kittyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        kittyWriter.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme && printf '%s' '" + kittyContent + "' > " + kittyConf];
+        kittyWriter.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme && printf '%s' '" + kittyContent + "' > " + kittyConf + " && pkill -SIGUSR1 kitty || true"];
         kittyWriter.running = true;
 
         // hyprlock: write theme colors to a sourced file. Add this to the END
@@ -712,5 +745,31 @@ Item {
         var hyprlockWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
         hyprlockWriter.running = true;
+
+        // Hyprland border colors: instant visual impact, applies immediately
+        // Sets the active and inactive border colors to match the theme
+        var hyprlandCmd = "hyprctl keyword general:col.active_border " + colors.secondary.replace("#","") + " && hyprctl keyword general:col.inactive_border " + colors.outlineVariant.replace("#","");
+        var hyprlandWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        hyprlandWriter.command = ["sh", "-c", hyprlandCmd + " && hyprctl reload"];
+        hyprlandWriter.running = true;
+        console.log("[ThemeService] Applied Hyprland border colors + reloaded");
+
+        // mako notification daemon theming (write config and reload)
+        // mako uses simple color definitions in its config
+        var makoConfig = themeService.homeDir + "/.config/mako/config";
+        var makoContent =
+            "# Managed by QuickShell ThemeService\n" +
+            "default-timeout=10\n" +
+            "background-color=" + colors.background + "\n" +
+            "text-color=" + colors.text + "\n" +
+            "border-color=" + colors.border + "\n" +
+            "progress-color=" + colors.primary + "\n" +
+            "background-color-d=" + colors.surface + "\n" +
+            "text-color-d=" + colors.textDim + "\n" +
+            "border-color-d=" + colors.borderDim + "\n";
+        var makoWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        makoWriter.command = ["sh", "-c", "mkdir -p ~/.config/mako && printf '%s' '" + makoContent + "' > " + makoConfig + " && makoctl reload"];
+        makoWriter.running = true;
+        console.log("[ThemeService] Applied mako theme");
     }
 }

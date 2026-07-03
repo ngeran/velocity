@@ -19,6 +19,10 @@ BtDeviceRow 1.0 BtDeviceRow.qml
 SinkListView 1.0 SinkListView.qml
 SinkRow 1.0 SinkRow.qml
 SinkInputRow 1.0 SinkInputRow.qml
+SourceListView 1.0 SourceListView.qml
+SourceRow 1.0 SourceRow.qml
+BrightnessControlView 1.0 BrightnessControlView.qml
+MprisControlView 1.0 MprisControlView.qml
 IdentityWidget 1.0 IdentityWidget.qml
 NetworkWidget 1.0 NetworkWidget.qml
 TopNavBar 1.0 TopNavBar.qml

@@ -28,6 +28,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../config" as Config
+import "../utils" as Utils
+import "../services" as Services
 
 Item {
     id: root
@@ -58,6 +60,56 @@ Item {
     property int    lastIndex: -1
     property bool   cyclingEnabled: true
     property bool   scanInProgress: false
+    property string currentMonitor: ""  // Target monitor for wallpaper (empty = all)
+
+    // =========================================================================
+    // CONFIGURATION PERSISTENCE
+    // =========================================================================
+
+    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
+                                       .replace("file://", "") + "/quickshell/wallpaper-config.json"
+
+    Utils.ConfigPersistence {
+        id: configPersister
+        configPath: root.configFilePath
+
+        onLoaded: function(data) {
+            console.log("[WallpaperService] Config loaded:", JSON.stringify(data))
+            if (data.cycleInterval !== undefined) {
+                root.cycleInterval = data.cycleInterval * 1000 // Convert seconds to ms
+            }
+            if (data.cyclingEnabled !== undefined) {
+                root.cyclingEnabled = data.cyclingEnabled
+            }
+            if (data.transitionType !== undefined) {
+                root.transitionType = data.transitionType
+            }
+            if (data.wallpaperDir !== undefined) {
+                root.wallpaperDir = data.wallpaperDir
+            }
+            if (data.currentWallpaper !== undefined) {
+                root.currentWallpaper = data.currentWallpaper
+            }
+        }
+
+        onSaved: function(success) {
+            if (success) {
+                console.log("[WallpaperService] Config saved successfully")
+            } else {
+                console.log("[WallpaperService] Failed to save config")
+            }
+        }
+    }
+
+    function saveConfig() {
+        configPersister.save({
+            cycleInterval: root.cycleInterval / 1000, // Convert ms to seconds
+            cyclingEnabled: root.cyclingEnabled,
+            transitionType: root.transitionType,
+            wallpaperDir: root.wallpaperDir,
+            currentWallpaper: root.currentWallpaper
+        })
+    }
 
     // =========================================================================
     // INITIALIZATION
@@ -85,10 +137,51 @@ Item {
 
         onRunningChanged: {
             if (!running) {
-                root.wallpaperDir = homeGetter.buf.trim() + "/Pictures/Wallpapers/"
+                var home = homeGetter.buf.trim()
                 homeGetter.buf = ""
+
+                // If config didn't set wallpaperDir, use default
+                if (root.wallpaperDir.length === 0) {
+                    root.wallpaperDir = home + "/Pictures/Wallpapers/"
+                }
                 console.log("[WallpaperService] Wallpaper dir:", root.wallpaperDir)
+
+                // Load saved config
+                configPersister.load()
                 startScan()
+            }
+        }
+    }
+
+    // =========================================================================
+    // STEP 1.5 — Get available monitors
+    // =========================================================================
+
+    Process {
+        id: monitorGetter
+        command: ["sh", "-c", "hyprctl monitors -j"]
+        running: false
+
+        property string buf: ""
+
+        stdout: SplitParser {
+            onRead: data => { monitorGetter.buf += data }
+        }
+
+        onRunningChanged: {
+            if (!running && monitorGetter.buf.length > 0) {
+                try {
+                    var monitors = JSON.parse(monitorGetter.buf)
+                    if (monitors && monitors.length > 0) {
+                        // Set first monitor as default if none selected
+                        if (root.currentMonitor.length === 0) {
+                            root.currentMonitor = monitors[0].name
+                        }
+                    }
+                } catch (e) {
+                    console.log("[WallpaperService] Failed to parse monitors:", e)
+                }
+                monitorGetter.buf = ""
             }
         }
     }
@@ -119,7 +212,12 @@ Item {
                 root.wallpaperList = lines
                 scanner.buf = ""
 
-                console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
+                if (lines.length === 0 && root.wallpaperDir.length > 0) {
+                    console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
+                    console.warn("[WallpaperService] Check that the directory exists and contains image files")
+                } else {
+                    console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
+                }
 
                 // First run: start timer and apply an initial wallpaper
                 if (root.wallpaperList.length > 0) {
@@ -132,6 +230,13 @@ Item {
                 }
             }
         }
+
+        onExited: function(exitCode) {
+            if (exitCode !== 0) {
+                console.warn("[WallpaperService] Directory scan failed with exit code:", exitCode)
+                console.warn("[WallpaperService] Check directory path and permissions:", root.wallpaperDir)
+            }
+        }
     }
 
     /// Kick off a directory scan; silently skips if one is already running.
@@ -140,7 +245,10 @@ Item {
             console.log("[WallpaperService] Scan already in progress, skipping")
             return
         }
-        if (root.wallpaperDir.length === 0) return
+        if (root.wallpaperDir.length === 0) {
+            console.warn("[WallpaperService] Cannot scan: no wallpaper directory set")
+            return
+        }
 
         root.scanInProgress = true
         scanner.command = [
@@ -206,10 +314,12 @@ Item {
         running: false
 
         onExited: function(exitCode) {
-            if (exitCode !== 0)
-                console.log("[WallpaperService] awww exited with code:", exitCode)
-            else
+            if (exitCode !== 0) {
+                console.warn("[WallpaperService] Wallpaper apply failed with exit code:", exitCode)
+                console.warn("[WallpaperService] Make sure awww is installed and the path is valid")
+            } else {
                 console.log("[WallpaperService] Wallpaper applied OK")
+            }
         }
     }
 
@@ -220,15 +330,31 @@ Item {
             return
         }
 
-        awwwProcess.command = [
-            "awww", "img",  path,
+        // Build command with optional --outputs flag
+        var cmd = [
+            "awww", "img", path,
             "--transition-type", root.transitionType,
-            "--transition-fps",  root.transitionFps.toString(),
+            "--transition-fps", root.transitionFps.toString(),
             "--transition-step", root.transitionStep.toString()
         ]
+
+        // Add --outputs if a specific monitor is selected
+        if (root.currentMonitor && root.currentMonitor.length > 0) {
+            cmd.push("--outputs", root.currentMonitor)
+        }
+
+        awwwProcess.command = cmd
         awwwProcess.running  = true
         root.currentWallpaper = path
         Config.SharedState.updateWallpaper(path)
+        saveConfig()
+
+        // Auto-regenerate theme if enabled
+        if (Services.SettingsConfigService.syncThemeToWallpaper) {
+            console.log("[WallpaperService] Auto-regenerating theme from wallpaper:", path)
+            // Use the current OLED clamp setting from ThemeConfig
+            Services.ThemeService.applyDynamicTheme(path, Config.ThemeConfig.oledClamp)
+        }
     }
 
     // =========================================================================
@@ -256,6 +382,7 @@ Item {
         cycleTimer.running  = root.cyclingEnabled && root.wallpaperList.length > 0
         console.log("[WallpaperService] toggleCycling ->", root.cyclingEnabled,
                     "timer running:", cycleTimer.running)
+        saveConfig()
     }
 
     /// Set auto-cycle interval (seconds; minimum 10).
@@ -269,13 +396,16 @@ Item {
         cycleTimer.interval = root.cycleInterval
         console.log("[WallpaperService] Interval set to", seconds,
                     "seconds (", root.cycleInterval, "ms)")
+        saveConfig()
     }
 
     /// Set transition type (any|outer|inner|fade|wipe|simple|wave).
     function setTransition(type: string) {
         console.log("[WallpaperService] setTransition", type)
-        if (type.length > 0)
+        if (type.length > 0) {
             root.transitionType = type
+            saveConfig()
+        }
     }
 
     /// Re-scan the wallpaper directory.
@@ -296,6 +426,7 @@ Item {
         root.currentWallpaper = ""
         root.lastIndex        = -1
         console.log("[WallpaperService] Wallpaper directory set to", root.wallpaperDir)
+        saveConfig()
         startScan()
     }
 

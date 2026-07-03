@@ -7,7 +7,8 @@
 // all properties automatically update, triggering reactive updates across
 // all QuickShell components.
 //
-// Reads ~/.cache/theme/colors.json via a 1s poll (settings is the sole writer).
+// Reads ~/.cache/theme/colors.json via FileView.onFileChanged (event-driven,
+// instant updates when settings or external tools write the file).
 //
 // =============================================================================
 // SYNC WITH: settings/config/ThemeConfig.qml — applyTheme(), updateColorToken(),
@@ -146,37 +147,70 @@ Item {
     }
 
     // =========================================================================
-    // FILE READING — poll colors.json every 1s. triggeredOnStart reads the
-    // existing file at launch (restore on boot); the repeat catches live writes
-    // from settings. (FileView proved unreliable for both live + initial load.)
+    // EXTERNAL INTAKE — FileView.onFileChanged watching colors.json
+    // -------------------------------------------------------------------------
+    // Event-driven sync (replaces 1s poll). Reacts instantly to writes from
+    // settings (ThemeService) and external tools (theme-switcher CLI).
+    // FileView.text is a METHOD in this Quickshell build, not a property.
     // =========================================================================
 
-    Process {
-        id: catProc
-        command: ["sh", "-c", "cat " + root.themeFilePath]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { catProc.buffer += data } }
-        onRunningChanged: {
-            if (!running && catProc.buffer.trim().length > 0) {
-                try {
-                    var newData = catProc.buffer.trim()
-                    if (newData !== root.lastCachedData) {
-                        root.lastCachedData = newData
-                        root.applyTheme(JSON.parse(newData))
-                    }
-                } catch (e) {
-                    console.warn("[Bar ThemeConfig] colors.json parse error:", e)
+    property string lastCachedTimestamp: ""
+
+    // FileView watcher for instant theme sync when file changes
+    property var cacheWatcher: FileView {
+        path: root.themeFilePath
+
+        onFileChanged: {
+            // FileView.text is a METHOD (not a property) in this Quickshell build
+            var raw = cacheWatcher.text()
+            if (!raw || raw.trim() === "") return
+
+            try {
+                var newData = raw.trim()
+                var data = JSON.parse(newData)
+
+                // Check if data actually changed by comparing timestamps
+                var newTimestamp = (data.metadata && data.metadata.applied) ? data.metadata.applied : ""
+                if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
+                    return  // No actual change
                 }
-                catProc.buffer = ""
+
+                if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
+
+                root.lastCachedTimestamp = newTimestamp
+                root.lastCachedData = newData
+                root.applyTheme(data)
+            } catch (e) {
+                console.warn("[Bar ThemeConfig] colors.json parse error:", e)
             }
         }
     }
 
-    Timer {
-        interval: 1000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: if (!catProc.running) catProc.running = true
+    // Startup restore: FileView doesn't fire for an already-existing file at
+    // launch, so explicitly read colors.json once on completion to restore the
+    // last-applied theme from the previous session.
+    Component.onCompleted: startupReader.running = true
+
+    Process {
+        id: startupReader
+        command: ["sh", "-c", "cat " + root.themeFilePath]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data } }
+        onRunningChanged: {
+            if (!running && startupReader.buffer.trim().length > 0) {
+                try {
+                    var raw = startupReader.buffer.trim()
+                    var data = JSON.parse(raw)
+                    root.lastCachedData = raw
+                    if (data.metadata && data.metadata.applied) root.lastCachedTimestamp = data.metadata.applied
+                    root.applyTheme(data)
+                    if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Startup theme restored")
+                } catch (e) {
+                    // No/invalid cache yet — keep defaults
+                    if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] No cache file, using defaults")
+                }
+                startupReader.buffer = ""
+            }
+        }
     }
 }

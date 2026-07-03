@@ -18,7 +18,7 @@ QtObject {
     // propagates here instantly, and on to ThemeInfoCard. updateTheme() below
     // is deprecated (kept as a no-op so its caller does not error).
     property string themeName:           ThemeConfig.metadata.name
-    property string themeAuthor:         "QuickShell"
+    property string themeAuthor:         getThemeAuthor()
     property bool   themeIsOLED:         ThemeConfig.metadata.oledClamp
     property color  themePrimaryColor:   ThemeConfig.colors.primary
     property color  themeSecondaryColor: ThemeConfig.colors.secondary
@@ -71,5 +71,20 @@ QtObject {
         if (!path || path === "") return "None"
         let parts = path.split('/')
         return parts[parts.length - 1]
+    }
+
+    function getThemeAuthor() {
+        // Derive theme author from the source metadata
+        var source = ThemeConfig.metadata.source || "unknown"
+        switch (source) {
+            case "preset":
+                return "QuickShell Preset"
+            case "matugen":
+                return "Matugen (wallpaper)"
+            case "manual":
+                return "Custom (manual)"
+            default:
+                return source.charAt(0).toUpperCase() + source.slice(1)
+        }
     }
 }

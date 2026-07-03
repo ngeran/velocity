@@ -30,6 +30,8 @@ Item {
     property string defaultSink: ""
     property var sinks: []
     property var sinkInputs: []
+    property string defaultSource: ""
+    property var sources: []
 
     // -------------------------------------------------------------------------
     // DEFAULT SINK
@@ -103,6 +105,53 @@ Item {
     }
 
     // -------------------------------------------------------------------------
+    // DEFAULT SOURCE
+    // -------------------------------------------------------------------------
+
+    Process {
+        id: defaultSourceProc
+        command: ["pactl", "get-default-source"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { defaultSourceProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var s = defaultSourceProc.buffer.trim()
+                if (s.length > 0) {
+                    root.defaultSource = s
+                    root._restampDefaultSource(s)
+                }
+                defaultSourceProc.buffer = ""
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SOURCES (microphones)
+    // -------------------------------------------------------------------------
+
+    Process {
+        id: sourcesProc
+        command: ["sh", "-c", "pactl -f json list sources 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { sourcesProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var raw = sourcesProc.buffer.trim()
+                if (raw.length > 0) {
+                    var parsed = root._looksJson(raw)
+                        ? root._parseSourcesJson(raw)
+                        : root._parseSourcesText(raw)
+                    if (parsed) {
+                        root.sources = parsed
+                        root._restampDefaultSource(root.defaultSource)
+                    }
+                }
+                sourcesProc.buffer = ""
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // POLLING
     // -------------------------------------------------------------------------
 
@@ -114,6 +163,8 @@ Item {
         onTriggered: {
             if (!defaultSinkProc.running) defaultSinkProc.running = true
             if (!sinksProc.running) sinksProc.running = true
+            if (!defaultSourceProc.running) defaultSourceProc.running = true
+            if (!sourcesProc.running) sourcesProc.running = true
         }
     }
 
@@ -129,6 +180,8 @@ Item {
         if (!defaultSinkProc.running) defaultSinkProc.running = true
         if (!sinksProc.running) sinksProc.running = true
         if (!sinkInputsProc.running) sinkInputsProc.running = true
+        if (!defaultSourceProc.running) defaultSourceProc.running = true
+        if (!sourcesProc.running) sourcesProc.running = true
     }
 
     // -------------------------------------------------------------------------
@@ -177,10 +230,28 @@ Item {
         _run("set-sink-input-mute", [id, "toggle"], "stream mute " + id)
     }
 
+    // Source (microphone) functions
+    function setDefaultSource(name) {
+        if (!name) return
+        _run("set-default-source", [name], "set default source " + name)
+        CommandService.pushLog("[audio] default source → " + name, "output")
+    }
+
+    function setSourceVolume(name, pct) {
+        if (!name || !pct) return
+        _run("set-source-volume", [name, pct], "source vol " + name + " " + pct)
+    }
+
+    function toggleSourceMute(name) {
+        if (!name) return
+        _run("set-source-mute", [name, "toggle"], "source mute " + name)
+    }
+
     // Default-sink parity with the bar AudioService.
     function volumeUp()   { setSinkVolume(root.defaultSink, "+5%") }
     function volumeDown() { setSinkVolume(root.defaultSink, "-5%") }
     function toggleMute() { toggleSinkMute(root.defaultSink) }
+    function toggleMicMute() { toggleSourceMute(root.defaultSource) }
 
     // -------------------------------------------------------------------------
     // HELPERS / PARSERS
@@ -305,5 +376,88 @@ Item {
             out.push({ index: s.index, name: s.name, desc: s.desc, isDefault: def, volume: s.volume, mute: s.mute })
         }
         if (changed) root.sinks = out
+    }
+
+    // Re-stamp isDefault for sources after defaultSource or sources change.
+    function _restampDefaultSource(name) {
+        if (!name || root.sources.length === 0) return
+        var changed = false
+        var out = []
+        for (var i = 0; i < root.sources.length; i++) {
+            var s = root.sources[i]
+            var def = (s.name === name)
+            if (s.isDefault !== def) changed = true
+            out.push({ index: s.index, name: s.name, desc: s.desc, isDefault: def, volume: s.volume, mute: s.mute })
+        }
+        if (changed) root.sources = out
+    }
+
+    // Parse sources from JSON output (same format as sinks)
+    function _parseSourcesJson(raw) {
+        try {
+            var data = JSON.parse(raw)
+            if (!Array.isArray(data)) data = [data]
+            var out = []
+            for (var i = 0; i < data.length; i++) {
+                var s = data[i]
+                var props = s.properties || {}
+                var name = props["device.name"] || props["node.name"] || ""
+                var desc = props["device.description"] || props["device.nick"] || name
+                var vol = props["device.volume"] || 0
+                var mute = props["device.muted"] || false
+
+                // Extract average volume from array if needed
+                if (Array.isArray(vol) && vol.length > 0) {
+                    var sum = 0
+                    for (var j = 0; j < vol.length; j++) sum += vol[j]
+                    vol = Math.round((sum / vol.length) * 100)
+                } else if (!Array.isArray(vol)) {
+                    vol = Math.round(vol * 100)
+                }
+
+                out.push({
+                    index: String(props["device.index"] || i),
+                    name: name,
+                    desc: desc,
+                    isDefault: false,
+                    volume: vol,
+                    mute: mute
+                })
+            }
+            return out
+        } catch (e) {
+            CommandService.pushLog("[audio] sources json parse failed: " + e, "warning")
+            return null
+        }
+    }
+
+    // Parse sources from text output (similar to sinks)
+    function _parseSourcesText(raw) {
+        try {
+            var lines = raw.split("\n")
+            var out = []
+            var cur = null
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim()
+                if (line.indexOf("Source #") === 0) {
+                    if (cur) out.push(cur)
+                    var m = line.match(/Source #(\d+)/)
+                    cur = { index: m ? m[1] : "", name: "", desc: "", volume: 0, mute: false, isDefault: false }
+                } else if (cur) {
+                    if (line.indexOf("Name:") === 0) cur.name = line.substring(5).trim()
+                    else if (line.indexOf("Description:") === 0) cur.desc = line.substring(12).trim()
+                    else if (line.indexOf("Volume:") === 0) {
+                        var m = line.match(/(\d+)%/)
+                        if (m) cur.volume = parseInt(m[1])
+                    }
+                    else if (line.indexOf("Mute:") === 0) cur.mute = (line.indexOf("yes") !== -1)
+                }
+            }
+            if (cur) out.push(cur)
+            return out
+        } catch (e) {
+            CommandService.pushLog("[audio] sources text parse failed: " + e, "warning")
+            return null
+        }
     }
 }

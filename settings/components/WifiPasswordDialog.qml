@@ -41,7 +41,7 @@ Item {
     }
 
     // Animate height on show/hide
-    Behavior on implicitHeight { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+    Behavior on implicitHeight { NumberAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutCubic } }
 
     // -------------------------------------------------------------------------
     // BORDER + BACKGROUND
@@ -110,7 +110,7 @@ Item {
                              : Config.ThemeConfig.colors.border
                 border.width: 1
 
-                Behavior on border.color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutQuad } }
 
                 TextInput {
                     id: passField

@@ -31,16 +31,28 @@ Rectangle {
         }
 
         // Map the full 17-token palette to the simplified format used by the card
+        // Swatches now show a representative set of 12 colors (up from 4)
+        // giving a much better preview fidelity
         return {
             bg: palette.background,
             accent: palette.secondary,
             surface: palette.surfaceContainer,
             text: palette.text,
             swatches: [
+                // Tier 1: Structural foundations
                 palette.background,
-                palette.secondary,
+                palette.surface,
+                palette.surfaceVariant,
+                palette.surfaceContainer,
+                palette.text,
+                palette.textDim,
+                palette.border,
+                palette.outline,
+                palette.outlineVariant,
+                // Tier 2: Accent fields
                 palette.primary,
-                palette.text
+                palette.secondary,
+                palette.accent
             ]
         };
     }
@@ -51,8 +63,12 @@ Rectangle {
     width:  160
     height: 90
     color:  themeColors.surface
-    border.color: isActive ? themeColors.accent : Config.ThemeConfig.colors.border
-    border.width: 1
+    border.color: {
+        if (isActive) return themeColors.accent
+        if (interactiveClickArea.activeFocus) return Config.ThemeConfig.colors.primary
+        return Config.ThemeConfig.colors.border
+    }
+    border.width: (isActive || interactiveClickArea.activeFocus) ? 2 : 1
     radius: 0 // Hard enforcement of sharp corners
 
     // Active status accent vertical indicator strip bar (left-aligned)
@@ -92,13 +108,13 @@ Rectangle {
         // Color Swatch Strip Layout Grid Component Block
         Row {
             Layout.fillWidth: true
-            spacing: 4
+            spacing: 3
 
             Repeater {
                 model: root.themeColors.swatches
                 delegate: Rectangle {
-                    width:  14
-                    height: 14
+                    width:  8
+                    height: 12
                     color:  modelData
                     border.color: Config.ThemeConfig.colors.border
                     border.width: 1
@@ -150,7 +166,17 @@ Rectangle {
         anchors.fill: parent
         cursorShape:  Qt.PointingHandCursor
         hoverEnabled: true
-        onClicked:    root.clicked()
+
+        // Keyboard navigation support
+        focus: true
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
+                root.clicked()
+                event.accepted = true
+            }
+        }
+
+        onClicked: root.clicked()
     }
 
     // Clean terminal press luminance modifier canvas overlay element
@@ -161,7 +187,7 @@ Rectangle {
         radius:       0
 
         Behavior on opacity {
-            NumberAnimation { duration: 50; easing.type: Easing.OutQuad }
+            NumberAnimation { duration: Config.SettingsConfig.animDurationFast; easing.type: Easing.OutQuad }
         }
     }
 }

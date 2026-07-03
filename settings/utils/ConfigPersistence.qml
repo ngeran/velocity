@@ -5,6 +5,12 @@
 // Provides save/load functions for QML settings persistence.
 // Uses QuickShell.Io.Process for file operations.
 //
+// Config storage: ~/.config/quickshell/wallpaper-config.json
+// Other configs can use this utility with different configPath values.
+//
+// NOTE: This is NOT a singleton - multiple instances can be created with
+// different configPath values for different config files.
+//
 // =============================================================================
 
 import QtQuick

@@ -18,7 +18,7 @@ Item {
     readonly property int cycleInterval: Services.WallpaperService.cycleInterval > 0 ? Services.WallpaperService.cycleInterval / 1000 : 300
     readonly property bool cyclingEnabled: Services.WallpaperService.cyclingEnabled
     readonly property string transitionType: Services.WallpaperService.transitionType || "outer"
-    readonly property string wallpaperDir: Services.WallpaperService.wallpaperDir || "/home/nikos/Pictures/Wallpapers/"
+    readonly property string wallpaperDir: Services.WallpaperService.wallpaperDir || (Services.ThemeService.homeDir + "/Pictures/Wallpapers/")
 
     implicitWidth: 600
     implicitHeight: 800
@@ -86,6 +86,8 @@ Item {
             Rectangle {
                 width: 120; height: 32; radius: 0
                 color: root.cyclingEnabled ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
+                border.color: cyclingMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : "transparent"
+                border.width: cyclingMouseArea.activeFocus ? 2 : 0
 
                 Text {
                     anchors.centerIn: parent
@@ -94,12 +96,77 @@ Item {
                 }
 
                 MouseArea {
+                    id: cyclingMouseArea
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
+                    focus: true
+                    hoverEnabled: true
+
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
+                            console.log("[WallpaperModule] CYCLING BUTTON PRESSED!")
+                            root.debugLog("Cycling toggle", "current state:", root.cyclingEnabled)
+                            toggleCycling()
+                            event.accepted = true
+                        }
+                    }
+
                     onPressed: {
                         console.log("[WallpaperModule] CYCLING BUTTON PRESSED!")
                         root.debugLog("Cycling toggle", "current state:", root.cyclingEnabled)
                         toggleCycling()
+                    }
+                }
+            }
+        }
+
+        // Theme Sync Toggle
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            Text {
+                text: "Auto-sync theme when wallpaper changes"
+                font.pixelSize: 10
+                color: Config.ThemeConfig.colors.textDim
+                Layout.fillWidth: true
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 80
+                Layout.preferredHeight: 28
+                radius: 0
+                color: Services.SettingsConfigService.syncThemeToWallpaper ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
+                border.color: syncMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
+                border.width: syncMouseArea.activeFocus ? 2 : 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Services.SettingsConfigService.syncThemeToWallpaper ? "ON" : "OFF"
+                    font.pixelSize: 9
+                    font.family: Config.SettingsConfig.fontFamily
+                    font.bold: true
+                    color: Services.SettingsConfigService.syncThemeToWallpaper ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
+                }
+
+                MouseArea {
+                    id: syncMouseArea
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    focus: true
+                    hoverEnabled: true
+
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
+                            Services.SettingsConfigService.syncThemeToWallpaper = !Services.SettingsConfigService.syncThemeToWallpaper
+                            Services.SettingsConfigService.saveSettings()
+                            event.accepted = true
+                        }
+                    }
+
+                    onClicked: {
+                        Services.SettingsConfigService.syncThemeToWallpaper = !Services.SettingsConfigService.syncThemeToWallpaper
+                        Services.SettingsConfigService.saveSettings()
                     }
                 }
             }
