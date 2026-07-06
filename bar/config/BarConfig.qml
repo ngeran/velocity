@@ -18,6 +18,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 
 Item {
@@ -37,8 +38,7 @@ Item {
     // CONFIG FILE LOADING
     // =========================================================================
 
-    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
-                                       .replace("file://", "") + "/quickshell/bar-config.json"
+    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
 
     Process {
         id: configLoader

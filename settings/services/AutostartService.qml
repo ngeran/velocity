@@ -12,6 +12,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 
 Item {
@@ -27,10 +28,10 @@ Item {
     // CONFIG FILE PATHS
     // =========================================================================
 
-    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
+    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString()
                                        .replace("file://", "") + "/quickshell/autostart.json"
 
-    property string hyprlandConfPath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
+    property string hyprlandConfPath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString()
                                           .replace("file://", "") + "/hypr/hyprland.conf"
 
     // =========================================================================

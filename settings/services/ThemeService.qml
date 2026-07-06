@@ -19,13 +19,12 @@ Item {
     readonly property string currentThemeSource: Config.ThemeConfig.metadata.source
     readonly property bool   isOledClampActive:  Config.ThemeConfig.metadata.oledClamp
 
-    property bool matugenAvailable: false
     property bool isRegenerating:    false
     property bool pendingOLEDClamp:  false
 
-    // Matugen error state for visible error reporting in the UI
-    property string matugenError:  ""    // Human-readable error message
-    property bool   matugenFailed: false // True if last extraction failed
+    // Regeneration error state for visible error reporting in the UI
+    property string regenError:  ""    // Human-readable error message
+    property bool   regenFailed: false // True if last operation failed
 
     // StandardPaths.writableLocation() returns a QUrl ("file:///home/nikos") in
     // this Qt build. Concatenation coerces it to a string first, then we strip
@@ -56,11 +55,6 @@ Item {
         return proc;
     }
 
-    // theme-switcher lives in ~/.local/bin, which is NOT on the quickshell
-    // process's PATH — invoke it by absolute path or Process reports
-    // "binary could not be found" and theme switches silently no-op.
-    readonly property string _themeSwitcherBin: themeService.homeDir + "/.local/bin/theme-switcher"
-
     // Curated matrix representation for legacy interface alignment
     readonly property var curatedThemes: [
         "OLED Pure Black",
@@ -88,30 +82,10 @@ Item {
     property var customThemes: []
     readonly property string customThemesPath: themeService.homeDir + "/.config/quickshell/custom-themes.json"
 
-    Component.onCompleted: themeService.loadCustomThemes()
-
-    // =========================================================================
-    // ASYNCHRONOUS TOOL DETECTION INFRASTRUCTURE
-    // =========================================================================
-    property var matugenCheck: Process {
-        command: ["which", "matugen"]
-        running: true
-        onExited: (code) => {
-            themeService.matugenAvailable = (code === 0);
-        }
-    }
-
-    // =========================================================================
-    // SHELL UTILITY EXECUTORS
-    // =========================================================================
-    property var themeSwitcherRunner: Process {
-        id: themeSwitcherRunnerId
-        onExited: (code) => {
-            themeService.isRegenerating = false;
-            if (code !== 0) {
-                console.warn("ThemeService: theme-switcher failed with exit code:", code);
-            }
-        }
+    Component.onCompleted: {
+        themeService.loadCustomThemes();
+        // Load Stylix seed on startup (will be applied if colors.json is absent or stale)
+        themeService.loadStylixSeed();
     }
 
     // =========================================================================
@@ -121,8 +95,8 @@ Item {
     /**
      * Single OLED Clamp Function — forces surface tokens to pure black
      *
-     * This is the ONLY place where OLED clamping happens. All three entry points
-     * (preset, matugen, manual) must route through this function to ensure
+     * This is the ONLY place where OLED clamping happens. All entry points
+     * (preset, manual, stylix seed) must route through this function to ensure
      * consistent behavior and eliminate duplicate clamping.
      *
      * @param bundle - The color bundle to clamp (modified in-place)
@@ -130,10 +104,10 @@ Item {
      * @returns The clamped bundle (same object, modified in-place for efficiency)
      */
     // =========================================================================
-    // NORMALIZATION + CONTRAST HELPERS (shared by preset + matugen paths)
+    // NORMALIZATION + CONTRAST HELPERS (shared by preset + stylix paths)
     // -------------------------------------------------------------------------
     // normalizeBundle() emits the canonical 16-token shape from any raw color
-    // object so presets and matugen output are structurally identical; missing
+    // object so presets and stylix output are structurally identical; missing
     // tokens fall back to defaultBundle. luminance() powers the OLED-clamp text
     // safeguard in clampOLED().
     // =========================================================================
@@ -204,6 +178,28 @@ Item {
     }
 
     /**
+     * Writes the theme bundle to ~/.cache/theme/colors.json (bar sync channel)
+     *
+     * Consolidated helper for all four write sites (preset, stylix seed, manual,
+     * custom). Performs mkdir + write atomically via sh -c to avoid races.
+     */
+    function _writeColorsJson(bundle, metadata) {
+        var cachePath = themeService.homeDir + "/.cache/theme";
+        var colorsJsonPath = cachePath + "/colors.json";
+        var colorsPayload = { colors: bundle, metadata: metadata };
+        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
+        writer.onExited.connect(function(code) {
+            if (code !== 0) {
+                var errorMsg = "Failed to write colors.json (exit " + code + "). Theme may not sync to bar.";
+                console.error("[ThemeService] " + errorMsg);
+                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+            }
+        });
+        writer.running = true;
+    }
+
+    /**
      * Re-apply the current theme with new OLED clamp state
      *
      * This is the public API for toggling OLED protection. It re-applies the
@@ -224,16 +220,22 @@ Item {
         if (currentSource === "preset") {
             // Re-apply the preset with new clamp state
             themeService.applyPreset(currentName, clamp);
-        } else if (currentSource === "matugen") {
-            // For matugen themes, re-run extraction with new clamp state
-            // Note: We need the wallpaper path - fetch from SharedState
-            var wallpaperPath = Config.SharedState.wallpaperPath;
-            if (wallpaperPath && wallpaperPath !== "") {
-                themeService.applyDynamicTheme(wallpaperPath, clamp);
-            } else {
-                if (Config.DebugConfig.debugTheme) console.warn("[setOledClamp] Matugen theme active but no wallpaper path - falling back to OLED Pure Black")
-                themeService.applyPreset("OLED Pure Black", clamp);
-            }
+        } else if (currentSource === "stylix") {
+            // Stylix themes: re-apply the seed with new clamp state
+            themeService.loadStylixSeed();
+            var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors);
+            themeService.clampOLED(bundle, clamp);
+            Config.ThemeConfig.applyTheme({
+                colors: bundle,
+                metadata: {
+                    name: Config.ThemeConfig.metadata.name,
+                    source: "stylix",
+                    applied: new Date().toISOString(),
+                    oledClamp: clamp
+                }
+            }, true);
+            themeService._writeColorsJson(bundle, Config.ThemeConfig.metadata);
+            themeService.syncToExternalApps(bundle);
         } else {
             // Unknown source - fall back to OLED Pure Black
             if (Config.DebugConfig.debugTheme) console.warn("[setOledClamp] Unknown theme source:", currentSource, "- falling back to OLED Pure Black")
@@ -286,39 +288,18 @@ Item {
                 name: presetName,
                 source: "preset",
                 applied: new Date().toISOString(),
-                oledClamp: applyOLEDClamp ? true : false,
-                matugenEnabled: false
+                oledClamp: applyOLEDClamp ? true : false
             }
         }, true);  // Mark as user-initiated change
 
         if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Config.ThemeConfig.metadata.oledClamp AFTER applyTheme:", Config.ThemeConfig.metadata.oledClamp)
 
         // --- SECONDARY: write to cache file for bar and other shells ---
-        var cachePath = themeService.homeDir + "/.cache/theme";
-        var colorsJsonPath = cachePath + "/colors.json";
-
-        // Write colors to cache file for bar (mkdir + write in one sh -c to
-        // avoid the race where write beats mkdir on a fresh machine).
-        var colorsPayload = {
-            colors: bundle,
-            metadata: {
-                name: presetName,
-                source: "preset",
-                oledClamp: applyOLEDClamp
-            }
-        };
-
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Writing to cache file with oledClamp:", applyOLEDClamp)
-        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
-        writer.onExited.connect(function(code) {
-            if (code !== 0) {
-                var errorMsg = "Failed to write colors.json (exit " + code + "). Theme may not sync to bar.";
-                console.error("[ThemeService] " + errorMsg);
-                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
-            }
+        themeService._writeColorsJson(bundle, {
+            name: presetName,
+            source: "preset",
+            oledClamp: applyOLEDClamp
         });
-        writer.running = true;
 
         // Sync to external apps
         themeService.syncToExternalApps(bundle);
@@ -329,157 +310,65 @@ Item {
     }
 
     /**
-     * Triggers external automated Matugen wallpaper extraction workflows
+     * Triggers rebuild to apply Stylix palette from a new wallpaper
      *
-     * Uses buffer-then-parse pattern (stdout accumulated across onRead, parsed once
-     * on process exit) to handle split JSON chunks. Includes palette-completeness
-     * validation and visible error reporting.
+     * Copies the chosen wallpaper into the flake tree and rebuilds; Stylix
+     * regenerates the seed from the new image. After rebuild succeeds,
+     * loadStylixSeed() applies the new palette to colors.json.
      */
-    property var matugenRunner: Process {
-        id: runner
-
-        // Buffer for stdout accumulation
+    property var rebuildRunner: Process {
+        id: rebuilder
         property string buffer: ""
 
         stdout: SplitParser {
-            onRead: function(data) {
-                runner.buffer += data
-            }
+            onRead: function(data) { rebuilder.buffer += data }
         }
 
         onRunningChanged: function() {
             if (!running) {
-                // matugen exited without capturable JSON — surface it instead of
-                // silently doing nothing (and leaving isRegenerating stuck until
-                // the safety timeout fires).
-                if (runner.buffer.length === 0) {
-                    console.error("ThemeService: matugen produced no stdout to parse")
-                    themeService.matugenError = "Matugen produced no output — extraction may have failed"
-                    themeService.matugenFailed = true
-                    themeService.isRegenerating = false
-                    return
-                }
-                try {
-                    var matugenOutput = runner.buffer.trim();
-                    runner.buffer = "";  // Clear buffer immediately after read
-
-                    if (matugenOutput.length > 0) {
-                        var colors = JSON.parse(matugenOutput);
-
-                        // Validate the Material palette — the vivid source we map from.
-                        // base16 slots are tonal and render near-black on dark wallpapers,
-                        // so we map from colors.* (Material You) for vivid accents.
-                        var m = colors.colors || {}
-                        var requiredM = ["primary", "secondary", "tertiary", "error", "surface", "on_surface"]
-                        var missingM = []
-                        for (var i = 0; i < requiredM.length; i++) {
-                            if (!m[requiredM[i]]) missingM.push(requiredM[i])
-                        }
-                        if (missingM.length > 0) {
-                            console.error("ThemeService: Matugen Material palette incomplete - missing:", missingM.join(", "))
-                            themeService.matugenError = "Incomplete palette from wallpaper: missing " + missingM.length + " color(s)"
-                            themeService.matugenFailed = true
-                            themeService.isRegenerating = false
-                            return
-                        }
-
-                        // Map matugen Material colors → canonical tokens. Brand accents
-                        // come from colors.primary/secondary/tertiary; secondary (the
-                        // unified accent) is driven by colors.primary — the vivid
-                        // saturated swatch. success/warning/info stay as fixed semantic
-                        // colors (Material has no equivalents). normalizeBundle() fills
-                        // gaps and guarantees the same 16-token shape as presets.
-                        function pickM(key) {
-                            var e = m[key]
-                            if (!e) return null
-                            return (e.default && e.default.color) || (e.dark && e.dark.color) || (e.light && e.light.color) || null
-                        }
-                        var bundle = themeService.normalizeBundle({
-                            background: pickM("background"),
-                            surface: pickM("surface"),
-                            surfaceVariant: pickM("surface_variant"),
-                            surfaceContainer: pickM("surface_container"),
-                            text: pickM("on_surface"),
-                            textDim: pickM("on_surface_variant"),
-                            border: pickM("outline_variant"),
-                            outline: pickM("outline"),
-                            outlineVariant: pickM("outline_variant"),
-                            primary: pickM("tertiary"),
-                            secondary: pickM("primary"),
-                            accent: pickM("secondary"),
-                            success: "#34d399",
-                            warning: "#fbbf24",
-                            error: pickM("error"),
-                            info: "#00dce5"
-                        })
-
-                        // Apply OLED clamp through the single clampOLED function
-                        themeService.clampOLED(bundle, themeService.pendingOLEDClamp);
-
-                        Config.ThemeConfig.applyTheme({
-                            colors: bundle,
-                            metadata: {
-                                name: "Dynamic Wallpaper",
-                                source: "matugen",
-                                applied: new Date().toISOString(),
-                                oledClamp: themeService.pendingOLEDClamp,
-                                matugenEnabled: true
-                            }
-                        });
-
-                        // Write to cache file
-                        var cachePath = themeService.homeDir + "/.cache/theme";
-                        var colorsJsonPath = cachePath + "/colors.json";
-                        var colorsPayload = {
-                            colors: bundle,
-                            metadata: Config.ThemeConfig.metadata
-                        };
-                        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-                        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
-                        writer.running = true;
-
-                        // Sync to external apps
-                        themeService.syncToExternalApps(bundle);
-
-                        // Success - clear any previous error
-                        themeService.matugenError = "";
-                        themeService.matugenFailed = false;
-                    }
-                } catch (e) {
-                    console.error("ThemeService: Failed to parse matugen output:", e);
-                    themeService.matugenError = "Failed to parse matugen output: " + e.message;
-                    themeService.matugenFailed = true;
-                }
+                // Reset state regardless of buffer length — a no-op rebuild may
+                // emit little/no stdout, and we must not leave isRegenerating
+                // stuck true (which would disable the button for 60s until
+                // rebuildTimeout fires).
+                console.log("[ThemeService] Rebuild output:", rebuilder.buffer.trim());
                 themeService.isRegenerating = false;
+                themeService.regenFailed = (rebuilder.buffer.search(/error|fail/i) !== -1);
+                themeService.regenError = themeService.regenFailed ? "Rebuild failed - check logs" : "";
+                // On successful rebuild, reload the Stylix seed
+                if (!themeService.regenFailed) {
+                    themeService.loadStylixSeed();
+                }
+                rebuilder.buffer = "";
             }
         }
 
         onExited: function(code) {
             if (code !== 0) {
-                console.error("ThemeService: matugen failed with exit code:", code);
-                themeService.matugenError = "Matugen extraction failed (exit code " + code + ")";
-                themeService.matugenFailed = true;
+                console.error("ThemeService: rebuild failed with exit code:", code);
+                themeService.regenError = "Rebuild failed (exit code " + code + ")";
+                themeService.regenFailed = true;
                 themeService.isRegenerating = false;
             }
         }
     }
 
-    // Safety timeout: clear isRegenerating after ~8s if matugen hangs
-    // This prevents the Run Extraction button from being permanently disabled
+    // Safety timeout: clear isRegenerating after 60s if rebuild hangs
     Timer {
-        id: matugenTimeout
-        interval: 8000
+        id: rebuildTimeout
+        interval: 60000
         running: false
         repeat: false
         onTriggered: {
             if (themeService.isRegenerating) {
-                console.warn("ThemeService: matugen timeout - clearing isRegenerating flag")
-                themeService.isRegenerating = false
+                console.warn("ThemeService: rebuild timeout - clearing isRegenerating flag")
+                themeService.regenError = "Rebuild timed out";
+                themeService.regenFailed = true;
+                themeService.isRegenerating = false;
             }
         }
     }
 
-    function applyDynamicTheme(wallpaperPath, applyOLEDClamp) {
+    function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
         if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme CALLED ===")
         if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
         if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp)
@@ -495,30 +384,111 @@ Item {
         if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] actualPath to use:", actualPath)
 
         if (!actualPath || actualPath === "") {
-            // Surface a visible error instead of silently returning — otherwise
-            // the button appears to do nothing when no wallpaper is active.
             console.warn("[applyDynamicTheme] No wallpaper path available")
-            themeService.matugenError = "No wallpaper selected — set a wallpaper in the Wallpaper tab first"
-            themeService.matugenFailed = true
+            themeService.regenError = "No wallpaper selected — set a wallpaper in the Wallpaper tab first"
+            themeService.regenFailed = true
             return;
         }
 
         // Reset error state and clear any stale stdout buffer from a previous run.
-        themeService.matugenError = ""
-        themeService.matugenFailed = false
-        matugenRunner.buffer = ""
+        themeService.regenError = ""
+        themeService.regenFailed = false
+        rebuildRunner.buffer = ""
 
         themeService.isRegenerating = true;
-        themeService.pendingOLEDClamp = applyOLEDClamp;
-        matugenTimeout.restart();
+        themeService.rebuildTimeout.restart();
 
-        // Run matugen to generate colors from wallpaper
         // Strip file:// prefix if present
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Running matugen with path:", cleanPath)
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Triggering rebuild with wallpaper:", cleanPath)
 
-        matugenRunner.command = ["matugen", "image", cleanPath, "-j", "hex", "--mode", "dark", "--type", "scheme-tonal-spot", "--prefer=lightness", "-q"];
-        matugenRunner.running = true;
+        rebuildRunner.command = ["pkexec", "/run/current-system/sw/bin/qs-apply-wallpaper", cleanPath];
+        rebuildRunner.running = true;
+    }
+
+    /**
+     * Loads the Stylix seed palette and applies it as the active theme
+     *
+     * Reads ~/.config/quickshell/stylix-palette.json (written by Stylix's
+     * home-manager module) and pushes it to ThemeConfig + colors.json.
+     * Called on Component.onCompleted (only if colors.json is absent or
+     * source === "stylix") and after successful rebuilds. The clobber guard
+     * prevents overwriting a user's live preset choice on every launch.
+     */
+    // Helper process for checking colors.json before loading Stylix seed
+    property var stylixChecker: Process {
+        property string buffer: ""
+        command: []
+        stdout: SplitParser {
+            onRead: function(data) {
+                stylixChecker.buffer += data
+            }
+        }
+        onExited: function(code) {
+            var shouldLoadSeed = true;
+            if (stylixChecker.buffer.trim() !== "NONE") {
+                try {
+                    var existing = JSON.parse(stylixChecker.buffer.trim());
+                    if (existing.metadata && existing.metadata.source && existing.metadata.source !== "stylix") {
+                        shouldLoadSeed = false;
+                        console.log("[ThemeService] Skipping Stylix seed - existing theme:", existing.metadata.name);
+                    }
+                } catch (e) {
+                    // File exists but invalid, load seed
+                }
+            }
+            if (shouldLoadSeed) {
+                stylixSeedLoader.running = true;
+            }
+            stylixChecker.buffer = "";
+        }
+    }
+
+    property var stylixSeedLoader: Process {
+        property string buffer: ""
+        command: ["sh", "-c", "cat ~/.config/quickshell/stylix-palette.json 2>/dev/null"]
+        stdout: SplitParser {
+            onRead: function(data) { stylixSeedLoader.buffer += data }
+        }
+        onRunningChanged: {
+            if (!running && stylixSeedLoader.buffer.length > 0) {
+                try {
+                    var seed = JSON.parse(stylixSeedLoader.buffer.trim());
+                    if (seed && seed.colors && seed.metadata) {
+                        var bundle = themeService.normalizeBundle(seed.colors);
+                        Config.ThemeConfig.applyTheme({
+                            colors: bundle,
+                            metadata: seed.metadata
+                        });
+                        themeService._writeColorsJson(bundle, seed.metadata);
+                        themeService.syncToExternalApps(bundle);
+                        console.log("[ThemeService] Stylix seed loaded:", seed.metadata.name);
+                    } else {
+                        console.warn("[ThemeService] Stylix seed invalid or missing colors");
+                    }
+                } catch (e) {
+                    console.error("[ThemeService] Failed to parse Stylix seed:", e);
+                }
+                stylixSeedLoader.buffer = "";
+            }
+        }
+    }
+
+    function loadStylixSeed() {
+        // Check if colors.json exists and has a non-Stylix source before loading seed
+        var colorsPath = themeService.homeDir + "/.cache/theme/colors.json";
+        stylixChecker.command = ["sh", "-c", "test -f " + colorsPath + " && cat " + colorsPath + " || echo 'NONE'"];
+        stylixChecker.running = true;
+    }
+
+    /**
+     * Force-load the Stylix seed palette NOW, bypassing the clobber guard.
+     * User-initiated "Load Stylix" action from the Manual Theme Editor: pulls
+     * the seed colors into ThemeConfig + colors.json + external apps live, so
+     * the editor fields populate with the extracted palette for tweaking.
+     */
+    function applyStylixSeedNow() {
+        stylixSeedLoader.running = true;
     }
 
     /**
@@ -533,28 +503,10 @@ Item {
             "name": "Custom Modification",
             "source": "manual",
             "applied": new Date().toISOString(),
-            "oledClamp": themeService.isOledClampActive,
-            "matugenEnabled": false
+            "oledClamp": themeService.isOledClampActive
         };
 
-        // Write to cache file (mkdir + write in one sh -c — avoids the race)
-        var cachePath = themeService.homeDir + "/.cache/theme";
-        var colorsJsonPath = cachePath + "/colors.json";
-        var colorsPayload = {
-            colors: Config.ThemeConfig.colors,
-            metadata: Config.ThemeConfig.metadata
-        };
-
-        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
-        writer.onExited.connect(function(code) {
-            if (code !== 0) {
-                var errorMsg = "Failed to write colors.json (exit " + code + "). Manual override may not sync to bar.";
-                console.error("[ThemeService] " + errorMsg);
-                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
-            }
-        });
-        writer.running = true;
+        themeService._writeColorsJson(Config.ThemeConfig.colors, Config.ThemeConfig.metadata);
 
         // Sync to external apps
         themeService.syncToExternalApps(Config.ThemeConfig.colors);
@@ -624,17 +576,11 @@ Item {
                 name: found.name,
                 source: "custom",
                 applied: new Date().toISOString(),
-                oledClamp: themeService.isOledClampActive,
-                matugenEnabled: false
+                oledClamp: themeService.isOledClampActive
             }
         }, true)
 
-        var cachePath = themeService.homeDir + "/.cache/theme"
-        var colorsJsonPath = cachePath + "/colors.json"
-        var colorsPayload = { colors: bundle, metadata: Config.ThemeConfig.metadata }
-        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService)
-        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath]
-        writer.running = true
+        themeService._writeColorsJson(bundle, Config.ThemeConfig.metadata)
         themeService.syncToExternalApps(bundle)
     }
 
@@ -766,7 +712,7 @@ Item {
             "progress-color=" + colors.primary + "\n" +
             "background-color-d=" + colors.surface + "\n" +
             "text-color-d=" + colors.textDim + "\n" +
-            "border-color-d=" + colors.borderDim + "\n";
+            "border-color-d=" + colors.outlineVariant + "\n";
         var makoWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         makoWriter.command = ["sh", "-c", "mkdir -p ~/.config/mako && printf '%s' '" + makoContent + "' > " + makoConfig + " && makoctl reload"];
         makoWriter.running = true;

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This is a **quickshell-bar** — a minimal top bar for Hyprland on Arch Linux, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, a clock, and system tray icons (Bluetooth, Network, Volume, Battery).
+This is a **quickshell-bar** — a minimal top bar for Hyprland on NixOS, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, a clock, and system tray icons (Bluetooth, Network, Volume, Battery).
 
 **Design language:** Pure black background (`#000000`) · Obsidian Teal accent (`#00dce5`) · JetBrains Mono font
 
@@ -145,7 +145,7 @@ To move the bar to the bottom, edit `shell.qml` and change `anchors.top` → `an
 | `bluetui` | Bluetooth TUI |
 | `wiremix` | Audio TUI |
 
-Install on Arch: `sudo pacman -S quickshell socat networkmanager bluez-utils wireplumber upower impala bluetui wiremix kitty`
+**On NixOS:** All packages managed via `~/.omni-nix/flake.nix`.
 
 ---
 
@@ -155,3 +155,4 @@ Install on Arch: `sudo pacman -S quickshell socat networkmanager bluez-utils wir
 - Font assumes JetBrains Mono; falls back to `monospace`.
 - For HiDPI screens, adjust `BarConfig.barHeight`.
 - `kitty` is used for launching TUI apps with floating window class.
+- **Theme sync:** Bar watches `~/.cache/theme/colors.json` via `FileView.onFileChanged` in `config/ThemeConfig.qml`. When the settings process changes the theme, the bar updates within ~1s. The Stylix seed at `~/.config/quickshell/stylix-palette.json` is loaded on bar startup if `colors.json` has source `"stylix"`.

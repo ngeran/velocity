@@ -76,11 +76,20 @@ Item {
                             model: [
                                 Config.ThemeConfig.colors.background,
                                 Config.ThemeConfig.colors.surface,
+                                Config.ThemeConfig.colors.surfaceVariant,
                                 Config.ThemeConfig.colors.surfaceContainer,
+                                Config.ThemeConfig.colors.text,
+                                Config.ThemeConfig.colors.textDim,
+                                Config.ThemeConfig.colors.border,
+                                Config.ThemeConfig.colors.outline,
+                                Config.ThemeConfig.colors.outlineVariant,
                                 Config.ThemeConfig.colors.primary,
                                 Config.ThemeConfig.colors.secondary,
-                                Config.ThemeConfig.colors.outline,
-                                Config.ThemeConfig.colors.border
+                                Config.ThemeConfig.colors.accent,
+                                Config.ThemeConfig.colors.success,
+                                Config.ThemeConfig.colors.warning,
+                                Config.ThemeConfig.colors.error,
+                                Config.ThemeConfig.colors.info
                             ]
                             delegate: Rectangle {
                                 width:  22
@@ -121,7 +130,7 @@ Item {
                 spacing: 2
 
                 Repeater {
-                    model: ["curated", "matugen", "manual"]
+                    model: ["curated", "manual"]
                     delegate: Rectangle {
                         width:  74
                         height: 20
@@ -154,7 +163,7 @@ Item {
         StackLayout {
             Layout.fillWidth:  true
             Layout.fillHeight: true
-            currentIndex:      root.themeMode === "curated" ? 0 : (root.themeMode === "matugen" ? 1 : 2)
+            currentIndex:      root.themeMode === "curated" ? 0 : 1
 
             // -----------------------------------------------------------------
             // SECTION 2: CURATED THEME ARCHIVE LIBRARY GRID (6 PRESETS)
@@ -179,97 +188,9 @@ Item {
             }
 
             // -----------------------------------------------------------------
-            // SECTION 3: AUTOMATED MATUGEN WALLPAPER EXTRACTION ENGINE
-            // -----------------------------------------------------------------
-            ColumnLayout {
-                spacing: 8
-
-                Text {
-                    text:           "DYNAMIC MATUGEN COLOR HARVESTER"
-                    font.pixelSize: 11
-                    font.family: Config.SettingsConfig.fontFamily
-                    color:          Config.ThemeConfig.colors.text
-                }
-
-                RowLayout {
-                    spacing: 8
-                    Layout.fillWidth: true
-
-                    Rectangle {
-                        Layout.preferredWidth:  12
-                        Layout.preferredHeight: 12
-                        color:        Services.ThemeService.matugenAvailable ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-                        radius:       0
-                    }
-
-                    Text {
-                        text:           Services.ThemeService.matugenAvailable ? "MATUGEN PROTOCOL: OPERATIONAL" : "MATUGEN PROTOCOL: ABSENT"
-                        font.pixelSize: 10
-                        font.family: Config.SettingsConfig.fontFamily
-                        color:          Config.ThemeConfig.colors.text
-                    }
-                }
-
-                Text {
-                    text:           Services.ThemeService.matugenAvailable ?
-                                    "System binary maps wallpaper palettes dynamically onto active configuration arrays automatically." :
-                                    "Dependency error detected. To initialize extraction routines, install the binary locally via host package engine using: \n$ paru -S matugen"
-                    font.pixelSize: 9
-                    font.family: Config.SettingsConfig.fontFamily
-                    color:          Config.ThemeConfig.colors.textDim
-                    Layout.fillWidth: true
-                }
-
-                Item { height: 4 }
-
-                Rectangle {
-                    Layout.preferredWidth:  160
-                    Layout.preferredHeight: 28
-                    color:        "transparent"
-                    border.color: (!Services.ThemeService.matugenAvailable || Services.ThemeService.isRegenerating) ? Config.ThemeConfig.colors.border : Config.ThemeConfig.colors.secondary
-                    border.width: 1
-                    radius:       0
-
-                    Text {
-                        anchors.centerIn: parent
-                        text:            Services.ThemeService.isRegenerating ? "GENERATING..." : "RUN EXTRACTION"
-                        font.pixelSize:  10
-                        font.family: Config.SettingsConfig.fontFamily
-                        font.bold:       true
-                        color:           (!Services.ThemeService.matugenAvailable || Services.ThemeService.isRegenerating) ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.text
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled:      Services.ThemeService.matugenAvailable && !Services.ThemeService.isRegenerating
-                        cursorShape:  Qt.PointingHandCursor
-                        onClicked: {
-                            // Use the active wallpaper tracked by WallpaperService
-                            // (SharedState.wallpaperPath is never populated and was
-                            // always "" here, so matugen silently never ran).
-                            Services.ThemeService.applyDynamicTheme(Services.WallpaperService.currentWallpaper, root.oledClampEnabled)
-                        }
-                    }
-                }
-
-                // Matugen error display (visible only when extraction fails)
-                Text {
-                    Layout.fillWidth: true
-                    visible:          Services.ThemeService.matugenFailed && Services.ThemeService.matugenError !== ""
-                    text:             "⚠ " + Services.ThemeService.matugenError
-                    font.pixelSize:   9
-                    font.family: Config.SettingsConfig.fontFamily
-                    color:            Config.ThemeConfig.colors.error
-                    wrapMode:         Text.Wrap
-                    Layout.topMargin: 8
-                }
-
-                Item { Layout.fillHeight: true }
-            }
-
-            // -----------------------------------------------------------------
-            // -----------------------------------------------------------------
-            // SECTION 4: MANUAL THEME EDITOR
+            // SECTION 3: MANUAL THEME EDITOR
+            // (Stylix seed actions live inside the editor now — APPLY WALLPAPER
+            //  rebuild + LOAD STYLIX — so the separate Stylix tab is gone.)
             // -----------------------------------------------------------------
             Components.ManualThemeEditor {
                 Layout.fillWidth: true
@@ -316,7 +237,7 @@ Item {
                         font.pixelSize:  9
                         font.family: Config.SettingsConfig.fontFamily
                         font.bold:       true
-                        color:           root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                        color:           root.oledClampEnabled ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
                     }
 
                     MouseArea {

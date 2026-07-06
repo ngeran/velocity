@@ -266,7 +266,7 @@ Item {
     // Plain filesystem path. StandardPaths returns a file:// URL in this Qt
     // build; strip it via .replace so FileView gets a real path (a literal
     // "file://..." name doesn't exist → onFileChanged never fires).
-    readonly property string externalCachePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
+    readonly property string externalCachePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.cache/theme/colors.json").replace("file://", "")
 
     // Track last cached data and timestamp to avoid redundant re-application
     property string lastCachedData: ""

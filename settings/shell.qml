@@ -57,6 +57,28 @@ ShellRoot {
     }
 
     // =========================================================================
+    // WORKSPACE WATCHER — auto-close when the user switches workspace.
+    // Event-driven via Hyprland's socket2 (no polling latency). socat streams
+    // events line-by-line; we dismiss on workspace>> / workspacev2>> /
+    // focusedmon>> (focus moving to another monitor is effectively a switch).
+    // =========================================================================
+    Process {
+        id: workspaceWatcher
+        command: ["sh", "-c", "socat -u UNIX-CONNECT:\"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\" -"]
+        running: true
+        stdout: SplitParser {
+            onRead: function(line) {
+                var ev = "" + line
+                if (ev.indexOf("workspace>>") === 0
+                    || ev.indexOf("workspacev2>>") === 0
+                    || ev.indexOf("focusedmon>>") === 0) {
+                    if (root.shown) root.shown = false
+                }
+            }
+        }
+    }
+
+    // =========================================================================
     // IPC HANDLER — toggle window visibility from other instances (e.g. bar)
     // =========================================================================
     IpcHandler {
@@ -136,18 +158,15 @@ ShellRoot {
     PanelWindow {
         id: panelWindow
 
-        // Full-width transparent stage
+        // Full-screen overlay so ANY click outside the card closes the window.
         anchors {
             top: true
             left: true
             right: true
+            bottom: true
         }
 
-        // Height = bar + adaptive card + margin
-        implicitHeight: Config.SettingsConfig.barHeight + root.cardHeight + 14
-        implicitWidth:  1920
-
-        // Transparent stage — card provides the background
+        // Transparent stage — backdrop + card provide the visuals
         color: "transparent"
 
         // Don't reserve screen space
@@ -162,12 +181,22 @@ ShellRoot {
         // Start hidden
         visible: false
 
-        // Full-stage mouse area closes on outside-click
-        MouseArea {
+        // Dim backdrop — also makes the surface input-solid so clicks register
+        // anywhere outside the card. (A bare MouseArea on a transparent layer
+        // doesn't catch input in Wayland — the dim Rectangle is what registers
+        // the input region.) Fades in/out with the card.
+        Rectangle {
+            id: backdrop
             anchors.fill: parent
-            z: -1
-            onClicked: {
-                root.shown = false
+            color: Config.ThemeConfig.colors.background
+            opacity: root.shown ? 0.6 : 0.0
+            visible: opacity > 0.01
+            Behavior on opacity {
+                NumberAnimation { duration: Config.SettingsConfig.animDurationSlow }
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.shown = false
             }
         }
 
@@ -182,6 +211,7 @@ ShellRoot {
         Components.ModernDashboard {
             id: dashboard
 
+            z: 1   // paint above the dim backdrop
             width: root.cardWidth
             height: root.cardHeight
 

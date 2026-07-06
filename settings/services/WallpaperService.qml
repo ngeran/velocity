@@ -25,6 +25,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell
 import Quickshell.Io
 import "../config" as Config
@@ -66,7 +67,7 @@ Item {
     // CONFIGURATION PERSISTENCE
     // =========================================================================
 
-    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
+    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString()
                                        .replace("file://", "") + "/quickshell/wallpaper-config.json"
 
     Utils.ConfigPersistence {
@@ -349,11 +350,11 @@ Item {
         Config.SharedState.updateWallpaper(path)
         saveConfig()
 
-        // Auto-regenerate theme if enabled
-        if (Services.SettingsConfigService.syncThemeToWallpaper) {
-            console.log("[WallpaperService] Auto-regenerating theme from wallpaper:", path)
-            // Use the current OLED clamp setting from ThemeConfig
-            Services.ThemeService.applyDynamicTheme(path, Config.ThemeConfig.oledClamp)
+        // Auto-regenerate Stylix theme if opt-in rebuild flag is set
+        // (Separate from syncThemeToWallpaper; this triggers a rebuild via pkexec)
+        if (Services.SettingsConfigService.rebuildOnWallpaperChange) {
+            console.log("[WallpaperService] Auto-rebuilding Stylix theme from wallpaper:", path)
+            Services.ThemeService.applyDynamicTheme(path)
         }
     }
 

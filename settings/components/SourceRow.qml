@@ -105,7 +105,7 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Services.AudioControlService.toggleSourceMute(row.source.name)
+                onClicked: Services.AudioControlService.toggleSourceMute(row.source.id)
             }
         }
     }
@@ -115,7 +115,7 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
         onClicked: {
             if (!row.source.isDefault) {
-                Services.AudioControlService.setDefaultSource(row.source.name)
+                Services.AudioControlService.setDefaultSource(row.source.id)
             }
         }
     }

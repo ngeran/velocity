@@ -15,6 +15,12 @@ qslog/
 # System configuration validation (not needed for repo)
 validate-system-config.sh
 
+# HM-managed seed (deployed by omni-dots flake) — store symlink, never track
+stylix-palette.json
+
+# Quickshell runtime state
+wallpaper-config.json
+
 # IDE and editor files
 .vscode/
 .idea/

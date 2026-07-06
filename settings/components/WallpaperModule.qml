@@ -126,7 +126,7 @@ Item {
             spacing: 12
 
             Text {
-                text: "Auto-sync theme when wallpaper changes"
+                text: "Auto-rebuild Stylix theme when wallpaper changes"
                 font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 Layout.fillWidth: true
@@ -136,17 +136,17 @@ Item {
                 Layout.preferredWidth: 80
                 Layout.preferredHeight: 28
                 radius: 0
-                color: Services.SettingsConfigService.syncThemeToWallpaper ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
+                color: Services.SettingsConfigService.rebuildOnWallpaperChange ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
                 border.color: syncMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
                 border.width: syncMouseArea.activeFocus ? 2 : 1
 
                 Text {
                     anchors.centerIn: parent
-                    text: Services.SettingsConfigService.syncThemeToWallpaper ? "ON" : "OFF"
+                    text: Services.SettingsConfigService.rebuildOnWallpaperChange ? "ON" : "OFF"
                     font.pixelSize: 9
                     font.family: Config.SettingsConfig.fontFamily
                     font.bold: true
-                    color: Services.SettingsConfigService.syncThemeToWallpaper ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
+                    color: Services.SettingsConfigService.rebuildOnWallpaperChange ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
                 }
 
                 MouseArea {
@@ -158,14 +158,14 @@ Item {
 
                     Keys.onPressed: function(event) {
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
-                            Services.SettingsConfigService.syncThemeToWallpaper = !Services.SettingsConfigService.syncThemeToWallpaper
+                            Services.SettingsConfigService.rebuildOnWallpaperChange = !Services.SettingsConfigService.rebuildOnWallpaperChange
                             Services.SettingsConfigService.saveSettings()
                             event.accepted = true
                         }
                     }
 
                     onClicked: {
-                        Services.SettingsConfigService.syncThemeToWallpaper = !Services.SettingsConfigService.syncThemeToWallpaper
+                        Services.SettingsConfigService.rebuildOnWallpaperChange = !Services.SettingsConfigService.rebuildOnWallpaperChange
                         Services.SettingsConfigService.saveSettings()
                     }
                 }
@@ -237,7 +237,7 @@ Item {
                     Rectangle {
                         width: 50; height: 24; color: root.transitionType === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                         border.color: Config.ThemeConfig.colors.border
-                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 9; color: Config.ThemeConfig.colors.text }
+                        Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 9; color: root.transitionType === modelData ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor

@@ -1,21 +1,21 @@
 // =============================================================================
-// AudioControlService.qml — pactl control (sinks/sources + per-stream vol)
+// AudioControlService.qml — WirePlumber control via wpctl
 // =============================================================================
+// PipeWire-native. `pactl` is NOT installed on this machine (services.pulseaudio
+// is disabled in favour of pipewire-pulse), so everything goes through `wpctl`.
 //
-// PROBES:
-//   defaultSinkProc (3s) pactl get-default-sink
-//   sinksProc       (3s) pactl -f json list sinks
-//   sinkInputsProc  (2s) pactl -f json list sink-inputs
+// POLL (3s):
+//   statusProc  → `wpctl status`           lists sinks/sources/streams + vol + default (*)
+//   muteProc    → `wpctl get-volume <id>`  per node (status omits mute state)
 //
-// Matches the existing bar AudioService (pactl, not wpctl). Prefers `-f json`
-// (verified on pipewire-pulse 17) and auto-falls-back to text-regex parsing if
-// the build ignores -f json. Format is detected by the first non-ws char
-// ("[" / "{" → JSON, else text).
+// ACTIONS (all take the numeric node id, bare — no @ prefix):
+//   wpctl set-default <id>
+//   wpctl set-volume -l 1.0 <id> 0.NN      (-l 1.0 caps at 100%)
+//   wpctl set-mute <id> toggle
 //
-// sinks entry:      { index, name, desc, isDefault, volume(0-100), mute }
-// sinkInputs entry: { id, app, sink(index str), volume(0-100), mute }
-//
-// On any set-*, the relevant list is refreshed immediately (responsive UI).
+// Entry shapes (kept compatible with SinkListView/SinkRow/SourceRow/SinkInputRow):
+//   sinks/sources:  { id, name, desc, isDefault, volume(0-100), mute }
+//   sinkInputs:     { id, app, volume(0-100), mute }
 // =============================================================================
 
 pragma Singleton
@@ -34,430 +34,250 @@ Item {
     property var sources: []
 
     // -------------------------------------------------------------------------
-    // DEFAULT SINK
+    // STATUS POLL — wpctl status (sinks + sources + streams + default marker)
     // -------------------------------------------------------------------------
-
     Process {
-        id: defaultSinkProc
-        command: ["pactl", "get-default-sink"]
+        id: statusProc
+        command: ["wpctl", "status"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { defaultSinkProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { statusProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
-                var s = defaultSinkProc.buffer.trim()
-                if (s.length > 0) {
-                    root.defaultSink = s
-                    // re-stamp isDefault flags if the list already exists
-                    root._restampDefault(s)
+                var parsed = root._parseWpctlStatus(statusProc.buffer)
+                root.sinks = parsed.sinks
+                root.sources = parsed.sources
+                root.sinkInputs = parsed.streams
+                for (var i = 0; i < parsed.sinks.length; i++) {
+                    if (parsed.sinks[i].isDefault) { root.defaultSink = parsed.sinks[i].id; break }
                 }
-                defaultSinkProc.buffer = ""
+                for (var j = 0; j < parsed.sources.length; j++) {
+                    if (parsed.sources[j].isDefault) { root.defaultSource = parsed.sources[j].id; break }
+                }
+                root._pollNodeInfo(parsed.sinks, parsed.sources, parsed.streams)
+                statusProc.buffer = ""
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    // SINKS
+    // NODE-INFO POLL — wpctl get-volume <id> for every node (status omits mute)
+    // Output per line: "<id>=Volume: 0.40" (+ " [MUTED]" when muted)
     // -------------------------------------------------------------------------
-
     Process {
-        id: sinksProc
-        command: ["sh", "-c", "pactl -f json list sinks 2>/dev/null"]
+        id: nodeInfoProc
+        command: []
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { sinksProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { nodeInfoProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
-                var raw = sinksProc.buffer.trim()
-                if (raw.length > 0) {
-                    var parsed = root._looksJson(raw)
-                        ? root._parseSinksJson(raw)
-                        : root._parseSinksText(raw)
-                    if (parsed) {
-                        root.sinks = parsed
-                        root._restampDefault(root.defaultSink)
-                    }
-                }
-                sinksProc.buffer = ""
+                root._applyNodeInfo(nodeInfoProc.buffer)
+                nodeInfoProc.buffer = ""
             }
         }
     }
 
-    // -------------------------------------------------------------------------
-    // SINK INPUTS (active streams)
-    // -------------------------------------------------------------------------
-
-    Process {
-        id: sinkInputsProc
-        command: ["sh", "-c", "pactl -f json list sink-inputs 2>/dev/null"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { sinkInputsProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var raw = sinkInputsProc.buffer.trim()
-                if (raw.length > 0) {
-                    var parsed = root._looksJson(raw)
-                        ? root._parseSinkInputsJson(raw)
-                        : root._parseSinkInputsText(raw)
-                    if (parsed) root.sinkInputs = parsed
-                }
-                sinkInputsProc.buffer = ""
-            }
-        }
+    function _pollNodeInfo(sinks, sources, streams) {
+        var ids = []
+        var i
+        for (i = 0; i < sinks.length; i++) ids.push(sinks[i].id)
+        for (i = 0; i < sources.length; i++) ids.push(sources[i].id)
+        for (i = 0; i < streams.length; i++) ids.push(streams[i].id)
+        if (ids.length === 0) return
+        // for n in 53 54 55; do printf '%s=' "$n"; wpctl get-volume "$n"; done
+        var loop = "for n in " + ids.join(" ") + "; do printf '%s=' \"$n\"; wpctl get-volume \"$n\"; done"
+        nodeInfoProc.command = ["sh", "-c", loop]
+        nodeInfoProc.running = true
     }
 
-    // -------------------------------------------------------------------------
-    // DEFAULT SOURCE
-    // -------------------------------------------------------------------------
-
-    Process {
-        id: defaultSourceProc
-        command: ["pactl", "get-default-source"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { defaultSourceProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var s = defaultSourceProc.buffer.trim()
-                if (s.length > 0) {
-                    root.defaultSource = s
-                    root._restampDefaultSource(s)
-                }
-                defaultSourceProc.buffer = ""
-            }
+    function _applyNodeInfo(raw) {
+        // Build id → { volume, mute } from "53=Volume: 0.40 [MUTED]" lines
+        var info = {}
+        var lines = raw.split("\n")
+        for (var i = 0; i < lines.length; i++) {
+            var m = lines[i].match(/^(\d+)=Volume:\s*([\d.]+)\s*(\[MUTED\])?/)
+            if (m) info[m[1]] = { volume: Math.round(parseFloat(m[2]) * 100), mute: !!m[3] }
         }
-    }
+        if (Object.keys(info).length === 0) return
 
-    // -------------------------------------------------------------------------
-    // SOURCES (microphones)
-    // -------------------------------------------------------------------------
-
-    Process {
-        id: sourcesProc
-        command: ["sh", "-c", "pactl -f json list sources 2>/dev/null"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { sourcesProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var raw = sourcesProc.buffer.trim()
-                if (raw.length > 0) {
-                    var parsed = root._looksJson(raw)
-                        ? root._parseSourcesJson(raw)
-                        : root._parseSourcesText(raw)
-                    if (parsed) {
-                        root.sources = parsed
-                        root._restampDefaultSource(root.defaultSource)
-                    }
-                }
-                sourcesProc.buffer = ""
-            }
+        // Rebuild arrays so bindings re-fire; sinks/sources keep status vol (mute
+        // from here), streams take both vol + mute from here.
+        var s2 = []
+        for (var a = 0; a < root.sinks.length; a++) {
+            var s = root.sinks[a]
+            var si = info[s.id]
+            s2.push({ id: s.id, name: s.name, desc: s.desc, isDefault: s.isDefault,
+                      volume: s.volume, mute: si ? si.mute : s.mute })
         }
+        root.sinks = s2
+
+        var src2 = []
+        for (var b = 0; b < root.sources.length; b++) {
+            var sr = root.sources[b]
+            var sri = info[sr.id]
+            src2.push({ id: sr.id, name: sr.name, desc: sr.desc, isDefault: sr.isDefault,
+                        volume: sr.volume, mute: sri ? sri.mute : sr.mute })
+        }
+        root.sources = src2
+
+        var st2 = []
+        for (var c = 0; c < root.sinkInputs.length; c++) {
+            var st = root.sinkInputs[c]
+            var sti = info[st.id]
+            st2.push({ id: st.id, app: st.app,
+                       volume: sti ? sti.volume : st.volume,
+                       mute: sti ? sti.mute : st.mute })
+        }
+        root.sinkInputs = st2
     }
 
     // -------------------------------------------------------------------------
     // POLLING
     // -------------------------------------------------------------------------
-
     Timer {
         interval: 3000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: {
-            if (!defaultSinkProc.running) defaultSinkProc.running = true
-            if (!sinksProc.running) sinksProc.running = true
-            if (!defaultSourceProc.running) defaultSourceProc.running = true
-            if (!sourcesProc.running) sourcesProc.running = true
-        }
-    }
-
-    Timer {
-        interval: 2000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: { if (!sinkInputsProc.running) sinkInputsProc.running = true }
+        onTriggered: { if (!statusProc.running) statusProc.running = true }
     }
 
     function refresh() {
-        if (!defaultSinkProc.running) defaultSinkProc.running = true
-        if (!sinksProc.running) sinksProc.running = true
-        if (!sinkInputsProc.running) sinkInputsProc.running = true
-        if (!defaultSourceProc.running) defaultSourceProc.running = true
-        if (!sourcesProc.running) sourcesProc.running = true
+        if (!statusProc.running) statusProc.running = true
     }
 
     // -------------------------------------------------------------------------
-    // ACTIONS
+    // ACTIONS — all take the numeric node id (bare, no @)
     // -------------------------------------------------------------------------
-
     Process {
         id: actionProc
         property string label: ""
-        property string lastVolume: ""
         onExited: function(code) {
             if (code !== 0) CommandService.pushLog("[audio] " + actionProc.label + " failed (exit " + code + ")", "error")
             root.refresh()
         }
     }
 
-    function _run(verb, args, label) {
+    function _run(cmd, label) {
         actionProc.label = label
-        actionProc.command = ["pactl", verb].concat(args)
+        actionProc.command = cmd
         actionProc.running = true
     }
 
-    function setDefaultSink(name) {
-        if (!name) return
-        _run("set-default-sink", [name], "set default " + name)
-        CommandService.pushLog("[audio] default sink → " + name, "output")
+    function _volArg(pct) {
+        // Accept number (50) or "50%" string from the UI sliders
+        var n = typeof pct === "string" ? parseFloat(pct.replace("%", "")) : Number(pct)
+        if (isNaN(n)) n = 0
+        var v = Math.max(0, Math.min(100, Math.round(n)))
+        return (v / 100).toFixed(2)
     }
 
-    function setSinkVolume(name, pct) {
-        if (!name || !pct) return
-        _run("set-sink-volume", [name, pct], "vol " + name + " " + pct)
+    function setDefaultSink(id) {
+        if (!id) return
+        _run(["wpctl", "set-default", String(id)], "set default sink " + id)
+        CommandService.pushLog("[audio] default sink → " + id, "output")
     }
 
-    function toggleSinkMute(name) {
-        if (!name) return
-        _run("set-sink-mute", [name, "toggle"], "mute " + name)
+    function setSinkVolume(id, pct) {
+        if (id === undefined || id === "" || pct === undefined) return
+        _run(["wpctl", "set-volume", "-l", "1.0", String(id), _volArg(pct)], "sink vol " + id + " " + pct)
+    }
+
+    function toggleSinkMute(id) {
+        if (!id) return
+        _run(["wpctl", "set-mute", String(id), "toggle"], "sink mute " + id)
     }
 
     function setSinkInputVolume(id, pct) {
-        if (!id || !pct) return
-        _run("set-sink-input-volume", [id, pct], "stream vol " + id + " " + pct)
+        if (id === undefined || id === "" || pct === undefined) return
+        _run(["wpctl", "set-volume", "-l", "1.0", String(id), _volArg(pct)], "stream vol " + id + " " + pct)
     }
 
     function toggleSinkInputMute(id) {
         if (!id) return
-        _run("set-sink-input-mute", [id, "toggle"], "stream mute " + id)
+        _run(["wpctl", "set-mute", String(id), "toggle"], "stream mute " + id)
     }
 
-    // Source (microphone) functions
-    function setDefaultSource(name) {
-        if (!name) return
-        _run("set-default-source", [name], "set default source " + name)
-        CommandService.pushLog("[audio] default source → " + name, "output")
+    function setDefaultSource(id) {
+        if (!id) return
+        _run(["wpctl", "set-default", String(id)], "set default source " + id)
+        CommandService.pushLog("[audio] default source → " + id, "output")
     }
 
-    function setSourceVolume(name, pct) {
-        if (!name || !pct) return
-        _run("set-source-volume", [name, pct], "source vol " + name + " " + pct)
+    function setSourceVolume(id, pct) {
+        if (id === undefined || id === "" || pct === undefined) return
+        _run(["wpctl", "set-volume", "-l", "1.0", String(id), _volArg(pct)], "source vol " + id + " " + pct)
     }
 
-    function toggleSourceMute(name) {
-        if (!name) return
-        _run("set-source-mute", [name, "toggle"], "source mute " + name)
+    function toggleSourceMute(id) {
+        if (!id) return
+        _run(["wpctl", "set-mute", String(id), "toggle"], "source mute " + id)
     }
 
     // Default-sink parity with the bar AudioService.
-    function volumeUp()   { setSinkVolume(root.defaultSink, "+5%") }
-    function volumeDown() { setSinkVolume(root.defaultSink, "-5%") }
-    function toggleMute() { toggleSinkMute(root.defaultSink) }
-    function toggleMicMute() { toggleSourceMute(root.defaultSource) }
+    function _find(id, arr) {
+        for (var i = 0; i < arr.length; i++) if (arr[i].id === id) return arr[i]
+        return null
+    }
+    function volumeUp()   { var d = root.defaultSink; var s = d ? _find(d, root.sinks) : null; if (d) setSinkVolume(d, (s ? s.volume : 50) + 5) }
+    function volumeDown() { var d = root.defaultSink; var s = d ? _find(d, root.sinks) : null; if (d) setSinkVolume(d, (s ? s.volume : 50) - 5) }
+    function toggleMute()    { if (root.defaultSink) toggleSinkMute(root.defaultSink) }
+    function toggleMicMute() { if (root.defaultSource) toggleSourceMute(root.defaultSource) }
 
     // -------------------------------------------------------------------------
-    // HELPERS / PARSERS
+    // PARSER — wpctl status tree
+    //   Lines are prefixed with Unicode box-drawing chars (│ ├ └ ─) + spaces,
+    //   so the regex consumes any leading non-digit/non-asterisk chars first.
+    //   Only the Audio section is parsed — wpctl also emits a Video section
+    //   with its own Sinks/Sources that we must NOT collect.
+    //     Sinks:    53. Name [vol: 0.40]    (leading "*" = default)
+    //     Sources:  55. Name [vol: 1.00]
+    //     Streams:  103. AppName            (nested device line has [vol:] — skipped)
     // -------------------------------------------------------------------------
-
-    function _looksJson(s) {
-        var t = (s || "").trim()
-        return t.length > 0 && (t.charAt(0) === "[" || t.charAt(0) === "{")
-    }
-
-    function _volPct(vol) {
-        if (!vol) return 0
-        for (var k in vol) {
-            if (Object.prototype.hasOwnProperty.call(vol, k) && vol[k] && vol[k].value_percent) {
-                return parseInt(vol[k].value_percent) || 0
-            }
-        }
-        for (var k2 in vol) {
-            if (Object.prototype.hasOwnProperty.call(vol, k2) && vol[k2] && typeof vol[k2].value === "number") {
-                return Math.round(vol[k2].value / 65536 * 100)
-            }
-        }
-        return 0
-    }
-
-    function _parseSinksJson(raw) {
-        try {
-            var arr = JSON.parse(raw)
-            var out = []
-            for (var i = 0; i < arr.length; i++) {
-                var s = arr[i]
-                out.push({
-                    index: s.index,
-                    name: s.name || "",
-                    desc: s.description || s.name || "",
-                    isDefault: (s.name === root.defaultSink),
-                    volume: root._volPct(s.volume),
-                    mute: !!s.mute
-                })
-            }
-            return out
-        } catch (e) {
-            CommandService.pushLog("[audio] sinks json parse failed: " + e, "warning")
-            return null
-        }
-    }
-
-    function _parseSinkInputsJson(raw) {
-        try {
-            var arr = JSON.parse(raw)
-            if (!arr) return []
-            var out = []
-            for (var i = 0; i < arr.length; i++) {
-                var si = arr[i]
-                var app = ""
-                try { app = (si.properties && (si.properties["application.name"] || si.properties["media.name"])) || ("stream " + si.index) } catch (e2) { app = "stream " + si.index }
-                out.push({
-                    id: String(si.index),
-                    app: app,
-                    sink: String(si.sink),
-                    volume: root._volPct(si.volume),
-                    mute: !!si.mute
-                })
-            }
-            return out
-        } catch (e) {
-            CommandService.pushLog("[audio] sink-inputs json parse failed: " + e, "warning")
-            return null
-        }
-    }
-
-    // --- text fallback (for builds that ignore -f json) ---
-    function _parseSinksText(raw) {
-        var lines = raw.split("\n")
-        var out = []
-        var cur = null
+    function _parseWpctlStatus(text) {
+        var sinks = [], sources = [], streams = [], section = null, inAudio = false
+        var lines = text.split("\n")
         for (var i = 0; i < lines.length; i++) {
-            var ln = lines[i].trim()
-            if (ln.indexOf("Sink #") === 0) {
-                if (cur) out.push(cur)
-                cur = { index: parseInt(ln.replace("Sink #", "")) || -1, name: "", desc: "", isDefault: false, volume: 0, mute: false }
-            } else if (cur) {
-                if (ln.indexOf("Name:") === 0) { cur.name = ln.substring(5).trim(); cur.isDefault = (cur.name === root.defaultSink) }
-                else if (ln.indexOf("Description:") === 0) cur.desc = ln.substring(12).trim()
-                else if (ln.indexOf("Mute:") === 0) cur.mute = (ln.substring(5).trim() === "yes")
-                else if (ln.indexOf("Volume:") === 0) { var m = ln.match(/(\d+)%/); if (m) cur.volume = parseInt(m[1]) }
+            var line = lines[i]
+            // Top-level section headers are bare words ("Audio", "Video"). Match
+            // the trimmed line exactly — sink names contain "Audio" substring.
+            var trimmed = line.trim()
+            if (trimmed === "Audio")  { inAudio = true;  section = null; continue }
+            if (trimmed === "Video")  { inAudio = false; section = null; continue }
+            if (trimmed === "Settings") { inAudio = false; section = null; continue }
+            if (!inAudio) continue
+
+            if (line.indexOf("Sinks:") !== -1)        { section = "sink";   continue }
+            if (line.indexOf("Sources:") !== -1)      { section = "source"; continue }
+            if (line.indexOf("Streams:") !== -1)      { section = "stream"; continue }
+            if (line.indexOf("Filters:") !== -1
+                || line.indexOf("Devices:") !== -1
+                || line.indexOf("Profile") !== -1)    { section = null; continue }
+            if (!section) continue
+
+            if (section === "stream") {
+                // Top-level stream line: "  103. Chromium" (no [vol:]). Nested
+                // device lines ("       54. Ryzen ... [vol: 0.50]") have [vol:] → skip.
+                if (line.indexOf("[vol:") !== -1) continue
+                var sm = line.match(/^[^0-9]*(\d+)\.\s+(.+)$/)
+                if (sm) streams.push({ id: sm[1], app: sm[2].trim(), volume: 0, mute: false })
+                continue
             }
-        }
-        if (cur) out.push(cur)
-        return out
-    }
 
-    function _parseSinkInputsText(raw) {
-        var lines = raw.split("\n")
-        var out = []
-        var cur = null
-        for (var i = 0; i < lines.length; i++) {
-            var ln = lines[i].trim()
-            if (ln.indexOf("Sink Input #") === 0) {
-                if (cur) out.push(cur)
-                cur = { id: ln.replace("Sink Input #", "").trim(), app: "", sink: "", volume: 0, mute: false }
-            } else if (cur) {
-                if (ln.indexOf("Sink:") === 0) cur.sink = ln.substring(5).trim()
-                else if (ln.indexOf("Mute:") === 0) cur.mute = (ln.substring(5).trim() === "yes")
-                else if (ln.indexOf("Volume:") === 0) { var m = ln.match(/(\d+)%/); if (m) cur.volume = parseInt(m[1]) }
-                else if (ln.indexOf("application.name") === 0) cur.app = ln.split("=")[1].trim().replace(/"/g, "")
+            // Sink / source: consume box-drawing prefix + spaces, optional "*",
+            // then "NN. Name [vol: 0.XX]"
+            var m = line.match(/^[^0-9*]*(\*)?\s*(\d+)\.\s+(.+?)\s+\[vol:\s*([\d.]+)\]/)
+            if (!m) continue
+            var entry = {
+                id: m[2],
+                name: m[3].trim(),
+                desc: m[3].trim(),
+                volume: Math.round(parseFloat(m[4]) * 100),
+                mute: false,
+                isDefault: m[1] === "*"
             }
+            if (section === "sink") sinks.push(entry)
+            else sources.push(entry)
         }
-        if (cur) out.push(cur)
-        return out
-    }
-
-    // Re-stamp isDefault after defaultSink or sinks change.
-    function _restampDefault(name) {
-        if (!name || root.sinks.length === 0) return
-        var changed = false
-        var out = []
-        for (var i = 0; i < root.sinks.length; i++) {
-            var s = root.sinks[i]
-            var def = (s.name === name)
-            if (s.isDefault !== def) changed = true
-            out.push({ index: s.index, name: s.name, desc: s.desc, isDefault: def, volume: s.volume, mute: s.mute })
-        }
-        if (changed) root.sinks = out
-    }
-
-    // Re-stamp isDefault for sources after defaultSource or sources change.
-    function _restampDefaultSource(name) {
-        if (!name || root.sources.length === 0) return
-        var changed = false
-        var out = []
-        for (var i = 0; i < root.sources.length; i++) {
-            var s = root.sources[i]
-            var def = (s.name === name)
-            if (s.isDefault !== def) changed = true
-            out.push({ index: s.index, name: s.name, desc: s.desc, isDefault: def, volume: s.volume, mute: s.mute })
-        }
-        if (changed) root.sources = out
-    }
-
-    // Parse sources from JSON output (same format as sinks)
-    function _parseSourcesJson(raw) {
-        try {
-            var data = JSON.parse(raw)
-            if (!Array.isArray(data)) data = [data]
-            var out = []
-            for (var i = 0; i < data.length; i++) {
-                var s = data[i]
-                var props = s.properties || {}
-                var name = props["device.name"] || props["node.name"] || ""
-                var desc = props["device.description"] || props["device.nick"] || name
-                var vol = props["device.volume"] || 0
-                var mute = props["device.muted"] || false
-
-                // Extract average volume from array if needed
-                if (Array.isArray(vol) && vol.length > 0) {
-                    var sum = 0
-                    for (var j = 0; j < vol.length; j++) sum += vol[j]
-                    vol = Math.round((sum / vol.length) * 100)
-                } else if (!Array.isArray(vol)) {
-                    vol = Math.round(vol * 100)
-                }
-
-                out.push({
-                    index: String(props["device.index"] || i),
-                    name: name,
-                    desc: desc,
-                    isDefault: false,
-                    volume: vol,
-                    mute: mute
-                })
-            }
-            return out
-        } catch (e) {
-            CommandService.pushLog("[audio] sources json parse failed: " + e, "warning")
-            return null
-        }
-    }
-
-    // Parse sources from text output (similar to sinks)
-    function _parseSourcesText(raw) {
-        try {
-            var lines = raw.split("\n")
-            var out = []
-            var cur = null
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i].trim()
-                if (line.indexOf("Source #") === 0) {
-                    if (cur) out.push(cur)
-                    var m = line.match(/Source #(\d+)/)
-                    cur = { index: m ? m[1] : "", name: "", desc: "", volume: 0, mute: false, isDefault: false }
-                } else if (cur) {
-                    if (line.indexOf("Name:") === 0) cur.name = line.substring(5).trim()
-                    else if (line.indexOf("Description:") === 0) cur.desc = line.substring(12).trim()
-                    else if (line.indexOf("Volume:") === 0) {
-                        var m = line.match(/(\d+)%/)
-                        if (m) cur.volume = parseInt(m[1])
-                    }
-                    else if (line.indexOf("Mute:") === 0) cur.mute = (line.indexOf("yes") !== -1)
-                }
-            }
-            if (cur) out.push(cur)
-            return out
-        } catch (e) {
-            CommandService.pushLog("[audio] sources text parse failed: " + e, "warning")
-            return null
-        }
+        return { sinks: sinks, sources: sources, streams: streams }
     }
 }

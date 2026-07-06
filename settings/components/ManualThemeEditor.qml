@@ -38,18 +38,22 @@ Item {
     // Editable tokens (key into ThemeConfig.colors). value is read live in the
     // delegate so swatches + hex fields track the canonical theme reactively.
     readonly property var colorTokens: [
-        { key: "primary",    name: "Primary" },
-        { key: "secondary",  name: "Secondary" },
-        { key: "accent",     name: "Accent" },
-        { key: "success",    name: "Success" },
-        { key: "warning",    name: "Warning" },
-        { key: "error",      name: "Error" },
-        { key: "info",       name: "Info" },
-        { key: "background", name: "Background" },
-        { key: "surface",    name: "Surface" },
-        { key: "text",       name: "Text" },
-        { key: "textDim",    name: "Text Dim" },
-        { key: "border",     name: "Border" }
+        { key: "background",       name: "Background" },
+        { key: "surface",          name: "Surface" },
+        { key: "surfaceVariant",   name: "Surf. Variant" },
+        { key: "surfaceContainer", name: "Surf. Container" },
+        { key: "text",             name: "Text" },
+        { key: "textDim",          name: "Text Dim" },
+        { key: "border",           name: "Border" },
+        { key: "outline",          name: "Outline" },
+        { key: "outlineVariant",   name: "Outl. Variant" },
+        { key: "primary",          name: "Primary" },
+        { key: "secondary",        name: "Secondary" },
+        { key: "accent",           name: "Accent" },
+        { key: "success",          name: "Success" },
+        { key: "warning",          name: "Warning" },
+        { key: "error",            name: "Error" },
+        { key: "info",             name: "Info" }
     ]
 
     // -------------------------------------------------------------------------
@@ -160,23 +164,128 @@ Item {
             wrapMode: Text.WordWrap
         }
 
-        // Token grid — scrollable + 2 columns so it fits the window without
-        // overflowing. Swatch (click → picker) + hex field (type → apply).
-        Flickable {
-            id: tokenFlick
+        // ── STYLIX STRIP ── palette-from-wallpaper actions, in one place.
+        // APPLY WALLPAPER = rebuild (regenerates the seed from the current
+        //   wallpaper via Stylix, ~30-60s, passwordless via polkit).
+        // LOAD STYLIX = pull the EXISTING seed into the editor live so the
+        //   extracted colors populate every field for tweaking.
+        Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            contentWidth: tokenFlick.width
-            contentHeight: tokenGrid.height
+            Layout.preferredHeight: 32
+            color: Config.ThemeConfig.colors.surfaceContainer
+            border.color: Config.ThemeConfig.colors.border
+            border.width: 1
 
-            GridLayout {
-                id: tokenGrid
-                width: tokenFlick.width
-                columns: 2
-                columnSpacing: 10
-                rowSpacing: 6
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 8
+                spacing: 10
+
+                // Status dot + label
+                Rectangle {
+                    Layout.preferredWidth: 8
+                    Layout.preferredHeight: 8
+                    radius: 4
+                    color: Services.ThemeService.isRegenerating
+                           ? Config.ThemeConfig.colors.warning
+                           : Config.ThemeConfig.colors.success
+                }
+
+                Text {
+                    text: Services.ThemeService.isRegenerating
+                          ? "REBUILDING…"
+                          : (Config.ThemeConfig.metadata.source === "stylix"
+                              ? "STYLIX SEED ACTIVE"
+                              : "STYLIX SEED READY")
+                    font.pixelSize: 9
+                    font.bold: true
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.text
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // APPLY WALLPAPER — rebuild (disabled while regenerating)
+                Rectangle {
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 22
+                    color: applyWallpaperArea.containsMouse && !Services.ThemeService.isRegenerating
+                           ? Config.ThemeConfig.colors.secondary : "transparent"
+                    border.color: Services.ThemeService.isRegenerating
+                                  ? Config.ThemeConfig.colors.border
+                                  : Config.ThemeConfig.colors.secondary
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: Services.ThemeService.isRegenerating ? "…" : "APPLY WALLPAPER"
+                        font.pixelSize: 9; font.bold: true
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: (applyWallpaperArea.containsMouse && !Services.ThemeService.isRegenerating)
+                               ? Config.ThemeConfig.colors.background
+                               : (Services.ThemeService.isRegenerating
+                                   ? Config.ThemeConfig.colors.textDim
+                                   : Config.ThemeConfig.colors.secondary)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+                    MouseArea {
+                        id: applyWallpaperArea
+                        anchors.fill: parent
+                        enabled: !Services.ThemeService.isRegenerating
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ThemeService.applyDynamicTheme(Services.WallpaperService.currentWallpaper)
+                    }
+                }
+
+                // LOAD STYLIX — pull existing seed into the editor live
+                Rectangle {
+                    Layout.preferredWidth: 92
+                    Layout.preferredHeight: 22
+                    color: loadStylixArea.containsMouse ? Config.ThemeConfig.colors.secondary : "transparent"
+                    border.color: Config.ThemeConfig.colors.secondary
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "LOAD STYLIX"
+                        font.pixelSize: 9; font.bold: true
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: loadStylixArea.containsMouse ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.secondary
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+                    MouseArea {
+                        id: loadStylixArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ThemeService.applyStylixSeedNow()
+                    }
+                }
+            }
+        }
+
+        // Rebuild error display (visible only when a rebuild fails)
+        Text {
+            Layout.fillWidth: true
+            visible: Services.ThemeService.regenFailed && Services.ThemeService.regenError !== ""
+            text: "⚠ " + Services.ThemeService.regenError
+            font.pixelSize: 9
+            font.family: Config.SettingsConfig.fontFamily
+            color: Config.ThemeConfig.colors.error
+            wrapMode: Text.Wrap
+        }
+
+        // Token grid — 4 columns, no Flickable. The 16-token grid is only ~4
+        // rows tall, so it displays inline; this stops the saved-schemes
+        // section below from stealing its height and forcing a scroll.
+        GridLayout {
+            id: tokenGrid
+            Layout.fillWidth: true
+            columns: 4
+            columnSpacing: 10
+            rowSpacing: 6
 
                 Repeater {
                     model: root.colorTokens
@@ -210,7 +319,7 @@ Item {
 
                         // Hex text entry (type → apply on commit)
                         Rectangle {
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: 80
                             Layout.preferredHeight: 20
                             color: Config.ThemeConfig.colors.background
                             border.color: Config.ThemeConfig.colors.border
@@ -240,10 +349,9 @@ Item {
                     }
                 }
             }
-        }
 
-        // ── Save current scheme ──
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant; Layout.topMargin: 6; Layout.bottomMargin: 8 }
+        // ── Save current scheme + reset (one row to save vertical space) ──
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         RowLayout {
             Layout.fillWidth: true
@@ -270,7 +378,7 @@ Item {
             }
 
             Rectangle {
-                Layout.preferredWidth: 64
+                Layout.preferredWidth: 60
                 Layout.preferredHeight: 24
                 color: saveSchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : "transparent"
                 border.color: Config.ThemeConfig.colors.secondary
@@ -295,84 +403,132 @@ Item {
                     }
                 }
             }
-        }
 
-        // ── Saved schemes (max 5) ──
-        Repeater {
-            model: Services.ThemeService.customThemes
-            delegate: RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Text {
-                    text: modelData.name
-                    color: Config.ThemeConfig.colors.text
-                    font.pixelSize: 9
-                    font.family: Config.SettingsConfig.fontFamily
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                Row {
-                    spacing: 2
-                    Layout.alignment: Qt.AlignVCenter
-                    Repeater {
-                        model: [modelData.colors.secondary, modelData.colors.primary, modelData.colors.accent]
-                        delegate: Rectangle { width: 10; height: 10; color: modelData }
-                    }
-                }
+            // Reset — moved up to share the save row so it can't be clipped
+            Rectangle {
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 24
+                color: resetSchemeArea.containsMouse ? Config.ThemeConfig.colors.surfaceVariant : "transparent"
+                border.color: Config.ThemeConfig.colors.border
+                border.width: 1
+                Behavior on color { ColorAnimation { duration: 120 } }
 
                 Text {
-                    text: "APPLY"
-                    color: applySchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                    anchors.centerIn: parent
+                    text: "RESET TO DEFAULT"
                     font.pixelSize: 8; font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
+                    color: resetSchemeArea.containsMouse ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                     Behavior on color { ColorAnimation { duration: 120 } }
-                    MouseArea {
-                        id: applySchemeArea
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
-                    }
                 }
-
-                Text {
-                    text: "✕"
-                    color: delSchemeArea.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 11
-                    font.family: Config.SettingsConfig.fontFamily
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    MouseArea {
-                        id: delSchemeArea
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
-                    }
+                MouseArea {
+                    id: resetSchemeArea
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
                 }
             }
         }
 
-        // Reset
-        Rectangle {
-            Layout.alignment: Qt.AlignRight
-            Layout.preferredWidth: 140
-            Layout.preferredHeight: 28
-            color: "transparent"
-            border.color: Config.ThemeConfig.colors.border
-            border.width: 1
+        // ── Saved schemes (max 5) — compact horizontal chips that wrap.
+        // Up to 5 fit on one row (~168px each × 5 = 840px); wraps to a 2nd
+        // row only if the editor narrows. Far more compact than vertical rows.
+        Text {
+            Layout.fillWidth: true
+            visible: Services.ThemeService.customThemes.length > 0
+            text: "SAVED (" + Services.ThemeService.customThemes.length + "/5)"
+            font.pixelSize: 8
+            font.bold: true
+            font.family: Config.SettingsConfig.fontFamily
+            color: Config.ThemeConfig.colors.textDim
+        }
 
-            Text {
-                anchors.centerIn: parent
-                text: "RESET TO DEFAULT"
-                font.pixelSize: 9
-                font.family: Config.SettingsConfig.fontFamily
-                color: Config.ThemeConfig.colors.textDim
-            }
+        Flow {
+            Layout.fillWidth: true
+            spacing: 6
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
+            Repeater {
+                model: Services.ThemeService.customThemes
+                delegate: Rectangle {
+                    width: 198
+                    height: 26
+                    color: Config.ThemeConfig.colors.background
+                    border.color: Config.ThemeConfig.colors.border
+                    border.width: 1
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        // 3-swatch preview
+                        Row {
+                            spacing: 2
+                            Repeater {
+                                model: [modelData.colors.secondary, modelData.colors.primary, modelData.colors.accent]
+                                delegate: Rectangle { width: 10; height: 10; color: modelData; y: 3 }
+                            }
+                        }
+
+                        Text {
+                            text: modelData.name
+                            color: Config.ThemeConfig.colors.text
+                            font.pixelSize: 9
+                            font.family: Config.SettingsConfig.fontFamily
+                            width: 44
+                            elide: Text.ElideRight
+                        }
+
+                        // EDIT — load this palette into the editor for tweaking.
+                        // Applies the colors live AND pre-fills the name field so
+                        // the next SAVE updates this scheme in place (saveCustomTheme
+                        // dedupes by name) rather than creating a duplicate.
+                        Text {
+                            text: "EDIT"
+                            color: editSchemeArea.containsMouse ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 8; font.bold: true
+                            font.family: Config.SettingsConfig.fontFamily
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            MouseArea {
+                                id: editSchemeArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    Services.ThemeService.applyCustomTheme(modelData.name)
+                                    schemeNameInput.text = modelData.name
+                                    schemeNameInput.forceActiveFocus()
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "APPLY"
+                            color: applySchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 8; font.bold: true
+                            font.family: Config.SettingsConfig.fontFamily
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            MouseArea {
+                                id: applySchemeArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
+                            }
+                        }
+
+                        Text {
+                            text: "✕"
+                            color: delSchemeArea.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 11
+                            font.family: Config.SettingsConfig.fontFamily
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            MouseArea {
+                                id: delSchemeArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -594,7 +750,7 @@ Item {
                             font.pixelSize: 9
                             font.family: Config.SettingsConfig.fontFamily
                             font.bold: true
-                            color: "#000000"
+                            color: Config.ThemeConfig.colors.background
                         }
                         MouseArea {
                             anchors.fill: parent

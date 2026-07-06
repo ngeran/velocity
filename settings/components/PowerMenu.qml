@@ -2,13 +2,23 @@
 // FILE: PowerMenu.qml
 // PROJECT: Obsidian Core — Quickshell Desktop Environment
 // PURPOSE: Floating power menu overlay — Shutdown / Restart / Suspend / Lock
-// DESIGN: 680×680 centered panel, 2×2 action grid, circular clock hub, scanline
+// DESIGN: Screen-proportional square panel, 2×2 action grid, circular uptime hub
 // LAYER: WlrLayerShell.Overlay — sits above all windows, exclusive keyboard
 // TRIGGER: Bind to keybind in your shell root (e.g. Meta+Shift+P)
 // AUTHOR: ngeran
-// VERSION: 0.1.0
-// UPDATED: 2025-06
+// VERSION: 0.2.0
+// UPDATED: 2026-07
 // =============================================================================
+//
+// CHANGELOG (0.1.0 -> 0.2.0):
+//   - Panel size is now derived from Screen.width/height instead of a fixed
+//     680x680 rect, so it no longer covers small/laptop displays.
+//   - Removed the live SYSTEM_TIME digital clock from the central hub.
+//   - Central hub now shows SYSTEM_UPTIME (previously only in the footer).
+//   - Removed the now-redundant footer (uptime moved into the hub).
+//   - Font sizes / spacing / radii scale off the computed panel size.
+//   - Colors are untouched — everything still resolves through
+//     Config.ThemeConfig.colors so the palette generator stays in control.
 //
 // DEPENDENCIES:
 //   - Quickshell (PanelWindow, WlrLayerShell, ShellConstants)
@@ -19,15 +29,13 @@
 //   [1]  Imports
 //   [2]  PanelWindow / Layer-shell Setup
 //   [3]  Background Overlay Dimmer
-//   [4]  Main Container (680×680)
+//   [4]  Main Container (proportional to screen size)
 //   [5]  Header: Branding
 //   [6]  Scanline Animation
 //   [7]  Power Grid: 2×2 Tile Layout
 //   [8]  PowerTile Component (inline)
-//   [9]  Central Clock Hub
-//   [10] Footer: System Uptime
-//   [11] Clock Timer Logic
-//   [12] System Command Execution
+//   [9]  Central Uptime Hub
+//   [10] System Command Execution
 // =============================================================================
 
 // -- [1] Imports --------------------------------------------------------------
@@ -45,6 +53,17 @@ PanelWindow {
 
     // Visible state — toggled externally by your shell root keybind
     property bool showing: false
+
+    // -- Proportional sizing -------------------------------------------------
+    // Panel is a square, sized as a fraction of the smaller screen dimension,
+    // clamped so it stays comfortable on both small laptop panels and large
+    // desktop monitors (e.g. your 3840x2160 QD-OLED).
+    readonly property real screenMinDim: Math.min(Screen.width, Screen.height)
+    readonly property int  panelSize:    Math.round(Math.max(360, Math.min(520, screenMinDim * 0.42)))
+
+    // Scale factor relative to the original 680px design baseline — used to
+    // keep fonts/spacing/radii proportional instead of just shrinking the box.
+    readonly property real scale: panelSize / 680
 
     // Layer-shell config (Quickshell 0.3.0 direct properties — NOT WlrLayerShell.* attached):
     // render above normal windows + accept keyboard input (Escape to close).
@@ -80,11 +99,11 @@ PanelWindow {
         }
     }
 
-    // -- [4] Main Container (680×680) -----------------------------------------
+    // -- [4] Main Container (proportional to screen size) --------------------
     Rectangle {
         id: container
-        width:  680
-        height: 680
+        width:  root.panelSize
+        height: root.panelSize
         anchors.centerIn: parent
 
         color:  Config.ThemeConfig.colors.surface
@@ -105,9 +124,9 @@ PanelWindow {
                 top:   parent.top
                 left:  parent.left
                 right: parent.right
-                topMargin:  24
-                leftMargin: 24
-                rightMargin: 24
+                topMargin:  Math.round(20 * root.scale)
+                leftMargin: Math.round(20 * root.scale)
+                rightMargin: Math.round(20 * root.scale)
             }
             spacing: 0
 
@@ -117,7 +136,7 @@ PanelWindow {
                 Text {
                     text: "Power Menu"
                     font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   18
+                    font.pixelSize:   Math.round(16 * root.scale)
                     font.weight:      Font.DemiBold
                     font.letterSpacing: -0.18
                     color: Config.ThemeConfig.colors.text
@@ -151,17 +170,17 @@ PanelWindow {
         GridLayout {
             id: powerGrid
             columns: 2
-            rowSpacing:    16
-            columnSpacing: 16
+            rowSpacing:    Math.round(14 * root.scale)
+            columnSpacing: Math.round(14 * root.scale)
             anchors {
                 top:    header.bottom
-                bottom: footer.top
+                bottom: parent.bottom
                 left:   parent.left
                 right:  parent.right
-                topMargin:    16
-                bottomMargin: 16
-                leftMargin:   24
-                rightMargin:  24
+                topMargin:    Math.round(14 * root.scale)
+                bottomMargin: Math.round(20 * root.scale)
+                leftMargin:   Math.round(20 * root.scale)
+                rightMargin:  Math.round(20 * root.scale)
             }
 
             // -- [8] PowerTile Instances ---------------------------------------
@@ -189,7 +208,7 @@ PanelWindow {
             Components.PowerTile {
                 Layout.fillWidth:  true
                 Layout.fillHeight: true
-                iconText:  "🔒"
+                iconText:  "\uf023"
                 labelText: "LOCK"
                 onActivated: {
                     systemCmd.execute("hyprlock")
@@ -198,12 +217,12 @@ PanelWindow {
             }
         }
 
-        // -- [9] Central Clock Hub --------------------------------------------
+        // -- [9] Central Uptime Hub --------------------------------------------
         Rectangle {
-            id: clockHub
-            width:  200
-            height: 200
-            radius: 100    // full circle
+            id: uptimeHub
+            width:  Math.round(160 * root.scale)
+            height: Math.round(160 * root.scale)
+            radius: width / 2    // full circle
             anchors.centerIn: powerGrid
 
             color:  Config.ThemeConfig.colors.surface
@@ -216,26 +235,30 @@ PanelWindow {
 
             ColumnLayout {
                 anchors.centerIn: parent
-                spacing: 4
+                spacing: Math.round(4 * root.scale)
+                width: parent.width * 0.82
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "SYSTEM_TIME"
+                    text: "SYSTEM_UPTIME"
                     font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   11
+                    font.pixelSize:   Math.max(8, Math.round(9 * root.scale))
                     font.weight:      Font.DemiBold
-                    font.letterSpacing: 5.5
+                    font.letterSpacing: 2.5
                     color: Config.ThemeConfig.colors.outline
                 }
 
                 Text {
-                    id: clockDisplay
+                    id: uptimeDisplay
                     Layout.alignment: Qt.AlignHCenter
-                    text: "00:00:00"
+                    Layout.fillWidth: true
+                    text: "--"
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
                     font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   28
+                    font.pixelSize:   Math.max(11, Math.round(15 * root.scale))
                     font.weight:      Font.ExtraBold
-                    font.letterSpacing: -1
+                    font.letterSpacing: -0.5
                     color: Config.ThemeConfig.colors.text
                 }
 
@@ -259,74 +282,11 @@ PanelWindow {
                 }
             }
         }
-
-        // -- [10] Footer: System Uptime -----------------------------------------
-        RowLayout {
-            id: footer
-            anchors {
-                bottom: parent.bottom
-                left:   parent.left
-                right:  parent.right
-                bottomMargin: 24
-                leftMargin:   24
-                rightMargin:  24
-            }
-
-            ColumnLayout {
-                spacing: 4
-                Text {
-                    text: "SYSTEM_UPTIME"
-                    font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   11
-                    font.letterSpacing: 3
-                    color: Config.ThemeConfig.colors.outline
-                }
-                Text {
-                    id: uptimeDisplay
-                    text: "--"
-                    font.family:      "JetBrainsMono Nerd Font"
-                    font.pixelSize:   13
-                    font.weight:      Font.DemiBold
-                    font.letterSpacing: 0.5
-                    color: Config.ThemeConfig.colors.text
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-        }
-
-        // Top border line above footer
-        Rectangle {
-            anchors {
-                bottom: footer.top
-                left:   parent.left
-                right:  parent.right
-                bottomMargin: 8
-                leftMargin:   24
-                rightMargin:  24
-            }
-            height: 1
-            color:  Config.ThemeConfig.colors.outlineVariant
-        }
     }
 
-    // -- [11] Clock Timer Logic -----------------------------------------------
-    Timer {
-        interval: 1000
-        running:  root.showing
-        repeat:   true
-        triggeredOnStart: true
-        onTriggered: {
-            var now = new Date()
-            var h = String(now.getHours()).padStart(2, '0')
-            var m = String(now.getMinutes()).padStart(2, '0')
-            var s = String(now.getSeconds()).padStart(2, '0')
-            clockDisplay.text = h + ":" + m + ":" + s
-        }
-    }
-
-    // -- [12] System Command Execution ----------------------------------------
-    // Reads real system uptime from /proc/uptime (independent of the live clock above)
+    // -- [10] System Command Execution ----------------------------------------
+    // Reads real system uptime from /proc/uptime, refreshed every 30s while
+    // the menu is open, and rendered inside the central hub above.
     Timer {
         id: uptimeTimer
         interval: 30000
@@ -338,12 +298,20 @@ PanelWindow {
 
     Process {
         id: uptimeProbe
-        command: ["bash", "-c", "uptime -p"]
+        // Read /proc/uptime directly and format it ourselves — avoids relying
+        // on `uptime -p` support, which varies across procps/busybox builds.
+        command: ["bash", "-c",
+            "s=$(cut -d. -f1 /proc/uptime); " +
+            "d=$((s/86400)); h=$(((s%86400)/3600)); m=$(((s%3600)/60)); " +
+            "if [ $d -gt 0 ]; then printf '%dd %dh %dm' $d $h $m; " +
+            "elif [ $h -gt 0 ]; then printf '%dh %dm' $h $m; " +
+            "else printf '%dm' $m; fi"
+        ]
         stdout: SplitParser {
             onRead: data => {
-                // "up 3 hours, 12 minutes" -> "3 HOURS, 12 MINUTES"
-                var t = data.trim().replace(/^up\s+/i, "")
-                uptimeDisplay.text = t.toUpperCase()
+                var t = data.trim()
+                if (t.length > 0)
+                    uptimeDisplay.text = t.toUpperCase()
             }
         }
     }

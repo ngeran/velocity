@@ -22,7 +22,7 @@ QtObject {
     // =========================================================================
 
     // Master debug flag — gates all debug logging
-    property bool debugEnabled: false
+    property bool debugEnabled: true
 
     // Specific debug categories (for granular control)
     property bool debugTheme: debugEnabled    // Theme-related logs

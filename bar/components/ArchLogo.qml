@@ -63,23 +63,14 @@ Item {
             "--class", "fastfetch-float",
             "--title", "System Info",
             
-            // Clean UI
+            // UI Tweaks
             "-o", "shell_integration=disabled",
-            "-o", "window_padding_width=20",
-            
-            // Hide Cursor
-            "-o", "cursor_blink_interval=0",
-            "-o", "cursor_shape=block",
-            "-o", "cursor_text_color=background",
-            
-            // Styling
-            "-o", "font_size=10",
-            "-o", "background_opacity=0.9",
+            "-o", "window_padding_width=25",
             "-o", "confirm_os_window_close=0",
+            "-o", "cursor_blink_interval=0",
             
-            // Run fastfetch directly
-            "--hold",
-            "fastfetch"
+            // Call the wrapper instead of fastfetch directly
+            "bash", "/home/nikos/.config/hypr/scripts/fastfetch_wrapper.sh"
         ]
     } 
 }

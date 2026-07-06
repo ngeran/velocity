@@ -47,7 +47,7 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Services.AudioControlService.setDefaultSink(row.sink.name)
+                onClicked: Services.AudioControlService.setDefaultSink(row.sink.id)
             }
         }
 
@@ -72,7 +72,7 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Services.AudioControlService.toggleSinkMute(row.sink.name)
+                onClicked: Services.AudioControlService.toggleSinkMute(row.sink.id)
             }
         }
 
@@ -98,7 +98,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         var pct = Math.round(Math.max(0, Math.min(1, mouseX / volTrack.width)) * 100)
-                        Services.AudioControlService.setSinkVolume(row.sink.name, pct + "%")
+                        Services.AudioControlService.setSinkVolume(row.sink.id, pct + "%")
                     }
                 }
             }

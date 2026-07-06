@@ -63,7 +63,7 @@ Item {
     // THEME FILE PATH
     // =========================================================================
 
-    readonly property string themeFilePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.cache/theme/colors.json").replace("file://", "")
+    readonly property string themeFilePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.cache/theme/colors.json").replace("file://", "")
     property string lastCachedData: ""
 
     // =========================================================================
@@ -156,22 +156,39 @@ Item {
 
     property string lastCachedTimestamp: ""
 
-    // FileView watcher for instant theme sync when file changes
-    property var cacheWatcher: FileView {
-        path: root.themeFilePath
+    // Polling timer for theme sync (FileView.onFileChanged doesn't fire reliably)
+    Timer {
+        id: cachePoller
+        interval: 1000  // Check every 1 second
+        running: true
+        repeat: true
+        onTriggered: themePoller.running = true
+    }
 
-        onFileChanged: {
-            // FileView.text is a METHOD (not a property) in this Quickshell build
-            var raw = cacheWatcher.text()
-            if (!raw || raw.trim() === "") return
-
+    // Poller process for checking theme file changes
+    Process {
+        id: themePoller
+        command: ["cat", root.themeFilePath]
+        property string pollBuffer: ""
+        stdout: SplitParser {
+            onRead: function(data) {
+                themePoller.pollBuffer += data
+            }
+        }
+        onExited: function(code) {
+            if (!themePoller.pollBuffer || themePoller.pollBuffer.trim() === "") return
             try {
-                var newData = raw.trim()
-                var data = JSON.parse(newData)
+                var newData = themePoller.pollBuffer.trim()
+                // Check if data actually changed
+                if (newData === root.lastCachedData) {
+                    themePoller.pollBuffer = ""
+                    return
+                }
 
-                // Check if data actually changed by comparing timestamps
-                var newTimestamp = (data.metadata && data.metadata.applied) ? data.metadata.applied : ""
+                var dataObj = JSON.parse(newData)
+                var newTimestamp = (dataObj.metadata && dataObj.metadata.applied) ? dataObj.metadata.applied : ""
                 if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
+                    themePoller.pollBuffer = ""
                     return  // No actual change
                 }
 
@@ -179,10 +196,11 @@ Item {
 
                 root.lastCachedTimestamp = newTimestamp
                 root.lastCachedData = newData
-                root.applyTheme(data)
+                root.applyTheme(dataObj)
             } catch (e) {
-                console.warn("[Bar ThemeConfig] colors.json parse error:", e)
+                // Silent retry on parse error (file might be mid-write)
             }
+            themePoller.pollBuffer = ""
         }
     }
 

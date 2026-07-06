@@ -11,6 +11,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 import "../config" as Config
 
@@ -34,13 +35,14 @@ Item {
     property int clockOffset: 0                 // UTC offset in hours (-12 to +14)
 
     // Wallpaper settings
-    property bool syncThemeToWallpaper: false    // Auto-regenerate theme when wallpaper changes
+    property bool syncThemeToWallpaper: false      // Auto-regenerate theme when wallpaper changes (legacy; now maps to rebuildOnWallpaperChange)
+    property bool rebuildOnWallpaperChange: false   // Trigger Stylix rebuild when wallpaper changes (requires pkexec)
 
     // =========================================================================
     // CONFIG PERSISTENCE
     // =========================================================================
 
-    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
+    property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString()
                                        .replace("file://", "") + "/quickshell/settings-config.json"
 
     // Process for saving config
@@ -97,7 +99,8 @@ Item {
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
-            syncThemeToWallpaper: root.syncThemeToWallpaper
+            syncThemeToWallpaper: root.syncThemeToWallpaper,
+            rebuildOnWallpaperChange: root.rebuildOnWallpaperChange
         }
 
         var json = JSON.stringify(config, null, 2)
@@ -140,6 +143,9 @@ Item {
         if (data.syncThemeToWallpaper !== undefined) {
             root.syncThemeToWallpaper = data.syncThemeToWallpaper
         }
+        if (data.rebuildOnWallpaperChange !== undefined) {
+            root.rebuildOnWallpaperChange = data.rebuildOnWallpaperChange
+        }
     }
 
     function saveBarConfig() {
@@ -151,7 +157,7 @@ Item {
             clockOffset: root.clockOffset
         }
         var json = JSON.stringify(barConfig, null, 2)
-        var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).replace("file://", "") + "/quickshell/bar-config.json"
+        var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
         var barWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
         barWriter.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > " + barConfigPath]
         barWriter.running = true

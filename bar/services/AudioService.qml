@@ -11,11 +11,12 @@ Scope {
     property bool syncLock: false
 
     // -------------------------------------------------------------------------
-    // STATUS PROBE — polls pactl for volume + mute state
+    // STATUS PROBE — polls wpctl for volume + mute state
+    // Output: "Volume: 0.40" (+ " [MUTED]" when muted)
     // -------------------------------------------------------------------------
     Process {
         id: statusProc
-        command: ["sh", "-c", "pactl get-sink-volume @DEFAULT_SINK@; pactl get-sink-mute @DEFAULT_SINK@"]
+        command: ["wpctl", "get-volume", "@DEFAULT_SINK@"]
         property string buffer: ""
         stdout: SplitParser {
             onRead: data => {
@@ -25,10 +26,10 @@ Scope {
         }
         onRunningChanged: {
             if (!running) {
-                const volMatch = statusProc.buffer.match(/(\d+)%/)
-                if (volMatch) root.volume = parseInt(volMatch[1])
-                if (statusProc.buffer.includes("Mute:"))
-                    root.muted = statusProc.buffer.includes("Mute: yes")
+                // wpctl prints "Volume: 0.40" (decimal 0-1); [MUTED] if muted
+                const volMatch = statusProc.buffer.match(/Volume:\s*([\d.]+)/)
+                if (volMatch) root.volume = Math.round(parseFloat(volMatch[1]) * 100)
+                root.muted = statusProc.buffer.indexOf("[MUTED]") !== -1
                 statusProc.buffer = ""
             }
         }
@@ -43,7 +44,7 @@ Scope {
         }
     }
 
-    // Lock expires after 1.5 s — enough for pactl to settle
+    // Lock expires after 1.5 s — enough for wpctl to settle
     Timer {
         id: lockTimeout
         interval: 1500
@@ -54,8 +55,7 @@ Scope {
     }
 
     // -------------------------------------------------------------------------
-    // VOLUME PROCESS — pactl set-sink-volume
-    // command is set dynamically before running = true
+    // VOLUME PROCESS — wpctl set-volume (command set dynamically before running)
     // -------------------------------------------------------------------------
     Process {
         id: volumeProc
@@ -67,11 +67,11 @@ Scope {
     }
 
     // -------------------------------------------------------------------------
-    // MUTE PROCESS — pactl set-sink-mute toggle
+    // MUTE PROCESS — wpctl set-mute toggle
     // -------------------------------------------------------------------------
     Process {
         id: muteProc
-        command: ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"]
+        command: ["wpctl", "set-mute", "@DEFAULT_SINK@", "toggle"]
         property string buffer: ""
         stderr: SplitParser { onRead: data => { muteProc.buffer += data } }
         onRunningChanged: {
@@ -87,7 +87,8 @@ Scope {
         root.syncLock = true
         lockTimeout.restart()
         root.volume = Math.max(0, Math.min(100, Math.round(val)))
-        volumeProc.command = ["pactl", "set-sink-volume", "@DEFAULT_SINK@", root.volume + "%"]
+        // wpctl takes a decimal fraction (0.00-1.00); -l 1.0 caps at 100%
+        volumeProc.command = ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_SINK@", (root.volume / 100).toFixed(2)]
         volumeProc.running = true
     }
 
