@@ -371,7 +371,7 @@ Item {
     function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
         if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme CALLED ===")
         if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp)
+        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp_unused)
 
         if (themeService.isRegenerating) {
             if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Already regenerating, skipping")
@@ -396,7 +396,7 @@ Item {
         rebuildRunner.buffer = ""
 
         themeService.isRegenerating = true;
-        themeService.rebuildTimeout.restart();
+        rebuildTimeout.restart();
 
         // Strip file:// prefix if present
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
@@ -717,5 +717,35 @@ Item {
         makoWriter.command = ["sh", "-c", "mkdir -p ~/.config/mako && printf '%s' '" + makoContent + "' > " + makoConfig + " && makoctl reload"];
         makoWriter.running = true;
         console.log("[ThemeService] Applied mako theme");
+
+        // nvim (base16): write a Lua table the nvim-base16 plugin reads.
+        // Lives in ~/.cache/theme (runtime-owned, like colors.json) — NOT in
+        // ~/.config/nvim (whose init.lua is a home-manager nix-store symlink).
+        // nvim dofile()s this on launch + on FocusGained for live reload.
+        // base16 has 16 slots; quickshell tokens map 11 directly + 5 fallbacks
+        // (base04/06/07/09/0F — see ~/.omni-nix/home/stylix.nix for the inverse).
+        var nvimLua = "return {\n" +
+            "  base00 = " + JSON.stringify(colors.background) + ",\n" +
+            "  base01 = " + JSON.stringify(colors.surface) + ",\n" +
+            "  base02 = " + JSON.stringify(colors.surfaceVariant) + ",\n" +
+            "  base03 = " + JSON.stringify(colors.textDim) + ",\n" +
+            "  base04 = " + JSON.stringify(colors.textDim) + ",\n" +   // fallback (mid comment)
+            "  base05 = " + JSON.stringify(colors.text) + ",\n" +
+            "  base06 = " + JSON.stringify(colors.text) + ",\n" +      // fallback (light fg)
+            "  base07 = " + JSON.stringify(colors.text) + ",\n" +      // fallback (lightest fg)
+            "  base08 = " + JSON.stringify(colors.error) + ",\n" +
+            "  base09 = " + JSON.stringify(colors.warning) + ",\n" +   // fallback (orange-ish)
+            "  base0A = " + JSON.stringify(colors.warning) + ",\n" +
+            "  base0B = " + JSON.stringify(colors.success) + ",\n" +
+            "  base0C = " + JSON.stringify(colors.secondary) + ",\n" +
+            "  base0D = " + JSON.stringify(colors.primary) + ",\n" +
+            "  base0E = " + JSON.stringify(colors.accent) + ",\n" +
+            "  base0F = " + JSON.stringify(colors.error) + "\n" +       // fallback (deprecated slot)
+            "}";
+        var nvimPath = themeService.homeDir + "/.cache/theme/nvim-base16.lua";
+        var nvimWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        nvimWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + nvimLua + "' > " + nvimPath];
+        nvimWriter.running = true;
+        console.log("[ThemeService] Wrote nvim base16 theme");
     }
 }
