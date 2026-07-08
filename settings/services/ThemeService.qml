@@ -700,23 +700,8 @@ Item {
         hyprlandWriter.running = true;
         console.log("[ThemeService] Applied Hyprland border colors + reloaded");
 
-        // mako notification daemon theming (write config and reload)
-        // mako uses simple color definitions in its config
-        var makoConfig = themeService.homeDir + "/.config/mako/config";
-        var makoContent =
-            "# Managed by QuickShell ThemeService\n" +
-            "default-timeout=10\n" +
-            "background-color=" + colors.background + "\n" +
-            "text-color=" + colors.text + "\n" +
-            "border-color=" + colors.border + "\n" +
-            "progress-color=" + colors.primary + "\n" +
-            "background-color-d=" + colors.surface + "\n" +
-            "text-color-d=" + colors.textDim + "\n" +
-            "border-color-d=" + colors.outlineVariant + "\n";
-        var makoWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        makoWriter.command = ["sh", "-c", "mkdir -p ~/.config/mako && printf '%s' '" + makoContent + "' > " + makoConfig + " && makoctl reload"];
-        makoWriter.running = true;
-        console.log("[ThemeService] Applied mako theme");
+        // NOTE: mako was removed — notifications are handled by the Quickshell
+        // Notification Center (bar/services/NotificationService.qml), fed via IPC.
 
         // nvim (base16): write a Lua table the nvim-base16 plugin reads.
         // Lives in ~/.cache/theme (runtime-owned, like colors.json) — NOT in

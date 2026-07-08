@@ -109,6 +109,13 @@ ShellRoot {
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
 
+            Components.NotificationButton {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 2
+                isActive: notificationCenter.shown
+                onCenterRequested: notificationCenter.toggle()
+            }
+
             Item {
                 width: Config.BarConfig.barPadding
                 Layout.fillHeight: true
@@ -132,6 +139,13 @@ ShellRoot {
     Components.TrayCard {
         activeTray: panelWindow.activeTray
         onCloseRequested: panelWindow.activeTray = ""
+    }
+
+    // =========================================================================
+    // NOTIFICATION CENTER — slide-in panel (toggled by NotificationButton)
+    // =========================================================================
+    Components.NotificationCenter {
+        id: notificationCenter
     }
 
     // =========================================================================

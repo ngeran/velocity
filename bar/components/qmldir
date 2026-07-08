@@ -10,3 +10,6 @@ BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
 BatteryIcon 1.0 BatteryIcon.qml
 TrayCard 1.0 TrayCard.qml
+NotificationCenter 1.0 NotificationCenter.qml
+NotificationCard 1.0 NotificationCard.qml
+NotificationButton 1.0 NotificationButton.qml
