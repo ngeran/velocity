@@ -732,5 +732,41 @@ Item {
         nvimWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + nvimLua + "' > " + nvimPath];
         nvimWriter.running = true;
         console.log("[ThemeService] Wrote nvim base16 theme");
+
+        // rofi: write a rasi palette the launcher's config.rasi @imports.
+        // Lives in ~/.cache/theme (runtime-owned, like colors.json + nvim) —
+        // NOT in ~/.config/rofi (a home-manager nix-store symlink, read-only).
+        // rofi re-reads config.rasi on every launch, so a theme change applies
+        // to the next launcher open — no reload needed. config.rasi imports this
+        // via an ABSOLUTE path (@import "/home/nikos/.cache/theme/rofi.rasi")
+        // because a relative import would resolve into the read-only nix store.
+        // GOTCHAS: (1) rasi @var references reject hyphens, so var names are
+        // hyphen-free (outlinealt, textdim, surfacevar). (2) color values MUST
+        // be UNQUOTED — `bg: #000000;` parses as a color, but `bg: "#000000";`
+        // is stored as a string and silently fails background-color: @bg (rofi
+        // falls back to its default light theme). So we concatenate the raw hex,
+        // NOT JSON.stringify (which would quote it — the bug that broke rofi).
+        var rofiRasi = "* {\n" +
+            "    bg:          " + colors.background + ";\n" +
+            "    surface:     " + colors.surface + ";\n" +
+            "    surfacevar:  " + colors.surfaceVariant + ";\n" +
+            "    text:        " + colors.text + ";\n" +
+            "    textdim:     " + colors.textDim + ";\n" +
+            "    primary:     " + colors.primary + ";\n" +
+            "    secondary:   " + colors.secondary + ";\n" +
+            "    accent:      " + colors.accent + ";\n" +
+            "    border:      " + colors.border + ";\n" +
+            "    outline:     " + colors.outline + ";\n" +
+            "    outlinealt:  " + colors.outlineVariant + ";\n" +
+            "    success:     " + colors.success + ";\n" +
+            "    warning:     " + colors.warning + ";\n" +
+            "    error:       " + colors.error + ";\n" +
+            "    info:        " + colors.info + ";\n" +
+            "}";
+        var rofiPath = themeService.homeDir + "/.cache/theme/rofi.rasi";
+        var rofiWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        rofiWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + rofiRasi + "' > " + rofiPath];
+        rofiWriter.running = true;
+        console.log("[ThemeService] Wrote rofi palette");
     }
 }
