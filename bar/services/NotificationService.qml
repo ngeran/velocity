@@ -51,9 +51,10 @@ Item {
     // PUBLIC API
     // -------------------------------------------------------------------------
     // urgency: 0 = low, 1 = normal, 2 = critical
-    function add(appName, summary, body, urgency) {
+    function add(appName, summary, body, urgency, clickId) {
         root.model.insert(0, {
             id: root.nextId,
+            clickId: (clickId === undefined ? 0 : clickId),  // DBus id for ActionInvoked (0 = none)
             appName: appName || "Notification",
             appIcon: "",
             summary: summary || "",
@@ -65,6 +66,25 @@ Item {
         root.nextId++
         root._recount()
     }
+
+    // Click-to-open: tell the forwarder (org.quickshell.NotifyBridge) to emit
+    // ActionInvoked / NotificationClosed so the originating app (e.g. Chromium)
+    // opens the content / stops tracking it. QML can't emit DBus itself, so we
+    // shell out to dbus-send (no-op if clickId is 0, i.e. no actions).
+    function _bridgeCall(method, clickId) {
+        if (!clickId) return
+        var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
+        p.command = ["dbus-send", "--session",
+                     "--dest=org.freedesktop.Notifications",
+                     "--type=method_call",
+                     "/org/freedesktop/Notifications",
+                     "org.quickshell.NotifyBridge." + method,
+                     "uint32:" + clickId]
+        p.running = true
+    }
+
+    function invokeAction(clickId) { root._bridgeCall("Invoke", clickId) }
+    function dismissDbus(clickId) { root._bridgeCall("Dismiss", clickId) }
 
     function markRead(id) {
         for (var i = 0; i < root.model.count; i++) {
@@ -103,7 +123,7 @@ Item {
                 console.warn("[NotificationService] IPC add: bad json:", json)
                 return
             }
-            root.add(d.appName, d.summary, d.body, d.urgency)
+            root.add(d.appName, d.summary, d.body, d.urgency, d.clickId)
         }
 
         function clear() { root.clearAll() }

@@ -41,7 +41,10 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: Services.NotificationService.markRead(model.id)
+        onClicked: {
+            Services.NotificationService.markRead(model.id)
+            Services.NotificationService.invokeAction(model.clickId)
+        }
     }
 
     RowLayout {
@@ -123,7 +126,10 @@ Rectangle {
                         anchors.fill: parent
                         anchors.margins: -6
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.NotificationService.remove(model.id)
+                        onClicked: {
+                            Services.NotificationService.dismissDbus(model.clickId)
+                            Services.NotificationService.remove(model.id)
+                        }
                     }
                 }
             }
