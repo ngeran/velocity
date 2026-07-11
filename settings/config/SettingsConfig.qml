@@ -133,10 +133,13 @@ QtObject {
     // BORDER RADIUS
     // =========================================================================
 
-    readonly property int radiusSm: 0
-    readonly property int radiusMd: 0
-    readonly property int radiusLg: 0
-    readonly property int radiusXl: 0
+    // Corner radius — driven by SettingsConfigService.cornerRadius (set from the
+    // Settings tab). Default 0 = OLED-sharp. radiusFull stays pill-shaped.
+    property int cornerRadius: 0
+    property int radiusSm: cornerRadius
+    property int radiusMd: cornerRadius
+    property int radiusLg: cornerRadius
+    property int radiusXl: cornerRadius
     readonly property int radiusFull: 9999
 
     // =========================================================================
@@ -152,8 +155,11 @@ QtObject {
     // ANIMATION
     // =========================================================================
 
-    readonly property int animDurationFast: 100
-    readonly property int animDurationNormal: 150
-    readonly property int animDurationSlow: 250
-    readonly property int animDurationSlower: 350
+    // Animation durations (ms) — scaled by animMultiplier, set by
+    // SettingsConfigService from the Animation Speed preference (fast/normal/slow).
+    property real animMultiplier: 1.0   // 0.5 fast · 1.0 normal · 1.7 slow
+    property int animDurationFast: Math.round(100 * animMultiplier)
+    property int animDurationNormal: Math.round(150 * animMultiplier)
+    property int animDurationSlow: Math.round(250 * animMultiplier)
+    property int animDurationSlower: Math.round(350 * animMultiplier)
 }

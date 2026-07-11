@@ -64,7 +64,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 32
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Config.ThemeConfig.colors.surface
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1
@@ -108,7 +108,7 @@ Item {
                 handle: Rectangle {
                     implicitWidth: 16
                     implicitHeight: 16
-                    radius: 0
+                    radius: Config.SettingsConfig.radiusMd
                     color: Config.ThemeConfig.colors.background
                     border.color: Config.ControlConfig.accent
                     border.width: 2
@@ -117,7 +117,7 @@ Item {
                         anchors.centerIn: parent
                         width: 4
                         height: 4
-                        radius: 0
+                        radius: Config.SettingsConfig.radiusMd
                         color: Config.ControlConfig.accent
                     }
                 }
@@ -131,7 +131,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 32
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Config.ThemeConfig.colors.surface
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1
@@ -162,7 +162,7 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 55
                     Layout.preferredHeight: 28
-                    radius: 0
+                    radius: Config.SettingsConfig.radiusMd
                     color: Services.BrightnessService.brightness === modelData ? Config.ControlConfig.accentSoft : Config.ThemeConfig.colors.surfaceVariant
                     border.color: Services.BrightnessService.brightness === modelData ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
                     border.width: 1

@@ -84,7 +84,7 @@ Item {
             }
 
             Rectangle {
-                width: 120; height: 32; radius: 0
+                width: 120; height: 32; radius: Config.SettingsConfig.radiusMd
                 color: root.cyclingEnabled ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
                 border.color: cyclingMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : "transparent"
                 border.width: cyclingMouseArea.activeFocus ? 2 : 0
@@ -135,7 +135,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 80
                 Layout.preferredHeight: 28
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Services.SettingsConfigService.rebuildOnWallpaperChange ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
                 border.color: syncMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
                 border.width: syncMouseArea.activeFocus ? 2 : 1
@@ -214,7 +214,7 @@ Item {
 
                 // Decrease button
                 Rectangle {
-                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: 0
+                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: Config.SettingsConfig.radiusMd
                     Text { anchors.centerIn: parent; text: "[-]"; color: Config.ThemeConfig.colors.text; font.bold: true; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; onClicked: { root.debugLog("Interval [-]", root.cycleInterval - 60); setInterval(root.cycleInterval - 60); } cursorShape: Qt.PointingHandCursor }
                 }
@@ -223,7 +223,7 @@ Item {
 
                 // Increase button
                 Rectangle {
-                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: 0
+                    width: 24; height: 24; color: Config.ThemeConfig.colors.surfaceVariant; radius: Config.SettingsConfig.radiusMd
                     Text { anchors.centerIn: parent; text: "[+]"; color: Config.ThemeConfig.colors.text; font.bold: true; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; onClicked: { root.debugLog("Interval [+]", root.cycleInterval + 60); setInterval(root.cycleInterval + 60); } cursorShape: Qt.PointingHandCursor }
                 }

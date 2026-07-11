@@ -13,7 +13,7 @@ Rectangle {
 
     width: parent.width
     height: 40
-    radius: 0
+    radius: Config.SettingsConfig.radiusMd
     color: Config.ThemeConfig.colors.surfaceVariant
     border.color: row.source.isDefault ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
     border.width: row.source.isDefault ? 1 : 0
@@ -47,13 +47,13 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 80
             Layout.preferredHeight: 6
-            radius: 0
+            radius: Config.SettingsConfig.radiusMd
             color: Config.ThemeConfig.colors.background
 
             Rectangle {
                 width: parent.width * (row.source.volume / 100)
                 height: parent.height
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: row.source.mute ? Config.ThemeConfig.colors.textDim : Config.ControlConfig.accent
             }
         }
@@ -72,7 +72,7 @@ Rectangle {
             visible: row.source.isDefault
             Layout.preferredWidth: 40
             Layout.preferredHeight: 16
-            radius: 0
+            radius: Config.SettingsConfig.radiusMd
             color: Config.ControlConfig.accent
 
             Text {
@@ -89,7 +89,7 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 50
             Layout.preferredHeight: 24
-            radius: 0
+            radius: Config.SettingsConfig.radiusMd
             color: row.source.mute ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.surface
             border.color: Config.ThemeConfig.colors.border
             border.width: 1

@@ -97,7 +97,7 @@ Item {
                                 color:  modelData
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                             }
                         }
                     }
@@ -137,7 +137,7 @@ Item {
                         color:  root.themeMode === modelData ? Config.ThemeConfig.colors.surface : "transparent"
                         border.color: root.themeMode === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border
                         border.width: 1
-                        radius: 0
+                        radius: Config.SettingsConfig.radiusMd
 
                         Text {
                             anchors.centerIn: parent

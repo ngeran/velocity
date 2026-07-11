@@ -100,7 +100,7 @@ Rectangle {
                 Rectangle {
                     id: tabBg
                     anchors.fill: parent
-                    radius: 0
+                    radius: Config.SettingsConfig.radiusMd
 
                     color: tabItem.isActive
                            ? Config.ThemeConfig.colors.primary       // white when active

@@ -66,7 +66,7 @@ Rectangle {
                     }
                     height: 1
                     color:  root.primaryColor
-                    radius: 0
+                    radius: Config.SettingsConfig.radiusMd
                 }
             }
         }

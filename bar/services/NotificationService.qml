@@ -39,6 +39,39 @@ Item {
         onTriggered: root.now = Date.now()
     }
 
+    // Do-Not-Disturb: when on, new notifications arrive silently (read) so the
+    // badge never bumps. Persisted to ~/.config/quickshell/dnd.flag across restarts.
+    property bool dnd: false
+    property bool panelOpen: false   // set by NotificationCenter — suppresses reaping while open
+    readonly property string _dndFlag: "~/.config/quickshell/dnd.flag"
+
+    property Process _dndReader: Process {
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { _dndReader.buffer += data } }
+        onRunningChanged: if (!running) { root.dnd = (_dndReader.buffer.trim() === "1"); _dndReader.buffer = "" }
+    }
+    function setDnd(on) {
+        root.dnd = on
+        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
+        w.command = ["sh", "-c", "printf '%s' '" + (on ? "1" : "0") + "' > " + root._dndFlag]
+        w.running = true
+    }
+
+    // Auto-dismiss: every 3s drop notifications older than 10s so the center
+    // doesn't linger forever — but never while the panel is open (user is reading).
+    Timer {
+        interval: 3000; running: true; repeat: true
+        onTriggered: {
+            if (root.panelOpen) return
+            var cutoff = Date.now() - 10000
+            for (var i = root.model.count - 1; i >= 0; i--) {
+                if (root.model.get(i).timestamp < cutoff) root.model.remove(i)
+            }
+            root._recount()
+        }
+    }
+
     function _recount() {
         var n = 0
         for (var i = 0; i < root.model.count; i++) {
@@ -61,7 +94,7 @@ Item {
             body: body || "",
             urgency: (urgency === undefined ? 1 : urgency),
             timestamp: Date.now(),
-            read: false
+            read: root.dnd   // silent (no badge bump) under Do-Not-Disturb
         })
         root.nextId++
         root._recount()
@@ -127,5 +160,10 @@ Item {
         }
 
         function clear() { root.clearAll() }
+    }
+
+    Component.onCompleted: {
+        _dndReader.command = ["sh", "-c", "cat " + root._dndFlag + " 2>/dev/null || true"]
+        _dndReader.running = true
     }
 }

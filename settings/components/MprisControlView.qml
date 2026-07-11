@@ -55,7 +55,7 @@ Item {
         Rectangle {
             width: parent.width
             height: 60
-            radius: 0
+            radius: Config.SettingsConfig.radiusMd
             color: Config.ThemeConfig.colors.surfaceVariant
             border.color: Config.ThemeConfig.colors.border
             border.width: 1
@@ -108,7 +108,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 70
                 Layout.preferredHeight: 40
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Config.ThemeConfig.colors.surface
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1
@@ -147,7 +147,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 90
                 Layout.preferredHeight: 40
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Services.MprisService.status === "playing" ? Config.ThemeConfig.colors.surfaceVariant : Config.ThemeConfig.colors.secondary
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1
@@ -187,7 +187,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 70
                 Layout.preferredHeight: 40
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Config.ThemeConfig.colors.surface
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1
@@ -228,7 +228,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 50
                 Layout.preferredHeight: 40
-                radius: 0
+                radius: Config.SettingsConfig.radiusMd
                 color: Config.ThemeConfig.colors.error
                 border.color: Config.ThemeConfig.colors.border
                 border.width: 1

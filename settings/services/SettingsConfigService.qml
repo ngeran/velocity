@@ -22,9 +22,20 @@ Item {
     // SETTINGS STATE
     // =========================================================================
 
-    // Appearance settings (settings-process only)
+    // Appearance settings (settings-process only) — pushed live to Config.SettingsConfig
     property string animationSpeed: "normal"  // fast, normal, slow
     property int cornerRadius: 0               // 0, 4, 8, 12
+    onAnimationSpeedChanged: applyAppearance()
+    onCornerRadiusChanged: applyAppearance()
+
+    // Map the user's Animation Speed + Corner Radius into the live design tokens
+    // consumed across the dashboard (SettingsConfig.qml). Called on change and on
+    // load (applyLoadedSettings re-sets the props, firing the handlers above).
+    function applyAppearance() {
+        var m = root.animationSpeed === "fast" ? 0.5 : (root.animationSpeed === "slow" ? 1.7 : 1.0)
+        Config.SettingsConfig.animMultiplier = m
+        Config.SettingsConfig.cornerRadius = root.cornerRadius
+    }
 
     // Bar settings (cross-process - bar reads from config file)
     property int barHeight: 26                  // 20, 26, 32, 40
@@ -37,6 +48,10 @@ Item {
     // Wallpaper settings
     property bool syncThemeToWallpaper: false      // Auto-regenerate theme when wallpaper changes (legacy; now maps to rebuildOnWallpaperChange)
     property bool rebuildOnWallpaperChange: false   // Trigger Stylix rebuild when wallpaper changes (requires pkexec)
+
+    // Pulses true briefly after every saveSettings() — drives the Settings-tab "✓ APPLIED" toast.
+    property bool justSaved: false
+    Timer { id: _justSavedReset; interval: 1200; onTriggered: root.justSaved = false }
 
     // =========================================================================
     // CONFIG PERSISTENCE
@@ -109,6 +124,23 @@ Item {
 
         // Also write bar-specific config for cross-process sync
         saveBarConfig()
+
+        // Pulse the "✓ APPLIED" toast in the Settings tab
+        root.justSaved = true
+        _justSavedReset.restart()
+    }
+
+    // One-click escape hatch for the Settings tab
+    function resetToDefaults() {
+        root.animationSpeed = "normal"
+        root.cornerRadius = 0
+        root.barHeight = 26
+        root.workspaceCount = 5
+        root.clockCity = "Local"
+        root.clockOffset = 0
+        root.syncThemeToWallpaper = false
+        root.rebuildOnWallpaperChange = false
+        root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
     }
 
     function loadSettings() {

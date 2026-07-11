@@ -24,7 +24,7 @@ Rectangle {
     color: Config.ThemeConfig.colors.surface
     border.color: Config.ThemeConfig.colors.border
     border.width: 1
-    radius: 0
+    radius: Config.SettingsConfig.radiusMd
 
     // Colours that definitely exist in the ThemeConfig palette (the old code
     // referenced colors.onPrimary, which is undefined → QColor warnings).
@@ -223,7 +223,7 @@ Rectangle {
 
         Layout.fillWidth: true
         Layout.preferredHeight: 64
-        radius: 0
+        radius: Config.SettingsConfig.radiusMd
         color: tile.checked ? root.checkedBg : root.uncheckedBg
         border.color: tileMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
         border.width: tileMouseArea.activeFocus ? 2 : 1

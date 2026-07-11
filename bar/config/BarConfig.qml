@@ -39,6 +39,7 @@ Item {
     // =========================================================================
 
     property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
+    property string _lastRaw: ""   // dedup: only re-apply when bar-config.json actually changes
 
     Process {
         id: configLoader
@@ -54,29 +55,25 @@ Item {
         }
 
         onRunningChanged: {
-            if (!running && configLoader.buffer.length > 0) {
-                try {
-                    var data = JSON.parse(configLoader.buffer)
-                    if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1) {
-                        barHeight = data.barHeight
-                        console.log("[BarConfig] Loaded barHeight:", barHeight)
-                    }
-                    if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1) {
-                        workspaceCount = data.workspaceCount
-                        console.log("[BarConfig] Loaded workspaceCount:", workspaceCount)
-                    }
-                    if (data.clockCity !== undefined) {
-                        clockCity = data.clockCity
-                        console.log("[BarConfig] Loaded clockCity:", clockCity)
-                    }
-                    if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14) {
-                        clockOffset = data.clockOffset
-                        console.log("[BarConfig] Loaded clockOffset:", clockOffset)
-                    }
-                } catch (e) {
-                    console.log("[BarConfig] Failed to parse config, using defaults:", e)
-                }
+            if (!running) {
+                var raw = configLoader.buffer
                 configLoader.buffer = ""
+                if (raw.length === 0 || raw === _lastRaw) return  // dedup: skip empty/unchanged
+                _lastRaw = raw
+                try {
+                    var data = JSON.parse(raw)
+                    if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1)
+                        barHeight = data.barHeight
+                    if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
+                        workspaceCount = data.workspaceCount
+                    if (data.clockCity !== undefined)
+                        clockCity = data.clockCity
+                    if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
+                        clockOffset = data.clockOffset
+                    console.log("[BarConfig] Hot-reloaded bar-config.json")
+                } catch (e) {
+                    console.log("[BarConfig] Failed to parse config:", e)
+                }
             }
         }
     }
@@ -129,6 +126,16 @@ Item {
     // =========================================================================
     // INITIALIZATION
     // =========================================================================
+
+    // Poll bar-config.json every 2s so the bar picks up Settings-tab changes
+    // (bar height, workspace dots, clock offset/city) without a restart. Mirrors
+    // the theme poller in ThemeConfig.qml; dedup avoids redundant re-application.
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: { configLoader.command = ["cat", configFilePath]; configLoader.running = true }
+    }
 
     Component.onCompleted: {
         console.log("[BarConfig] Loading config from:", configFilePath)

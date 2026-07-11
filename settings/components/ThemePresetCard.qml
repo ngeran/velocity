@@ -118,7 +118,7 @@ Rectangle {
                     color:  modelData
                     border.color: Config.ThemeConfig.colors.border
                     border.width: 1
-                    radius: 0
+                    radius: Config.SettingsConfig.radiusMd
                 }
             }
         }

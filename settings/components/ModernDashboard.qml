@@ -53,7 +53,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Config.ThemeConfig.colors.background
-        radius: 0
+        radius: Config.SettingsConfig.radiusMd
         // No-op MouseArea: stops clicks on empty card areas from falling through
         // to the shell.qml dim backdrop (which would close the window).
         MouseArea { anchors.fill: parent }
@@ -251,7 +251,7 @@ Item {
                         color: Config.ThemeConfig.colors.surfaceVariant
                         border.color: Config.ThemeConfig.colors.border
                         border.width: 1
-                        radius: 0
+                        radius: Config.SettingsConfig.radiusMd
 
                         RowLayout {
                             anchors.fill: parent
@@ -323,7 +323,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 60
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.SettingsConfigService.animationSpeed === modelData.toLowerCase() ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -435,7 +435,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.SettingsConfigService.barHeight === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -466,7 +466,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 12
                         Text {
-                            text: "WORKSPACES"
+                            text: "WORKSPACE DOTS"
                             color: Config.ThemeConfig.colors.textDim
                             font.pixelSize: 10; font.bold: true
                             font.family: Config.SettingsConfig.fontFamily
@@ -474,7 +474,7 @@ Item {
                             Layout.preferredWidth: 120
                         }
                         Text {
-                            text: Services.SettingsConfigService.workspaceCount + " workspaces"
+                            text: Services.SettingsConfigService.workspaceCount + " dots"
                             color: Config.ThemeConfig.colors.text
                             font.pixelSize: 11
                             font.family: Config.SettingsConfig.fontFamily
@@ -485,7 +485,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.SettingsConfigService.workspaceCount === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -545,7 +545,7 @@ Item {
                         Rectangle {
                             Layout.preferredWidth: 120
                             Layout.preferredHeight: 26
-                            radius: 0
+                            radius: Config.SettingsConfig.radiusMd
                             color: Config.ThemeConfig.colors.surfaceVariant
                             border.color: Config.ThemeConfig.colors.border
                             border.width: 1
@@ -598,7 +598,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 visible: modelData === 0 || [-12, -8, -5, -4, 1, 2, 3, 8, 10, 12].indexOf(modelData) !== -1
                                 color: Services.SettingsConfigService.clockOffset === modelData ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
@@ -661,7 +661,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.HypridleService.dimTimeout === modelData * 60 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -711,7 +711,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.HypridleService.lockTimeout === modelData * 60 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -761,7 +761,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.HypridleService.displayOffTimeout === modelData * 60 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -809,7 +809,7 @@ Item {
                         Rectangle {
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 24
-                            radius: 0
+                            radius: Config.SettingsConfig.radiusMd
                             color: Services.HypridleService.suspendEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                             border.color: Config.ThemeConfig.colors.border
                             border.width: 1
@@ -853,7 +853,7 @@ Item {
                             delegate: Rectangle {
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 24
-                                radius: 0
+                                radius: Config.SettingsConfig.radiusMd
                                 color: Services.HypridleService.suspendTimeout === modelData * 60 ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
                                 border.color: Config.ThemeConfig.colors.border
                                 border.width: 1
@@ -879,112 +879,60 @@ Item {
                         }
                     }
 
-                    // =================================================================
-                    // AUTOSTART SECTION
-                    // =================================================================
-
-                    Components.WidgetHeader {
-                        icon: "󰚜"
-                        label: "AUTOSTART"
-                        Layout.topMargin: 8
-                        Layout.bottomMargin: 4
-                    }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-                    // Autostart entries list
-                    ColumnLayout {
+                    // Reset to defaults — one-click escape hatch
+                    RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-
-                        Repeater {
-                            model: Services.AutostartService.autostartEntries
-                            delegate: RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                // Enable/disable toggle
-                                Rectangle {
-                                    Layout.preferredWidth: 40
-                                    Layout.preferredHeight: 24
-                                    radius: 0
-                                    color: modelData.enabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
-                                    border.color: Config.ThemeConfig.colors.border
-                                    border.width: 1
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.enabled ? "ON" : "OFF"
-                                        color: modelData.enabled ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
-                                        font.pixelSize: 8
-                                        font.family: Config.SettingsConfig.fontFamily
-                                        font.bold: true
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: Services.AutostartService.toggleEntry(index)
-                                    }
-                                }
-
-                                // Entry name
-                                Text {
-                                    text: modelData.name
-                                    color: Config.ThemeConfig.colors.text
-                                    font.pixelSize: 11
-                                    font.family: Config.SettingsConfig.fontFamily
-                                    Layout.fillWidth: true
-                                }
-
-                                // Command preview (truncated)
-                                Text {
-                                    text: modelData.command.length > 30 ? modelData.command.substring(0, 30) + "…" : modelData.command
-                                    color: Config.ThemeConfig.colors.textDim
-                                    font.pixelSize: 9
-                                    font.family: "JetBrains Mono"
-                                    Layout.preferredWidth: 200
-                                    elide: Text.ElideRight
-                                }
-
-                                // Remove button
-                                Rectangle {
-                                    Layout.preferredWidth: 24
-                                    Layout.preferredHeight: 24
-                                    radius: 0
-                                    color: Config.ThemeConfig.colors.surfaceVariant
-                                    border.color: Config.ThemeConfig.colors.border
-                                    border.width: 1
-                                    visible: modelData.name !== "Bar" && modelData.name !== "Settings"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "×"
-                                        color: Config.ThemeConfig.colors.text
-                                        font.pixelSize: 12
-                                        font.family: Config.SettingsConfig.fontFamily
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: Services.AutostartService.removeEntry(index)
-                                    }
-                                }
+                        Layout.topMargin: 12
+                        Item { Layout.fillWidth: true }
+                        Rectangle {
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 28
+                            radius: Config.SettingsConfig.radiusMd
+                            color: resetMa.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: Config.ThemeConfig.colors.border
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "RESET TO DEFAULTS"
+                                color: resetMa.containsMouse ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
+                                font.pixelSize: 9; font.bold: true
+                                font.family: Config.SettingsConfig.fontFamily
+                                font.letterSpacing: 1.0
+                            }
+                            MouseArea {
+                                id: resetMa
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Services.SettingsConfigService.resetToDefaults()
                             }
                         }
-
-                        // Add new entry hint
-                        Text {
-                            text: "Autostart entries are stored in ~/.config/quickshell/autostart.json"
-                            color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.topMargin: 4
-                        }
                     }
 
+                    // AUTOSTART section removed (2026-07-11): generateHyprlandConfig was
+                    // defined but never called; real autostart lives in the Lua Hyprland config.
                     Item { Layout.fillHeight: true }
+                }
+            }
+
+            // "✓ APPLIED" toast — pulses briefly after every saveSettings()
+            Rectangle {
+                anchors.top: parent.top; anchors.topMargin: 16
+                anchors.right: parent.right; anchors.rightMargin: 16
+                width: appliedLabel.implicitWidth + 24
+                height: 26
+                radius: Config.SettingsConfig.radiusMd
+                color: Config.ThemeConfig.colors.secondary
+                visible: Services.SettingsConfigService.justSaved
+                opacity: Services.SettingsConfigService.justSaved ? 1.0 : 0.0
+                Behavior on opacity { NumberAnimation { duration: 180 } }
+                Text {
+                    id: appliedLabel
+                    anchors.centerIn: parent
+                    text: "✓ APPLIED"
+                    color: Config.ThemeConfig.colors.background
+                    font.pixelSize: 10; font.bold: true
+                    font.family: Config.SettingsConfig.fontFamily
+                    font.letterSpacing: 1.0
                 }
             }
 

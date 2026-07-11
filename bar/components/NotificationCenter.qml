@@ -39,7 +39,10 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
 
     // defer visible=false until the slide-out finishes (so it can animate)
-    onShownChanged: if (!shown) hideTimer.restart()
+    onShownChanged: {
+        Services.NotificationService.panelOpen = root.shown   // suppress auto-dismiss while open
+        if (!shown) hideTimer.restart()
+    }
     Timer {
         id: hideTimer
         interval: 330   // matches the slide duration (320ms) + a small buffer
@@ -132,6 +135,28 @@ PanelWindow {
                         font.pixelSize: 14
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
+                    }
+
+                    // Do-Not-Disturb toggle (same-process; persisted by NotificationService)
+                    Rectangle {
+                        Layout.preferredWidth: 48
+                        Layout.preferredHeight: 20
+                        radius: 10
+                        color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : "transparent"
+                        border.color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.border
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "DND"
+                            color: Services.NotificationService.dnd ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 9; font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.NotificationService.setDnd(!Services.NotificationService.dnd)
+                        }
                     }
                 }
 

@@ -38,7 +38,13 @@ Item {
         var day = _days[d.getDay()]
         var num = String(d.getDate()).padStart(2, "0")
         var mon = _months[d.getMonth()]
-        return day + " · " + num + " " + mon
+        var s = day + " · " + num + " " + mon
+        // Append the configured city label (from the Settings tab) when it's set,
+        // so the City field is reflected in the bar — not a dead label.
+        var city = (Config.BarConfig.clockCity || "").trim()
+        if (city.length > 0 && city.toLowerCase() !== "local")
+            s += " · " + city.toUpperCase()
+        return s
     }
 
     Column {
