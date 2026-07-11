@@ -699,14 +699,18 @@ Item {
 
         // hyprlock: write theme colors to a sourced file. Add this to the END
         // of ~/.config/hypr/hyprlock.conf:  source = ~/.config/hypr/quickshell-colors.conf
+        // hyprlock: write theme colors to a sourced file. Add this to the END
+        // of ~/.config/hypr/hyprlock.conf:  source = ~/.config/hypr/quickshell-colors.conf
+        //
+        // NOTE: only `background` is themed here. Do NOT emit an `input-field {}`
+        // block — hyprlock treats each input-field block as a SEPARATE field (it
+        // does not merge them like background), so a second block renders a
+        // second overlapping password box. The single input-field lives in
+        // hyprlock.conf with static colors. See that file's THEME section.
         var hyprlockFile = themeService.homeDir + "/.config/hypr/quickshell-colors.conf";
         var hyprlockContent =
             "# Managed by QuickShell ThemeService — source at END of hyprlock.conf\n" +
-            "background {\n    color = rgba(" + colors.background.replace("#","") + "ff)\n}\n" +
-            "input-field {\n" +
-            "    inner_color = rgba(" + colors.surfaceContainer.replace("#","") + "ff)\n" +
-            "    outer_color = rgba(" + colors.secondary.replace("#","") + "ff)\n" +
-            "    font_color = rgba(" + colors.text.replace("#","") + "ff)\n}\n";
+            "background {\n    color = rgba(" + colors.background.replace("#","") + "ff)\n}\n";
         var hyprlockWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
         hyprlockWriter.running = true;
