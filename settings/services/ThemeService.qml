@@ -697,20 +697,37 @@ Item {
         kittyWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + kittyContent + "' > " + kittyConf + " && pkill -SIGUSR1 kitty || true"];
         kittyWriter.running = true;
 
-        // hyprlock: write theme colors to a sourced file. Add this to the END
-        // of ~/.config/hypr/hyprlock.conf:  source = ~/.config/hypr/quickshell-colors.conf
-        // hyprlock: write theme colors to a sourced file. Add this to the END
-        // of ~/.config/hypr/hyprlock.conf:  source = ~/.config/hypr/quickshell-colors.conf
+        // hyprlock: this file is sourced at the END of ~/.config/hypr/hyprlock.conf
+        // and is the SINGLE source for the lock screen's background + input-field,
+        // themed here from the active palette. hyprlock does NOT merge input-field
+        // blocks (each is a SEPARATE field), so hyprlock.conf defines none — adding
+        // one there too would draw a second, overlapping password box.
         //
-        // NOTE: only `background` is themed here. Do NOT emit an `input-field {}`
-        // block — hyprlock treats each input-field block as a SEPARATE field (it
-        // does not merge them like background), so a second block renders a
-        // second overlapping password box. The single input-field lives in
-        // hyprlock.conf with static colors. See that file's THEME section.
+        // Keep this input-field's geometry in sync with the build-time fallback in
+        // modules/apps/essentials.nix (seedHyprlockColors), which seeds this file
+        // before the settings process first runs.
         var hyprlockFile = themeService.homeDir + "/.config/hypr/quickshell-colors.conf";
         var hyprlockContent =
-            "# Managed by QuickShell ThemeService — source at END of hyprlock.conf\n" +
-            "background {\n    color = rgba(" + colors.background.replace("#","") + "ff)\n}\n";
+            "# Managed by QuickShell ThemeService — sourced at END of hyprlock.conf.\n" +
+            "# Single source for the lock background + input-field (themed).\n" +
+            "background {\n    color = rgba(" + colors.background.replace("#","") + "ff)\n}\n" +
+            "input-field {\n" +
+            "    monitor =\n" +
+            "    size = 400, 50\n" +
+            "    position = 0, 0\n" +
+            "    halign = center\n" +
+            "    valign = center\n" +
+            "    rounding = 16\n" +
+            "    outline_thickness = 2\n" +
+            "    inner_color = rgba(" + colors.surfaceContainer.replace("#","") + "ff)\n" +
+            "    outer_color = rgba(" + colors.secondary.replace("#","") + "ff)\n" +
+            "    font_color = rgba(" + colors.text.replace("#","") + "ff)\n" +
+            "    font_family = JetBrainsMono Nerd Font\n" +
+            "    placeholder_text = Enter Password\n" +
+            "    fail_text = <i>$FAIL ($ATTEMPTS)</i>\n" +
+            "    shadow_passes = 0\n" +
+            "    fade_on_empty = false\n" +
+            "}\n";
         var hyprlockWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
         hyprlockWriter.running = true;
