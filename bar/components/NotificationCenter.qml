@@ -42,7 +42,7 @@ PanelWindow {
     onShownChanged: if (!shown) hideTimer.restart()
     Timer {
         id: hideTimer
-        interval: 280   // matches the slide duration
+        interval: 330   // matches the slide duration (320ms) + a small buffer
         onTriggered: if (!root.shown) root.visible = false
     }
 
@@ -60,21 +60,36 @@ PanelWindow {
         MouseArea { anchors.fill: parent; onClicked: root.close() }
     }
 
-    // ---- the panel itself (slides + fades) ----
+    // ---- the panel itself (slides + fades, macOS Notification Center style) ----
     Rectangle {
         id: panel
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        anchors.right: parent.right      // pinned to the right edge — never depends on parent.width timing
         width: root.panelWidth
         color: Config.ThemeConfig.colors.background          // pure black (OLED-safe)
         border.color: Config.ThemeConfig.colors.border       // subtle structure
         border.width: 1
         clip: true
         opacity: root.shown ? 1.0 : 0.0
-        // slide from off-screen-right to flush-right
-        x: root.shown ? (parent.width - width) : parent.width
-        Behavior on x { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+        // Offset from the anchored (flush-right) position, in its own local space.
+        // 0 = fully docked. +width+margin = pushed off-screen to the right.
+        // Driving this instead of raw `x` avoids any left-to-right glitch that
+        // can happen when `x` is computed from parent.width during layout.
+        property real hiddenOffset: width + 24
+        transform: Translate {
+            x: root.shown ? 0 : panel.hiddenOffset
+            Behavior on x {
+                NumberAnimation { duration: 320; easing.type: Easing.OutExpo }
+            }
+        }
+
+        // macOS-style entrance: fast, confident deceleration, no overshoot on open;
+        // slightly quicker, snappier curve on close (matches Notification Center feel).
+        Behavior on opacity {
+            NumberAnimation { duration: root.shown ? 220 : 180; easing.type: Easing.OutCubic }
+        }
 
         // stop clicks inside the panel from reaching the backdrop
         MouseArea { anchors.fill: parent }

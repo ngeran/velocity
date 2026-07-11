@@ -220,16 +220,19 @@ Item {
         if (currentSource === "preset") {
             // Re-apply the preset with new clamp state
             themeService.applyPreset(currentName, clamp);
-        } else if (currentSource === "stylix") {
-            // Stylix themes: re-apply the seed with new clamp state
-            themeService.loadStylixSeed();
+        } else if (currentSource === "stylix" || currentSource === "custom" || currentSource === "manual") {
+            // Re-clamp the CURRENT palette in place. Do NOT call loadStylixSeed()
+            // here: the seed's hardcoded oledClamp:false would revert this toggle
+            // ~1s later (async seed reload), and reloading the seed would also
+            // discard a custom/manual palette. The current colors already live in
+            // Config.ThemeConfig.colors — just re-clamp + persist + sync them.
             var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors);
             themeService.clampOLED(bundle, clamp);
             Config.ThemeConfig.applyTheme({
                 colors: bundle,
                 metadata: {
                     name: Config.ThemeConfig.metadata.name,
-                    source: "stylix",
+                    source: currentSource,
                     applied: new Date().toISOString(),
                     oledClamp: clamp
                 }
@@ -326,28 +329,30 @@ Item {
 
         onRunningChanged: function() {
             if (!running) {
-                // Reset state regardless of buffer length — a no-op rebuild may
-                // emit little/no stdout, and we must not leave isRegenerating
-                // stuck true (which would disable the button for 60s until
-                // rebuildTimeout fires).
+                // Just log + clear the buffer here. The success/failure decision
+                // (and the post-rebuild seed load) is made in onExited using the
+                // AUTHORITATIVE exit code — a stdout /error|fail/i regex would
+                // false-positive on benign nix warnings, mark a successful build
+                // as failed, and skip applying the freshly-regenerated palette.
                 console.log("[ThemeService] Rebuild output:", rebuilder.buffer.trim());
-                themeService.isRegenerating = false;
-                themeService.regenFailed = (rebuilder.buffer.search(/error|fail/i) !== -1);
-                themeService.regenError = themeService.regenFailed ? "Rebuild failed - check logs" : "";
-                // On successful rebuild, reload the Stylix seed
-                if (!themeService.regenFailed) {
-                    themeService.loadStylixSeed();
-                }
                 rebuilder.buffer = "";
             }
         }
 
         onExited: function(code) {
-            if (code !== 0) {
-                console.error("ThemeService: rebuild failed with exit code:", code);
+            themeService.isRegenerating = false;
+            if (code === 0) {
+                themeService.regenFailed = false;
+                themeService.regenError = "";
+                console.log("[ThemeService] Rebuild succeeded (exit 0) — applying new Stylix seed");
+                // FORCE-load the regenerated seed (bypass the startup clobber-guard,
+                // which would skip it because the active source is preset/custom,
+                // not stylix). applyStylixSeedNow runs stylixSeedLoader directly.
+                themeService.applyStylixSeedNow();
+            } else {
+                console.error("[ThemeService] Rebuild failed with exit code:", code);
                 themeService.regenError = "Rebuild failed (exit code " + code + ")";
                 themeService.regenFailed = true;
-                themeService.isRegenerating = false;
             }
         }
     }
@@ -456,13 +461,26 @@ Item {
                     var seed = JSON.parse(stylixSeedLoader.buffer.trim());
                     if (seed && seed.colors && seed.metadata) {
                         var bundle = themeService.normalizeBundle(seed.colors);
+                        // Preserve the user's OLED preference. The seed hardcodes
+                        // oledClamp:false; applying it verbatim silently un-clamps
+                        // an OLED user's pure-black surfaces. Thread the live clamp
+                        // state through, clamp the bundle to match, and carry it in
+                        // the metadata we write back to colors.json + ThemeConfig.
+                        var liveClamp = Config.ThemeConfig.metadata.oledClamp;
+                        var meta = {
+                            name: seed.metadata.name,
+                            source: seed.metadata.source,
+                            applied: new Date().toISOString(),
+                            oledClamp: liveClamp
+                        };
+                        themeService.clampOLED(bundle, liveClamp);
                         Config.ThemeConfig.applyTheme({
                             colors: bundle,
-                            metadata: seed.metadata
+                            metadata: meta
                         });
-                        themeService._writeColorsJson(bundle, seed.metadata);
+                        themeService._writeColorsJson(bundle, meta);
                         themeService.syncToExternalApps(bundle);
-                        console.log("[ThemeService] Stylix seed loaded:", seed.metadata.name);
+                        console.log("[ThemeService] Stylix seed loaded:", seed.metadata.name, "(oledClamp preserved:", liveClamp + ")");
                     } else {
                         console.warn("[ThemeService] Stylix seed invalid or missing colors");
                     }
@@ -648,10 +666,11 @@ Item {
         ghosttyWriter.command = ["python3", "-c", ghosttyPy];
         ghosttyWriter.running = true;
 
-        // kitty: write the palette to the file kitty.conf already includes
-        // (include ~/.config/ngeran/theme/kitty.conf). Reload kitty (ctrl+shift+f5)
-        // to apply — kitty doesn't auto-reload config.
-        var kittyConf = themeService.homeDir + "/.config/ngeran/theme/kitty.conf";
+        // kitty: write the palette to ~/.cache/theme/kitty.conf (runtime-writable,
+        // like nvim-base16.lua + rofi.rasi) — NOT ~/.config/ngeran/theme (a
+        // read-only nix-store whole-dir symlink). kitty.conf includes this path.
+        // Reload kitty (ctrl+shift+f5) to apply — kitty doesn't auto-reload config.
+        var kittyConf = themeService.homeDir + "/.cache/theme/kitty.conf";
         var kittyContent =
             "background " + colors.background + "\n" +
             "foreground " + colors.text + "\n" +
@@ -675,7 +694,7 @@ Item {
             "color14 " + colors.info + "\n" +
             "color15 " + colors.text + "\n";
         var kittyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        kittyWriter.command = ["sh", "-c", "mkdir -p ~/.config/ngeran/theme && printf '%s' '" + kittyContent + "' > " + kittyConf + " && pkill -SIGUSR1 kitty || true"];
+        kittyWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + kittyContent + "' > " + kittyConf + " && pkill -SIGUSR1 kitty || true"];
         kittyWriter.running = true;
 
         // hyprlock: write theme colors to a sourced file. Add this to the END
@@ -692,13 +711,19 @@ Item {
         hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
         hyprlockWriter.running = true;
 
-        // Hyprland border colors: instant visual impact, applies immediately
-        // Sets the active and inactive border colors to match the theme
-        var hyprlandCmd = "hyprctl keyword general:col.active_border " + colors.secondary.replace("#","") + " && hyprctl keyword general:col.inactive_border " + colors.outlineVariant.replace("#","");
-        var hyprlandWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        hyprlandWriter.command = ["sh", "-c", hyprlandCmd + " && hyprctl reload"];
-        hyprlandWriter.running = true;
-        console.log("[ThemeService] Applied Hyprland border colors + reloaded");
+        // NOTE: Hyprland window borders are intentionally NOT live-themed here.
+        // On this system the Hyprland config is generated from READ-ONLY Lua
+        // modules (~/.config/hypr/*.lua, via the start-hyprland wrapper), so:
+        //   - `hyprctl keyword general:col.*` is rejected ("non-legacy parsers"),
+        //   - `hyprctl eval` is a Lua eval, not a config setter,
+        //   - `hyprctl reload` would revert any runtime change back to the Lua value.
+        // The border colour (low-saturation teal rgba(00707888)) is a DELIBERATE
+        // OLED burn-in mitigation hardcoded in configs/hypr/look-and-feel.lua (see
+        // its header comment: ~40% lower peak brightness than a vivid accent).
+        // Live border theming would require rearchitecting the Lua config to source
+        // a runtime colours file — left as a follow-up. The previous code here ran
+        // `hyprctl keyword ... && hyprctl reload` on every theme switch: it never
+        // worked (keyword rejected) yet logged a false "Applied" success. Removed.
 
         // NOTE: mako was removed — notifications are handled by the Quickshell
         // Notification Center (bar/services/NotificationService.qml), fed via IPC.
