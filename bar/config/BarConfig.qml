@@ -6,8 +6,8 @@
 // Colors are dynamically sourced from ThemeConfig for theme switching.
 //
 // SIZES
-//   barHeight - Total bar height in pixels (configurable via bar-config.json)
-//   iconSize - Size of each icon square
+//   barHeight  - Total bar height in pixels (configurable via bar-config.json)
+//   iconSize   - Size of each icon square (scales with barHeight)
 //   iconSpacing - Space between icons
 //
 // BEHAVIOR
@@ -82,9 +82,17 @@ Item {
     // GEOMETRY
     // =========================================================================
 
+    // barHeight is configurable ([20, 26, 32, 40]). Every visible item in the
+    // bar scales off this baseline so the bar stays proportional at any height
+    // — icons, clock text, and workspace dots all grow/shrink together instead
+    // of floating unchanged inside a taller bar. Baseline = 26px (the default),
+    // so _contentScale is 1.0 at the default and the default look is preserved.
+    readonly property real _contentScale: root.barHeight / 26.0
+
     readonly property int barPadding: 12
-    readonly property int iconSize: 32  // Increased from 20 for better clickability
+    readonly property int iconSize: Math.round(32 * _contentScale)   // tray-icon slot
     readonly property int iconSpacing: 4
+    readonly property int archLogoSize: Math.round(15 * _contentScale)
 
     // =========================================================================
     // COLOURS (Dynamic from ThemeConfig)
@@ -103,16 +111,19 @@ Item {
 
     readonly property string fontFamily: "monospace"
     readonly property string fontNerd: "JetBrainsMono Nerd Font"
-    readonly property int fontSizeClock: 14
-    readonly property int fontSizeIcon: 14
+    readonly property int fontSizeClock: Math.max(10, Math.round(14 * _contentScale))
+    readonly property int fontSizeDate: Math.max(7, Math.round(9 * _contentScale))
+    readonly property int fontSizeIcon: Math.max(10, Math.round(14 * _contentScale))   // tray glyph
 
     // =========================================================================
     // WORKSPACES
     // =========================================================================
 
-    readonly property int workspaceDotWidth: 6
-    readonly property int workspaceDotWidthActive: 14
-    readonly property int workspaceDotHeight: 6
+    readonly property int workspaceDotWidth: Math.max(3, Math.round(6 * _contentScale))
+    readonly property int workspaceDotWidthActive: Math.round(14 * _contentScale)
+    readonly property int workspaceDotHeight: Math.max(3, Math.round(6 * _contentScale))
+    readonly property int workspaceButtonSize: Math.round(24 * _contentScale)
+    readonly property int workspaceButtonFontSize: Math.max(8, Math.round(11 * _contentScale))
 
     // =========================================================================
     // POLLING INTERVALS (milliseconds)

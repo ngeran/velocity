@@ -16,8 +16,8 @@ Rectangle {
 
     signal clicked()
 
-    width: 24
-    height: 24
+    width: Config.BarConfig.workspaceButtonSize
+    height: Config.BarConfig.workspaceButtonSize
     radius: 4
     color: isHovered ? "#111111" : "transparent"
 
@@ -34,7 +34,7 @@ Rectangle {
         anchors.centerIn: parent
         text: button.workspaceId
         color: isActive ? Config.BarConfig.colorText : isOccupied ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
-        font.pixelSize: 11
+        font.pixelSize: Config.BarConfig.workspaceButtonFontSize
         font.family: Config.BarConfig.fontFamily
     }
 

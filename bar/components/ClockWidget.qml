@@ -68,7 +68,7 @@ Item {
             color: clkMa.containsMouse
                    ? Qt.rgba(0, 0.863, 0.898, 0.65)   // teal @ 65 % on hover
                    : Qt.rgba(1, 1, 1, 0.30)             // #ffffff @ 30 % at rest
-            font.pixelSize: 9
+            font.pixelSize: Config.BarConfig.fontSizeDate
             font.family: Config.BarConfig.fontFamily
             font.weight: Font.Bold
             font.letterSpacing: 2.5

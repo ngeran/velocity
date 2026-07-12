@@ -15,8 +15,8 @@ Item {
     Image {
         id: archSvg
         anchors.centerIn: parent
-        width: 15
-        height: 15
+        width: Config.BarConfig.archLogoSize
+        height: Config.BarConfig.archLogoSize
         
         // We use standard string concatenation to ensure the SVG is built correctly
         source: "data:image/svg+xml;base64," + Qt.btoa(

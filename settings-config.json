@@ -1,0 +1,10 @@
+{
+  "animationSpeed": "normal",
+  "cornerRadius": 0,
+  "barHeight": 26,
+  "workspaceCount": 5,
+  "clockCity": "Local",
+  "clockOffset": 0,
+  "syncThemeToWallpaper": false,
+  "rebuildOnWallpaperChange": false
+}

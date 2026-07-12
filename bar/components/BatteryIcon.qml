@@ -16,7 +16,7 @@ Item {
         anchors.centerIn: parent
         text: Services.BatteryService.glyph
         font.family: Config.BarConfig.fontNerd
-        font.pixelSize: 14
+        font.pixelSize: Config.BarConfig.fontSizeIcon
         color: {
             if (root.isActive) return Config.BarConfig.colorAccent
             if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorText

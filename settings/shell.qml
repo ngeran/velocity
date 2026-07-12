@@ -27,13 +27,17 @@ ShellRoot {
 
     property bool shown: false
 
-    // Screen-adaptive sizing - scale based on available window width
-    // PanelWindow width spans the full screen, so we can use that directly
+    // Screen-adaptive sizing — scale based on available window dimensions.
+    // PanelWindow spans the full screen, so its width/height map to the screen.
     readonly property real availableWidth: panelWindow.width || 1920
+    readonly property real availableHeight: panelWindow.height || 1080
 
-    // Base dimensions (1100×640) scaled to fit screen with margins
-    readonly property real cardWidth: Math.min(1100, availableWidth - 80)
-    readonly property real cardHeight: 640  // Fixed height for consistency
+    // Base design size (1100×640) — the perfect size on the 4K OLED. On smaller
+    // screens each dimension is capped to a fraction of the panel so the card
+    // never swamps the display (a fixed 640px height covered ~all of a 768p
+    // laptop); floors keep it usable on tiny screens. Caps preserve the 4K look.
+    readonly property real cardWidth:  Math.max(720, Math.min(1100, availableWidth  * 0.60))
+    readonly property real cardHeight: Math.max(480, Math.min(640,  availableHeight * 0.75))
 
     // =========================================================================
     // HIDE TIMER — defer visible=false until slide-up completes

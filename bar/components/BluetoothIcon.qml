@@ -16,7 +16,7 @@ Item {
         anchors.centerIn: parent
         text: Services.BluetoothService.powered ? "󰂯" : "󰂲"
         font.family: Config.BarConfig.fontNerd
-        font.pixelSize: 14
+        font.pixelSize: Config.BarConfig.fontSizeIcon
         color: root.isActive ? Config.BarConfig.colorAccent : Config.BarConfig.colorText
         Behavior on color { ColorAnimation { duration: 120 } }
     }

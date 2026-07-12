@@ -59,7 +59,7 @@ Item {
         anchors.centerIn: parent
         text: root._hasUnread ? "󰂚" : "󰂜"
         font.family: Config.BarConfig.fontNerd
-        font.pixelSize: 15
+        font.pixelSize: Config.BarConfig.fontSizeIcon
         color: root.isActive
                ? Config.BarConfig.colorAccent
                : (root._hasUnread ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim)
