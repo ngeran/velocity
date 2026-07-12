@@ -41,15 +41,12 @@
 //   - In-process: ThemeService mutates `colors`/`metadata` directly (or via
 //     updateColorToken); QML re-evaluates every Config.ThemeConfig.colors.*
 //     and UI.Colors.* binding (the latter via the Colors.qml shim).
-//   - External intake: a Process polls ~/.cache/theme/colors.json every 1s so
-//     the active shell still reacts to the pre-existing `theme-switcher` CLI
-//     and other external writers WITHOUT requiring changes to those scripts.
-//     ThemeService additionally mirrors internal changes to
-//     ~/.config/quickshell/theme-active.json (see ThemeService.qml).
+//   - External intake: a FileView watches ~/.cache/theme/colors.json so the
+//     active shell still reacts to external writers (theme-switcher CLI).
 //
 // I/O TARGETS
-//   READ : ~/.cache/theme/colors.json   (external intake poll)
-//   WRITE: none here — owned by ThemeService (theme-active.json loop)
+//   READ : ~/.cache/theme/colors.json   (external intake)
+//   WRITE: none here — owned by ThemeService (the sole pre-clamping writer)
 //
 // BACKWARD COMPATIBILITY
 //   Retains the `.colors` and `.metadata` sub-objects so existing consumers
@@ -238,16 +235,9 @@ Item {
             if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
         }
 
-        // QD-OLED Safe: force pure-black backgrounds
-        if (root.metadata.oledClamp) {
-            var cs = {}
-            for (var ks in root.colors) cs[ks] = root.colors[ks]
-            cs.background = "#000000"
-            cs.surface = "#000000"
-            cs.surfaceVariant = "#000000"
-            cs.surfaceContainer = "#000000"
-            root.colors = cs
-        }
+        // NOTE: no inline OLED clamp here. ThemeService is the SOLE pre-clamping
+        // writer — every bundle reaching applyTheme (in-process or via colors.json
+        // intake) is already clamped. The bar keeps its own clamp as defense.
 
         if (Config.DebugConfig.debugTheme) {
             console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
@@ -260,7 +250,7 @@ Item {
     // -------------------------------------------------------------------------
     // Event-driven sync (replaces 1s poll). Reacts to external writes from
     // ThemeService (settings writes) and external tools (theme-switcher CLI).
-    // ThemeService owns the in-process mutation path and theme-active.json write-back.
+    // ThemeService is the sole pre-clamping writer, so intake bundles are clamped.
     // =========================================================================
 
     // Plain filesystem path. StandardPaths returns a file:// URL in this Qt

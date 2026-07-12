@@ -81,8 +81,12 @@ QtObject {
                 return "QuickShell Preset"
             case "matugen":
                 return "Matugen (wallpaper)"
+            case "stylix":
+                return "Stylix (seed)"
             case "manual":
                 return "Custom (manual)"
+            case "custom":
+                return "Saved palette"
             default:
                 return source.charAt(0).toUpperCase() + source.slice(1)
         }

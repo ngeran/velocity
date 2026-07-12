@@ -82,6 +82,18 @@ Item {
         root.colors = next
     }
 
+    // Relative luminance (0..1, sRGB) of a "#rrggbb" string — mirrors
+    // ThemeService.luminance (the bar is a separate process and can't import it).
+    function luminance(hex) {
+        var h = (hex || "#000000").replace("#", "")
+        if (h.length !== 6) return 0
+        var ch = function (s) {
+            var v = parseInt(s, 16) / 255
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * ch(h.substring(0, 2)) + 0.7152 * ch(h.substring(2, 4)) + 0.0722 * ch(h.substring(4, 6))
+    }
+
     // =========================================================================
     // THEME APPLICATION
     // =========================================================================
@@ -133,7 +145,10 @@ Item {
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Metadata applied. oledClamp:", root.metadata.oledClamp)
         }
 
-        // QD-OLED Safe: force pure-black backgrounds
+        // QD-OLED Safe: force pure-black backgrounds. Kept as defense (the bar is
+        // a separate process reading colors.json — can't fully trust external
+        // writers). Includes the text-luminance safeguard so dim text on pure
+        // black is bumped to a readable default (matches ThemeService.clampOLED).
         if (root.metadata.oledClamp) {
             var cb = {}
             for (var kb in root.colors) cb[kb] = root.colors[kb]
@@ -141,6 +156,8 @@ Item {
             cb.surface = "#000000"
             cb.surfaceVariant = "#000000"
             cb.surfaceContainer = "#000000"
+            if (root.luminance(cb.text) < 0.18) cb.text = "#e0e0e0"
+            if (root.luminance(cb.textDim) < 0.12) cb.textDim = "#808080"
             root.colors = cb
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] OLED clamp applied")
         }

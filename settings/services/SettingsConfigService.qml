@@ -45,9 +45,9 @@ Item {
     property string clockCity: "Local"          // Display name for timezone
     property int clockOffset: 0                 // UTC offset in hours (-12 to +14)
 
-    // Wallpaper settings
-    property bool syncThemeToWallpaper: false      // Auto-regenerate theme when wallpaper changes (legacy; now maps to rebuildOnWallpaperChange)
-    property bool rebuildOnWallpaperChange: false   // Trigger Stylix rebuild when wallpaper changes (requires pkexec)
+    // Wallpaper → theme: regenerate the palette from the active wallpaper via
+    // matugen whenever it changes (instant, no rebuild). Default ON.
+    property bool matugenOnWallpaperChange: true
 
     // Pulses true briefly after every saveSettings() — drives the Settings-tab "✓ APPLIED" toast.
     property bool justSaved: false
@@ -114,8 +114,7 @@ Item {
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
-            syncThemeToWallpaper: root.syncThemeToWallpaper,
-            rebuildOnWallpaperChange: root.rebuildOnWallpaperChange
+            matugenOnWallpaperChange: root.matugenOnWallpaperChange
         }
 
         var json = JSON.stringify(config, null, 2)
@@ -138,8 +137,7 @@ Item {
         root.workspaceCount = 5
         root.clockCity = "Local"
         root.clockOffset = 0
-        root.syncThemeToWallpaper = false
-        root.rebuildOnWallpaperChange = false
+        root.matugenOnWallpaperChange = true
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
     }
 
@@ -172,11 +170,11 @@ Item {
         if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14) {
             root.clockOffset = data.clockOffset
         }
-        if (data.syncThemeToWallpaper !== undefined) {
-            root.syncThemeToWallpaper = data.syncThemeToWallpaper
-        }
-        if (data.rebuildOnWallpaperChange !== undefined) {
-            root.rebuildOnWallpaperChange = data.rebuildOnWallpaperChange
+        // Migrate the legacy `rebuildOnWallpaperChange` key → matugenOnWallpaperChange.
+        if (data.matugenOnWallpaperChange !== undefined) {
+            root.matugenOnWallpaperChange = data.matugenOnWallpaperChange
+        } else if (data.rebuildOnWallpaperChange !== undefined) {
+            root.matugenOnWallpaperChange = data.rebuildOnWallpaperChange
         }
     }
 

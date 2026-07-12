@@ -350,10 +350,10 @@ Item {
         Config.SharedState.updateWallpaper(path)
         saveConfig()
 
-        // Auto-regenerate Stylix theme if opt-in rebuild flag is set
-        // (Separate from syncThemeToWallpaper; this triggers a rebuild via pkexec)
-        if (Services.SettingsConfigService.rebuildOnWallpaperChange) {
-            console.log("[WallpaperService] Auto-rebuilding Stylix theme from wallpaper:", path)
+        // Auto-theme from the new wallpaper via matugen (instant, no rebuild)
+        // when the matugenOnWallpaperChange toggle is on.
+        if (Services.SettingsConfigService.matugenOnWallpaperChange) {
+            console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
             Services.ThemeService.applyDynamicTheme(path)
         }
     }

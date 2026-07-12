@@ -2,6 +2,28 @@
 // settings/services/ThemeService.qml
 // Core Architectural State Machine Engine
 // =============================================================================
+//
+// THEME SOURCES (5) — which apply path emits each:
+//   "preset"  — applyPreset()                 (a curated palette from ThemePresets)
+//   "stylix"  — stylixSeedLoader              (Stylix cold-boot seed, build-time)
+//   "matugen" — matugenRunner                 (runtime wallpaper → Material-You, instant)
+//   "manual"  — applyManualOverride()         (per-token hex edits)
+//   "custom"  — applyCustomTheme()            (a user-saved palette)
+//
+// HYBRID PALETTE ARCHITECTURE
+//   Stylix = the cold-boot seed (build-time base16 from wallpaper.jpg →
+//     stylix-palette.json). Loaded once at boot if no live theme is chosen.
+//   matugen = the runtime generator (`matugen image <live-wallpaper> --json hex`),
+//     producing a Material-You palette instantly with NO rebuild. This is what
+//     makes "custom palette from the active wallpaper" instant.
+//   They never fight: once a non-stylix source is active, loadStylixSeed()'s
+//   clobber-guard skips the seed on later boots.
+//
+// INVARIANT: ThemeService is the SOLE writer that pre-clamps (clampOLED runs
+//   before every applyTheme + every colors.json write). ThemeConfig therefore
+//   does NOT re-clamp on intake. The bar (separate process) keeps its own
+//   clamp as defense against external writers.
+// =============================================================================
 
 pragma Singleton
 import QtQuick
@@ -26,13 +48,14 @@ Item {
     property string regenError:  ""    // Human-readable error message
     property bool   regenFailed: false // True if last operation failed
 
+    // If matugen fails, fall back to the old Stylix rebuild path instead of
+    // surfacing an error. Default OFF: surface errors so problems are visible.
+    property bool fallbackToRebuild: false
+
     // StandardPaths.writableLocation() returns a QUrl ("file:///home/nikos") in
     // this Qt build. Concatenation coerces it to a string first, then we strip
-    // the "file://" scheme. (Calling .startsWith/.replace directly on the QUrl
-    // throws TypeError — this mirrors the bar's working themeFilePath pattern.)
-    // Routing every write through this real path fixes the bug where theme
-    // writes (colors.json, ghostty, theme-active) landed in literal "file:"
-    // dirs instead of their real locations, so the bar/ghostty never updated.
+    // the "file://" scheme. Routing every write through this real path fixes
+    // the bug where theme writes landed in literal "file:" dirs.
     readonly property string homeDir: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "")
 
     // =========================================================================
@@ -42,8 +65,6 @@ Item {
     function createProcess(cmd, label) {
         var proc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         proc.command = cmd;
-
-        // Add error logging
         proc.onExited.connect(function(code) {
             if (code !== 0) {
                 var errorMsg = "Process failed with exit code " + code + ": " + (label || "unknown");
@@ -51,7 +72,6 @@ Item {
                 CommandService.pushLog("[ThemeService] " + errorMsg, "error");
             }
         });
-
         return proc;
     }
 
@@ -64,14 +84,6 @@ Item {
 
     // =========================================================================
     // PRESET PALETTE REFERENCE — reads from ThemePresets (SSOT)
-    // -------------------------------------------------------------------------
-    // applyPreset() applies a bundle from ThemePresets DIRECTLY to
-    // Config.ThemeConfig (instant recolor via bindings). This bypasses the
-    // unreliable colors.json cat-poll as the primary apply path.
-    //
-    // ThemePresets is the single source of truth; these values mirror the
-    // palettes in ~/.local/bin/theme-switcher so quickshell and global targets
-    // agree. Full token set per theme (Tier 1 structural + Tier 2 accents).
     // =========================================================================
     readonly property var presetPalettes: Config.ThemePresets.palettes
 
@@ -84,41 +96,15 @@ Item {
 
     Component.onCompleted: {
         themeService.loadCustomThemes();
-        // Load Stylix seed on startup (will be applied if colors.json is absent or stale)
         themeService.loadStylixSeed();
     }
 
     // =========================================================================
-    // INTERFACE MANIPULATION METHODS
+    // SCHEMA — token keys + default seed (canonical source, shared with
+    // settings/config/ThemeConfig.qml + essentials.nix). Live color VALUES
+    // still flow only through ThemeConfig; this is keys + the default bundle.
     // =========================================================================
-
-    /**
-     * Single OLED Clamp Function — forces surface tokens to pure black
-     *
-     * This is the ONLY place where OLED clamping happens. All entry points
-     * (preset, manual, stylix seed) must route through this function to ensure
-     * consistent behavior and eliminate duplicate clamping.
-     *
-     * @param bundle - The color bundle to clamp (modified in-place)
-     * @param clamp - If true, force surface tokens to #000000
-     * @returns The clamped bundle (same object, modified in-place for efficiency)
-     */
-    // =========================================================================
-    // NORMALIZATION + CONTRAST HELPERS (shared by preset + stylix paths)
-    // -------------------------------------------------------------------------
-    // normalizeBundle() emits the canonical 16-token shape from any raw color
-    // object so presets and stylix output are structurally identical; missing
-    // tokens fall back to defaultBundle. luminance() powers the OLED-clamp text
-    // safeguard in clampOLED().
-    // =========================================================================
-
-    readonly property var defaultBundle: ({
-        background: "#000000", surface: "#0a0a0a", surfaceVariant: "#111111",
-        surfaceContainer: "#111111", text: "#e0e0e0", textDim: "#808080",
-        border: "#1a1a1a", outline: "#2a2a2a", outlineVariant: "#1a1a1a",
-        primary: "#7c6bf0", secondary: "#00dce5", accent: "#f87171",
-        success: "#34d399", warning: "#fbbf24", error: "#f87171", info: "#00dce5"
-    })
+    readonly property var defaultBundle: Config.ThemeSchema.defaults
 
     // Relative luminance (0..1, sRGB) of a "#rrggbb" string; invalid → 0.
     function luminance(hex) {
@@ -156,76 +142,82 @@ Item {
         }
     }
 
+    /**
+     * Single OLED Clamp Function — forces surface tokens to pure black.
+     * The ONLY clamp in the settings process. All apply paths route through it.
+     */
     function clampOLED(bundle, clamp) {
         if (!clamp) {
-            return bundle;  // No clamping needed, return as-is
+            return bundle;
         }
-
         // Force ONLY the four surface tokens to pure black
         bundle.background = "#000000";
         bundle.surface = "#000000";
         bundle.surfaceVariant = "#000000";
         bundle.surfaceContainer = "#000000";
-
         // Pure-black bg: guarantee text legibility. If the source palette's text
         // is too dim to read on #000, fall back to the default light tokens.
         if (themeService.luminance(bundle.text) < 0.18)
             bundle.text = themeService.defaultBundle.text;
         if (themeService.luminance(bundle.textDim) < 0.12)
             bundle.textDim = themeService.defaultBundle.textDim;
-
         return bundle;
     }
 
-    /**
-     * Writes the theme bundle to ~/.cache/theme/colors.json (bar sync channel)
-     *
-     * Consolidated helper for all four write sites (preset, stylix seed, manual,
-     * custom). Performs mkdir + write atomically via sh -c to avoid races.
-     */
-    function _writeColorsJson(bundle, metadata) {
-        var cachePath = themeService.homeDir + "/.cache/theme";
-        var colorsJsonPath = cachePath + "/colors.json";
-        var colorsPayload = { colors: bundle, metadata: metadata };
-        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        writer.command = ["sh", "-c", "mkdir -p " + cachePath + " && printf '%s' '" + JSON.stringify(colorsPayload) + "' > " + colorsJsonPath];
-        writer.onExited.connect(function(code) {
+    // =========================================================================
+    // ATOMIC I/O HELPERS
+    // -------------------------------------------------------------------------
+    // _runSh       — one-shot `sh -c` Process; logs failures (no silent errors).
+    // _atomicWrite — write to <path>.tmp.$$ then mv. Readers (bar FileView,
+    //   nvim dofile, rofi) never see a half-written file. Single quotes in the
+    //   payload are escaped; paths are space-free under ~ so left bare for $$.
+    // =========================================================================
+    function _runSh(script, label) {
+        var p = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
+        p.command = ["sh", "-c", script];
+        p.onExited.connect(function(code) {
             if (code !== 0) {
-                var errorMsg = "Failed to write colors.json (exit " + code + "). Theme may not sync to bar.";
-                console.error("[ThemeService] " + errorMsg);
-                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
+                var msg = (label || "shell") + " failed (exit " + code + ")";
+                console.error("[ThemeService] " + msg);
+                CommandService.pushLog("[ThemeService] " + msg, "error");
             }
         });
-        writer.running = true;
+        p.running = true;
+        return p;
+    }
+
+    function _atomicWrite(path, content) {
+        var dir = path.substring(0, path.lastIndexOf("/"));
+        var safe = String(content).replace(/'/g, "'\\''");
+        themeService._runSh(
+            "mkdir -p " + dir + " && printf '%s' '" + safe + "' > " + path + ".tmp.$$ && mv -f " + path + ".tmp.$$ " + path,
+            "write " + path
+        );
     }
 
     /**
-     * Re-apply the current theme with new OLED clamp state
-     *
-     * This is the public API for toggling OLED protection. It re-applies the
-     * current palette (from ThemeConfig.metadata) with the new clamp state,
-     * ensuring both settings and bar update consistently.
-     *
-     * @param clamp - New OLED clamp state (true = ON, false = OFF)
+     * Writes the theme bundle to ~/.cache/theme/colors.json (bar sync channel).
+     * Atomic, consolidated helper for all apply paths.
+     */
+    function _writeColorsJson(bundle, metadata) {
+        var colorsJsonPath = themeService.homeDir + "/.cache/theme/colors.json";
+        themeService._atomicWrite(colorsJsonPath, JSON.stringify({ colors: bundle, metadata: metadata }));
+    }
+
+    /**
+     * Re-apply the current theme with new OLED clamp state (public toggle API).
      */
     function setOledClamp(clamp) {
-        if (Config.DebugConfig.debugTheme) console.log("=== setOledClamp CALLED ===")
-        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] New clamp state:", clamp)
-        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] Current theme:", Config.ThemeConfig.metadata.name)
-        if (Config.DebugConfig.debugTheme) console.log("[setOledClamp] Current source:", Config.ThemeConfig.metadata.source)
-
+        if (Config.DebugConfig.debugTheme) console.log("=== setOledClamp CALLED ===", clamp)
         var currentName = Config.ThemeConfig.metadata.name || "OLED Pure Black";
         var currentSource = Config.ThemeConfig.metadata.source || "preset";
 
         if (currentSource === "preset") {
-            // Re-apply the preset with new clamp state
             themeService.applyPreset(currentName, clamp);
-        } else if (currentSource === "stylix" || currentSource === "custom" || currentSource === "manual") {
-            // Re-clamp the CURRENT palette in place. Do NOT call loadStylixSeed()
-            // here: the seed's hardcoded oledClamp:false would revert this toggle
-            // ~1s later (async seed reload), and reloading the seed would also
-            // discard a custom/manual palette. The current colors already live in
-            // Config.ThemeConfig.colors — just re-clamp + persist + sync them.
+        } else if (currentSource === "stylix" || currentSource === "matugen" || currentSource === "custom" || currentSource === "manual") {
+            // Re-clamp the CURRENT palette in place. Do NOT reload the seed —
+            // its hardcoded oledClamp:false would revert this toggle ~1s later,
+            // and reloading would discard a custom/manual/matugen palette.
             var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors);
             themeService.clampOLED(bundle, clamp);
             Config.ThemeConfig.applyTheme({
@@ -234,120 +226,203 @@ Item {
                     name: Config.ThemeConfig.metadata.name,
                     source: currentSource,
                     applied: new Date().toISOString(),
-                    oledClamp: clamp
+                    oledClamp: clamp,
+                    matugenEnabled: Config.ThemeConfig.metadata.matugenEnabled
                 }
             }, true);
             themeService._writeColorsJson(bundle, Config.ThemeConfig.metadata);
             themeService.syncToExternalApps(bundle);
         } else {
-            // Unknown source - fall back to OLED Pure Black
-            if (Config.DebugConfig.debugTheme) console.warn("[setOledClamp] Unknown theme source:", currentSource, "- falling back to OLED Pure Black")
+            if (Config.DebugConfig.debugTheme) console.warn("[setOledClamp] Unknown source:", currentSource, "- falling back to OLED Pure Black")
             themeService.applyPreset("OLED Pure Black", clamp);
         }
-
-        if (Config.DebugConfig.debugTheme) console.log("=== setOledClamp COMPLETE ===")
     }
 
-
-
     /**
-     * Executes internal structural preset modification pipeline updates
+     * Apply a curated preset palette (instant in-process recolor + cache write).
      */
     function applyPreset(presetName, applyOLEDClamp) {
-        if (Config.DebugConfig.debugTheme) console.log("=== applyPreset CALLED ===")
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] presetName:", presetName)
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] applyOLEDClamp:", applyOLEDClamp, "(type:", typeof applyOLEDClamp, ")")
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Current Config.ThemeConfig.metadata.oledClamp BEFORE:", Config.ThemeConfig.metadata.oledClamp)
-
-        // NOTE: no isRegenerating early-return guard — a stuck flag (e.g. a prior
-        // theme-switcher run whose onExited never fired during a reload) would
-        // otherwise brick ALL theme switches. Set true here for UI; onExited clears.
+        if (Config.DebugConfig.debugTheme) console.log("=== applyPreset CALLED ===", presetName)
         themeService.isRegenerating = true;
 
-        // --- PRIMARY: apply the palette IN-PROCESS for instant, reliable recolor. ---
-        // The colors.json cat-poll never reaches applyTheme, so we do NOT depend
-        // on it. This recolors the whole shell immediately via ThemeConfig bindings.
         var palette = themeService.presetPalettes[presetName];
         if (!palette) {
             themeService.isRegenerating = false;
-            console.warn("[applyPreset] ERROR: unknown preset (not in presetPalettes):", presetName);
+            console.warn("[applyPreset] unknown preset:", presetName);
             return;
         }
 
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Palette found for:", presetName)
         var bundle = themeService.normalizeBundle(palette);
-
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Background before clamp:", bundle.background)
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Surface before clamp:", bundle.surface)
-
-        // Apply OLED clamp through the single clampOLED function
         themeService.clampOLED(bundle, applyOLEDClamp);
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] OLED clamp", applyOLEDClamp ? "APPLIED" : "NOT applied")
 
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Calling Config.ThemeConfig.applyTheme with metadata.oledClamp:", applyOLEDClamp ? true : false)
-        Config.ThemeConfig.applyTheme({
-            colors: bundle,
-            metadata: {
-                name: presetName,
-                source: "preset",
-                applied: new Date().toISOString(),
-                oledClamp: applyOLEDClamp ? true : false
-            }
-        }, true);  // Mark as user-initiated change
-
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Config.ThemeConfig.metadata.oledClamp AFTER applyTheme:", Config.ThemeConfig.metadata.oledClamp)
-
-        // --- SECONDARY: write to cache file for bar and other shells ---
-        themeService._writeColorsJson(bundle, {
+        var meta = {
             name: presetName,
             source: "preset",
-            oledClamp: applyOLEDClamp
-        });
-
-        // Sync to external apps
+            applied: new Date().toISOString(),
+            oledClamp: applyOLEDClamp ? true : false,
+            matugenEnabled: false
+        };
+        Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
+        themeService._writeColorsJson(bundle, meta);
         themeService.syncToExternalApps(bundle);
 
         themeService.isRegenerating = false;
-        if (Config.DebugConfig.debugTheme) console.log("[applyPreset] Function complete. Final metadata.oledClamp:", Config.ThemeConfig.metadata.oledClamp)
-        if (Config.DebugConfig.debugTheme) console.log("=== applyPreset COMPLETE ===")
+    }
+
+    // =========================================================================
+    // RUNTIME PALETTE — matugen (instant wallpaper → Material-You, no rebuild)
+    // =========================================================================
+    // matugen emits { base16, colors: {<name>: {dark/default/light:{color}}} }.
+    // We use the `colors` (Material-You) block — the base16 block is a tonal
+    // ramp (base08 "red" is dark teal here), not semantically meaningful.
+    // `--prefer darkness` picks the darkest dominant color (deterministic,
+    // non-interactive). `-m dark` selects the dark scheme.
+    property var matugenRunner: Process {
+        id: matugenProc
+        property string buffer: ""
+        property string pendingWallpaper: ""
+        command: []
+        stdout: SplitParser { onRead: function(data) { matugenProc.buffer += data } }
+        onExited: function(code) {
+            themeService.isRegenerating = false;
+            var path = matugenProc.pendingWallpaper;
+            if (code === 0 && matugenProc.buffer.length > 0) {
+                try {
+                    var parsed = JSON.parse(matugenProc.buffer.trim());
+                    var bundle = themeService._matugenSchemeToBundle(parsed);
+                    var liveClamp = Config.ThemeConfig.metadata.oledClamp;
+                    themeService.clampOLED(bundle, liveClamp);
+                    var meta = {
+                        name: "Matugen (" + (path.split("/").pop() || "wallpaper") + ")",
+                        source: "matugen",
+                        applied: new Date().toISOString(),
+                        oledClamp: liveClamp,
+                        matugenEnabled: true
+                    };
+                    Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
+                    themeService._writeColorsJson(bundle, meta);
+                    themeService.syncToExternalApps(bundle);
+                    themeService.regenFailed = false;
+                    themeService.regenError = "";
+                    console.log("[ThemeService] matugen palette applied for", path);
+                } catch (e) {
+                    console.error("[ThemeService] matugen parse failed:", e);
+                    themeService._matugenFallback(path, "matugen output unreadable: " + e);
+                }
+            } else {
+                console.error("[ThemeService] matugen exited", code);
+                themeService._matugenFallback(path, "matugen failed (exit " + code + ")");
+            }
+            matugenProc.buffer = "";
+        }
+    }
+
+    // Map matugen Material-You `colors` block → 16-token schema (dark variants).
+    // MY has no success/warning/info semantic colors → fall back to defaultBundle.
+    function _matugenSchemeToBundle(parsed) {
+        var d = themeService.defaultBundle;
+        var col = (parsed && parsed.colors) ? parsed.colors : {};
+        function my(key) {
+            var e = col[key];
+            return (e && e.dark && typeof e.dark.color === "string") ? e.dark.color : null;
+        }
+        var background   = my("background") || d.background;
+        var surface      = my("surface") || d.surface;
+        var surfaceVar   = my("surface_variant") || d.surfaceVariant;
+        var surfaceCont  = my("surface_container") || surfaceVar || d.surfaceContainer;
+        var onSurface    = my("on_surface") || my("on_background") || d.text;
+        var onSurfaceV   = my("on_surface_variant") || d.textDim;
+        var outline      = my("outline") || d.outline;
+        var outlineVar   = my("outline_variant") || d.outlineVariant;
+        var primary      = my("primary") || d.primary;
+        var secondary    = my("secondary") || d.secondary;
+        var tertiary     = my("tertiary") || d.accent;
+        var error        = my("error") || d.error;
+        return {
+            background: background,
+            surface: surface,
+            surfaceVariant: surfaceVar,
+            surfaceContainer: surfaceCont,
+            text: onSurface,
+            textDim: onSurfaceV,
+            border: outlineVar,
+            outline: outline,
+            outlineVariant: outlineVar,
+            primary: primary,
+            secondary: secondary,
+            accent: tertiary,
+            success: d.success,
+            warning: d.warning,
+            error: error,
+            info: primary
+        };
+    }
+
+    // matugen failure → either rebuild fallback (opt-in) or surfaced error.
+    function _matugenFallback(path, reason) {
+        if (themeService.fallbackToRebuild) {
+            console.warn("[ThemeService] matugen failed → falling back to rebuild:", reason);
+            themeService.applyDynamicThemeViaRebuild(path);
+        } else {
+            themeService.regenError = reason;
+            themeService.regenFailed = true;
+        }
     }
 
     /**
-     * Triggers rebuild to apply Stylix palette from a new wallpaper
-     *
-     * Copies the chosen wallpaper into the flake tree and rebuilds; Stylix
-     * regenerates the seed from the new image. After rebuild succeeds,
-     * loadStylixSeed() applies the new palette to colors.json.
+     * Generate a palette from the ACTIVE wallpaper via matugen (instant, no
+     * rebuild). wallpaperPath comes from WallpaperService.currentWallpaper.
+     * The OLED-clamp param is honoured via the live clamp state (matugen's
+     * surfaces get clamped like any other source).
      */
+    function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
+        if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme (matugen) CALLED ===", wallpaperPath)
+
+        if (themeService.isRegenerating) {
+            if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] already regenerating, skipping")
+            return;
+        }
+
+        var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
+        if (!actualPath || actualPath === "") {
+            themeService.regenError = "No wallpaper selected — set a wallpaper in the Wallpaper tab first"
+            themeService.regenFailed = true
+            return;
+        }
+
+        themeService.regenError = ""
+        themeService.regenFailed = false
+        themeService.isRegenerating = true;
+        rebuildTimeout.restart();
+
+        var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
+        matugenProc.pendingWallpaper = cleanPath;
+        matugenProc.buffer = "";
+        matugenProc.command = ["matugen", "image", cleanPath, "--json", "hex", "--prefer", "darkness", "-m", "dark"];
+        matugenProc.running = true;
+    }
+
+    // =========================================================================
+    // REBUILD FALLBACK — the old Stylix-rebuild path (kept for when matugen is
+    // unavailable/broken and fallbackToRebuild is on). Copies the wallpaper
+    // into the flake tree and rebuilds; Stylix regenerates the seed.
+    // =========================================================================
     property var rebuildRunner: Process {
         id: rebuilder
         property string buffer: ""
-
-        stdout: SplitParser {
-            onRead: function(data) { rebuilder.buffer += data }
-        }
-
+        stdout: SplitParser { onRead: function(data) { rebuilder.buffer += data } }
         onRunningChanged: function() {
             if (!running) {
-                // Just log + clear the buffer here. The success/failure decision
-                // (and the post-rebuild seed load) is made in onExited using the
-                // AUTHORITATIVE exit code — a stdout /error|fail/i regex would
-                // false-positive on benign nix warnings, mark a successful build
-                // as failed, and skip applying the freshly-regenerated palette.
                 console.log("[ThemeService] Rebuild output:", rebuilder.buffer.trim());
                 rebuilder.buffer = "";
             }
         }
-
         onExited: function(code) {
             themeService.isRegenerating = false;
             if (code === 0) {
                 themeService.regenFailed = false;
                 themeService.regenError = "";
-                console.log("[ThemeService] Rebuild succeeded (exit 0) — applying new Stylix seed");
-                // FORCE-load the regenerated seed (bypass the startup clobber-guard,
-                // which would skip it because the active source is preset/custom,
-                // not stylix). applyStylixSeedNow runs stylixSeedLoader directly.
+                console.log("[ThemeService] Rebuild succeeded — applying new Stylix seed");
                 themeService.applyStylixSeedNow();
             } else {
                 console.error("[ThemeService] Rebuild failed with exit code:", code);
@@ -357,7 +432,16 @@ Item {
         }
     }
 
-    // Safety timeout: clear isRegenerating after 60s if rebuild hangs
+    function applyDynamicThemeViaRebuild(wallpaperPath) {
+        var cleanPath = (wallpaperPath || "").startsWith("file://") ? wallpaperPath.substring(7) : (wallpaperPath || "");
+        if (!cleanPath) return;
+        themeService.isRegenerating = true;
+        rebuildTimeout.restart();
+        rebuilder.command = ["pkexec", "/run/current-system/sw/bin/qs-apply-wallpaper", cleanPath];
+        rebuilder.running = true;
+    }
+
+    // Safety timeout: clear isRegenerating after 60s if generation hangs.
     Timer {
         id: rebuildTimeout
         interval: 60000
@@ -365,70 +449,22 @@ Item {
         repeat: false
         onTriggered: {
             if (themeService.isRegenerating) {
-                console.warn("ThemeService: rebuild timeout - clearing isRegenerating flag")
-                themeService.regenError = "Rebuild timed out";
+                console.warn("ThemeService: generation timeout - clearing isRegenerating flag")
+                themeService.regenError = "Theme generation timed out";
                 themeService.regenFailed = true;
                 themeService.isRegenerating = false;
             }
         }
     }
 
-    function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
-        if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme CALLED ===")
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] wallpaperPath:", wallpaperPath)
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] applyOLEDClamp:", applyOLEDClamp_unused)
-
-        if (themeService.isRegenerating) {
-            if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Already regenerating, skipping")
-            return;
-        }
-
-        // Use the provided wallpaper path (the active wallpaper from
-        // WallpaperService.currentWallpaper), or fall back to SharedState.
-        var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] actualPath to use:", actualPath)
-
-        if (!actualPath || actualPath === "") {
-            console.warn("[applyDynamicTheme] No wallpaper path available")
-            themeService.regenError = "No wallpaper selected — set a wallpaper in the Wallpaper tab first"
-            themeService.regenFailed = true
-            return;
-        }
-
-        // Reset error state and clear any stale stdout buffer from a previous run.
-        themeService.regenError = ""
-        themeService.regenFailed = false
-        rebuildRunner.buffer = ""
-
-        themeService.isRegenerating = true;
-        rebuildTimeout.restart();
-
-        // Strip file:// prefix if present
-        var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
-        if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] Triggering rebuild with wallpaper:", cleanPath)
-
-        rebuildRunner.command = ["pkexec", "/run/current-system/sw/bin/qs-apply-wallpaper", cleanPath];
-        rebuildRunner.running = true;
-    }
-
-    /**
-     * Loads the Stylix seed palette and applies it as the active theme
-     *
-     * Reads ~/.config/quickshell/stylix-palette.json (written by Stylix's
-     * home-manager module) and pushes it to ThemeConfig + colors.json.
-     * Called on Component.onCompleted (only if colors.json is absent or
-     * source === "stylix") and after successful rebuilds. The clobber guard
-     * prevents overwriting a user's live preset choice on every launch.
-     */
-    // Helper process for checking colors.json before loading Stylix seed
+    // =========================================================================
+    // STYLIX SEED (cold-boot only) — loaded on startup if colors.json is absent
+    // or its source is "stylix". The clobber-guard preserves a user's live choice.
+    // =========================================================================
     property var stylixChecker: Process {
         property string buffer: ""
         command: []
-        stdout: SplitParser {
-            onRead: function(data) {
-                stylixChecker.buffer += data
-            }
-        }
+        stdout: SplitParser { onRead: function(data) { stylixChecker.buffer += data } }
         onExited: function(code) {
             var shouldLoadSeed = true;
             if (stylixChecker.buffer.trim() !== "NONE") {
@@ -438,13 +474,9 @@ Item {
                         shouldLoadSeed = false;
                         console.log("[ThemeService] Skipping Stylix seed - existing theme:", existing.metadata.name);
                     }
-                } catch (e) {
-                    // File exists but invalid, load seed
-                }
+                } catch (e) { /* File exists but invalid, load seed */ }
             }
-            if (shouldLoadSeed) {
-                stylixSeedLoader.running = true;
-            }
+            if (shouldLoadSeed) stylixSeedLoader.running = true;
             stylixChecker.buffer = "";
         }
     }
@@ -452,32 +484,23 @@ Item {
     property var stylixSeedLoader: Process {
         property string buffer: ""
         command: ["sh", "-c", "cat ~/.config/quickshell/stylix-palette.json 2>/dev/null"]
-        stdout: SplitParser {
-            onRead: function(data) { stylixSeedLoader.buffer += data }
-        }
+        stdout: SplitParser { onRead: function(data) { stylixSeedLoader.buffer += data } }
         onRunningChanged: {
             if (!running && stylixSeedLoader.buffer.length > 0) {
                 try {
                     var seed = JSON.parse(stylixSeedLoader.buffer.trim());
                     if (seed && seed.colors && seed.metadata) {
                         var bundle = themeService.normalizeBundle(seed.colors);
-                        // Preserve the user's OLED preference. The seed hardcodes
-                        // oledClamp:false; applying it verbatim silently un-clamps
-                        // an OLED user's pure-black surfaces. Thread the live clamp
-                        // state through, clamp the bundle to match, and carry it in
-                        // the metadata we write back to colors.json + ThemeConfig.
                         var liveClamp = Config.ThemeConfig.metadata.oledClamp;
                         var meta = {
                             name: seed.metadata.name,
                             source: seed.metadata.source,
                             applied: new Date().toISOString(),
-                            oledClamp: liveClamp
+                            oledClamp: liveClamp,
+                            matugenEnabled: false
                         };
                         themeService.clampOLED(bundle, liveClamp);
-                        Config.ThemeConfig.applyTheme({
-                            colors: bundle,
-                            metadata: meta
-                        });
+                        Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta });
                         themeService._writeColorsJson(bundle, meta);
                         themeService.syncToExternalApps(bundle);
                         console.log("[ThemeService] Stylix seed loaded:", seed.metadata.name, "(oledClamp preserved:", liveClamp + ")");
@@ -493,49 +516,43 @@ Item {
     }
 
     function loadStylixSeed() {
-        // Check if colors.json exists and has a non-Stylix source before loading seed
         var colorsPath = themeService.homeDir + "/.cache/theme/colors.json";
         stylixChecker.command = ["sh", "-c", "test -f " + colorsPath + " && cat " + colorsPath + " || echo 'NONE'"];
         stylixChecker.running = true;
     }
 
-    /**
-     * Force-load the Stylix seed palette NOW, bypassing the clobber guard.
-     * User-initiated "Load Stylix" action from the Manual Theme Editor: pulls
-     * the seed colors into ThemeConfig + colors.json + external apps live, so
-     * the editor fields populate with the extracted palette for tweaking.
-     */
-    function applyStylixSeedNow() {
-        stylixSeedLoader.running = true;
-    }
+    /** Force-load the Stylix seed NOW, bypassing the clobber guard. */
+    function applyStylixSeedNow() { stylixSeedLoader.running = true; }
 
     /**
-     * Injects custom individual hex value token runtime updates manually
+     * Manual per-token override. Runs through clampOLED so OLED-on + a manual
+     * non-black surface is clamped back to pure black (the previous bypass bug).
      */
     function applyManualOverride(tokenKey, hexValue) {
         if (!/^#[0-9A-Fa-f]{6}$/.test(hexValue)) return;
 
         Config.ThemeConfig.updateColorToken(tokenKey, hexValue);
 
-        Config.ThemeConfig.metadata = {
-            "name": "Custom Modification",
-            "source": "manual",
-            "applied": new Date().toISOString(),
-            "oledClamp": themeService.isOledClampActive
+        // Re-clamp the whole bundle: an OLED user editing a surface token must
+        // still get pure black. Reads back the just-updated colors.
+        var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors);
+        var clamp = themeService.isOledClampActive;
+        themeService.clampOLED(bundle, clamp);
+        var meta = {
+            name: "Custom Modification",
+            source: "manual",
+            applied: new Date().toISOString(),
+            oledClamp: clamp,
+            matugenEnabled: Config.ThemeConfig.metadata.matugenEnabled
         };
-
-        themeService._writeColorsJson(Config.ThemeConfig.colors, Config.ThemeConfig.metadata);
-
-        // Sync to external apps
-        themeService.syncToExternalApps(Config.ThemeConfig.colors);
-
+        Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
+        themeService._writeColorsJson(bundle, meta);
+        themeService.syncToExternalApps(bundle);
     }
 
     // =========================================================================
     // CUSTOM SCHEME PERSISTENCE + API
     // =========================================================================
-
-    // Reads saved custom schemes from disk (called on startup + after writes).
     property var customThemeLoader: Process {
         id: customLoader
         property string buffer: ""
@@ -557,7 +574,6 @@ Item {
 
     function loadCustomThemes() { customLoader.running = true }
 
-    // Snapshot the current palette as a named scheme (max 5; oldest dropped).
     function saveCustomTheme(name) {
         var n = (name || "").trim()
         if (n.length === 0) return
@@ -578,7 +594,6 @@ Item {
         themeService._writeCustomThemes()
     }
 
-    // Apply a saved scheme through the standard pipeline (bar/ghostty/nvim update).
     function applyCustomTheme(name) {
         var found = null
         for (var i = 0; i < themeService.customThemes.length; i++) {
@@ -588,46 +603,76 @@ Item {
 
         var bundle = themeService.normalizeBundle(found.colors)
         themeService.clampOLED(bundle, themeService.isOledClampActive)
-        Config.ThemeConfig.applyTheme({
-            colors: bundle,
-            metadata: {
-                name: found.name,
-                source: "custom",
-                applied: new Date().toISOString(),
-                oledClamp: themeService.isOledClampActive
-            }
-        }, true)
-
-        themeService._writeColorsJson(bundle, Config.ThemeConfig.metadata)
+        var meta = {
+            name: found.name,
+            source: "custom",
+            applied: new Date().toISOString(),
+            oledClamp: themeService.isOledClampActive,
+            matugenEnabled: false
+        }
+        Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true)
+        themeService._writeColorsJson(bundle, meta)
         themeService.syncToExternalApps(bundle)
     }
 
     function _writeCustomThemes() {
-        var payload = JSON.stringify(themeService.customThemes)
-        var writer = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService)
-        writer.command = ["sh", "-c", "printf '%s' '" + payload.replace(/'/g, "'\\''") + "' > " + themeService.customThemesPath]
-        writer.onExited.connect(function(code) {
-            if (code !== 0) {
-                var errorMsg = "Failed to write custom themes (exit " + code + "). Custom theme may be lost.";
-                console.error("[ThemeService] " + errorMsg);
-                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
-            }
-        });
-        writer.running = true
+        themeService._atomicWrite(themeService.customThemesPath, JSON.stringify(themeService.customThemes));
     }
 
-    /**
-     * Sync theme to external apps (ghostty, terminal TUIs)
-     * This generates config files for apps that support custom theming
-     */
+    // =========================================================================
+    // EXTERNAL APP SYNC — debounced dispatcher
+    // -------------------------------------------------------------------------
+    // syncToExternalApps() debounces 80ms (coalesces rapid preset/manual/matugen
+    // bursts) then fans out to the _syncers registry. Each syncer writes one
+    // app's config; failures are caught + logged per-app (previously silent).
+    // =========================================================================
+    property var _pendingSyncColors: null
+
+    property var _syncDebounce: Timer {
+        interval: 80
+        repeat: false
+        onTriggered: {
+            if (themeService._pendingSyncColors) {
+                themeService._runAllSyncers(themeService._pendingSyncColors);
+                themeService._pendingSyncColors = null;
+            }
+        }
+    }
+
+    // Registry — add a target by appending {key, fn}.
+    property var _syncers: [
+        { key: "ghostty",  fn: function(c) { themeService._syncGhostty(c) } },
+        { key: "kitty",    fn: function(c) { themeService._syncKitty(c) } },
+        { key: "hyprlock", fn: function(c) { themeService._syncHyprlock(c) } },
+        { key: "nvim",     fn: function(c) { themeService._syncNvim(c) } },
+        { key: "rofi",     fn: function(c) { themeService._syncRofi(c) } },
+        { key: "gtk",      fn: function(c) { themeService._syncGtk(c) } }
+    ]
+
     function syncToExternalApps(colors) {
         if (!colors) colors = Config.ThemeConfig.colors;
+        themeService._pendingSyncColors = colors;
+        themeService._syncDebounce.restart();
+    }
 
-        // ghostty: write a managed palette block directly into the MAIN config.
-        // ghostty reliably watches + reloads its main config on content change
-        // (not config-file imports), and a trailing managed block overrides
-        // anything earlier — so open terminals pick up the new colors live.
-        // python3 does the read→strip→append (avoids shell quoting issues).
+    function _runAllSyncers(colors) {
+        for (var i = 0; i < themeService._syncers.length; i++) {
+            var s = themeService._syncers[i];
+            try {
+                s.fn(colors);
+            } catch (e) {
+                var msg = "syncer '" + s.key + "' threw: " + e;
+                console.error("[ThemeService] " + msg);
+                CommandService.pushLog("[ThemeService] " + msg, "error");
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // ghostty: managed palette block appended to the MAIN config (read→strip→
+    // append via python3). ghostty watches + reloads its main config on change.
+    // -------------------------------------------------------------------------
+    function _syncGhostty(colors) {
         var ghosttyMain = themeService.homeDir + "/.config/ghostty/config";
         var ghosttyLines = [
             "background = " + colors.background,
@@ -662,14 +707,14 @@ Item {
             "s = s.rstrip()",
             "open(f, 'w').write(s + '\\n\\n# >>> quickshell-theme >>>\\n' + lines + '\\n# <<< quickshell-theme <<<\\n')"
         ].join("\n");
-        var ghosttyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        ghosttyWriter.command = ["python3", "-c", ghosttyPy];
-        ghosttyWriter.running = true;
+        themeService._runSh("python3 -c " + JSON.stringify(ghosttyPy), "sync ghostty");
+    }
 
-        // kitty: write the palette to ~/.cache/theme/kitty.conf (runtime-writable,
-        // like nvim-base16.lua + rofi.rasi) — NOT ~/.config/ngeran/theme (a
-        // read-only nix-store whole-dir symlink). kitty.conf includes this path.
-        // Reload kitty (ctrl+shift+f5) to apply — kitty doesn't auto-reload config.
+    // -------------------------------------------------------------------------
+    // kitty: palette to ~/.cache/theme/kitty.conf (runtime-writable; kitty.conf
+    // includes it). SIGUSR1 asks kitty to reload. Atomic write.
+    // -------------------------------------------------------------------------
+    function _syncKitty(colors) {
         var kittyConf = themeService.homeDir + "/.cache/theme/kitty.conf";
         var kittyContent =
             "background " + colors.background + "\n" +
@@ -693,19 +738,16 @@ Item {
             "color13 " + colors.secondary + "\n" +
             "color14 " + colors.info + "\n" +
             "color15 " + colors.text + "\n";
-        var kittyWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        kittyWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + kittyContent + "' > " + kittyConf + " && pkill -SIGUSR1 kitty || true"];
-        kittyWriter.running = true;
+        themeService._atomicWrite(kittyConf, kittyContent);
+        themeService._runSh("pkill -SIGUSR1 kitty || true", "kitty reload");
+    }
 
-        // hyprlock: this file is sourced at the END of ~/.config/hypr/hyprlock.conf
-        // and is the SINGLE source for the lock screen's background + input-field,
-        // themed here from the active palette. hyprlock does NOT merge input-field
-        // blocks (each is a SEPARATE field), so hyprlock.conf defines none — adding
-        // one there too would draw a second, overlapping password box.
-        //
-        // Keep this input-field's geometry in sync with the build-time fallback in
-        // modules/apps/essentials.nix (seedHyprlockColors), which seeds this file
-        // before the settings process first runs.
+    // -------------------------------------------------------------------------
+    // hyprlock: sourced at the END of hyprlock.conf — single source for the
+    // lock background + input-field. Keep geometry in sync with the build-time
+    // fallback seedHyprlockColors in modules/apps/essentials.nix.
+    // -------------------------------------------------------------------------
+    function _syncHyprlock(colors) {
         var hyprlockFile = themeService.homeDir + "/.config/hypr/quickshell-colors.conf";
         var hyprlockContent =
             "# Managed by QuickShell ThemeService — sourced at END of hyprlock.conf.\n" +
@@ -728,70 +770,45 @@ Item {
             "    shadow_passes = 0\n" +
             "    fade_on_empty = false\n" +
             "}\n";
-        var hyprlockWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        hyprlockWriter.command = ["sh", "-c", "mkdir -p ~/.config/hypr && printf '%s' '" + hyprlockContent + "' > " + hyprlockFile];
-        hyprlockWriter.running = true;
+        themeService._atomicWrite(hyprlockFile, hyprlockContent);
+    }
 
-        // NOTE: Hyprland window borders are intentionally NOT live-themed here.
-        // On this system the Hyprland config is generated from READ-ONLY Lua
-        // modules (~/.config/hypr/*.lua, via the start-hyprland wrapper), so:
-        //   - `hyprctl keyword general:col.*` is rejected ("non-legacy parsers"),
-        //   - `hyprctl eval` is a Lua eval, not a config setter,
-        //   - `hyprctl reload` would revert any runtime change back to the Lua value.
-        // The border colour (low-saturation teal rgba(00707888)) is a DELIBERATE
-        // OLED burn-in mitigation hardcoded in configs/hypr/look-and-feel.lua (see
-        // its header comment: ~40% lower peak brightness than a vivid accent).
-        // Live border theming would require rearchitecting the Lua config to source
-        // a runtime colours file — left as a follow-up. The previous code here ran
-        // `hyprctl keyword ... && hyprctl reload` on every theme switch: it never
-        // worked (keyword rejected) yet logged a false "Applied" success. Removed.
+    // NOTE: Hyprland window borders are intentionally NOT themed (read-only
+    // Lua config; hyprctl keyword rejected; reload reverts). Border colour is
+    // a deliberate OLED burn-in mitigation hardcoded in configs/hypr/look-and-feel.lua.
+    // NOTE: mako removed — notifications handled by Quickshell NotificationCenter.
 
-        // NOTE: mako was removed — notifications are handled by the Quickshell
-        // Notification Center (bar/services/NotificationService.qml), fed via IPC.
-
-        // nvim (base16): write a Lua table the nvim-base16 plugin reads.
-        // Lives in ~/.cache/theme (runtime-owned, like colors.json) — NOT in
-        // ~/.config/nvim (whose init.lua is a home-manager nix-store symlink).
-        // nvim dofile()s this on launch + on FocusGained for live reload.
-        // base16 has 16 slots; quickshell tokens map 11 directly + 5 fallbacks
-        // (base04/06/07/09/0F — see ~/.omni-nix/home/stylix.nix for the inverse).
+    // -------------------------------------------------------------------------
+    // nvim (base16): Lua table the nvim-base16 plugin dofile()s on launch +
+    // FocusGained. ~/.cache/theme (runtime-owned). 16 slots: 11 direct + 5 fb.
+    // -------------------------------------------------------------------------
+    function _syncNvim(colors) {
         var nvimLua = "return {\n" +
             "  base00 = " + JSON.stringify(colors.background) + ",\n" +
             "  base01 = " + JSON.stringify(colors.surface) + ",\n" +
             "  base02 = " + JSON.stringify(colors.surfaceVariant) + ",\n" +
             "  base03 = " + JSON.stringify(colors.textDim) + ",\n" +
-            "  base04 = " + JSON.stringify(colors.textDim) + ",\n" +   // fallback (mid comment)
+            "  base04 = " + JSON.stringify(colors.textDim) + ",\n" +
             "  base05 = " + JSON.stringify(colors.text) + ",\n" +
-            "  base06 = " + JSON.stringify(colors.text) + ",\n" +      // fallback (light fg)
-            "  base07 = " + JSON.stringify(colors.text) + ",\n" +      // fallback (lightest fg)
+            "  base06 = " + JSON.stringify(colors.text) + ",\n" +
+            "  base07 = " + JSON.stringify(colors.text) + ",\n" +
             "  base08 = " + JSON.stringify(colors.error) + ",\n" +
-            "  base09 = " + JSON.stringify(colors.warning) + ",\n" +   // fallback (orange-ish)
+            "  base09 = " + JSON.stringify(colors.warning) + ",\n" +
             "  base0A = " + JSON.stringify(colors.warning) + ",\n" +
             "  base0B = " + JSON.stringify(colors.success) + ",\n" +
             "  base0C = " + JSON.stringify(colors.secondary) + ",\n" +
             "  base0D = " + JSON.stringify(colors.primary) + ",\n" +
             "  base0E = " + JSON.stringify(colors.accent) + ",\n" +
-            "  base0F = " + JSON.stringify(colors.error) + "\n" +       // fallback (deprecated slot)
+            "  base0F = " + JSON.stringify(colors.error) + "\n" +
             "}";
-        var nvimPath = themeService.homeDir + "/.cache/theme/nvim-base16.lua";
-        var nvimWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        nvimWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + nvimLua + "' > " + nvimPath];
-        nvimWriter.running = true;
-        console.log("[ThemeService] Wrote nvim base16 theme");
+        themeService._atomicWrite(themeService.homeDir + "/.cache/theme/nvim-base16.lua", nvimLua);
+    }
 
-        // rofi: write a rasi palette the launcher's config.rasi @imports.
-        // Lives in ~/.cache/theme (runtime-owned, like colors.json + nvim) —
-        // NOT in ~/.config/rofi (a home-manager nix-store symlink, read-only).
-        // rofi re-reads config.rasi on every launch, so a theme change applies
-        // to the next launcher open — no reload needed. config.rasi imports this
-        // via an ABSOLUTE path (@import "/home/nikos/.cache/theme/rofi.rasi")
-        // because a relative import would resolve into the read-only nix store.
-        // GOTCHAS: (1) rasi @var references reject hyphens, so var names are
-        // hyphen-free (outlinealt, textdim, surfacevar). (2) color values MUST
-        // be UNQUOTED — `bg: #000000;` parses as a color, but `bg: "#000000";`
-        // is stored as a string and silently fails background-color: @bg (rofi
-        // falls back to its default light theme). So we concatenate the raw hex,
-        // NOT JSON.stringify (which would quote it — the bug that broke rofi).
+    // -------------------------------------------------------------------------
+    // rofi: rasi palette config.rasi @imports (ABSOLUTE path → read-only nix
+    // store workaround). Hyphen-free var names; UNQUOTED hex (quoting breaks it).
+    // -------------------------------------------------------------------------
+    function _syncRofi(colors) {
         var rofiRasi = "* {\n" +
             "    bg:          " + colors.background + ";\n" +
             "    surface:     " + colors.surface + ";\n" +
@@ -809,10 +826,47 @@ Item {
             "    error:       " + colors.error + ";\n" +
             "    info:        " + colors.info + ";\n" +
             "}";
-        var rofiPath = themeService.homeDir + "/.cache/theme/rofi.rasi";
-        var rofiWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        rofiWriter.command = ["sh", "-c", "mkdir -p " + themeService.homeDir + "/.cache/theme && printf '%s' '" + rofiRasi + "' > " + rofiPath];
-        rofiWriter.running = true;
-        console.log("[ThemeService] Wrote rofi palette");
+        themeService._atomicWrite(themeService.homeDir + "/.cache/theme/rofi.rasi", rofiRasi);
+    }
+
+    // -------------------------------------------------------------------------
+    // GTK (4/libadwaita + 3): @define-color overrides in colors.css. libadwaita
+    // reads ~/.config/gtk-4.0/colors.css at app STARTUP — running apps do not
+    // recolor live; newly opened GTK apps pick up the change. No collision with
+    // HM (apps.nix writes settings.ini, not colors.css). Qt is NOT covered here
+    // (platformTheme=gtk won't read named colors) — see home/apps.nix follow-up.
+    // -------------------------------------------------------------------------
+    function _syncGtk(colors) {
+        var css =
+            "/* Managed by QuickShell ThemeService — do not edit. */\n" +
+            "@define-color window_bg_color " + colors.background + ";\n" +
+            "@define-color window_fg_color " + colors.text + ";\n" +
+            "@define-color view_bg_color " + colors.surface + ";\n" +
+            "@define-color view_fg_color " + colors.text + ";\n" +
+            "@define-color headerbar_bg_color " + colors.background + ";\n" +
+            "@define-color headerbar_fg_color " + colors.text + ";\n" +
+            "@define-color sidebar_bg_color " + colors.surface + ";\n" +
+            "@define-color sidebar_fg_color " + colors.text + ";\n" +
+            "@define-color dialog_bg_color " + colors.surface + ";\n" +
+            "@define-color dialog_fg_color " + colors.text + ";\n" +
+            "@define-color card_bg_color " + colors.surfaceContainer + ";\n" +
+            "@define-color card_fg_color " + colors.text + ";\n" +
+            "@define-color popover_bg_color " + colors.surface + ";\n" +
+            "@define-color popover_fg_color " + colors.text + ";\n" +
+            "@define-color accent_color " + colors.primary + ";\n" +
+            "@define-color accent_bg_color " + colors.primary + ";\n" +
+            "@define-color accent_fg_color " + colors.background + ";\n" +
+            "@define-color destructive_color " + colors.error + ";\n" +
+            "@define-color destructive_bg_color " + colors.error + ";\n" +
+            "@define-color success_color " + colors.success + ";\n" +
+            "@define-color success_bg_color " + colors.success + ";\n" +
+            "@define-color warning_color " + colors.warning + ";\n" +
+            "@define-color warning_bg_color " + colors.warning + ";\n" +
+            "@define-color error_color " + colors.error + ";\n" +
+            "@define-color error_bg_color " + colors.error + ";\n" +
+            "@define-color borders " + colors.border + ";\n" +
+            "@define-color insensitive_fg_color " + colors.textDim + ";\n";
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-4.0/colors.css", css);
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-3.0/colors.css", css);
     }
 }

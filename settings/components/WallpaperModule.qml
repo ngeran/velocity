@@ -126,7 +126,7 @@ Item {
             spacing: 12
 
             Text {
-                text: "Auto-rebuild Stylix theme when wallpaper changes"
+                text: "Auto-theme from wallpaper (matugen)"
                 font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 Layout.fillWidth: true
@@ -136,17 +136,17 @@ Item {
                 Layout.preferredWidth: 80
                 Layout.preferredHeight: 28
                 radius: Config.SettingsConfig.radiusMd
-                color: Services.SettingsConfigService.rebuildOnWallpaperChange ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
+                color: Services.SettingsConfigService.matugenOnWallpaperChange ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.surfaceVariant
                 border.color: syncMouseArea.activeFocus ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.border
                 border.width: syncMouseArea.activeFocus ? 2 : 1
 
                 Text {
                     anchors.centerIn: parent
-                    text: Services.SettingsConfigService.rebuildOnWallpaperChange ? "ON" : "OFF"
+                    text: Services.SettingsConfigService.matugenOnWallpaperChange ? "ON" : "OFF"
                     font.pixelSize: 9
                     font.family: Config.SettingsConfig.fontFamily
                     font.bold: true
-                    color: Services.SettingsConfigService.rebuildOnWallpaperChange ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
+                    color: Services.SettingsConfigService.matugenOnWallpaperChange ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.text
                 }
 
                 MouseArea {
@@ -158,14 +158,14 @@ Item {
 
                     Keys.onPressed: function(event) {
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
-                            Services.SettingsConfigService.rebuildOnWallpaperChange = !Services.SettingsConfigService.rebuildOnWallpaperChange
+                            Services.SettingsConfigService.matugenOnWallpaperChange = !Services.SettingsConfigService.matugenOnWallpaperChange
                             Services.SettingsConfigService.saveSettings()
                             event.accepted = true
                         }
                     }
 
                     onClicked: {
-                        Services.SettingsConfigService.rebuildOnWallpaperChange = !Services.SettingsConfigService.rebuildOnWallpaperChange
+                        Services.SettingsConfigService.matugenOnWallpaperChange = !Services.SettingsConfigService.matugenOnWallpaperChange
                         Services.SettingsConfigService.saveSettings()
                     }
                 }
