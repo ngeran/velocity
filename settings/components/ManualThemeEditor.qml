@@ -164,11 +164,14 @@ Item {
             wrapMode: Text.WordWrap
         }
 
-        // ── STYLIX STRIP ── palette-from-wallpaper actions, in one place.
-        // APPLY WALLPAPER = rebuild (regenerates the seed from the current
-        //   wallpaper via Stylix, ~30-60s, passwordless via polkit).
-        // LOAD STYLIX = pull the EXISTING seed into the editor live so the
-        //   extracted colors populate every field for tweaking.
+        // ── PALETTE-FROM-WALLPAPER STRIP ── on-demand extract actions.
+        // FROM WALLPAPER = run matugen on the CURRENT wallpaper and map its
+        //   colors into the editor LIVE (instant, no rebuild). Tweak tokens,
+        //   then SAVE to keep it as a custom theme. This does NOT auto-apply on
+        //   every wallpaper change — that is the separate, OFF-by-default
+        //   "Auto-theme from wallpaper" toggle in the Wallpaper tab (kept off
+        //   so the burn-in wallpaper cycler won't clobber your custom theme).
+        // LOAD STYLIX = pull the build-time Stylix SEED into the editor instead.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
@@ -194,10 +197,12 @@ Item {
 
                 Text {
                     text: Services.ThemeService.isRegenerating
-                          ? "REBUILDING…"
-                          : (Config.ThemeConfig.metadata.source === "stylix"
-                              ? "STYLIX SEED ACTIVE"
-                              : "STYLIX SEED READY")
+                          ? "GENERATING…"
+                          : (Config.ThemeConfig.metadata.source === "matugen"
+                              ? "WALLPAPER PALETTE"
+                              : (Config.ThemeConfig.metadata.source === "stylix"
+                                  ? "STYLIX SEED"
+                                  : "EDITOR READY"))
                     font.pixelSize: 9
                     font.bold: true
                     font.family: Config.SettingsConfig.fontFamily
@@ -206,7 +211,7 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                // APPLY WALLPAPER — rebuild (disabled while regenerating)
+                // FROM WALLPAPER — matugen extract into the editor (disabled while generating)
                 Rectangle {
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 22
@@ -220,7 +225,7 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: Services.ThemeService.isRegenerating ? "…" : "APPLY WALLPAPER"
+                        text: Services.ThemeService.isRegenerating ? "…" : "FROM WALLPAPER"
                         font.pixelSize: 9; font.bold: true
                         font.family: Config.SettingsConfig.fontFamily
                         color: (applyWallpaperArea.containsMouse && !Services.ThemeService.isRegenerating)

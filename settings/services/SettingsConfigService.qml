@@ -45,9 +45,12 @@ Item {
     property string clockCity: "Local"          // Display name for timezone
     property int clockOffset: 0                 // UTC offset in hours (-12 to +14)
 
-    // Wallpaper → theme: regenerate the palette from the active wallpaper via
-    // matugen whenever it changes (instant, no rebuild). Default ON.
-    property bool matugenOnWallpaperChange: true
+    // Auto-regenerate the palette from the active wallpaper via matugen
+    // whenever it changes (instant, no rebuild). Default OFF: a burn-in
+    // wallpaper cycler would otherwise clobber the user's custom theme on every
+    // rotation. Toggle on in the Wallpaper tab. On-demand extract (no auto
+    // apply) lives in the Theme tab manual editor — the FROM WALLPAPER button.
+    property bool matugenOnWallpaperChange: false
 
     // Pulses true briefly after every saveSettings() — drives the Settings-tab "✓ APPLIED" toast.
     property bool justSaved: false
@@ -137,7 +140,7 @@ Item {
         root.workspaceCount = 5
         root.clockCity = "Local"
         root.clockOffset = 0
-        root.matugenOnWallpaperChange = true
+        root.matugenOnWallpaperChange = false
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
     }
 
