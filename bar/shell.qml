@@ -109,6 +109,11 @@ ShellRoot {
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
 
+            Components.BtopIcon {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 2
+            }
+
             Components.NotificationButton {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
@@ -149,6 +154,13 @@ ShellRoot {
     }
 
     // =========================================================================
+    // KEYBINDS OVERLAY — mod+K cheat-sheet (toggled via IPC)
+    // =========================================================================
+    Components.KeybindsOverlay {
+        id: keybindsOverlay
+    }
+
+    // =========================================================================
     // IPC HANDLERS — External Control
     // =========================================================================
 
@@ -160,6 +172,16 @@ ShellRoot {
         function toggle() {
             panelWindow.visible = !panelWindow.visible
             console.log("[Bar] Visibility toggled:", panelWindow.visible)
+        }
+    }
+
+    // Keybinds overlay toggle (for SUPER+K — see configs/hypr/keybindings.lua)
+    IpcHandler {
+        id: keybindsIpc
+        target: "keybinds"
+
+        function toggle() {
+            keybindsOverlay.toggle()
         }
     }
 }

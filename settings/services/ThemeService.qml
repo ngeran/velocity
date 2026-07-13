@@ -669,8 +669,12 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // ghostty: managed palette block appended to the MAIN config (read→strip→
-    // append via python3). ghostty watches + reloads its main config on change.
+    // ghostty: managed palette block appended to the MAIN config. We read→strip
+    // the prior block→append a fresh one in `sh`+`sed` — NOT python3. python is
+    // not guaranteed on the runtime PATH, and every other syncer stays in pure
+    // sh/Qt; a missing python3 silently no-op'd this syncer (ghostty stalled on
+    // a stale palette while kitty/hyprlock updated). ghostty watches its main
+    // config and reloads on change, so no reload signal is needed.
     // -------------------------------------------------------------------------
     function _syncGhostty(colors) {
         var ghosttyMain = themeService.homeDir + "/.config/ghostty/config";
@@ -697,17 +701,20 @@ Item {
             "palette = 14=" + colors.info,
             "palette = 15=" + colors.text
         ].join("\n");
-        var ghosttyPy = [
-            "import os",
-            "f = " + JSON.stringify(ghosttyMain),
-            "lines = " + JSON.stringify(ghosttyLines),
-            "orig = open(f).read() if os.path.exists(f) else ''",
-            "s = orig[:orig.find('# >>> quickshell-theme >>>')] if '# >>> quickshell-theme >>>' in orig else orig",
-            "s = '\\n'.join(l for l in s.split('\\n') if not l.startswith('# quickshell-theme-version:'))",
-            "s = s.rstrip()",
-            "open(f, 'w').write(s + '\\n\\n# >>> quickshell-theme >>>\\n' + lines + '\\n# <<< quickshell-theme <<<\\n')"
-        ].join("\n");
-        themeService._runSh("python3 -c " + JSON.stringify(ghosttyPy), "sync ghostty");
+        var block = "# >>> quickshell-theme >>>\n" + ghosttyLines + "\n# <<< quickshell-theme <<<";
+        // sh single-quote escape (same scheme as _atomicWrite); block has no quotes.
+        var quoted = "'" + String(block).replace(/'/g, "'\\''") + "'";
+        // Ensure file exists, drop the old managed block (marker→EOF) and any
+        // trailing blank lines, then append the fresh block. User settings above
+        // the marker are preserved.
+        var script =
+            "f=" + ghosttyMain + " && " +
+            "mkdir -p \"$(dirname \"$f\")\" && " +
+            "{ [ -f \"$f\" ] || : > \"$f\"; } && " +
+            "sed -i '/# >>> quickshell-theme >>>/,$d' \"$f\" && " +
+            "sed -i -e :a -e '/^\\n*$/{$d;N;ba}' \"$f\" && " +
+            "printf '\\n\\n%s\\n' " + quoted + " >> \"$f\"";
+        themeService._runSh(script, "sync ghostty");
     }
 
     // -------------------------------------------------------------------------
