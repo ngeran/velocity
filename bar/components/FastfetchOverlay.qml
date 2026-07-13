@@ -23,6 +23,14 @@ PanelWindow {
 
     property bool shown: false
     property string infoText: ""      // last fastfetch output (kept visible during refresh)
+
+    // 8-color ANSI palette, in the order fastfetch renders them (indices 8→1).
+    // fastfetch strips color codes when piped (no TTY), so the standard palette
+    // is rendered directly here — Dracula tones read well on the OLED black bg.
+    property var swatchModel: [
+        "#6272a4", "#f8f8f2", "#8be9fd", "#ff79c6",
+        "#bd93f9", "#f1fa8c", "#50fa7b", "#ff5555"
+    ]
     visible: false
     function open()  { visible = true; shown = true; ffProc.running = true }
     function close() { shown = false; hideTimer.restart() }
@@ -35,6 +43,9 @@ PanelWindow {
                 .replace(/\x1b[()=>N]/g, "")               // charset / keypad modes
                 .replace(/\x1b./g, "")                      // any stray escape
                 .replace(/\n{3,}/g, "\n\n")                 // collapse extra blanks
+                .split("\n")
+                .filter(function(l) { return l.indexOf("●") === -1 })  // drop the swatch line (dots now in the header)
+                .join("\n")
                 .trim()
     }
 
@@ -97,6 +108,21 @@ PanelWindow {
                     font.bold: true
                     font.family: Config.BarConfig.fontFamily
                     font.letterSpacing: 2.5
+                }
+                // 8-color palette swatches (moved up from fastfetch's bottom line)
+                Row {
+                    spacing: 4
+                    Layout.leftMargin: 14
+                    Layout.alignment: Qt.AlignVCenter
+                    Repeater {
+                        model: root.swatchModel
+                        Rectangle {
+                            width: 9; height: 9; radius: 4
+                            color: modelData
+                            border.color: Config.ThemeConfig.colors.border
+                            border.width: 1
+                        }
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
