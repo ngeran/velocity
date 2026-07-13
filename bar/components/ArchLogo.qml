@@ -3,13 +3,16 @@
 // =============================================================================
 
 import QtQuick
-import Quickshell.Io
 import "../config" as Config
 
 Item {
     id: icon
     width: Config.BarConfig.iconSize
     height: Config.BarConfig.iconSize
+
+    // Emitted on click → shell.qml wires it to FastfetchOverlay.toggle().
+    // (Replaces the old inline kitty fastfetch launcher — see FastfetchOverlay.qml.)
+    signal triggered()
 
     // Custom Arch Linux SVG
     Image {
@@ -36,10 +39,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            // Robust toggle: Simply flip the running state
-            fastfetchProc.running = !fastfetchProc.running
-        }
+        onClicked: icon.triggered()
     }
 
     // Tooltip on hover
@@ -55,22 +55,4 @@ Item {
         opacity: mouseArea.containsMouse ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 120 } }
     }
-
-    Process {
-        id: fastfetchProc
-        command: [
-            "kitty",
-            "--class", "fastfetch-float",
-            "--title", "System Info",
-            
-            // UI Tweaks
-            "-o", "shell_integration=disabled",
-            "-o", "window_padding_width=25",
-            "-o", "confirm_os_window_close=0",
-            "-o", "cursor_blink_interval=0",
-            
-            // Call the wrapper instead of fastfetch directly
-            "bash", "/home/nikos/.config/hypr/scripts/fastfetch_wrapper.sh"
-        ]
-    } 
 }

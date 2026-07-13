@@ -65,6 +65,7 @@ ShellRoot {
             Components.ArchLogo {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Config.BarConfig.barPadding
+                onTriggered: fastfetchOverlay.toggle()
             }
 
             Components.WorkspaceWidget {
@@ -151,6 +152,13 @@ ShellRoot {
     // =========================================================================
     Components.NotificationCenter {
         id: notificationCenter
+    }
+
+    // =========================================================================
+    // FASTFETCH OVERLAY — system info (toggled by the ArchLogo bar icon)
+    // =========================================================================
+    Components.FastfetchOverlay {
+        id: fastfetchOverlay
     }
 
     // =========================================================================
