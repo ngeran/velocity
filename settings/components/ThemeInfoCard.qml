@@ -25,9 +25,33 @@ Rectangle {
     width:        220
     height:       130
     color:        Config.ThemeConfig.colors.surfaceContainer
-    border.color: Config.ThemeConfig.colors.border
+    border.color: root.isHovered ? root.primaryColor : Config.ThemeConfig.colors.border
     border.width: 1
     radius:       0 // Hard sharp corners asset enforcement
+
+    property bool isHovered: false
+
+    Behavior on border.color {
+        ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad }
+    }
+
+    // Faint accent top-edge highlight — same language as DashboardCard,
+    // so this reads as part of the same card family, not a one-off box.
+    Rectangle {
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        height: 1
+        color: root.primaryColor
+        opacity: root.isHovered ? 0.55 : 0.12
+        Behavior on opacity { NumberAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        onEntered: root.isHovered = true
+        onExited: root.isHovered = false
+        cursorShape: Qt.ArrowCursor
+    }
 
     Column {
         anchors {
@@ -42,7 +66,9 @@ Rectangle {
             font.pixelSize:      8
             font.family: Config.SettingsConfig.fontFamily
             font.letterSpacing:  1.5
-            color:               Config.ThemeConfig.colors.textDim
+            font.bold:           true
+            color:               root.primaryColor
+            opacity:             0.6
         }
 
         // Target Identifier Variable Sub-block Container
@@ -56,7 +82,7 @@ Rectangle {
                 font.bold:      true
                 color:          Config.ThemeConfig.colors.text
 
-                // Monospace accent baseline border line block matrix
+                // Accent underline beneath the theme name
                 Rectangle {
                     anchors {
                         left:   parent.left
@@ -64,9 +90,9 @@ Rectangle {
                         bottom: parent.bottom
                         bottomMargin: -4
                     }
-                    height: 1
+                    height: 2
                     color:  root.primaryColor
-                    radius: Config.SettingsConfig.radiusMd
+                    radius: 0
                 }
             }
         }

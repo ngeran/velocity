@@ -70,20 +70,30 @@ Item {
         // --- SECTION: Day Labels (S M T W T F S) ---
         GridLayout {
             columns: 7
+            columnSpacing: 2
             Layout.fillWidth: true
             Layout.bottomMargin: 10
             
             Repeater {
                 model: ["S", "M", "T", "W", "T", "F", "S"]
-                delegate: Text {
+                // Item wrapper (zero intrinsic width) matches the date-grid
+                // delegate below, so GridLayout splits all 7 columns evenly
+                // instead of sizing each column to its letter's glyph width
+                // ("M"/"W" are wider than "T"/"S", which was throwing the
+                // header out of alignment with the numbers underneath).
+                delegate: Item {
                     Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: modelData
-                    color: Config.ThemeConfig.colors.secondary
-                    opacity: 0.5
-                    font.pixelSize: 10
-                    font.weight: Font.Bold
-                    font.family: Config.SettingsConfig.fontFamily
+                    implicitHeight: dayLabel.implicitHeight
+                    Text {
+                        id: dayLabel
+                        anchors.centerIn: parent
+                        text: modelData
+                        color: Config.ThemeConfig.colors.secondary
+                        opacity: 0.5
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        font.family: Config.SettingsConfig.fontFamily
+                    }
                 }
             }
         }
@@ -110,16 +120,18 @@ Item {
                     readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay
                     readonly property bool isWeekend:   (index % 7 === 0) || (index % 7 === 6)
 
-                    // 1. Today Highlight (Modern Squircle)
+                    // 1. Today Highlight — sharp hairline frame (no radius, no bounce)
                     Rectangle {
                         anchors.centerIn: parent
-                        width: parent.width * 0.88
-                        height: parent.height * 0.88
-                        radius: 7 
-                        color: isToday ? Config.ThemeConfig.colors.secondary : "transparent"
-                        
-                        scale: isToday ? 1.0 : 0.8
-                        Behavior on scale { NumberAnimation { duration: 400; easing.type: Easing.OutBack } }
+                        width: parent.width * 0.8
+                        height: parent.height * 0.8
+                        radius: 0
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Config.ThemeConfig.colors.secondary
+                        visible: isToday
+                        opacity: isToday ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
                     }
 
                     // 2. Day Number
@@ -131,7 +143,7 @@ Item {
                         font.weight: isToday ? Font.Bold : Font.Normal
                         
                         color: {
-                            if (isToday) return Config.ThemeConfig.colors.background;
+                            if (isToday) return Config.ThemeConfig.colors.secondary;
                             if (isActualDay) {
                                 return isWeekend ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.primary;
                             }
