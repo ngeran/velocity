@@ -48,3 +48,5 @@ CoreLcdPane 1.0 CoreLcdPane.qml
 HudCard 1.0 HudCard.qml
 HudGauge 1.0 HudGauge.qml
 HudSpark 1.0 HudSpark.qml
+CpuInfoWidget 1.0 CpuInfoWidget.qml
+StorageMatrixWidget 1.0 StorageMatrixWidget.qml

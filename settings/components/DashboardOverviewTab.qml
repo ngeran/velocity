@@ -1,11 +1,15 @@
 // =============================================================================
-// DashboardOverviewTab.qml — Explicit Pixel-Perfect Bento Grid
-// VERSION: V1.06 — No Column/anchors.fill conflict; pure explicit geometry
+// DashboardOverviewTab.qml — Tactical left-heavy command layout
+// VERSION: V2.01 — Clock+Calendar (left) | CPU+Storage (right top) |
+//                 Network+Identity (right bottom). All cards tactical.
 //
-// ROOT CAUSE (V1.04/V1.05): Using Column{anchors.fill} + Row{height:parent.height}
-// creates a circular binding — Column height depends on children, children depend
-// on Column height. QML resolves this unpredictably, causing Row 1 to consume
-// all available height. Fix: explicit y-placement on an Item, zero parent refs.
+// Explicit pixel math on an Item root (no Column/anchors.fill circular bindings
+// — see V1.04..V1.06 history). Cards are placed by absolute x/y/width/height
+// derived only from root.width/root.height. Each card is a tactical DashboardCard
+// (showBrackets + accent); colours follow the live theme (multi-accent mapping:
+// clock/calendar=warning, processor=secondary, storage=success, network=secondary,
+// identity=primary). Reuses the existing Clock/Calendar/Network/Identity widgets
+// unchanged; ProcessorArrayWidget + StorageMatrixWidget are new.
 // =============================================================================
 
 import "." as Components
@@ -16,93 +20,77 @@ Item {
     id: root
     anchors.fill: parent
 
-    readonly property string layoutVersion: "V1.06"
+    readonly property string layoutVersion: "V2.00"
 
-    // =========================================================================
-    // DIMENSION CONSTANTS — all derived from root.width / root.height only
-    // =========================================================================
-    readonly property real pad:     20          // outer margin on all sides
-    readonly property real gap:     14          // gap between rows and between cards
+    // ── geometry (derived from root.width/height only) ──────────────────────
+    readonly property real pad: 16          // outer margin
+    readonly property real gap: 12          // between cards
 
-    // Usable canvas
     readonly property real cw: root.width  - pad * 2
     readonly property real ch: root.height - pad * 2
 
-    // Row heights: two rows + one inter-row gap must fill ch exactly
-    readonly property real r1h: (ch - gap) * 0.54
-    readonly property real r2h: (ch - gap) * 0.46
+    // left column (~32%) + right region
+    readonly property real leftW:  Math.round((cw - gap) * 0.32)
+    readonly property real rightX: pad + leftW + gap
+    readonly property real rightW: cw - leftW - gap
 
-    // Per-row available widths (innerWidth minus inter-card gaps)
-    // Row 1: 4 cards → 3 gaps
-    readonly property real r1w: cw - gap * 3
-    // Row 2: 3 cards → 2 gaps
-    readonly property real r2w: cw - gap * 2
+    // left column split: clock 42% / calendar rest
+    readonly property real clockH: Math.round((ch - gap) * 0.42)
+    readonly property real calY:   pad + clockH + gap
+    readonly property real calH:   ch - clockH - gap
 
-    // Y origins (no Column involved — pure coordinate math)
-    readonly property real row1Y: pad
-    readonly property real row2Y: pad + r1h + gap
+    // right top (60%) split: processor 58% / storage rest
+    readonly property real topH:   Math.round((ch - gap) * 0.60)
+    readonly property real procW:  Math.round((rightW - gap) * 0.58)
+    readonly property real storX:  rightX + procW + gap
+    readonly property real storW:  rightW - procW - gap
 
-    // =========================================================================
-    // ROW 1 — Clock | ThemeSwitch | Identity | Resources
-    // =========================================================================
-    Row {
-        x: root.pad
-        y: root.row1Y
-        width: root.cw
-        height: root.r1h
-        spacing: root.gap
+    // right bottom (rest) split: network 62% / identity rest
+    readonly property real botY:   pad + topH + gap
+    readonly property real botH:   ch - topH - gap
+    readonly property real netW:   Math.round((rightW - gap) * 0.62)
+    readonly property real idX:    rightX + netW + gap
+    readonly property real idW:    rightW - netW - gap
 
-        Components.DashboardCard {
-            width: root.r1w * 0.29
-            height: root.r1h
-            Components.ClockWidget { anchors.fill: parent }
-        }
-
-        Components.DashboardCard {
-            width: root.r1w * 0.21
-            height: root.r1h
-            Components.ThemeQuickSwitch { anchors.fill: parent }
-        }
-
-        Components.DashboardCard {
-            width: root.r1w * 0.25
-            height: root.r1h
-            Components.IdentityWidget { anchors.fill: parent }
-        }
-
-        Components.DashboardCard {
-            width: root.r1w * 0.25
-            height: root.r1h
-            Components.ResourcesWidget { anchors.fill: parent }
-        }
+    // ── LEFT: System Clock ──────────────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.pad; y: root.pad; width: root.leftW; height: root.clockH
+        accent: Config.ThemeConfig.colors.warning; showBrackets: true
+        Components.ClockWidget { anchors.fill: parent }
     }
 
-    // =========================================================================
-    // ROW 2 — Calendar | Kubernetes | Network
-    // =========================================================================
-    Row {
-        x: root.pad
-        y: root.row2Y
-        width: root.cw
-        height: root.r2h
-        spacing: root.gap
+    // ── LEFT: Calendar ──────────────────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.pad; y: root.calY; width: root.leftW; height: root.calH
+        accent: Config.ThemeConfig.colors.warning; showBrackets: true
+        Components.CalendarWidget { anchors.fill: parent }
+    }
 
-        Components.DashboardCard {
-            width: root.r2w * 0.40
-            height: root.r2h
-            Components.CalendarWidget { anchors.fill: parent }
-        }
+    // ── RIGHT TOP: CPU info ─────────────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.rightX; y: root.pad; width: root.procW; height: root.topH
+        accent: Config.ThemeConfig.colors.secondary; showBrackets: true
+        Components.CpuInfoWidget { anchors.fill: parent }
+    }
 
-        Components.DashboardCard {
-            width: root.r2w * 0.28
-            height: root.r2h
-            Components.K8sStatusWidget { anchors.fill: parent }
-        }
+    // ── RIGHT TOP: Storage Matrix ───────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.storX; y: root.pad; width: root.storW; height: root.topH
+        accent: Config.ThemeConfig.colors.success; showBrackets: true
+        Components.StorageMatrixWidget { anchors.fill: parent }
+    }
 
-        Components.DashboardCard {
-            width: root.r2w * 0.32
-            height: root.r2h
-            Components.NetworkWidget { anchors.fill: parent }
-        }
+    // ── RIGHT BOTTOM: Network ───────────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.rightX; y: root.botY; width: root.netW; height: root.botH
+        accent: Config.ThemeConfig.colors.secondary; showBrackets: true
+        Components.NetworkWidget { anchors.fill: parent }
+    }
+
+    // ── RIGHT BOTTOM: Identity ──────────────────────────────────────────────
+    Components.DashboardCard {
+        x: root.idX; y: root.botY; width: root.idW; height: root.botH
+        accent: Config.ThemeConfig.colors.primary; showBrackets: true
+        Components.IdentityWidget { anchors.fill: parent }
     }
 }

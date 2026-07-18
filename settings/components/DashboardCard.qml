@@ -1,19 +1,16 @@
 // =============================================================================
-// DashboardCard.qml — Theme-reactive glass card for dashboard bento grid
+// DashboardCard.qml — Theme-reactive card for the dashboard bento grid
 // =============================================================================
-//
-// A container card with theme-aware background and border, designed for the
-// dashboard bento grid. Binds to ThemeConfig.colors.surfaceContainer for
-// OLED-aware theming (pure black when OLED clamp is enabled).
+// Container card with theme-aware border/background. Default look is the
+// original glass card (radius respects SettingsConfig.radiusMd, no brackets).
+// Opt into the tactical HUD look (matching HudCard) with:
+//   DashboardCard { accent: ThemeConfig.colors.secondary; showBrackets: true; ... }
+// → sharp zero-radius corners + 4 corner brackets + accent-tinted top line.
 //
 // PUBLIC API:
-//   default property alias content: contentItem.children  — content slot
-//
-// USAGE:
-//   DashboardCard {
-//       Text { text: "Hello"; anchors.centerIn: parent }
-//   }
-//
+//   default property alias content: contentItem.data  — content slot
+//   property color accent   — top-line + bracket + hover-border colour
+//   property bool showBrackets — tactical corner brackets + radius 0
 // =============================================================================
 
 import QtQuick
@@ -22,33 +19,21 @@ import "../config" as Config
 Rectangle {
     id: root
 
-    // =========================================================================
-    // PUBLIC API — content slot
-    // =========================================================================
     default property alias content: contentItem.data
 
-    // =========================================================================
-    // VISUALS — theme-reactive glass card
-    // =========================================================================
-    color: "transparent"
-    radius: Config.SettingsConfig.radiusMd
+    property color accent: Config.ThemeConfig.colors.secondary
+    property bool showBrackets: false
+
+    color: root.showBrackets ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4) : "transparent"
+    radius: root.showBrackets ? 0 : Config.SettingsConfig.radiusMd
     border.color: Config.ThemeConfig.colors.outlineVariant
     border.width: 1
 
-    // Hover state — border brightens
     property bool isHovered: false
 
-    Behavior on color {
-        ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad }
-    }
+    Behavior on color { ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
+    Behavior on border.color { ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
 
-    Behavior on border.color {
-        ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad }
-    }
-
-    // =========================================================================
-    // LAYOUT
-    // =========================================================================
     Item {
         id: contentItem
         anchors.fill: parent
@@ -59,27 +44,35 @@ Rectangle {
         clip: true
     }
 
-    // Faint accent top-edge highlight — brightens on hover for depth.
+    // Accent top-edge highlight — brightens on hover for depth.
     Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
         height: 1
-        color: Config.ThemeConfig.colors.secondary
+        color: root.accent
         opacity: root.isHovered ? 0.55 : 0.12
         Behavior on opacity { NumberAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
     }
 
-    // =========================================================================
-    // HOVER DETECTION
-    // =========================================================================
+    // Tactical corner brackets (only when showBrackets). index 0=TL 1=TR 2=BL 3=BR.
+    Repeater {
+        model: root.showBrackets ? 4 : 0
+        Item {
+            width: 12; height: 12; opacity: 0.7
+            x: (index === 0 || index === 2) ? -1 : (root.width - 11)
+            y: (index === 0 || index === 1) ? -1 : (root.height - 11)
+            property bool isRight: (index === 1 || index === 3)
+            property bool isBottom: (index === 2 || index === 3)
+            Rectangle { width: 12; height: 2; color: root.accent; y: parent.isBottom ? 10 : 0 }
+            Rectangle { width: 2; height: 12; color: root.accent; x: parent.isRight ? 10 : 0 }
+        }
+    }
+
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
         onEntered: root.isHovered = true
         onExited: root.isHovered = false
         cursorShape: Qt.ArrowCursor
-        // Pass mouse events through to content
         propagateComposedEvents: true
         onClicked: mouse.accepted = false
         onPressAndHold: mouse.accepted = false
@@ -87,10 +80,7 @@ Rectangle {
         onReleased: mouse.accepted = false
     }
 
-    // Apply hover state
     onIsHoveredChanged: {
-        border.color = isHovered
-            ? Config.ThemeConfig.colors.secondary
-            : Config.ThemeConfig.colors.outlineVariant
+        border.color = isHovered ? root.accent : Config.ThemeConfig.colors.outlineVariant
     }
 }
