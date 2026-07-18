@@ -45,3 +45,6 @@ CoreGpuSection 1.0 CoreGpuSection.qml
 CoreMemorySection 1.0 CoreMemorySection.qml
 CoreEnvironmentalRow 1.0 CoreEnvironmentalRow.qml
 CoreLcdPane 1.0 CoreLcdPane.qml
+HudCard 1.0 HudCard.qml
+HudGauge 1.0 HudGauge.qml
+HudSpark 1.0 HudSpark.qml

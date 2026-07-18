@@ -1,0 +1,5 @@
+module ZaiUsage
+
+singleton ZaiUsageService 1.0 ZaiUsageService.qml
+ZaiUsagePopup 1.0 ZaiUsagePopup.qml
+UsageRow 1.0 UsageRow.qml

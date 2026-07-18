@@ -21,6 +21,7 @@ import QtQuick
 import QtQuick.Layouts
 import "components" as Components
 import "config" as Config
+import "services" as Services
 
 ShellRoot {
     PanelWindow {
@@ -168,6 +169,10 @@ ShellRoot {
         id: keybindsOverlay
     }
 
+    Components.ZaiUsageOverlay {
+        id: zaiUsageOverlay
+    }
+
     // =========================================================================
     // IPC HANDLERS — External Control
     // =========================================================================
@@ -190,6 +195,33 @@ ShellRoot {
 
         function toggle() {
             keybindsOverlay.toggle()
+        }
+    }
+
+    // Z.ai usage overlay toggle (for SUPER+Z — see configs/hypr/keybindings.lua)
+    IpcHandler {
+        id: zaiUsageIpc
+        target: "zaiUsage"
+
+        function toggle() {
+            zaiUsageOverlay.toggle()
+        }
+    }
+
+    // Bridge Z.ai quota threshold alerts into the in-app NotificationService.
+    // No notify-send/mako on this box — NotificationService is the single sink.
+    // Referencing the service here also forces its lazy instantiation so the
+    // polling Timer starts at bar launch.
+    Connections {
+        target: Services.ZaiUsageService
+        ignoreUnknownSignals: true
+        function onThresholdAlert(info) {
+            Services.NotificationService.add(
+                "Z.ai Usage",
+                info.windowName + " at " + Math.round(info.pct) + "%",
+                "Quota window used. Resets in " + info.resetLabel + ".",
+                info.urgency,
+                0)
         }
     }
 }

@@ -175,6 +175,7 @@ PanelWindow {
             { key: "SUPER + A",         desc: "Settings dashboard" },
             { key: "SUPER + P",         desc: "Power menu" },
             { key: "SUPER + K",         desc: "This keybinds overlay" },
+            { key: "SUPER + Z",         desc: "Z.ai usage analytics" },
             { key: "SUPER + SHIFT + B", desc: "Toggle the bar" },
             { key: "SUPER + SHIFT + T", desc: "Network / Bluetooth center" }
         ]},
