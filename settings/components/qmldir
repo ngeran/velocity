@@ -34,3 +34,14 @@ ThemeQuickSwitch 1.0 ThemeQuickSwitch.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml
 WallpaperModule 1.0 WallpaperModule.qml
 WidgetHeader 1.0 WidgetHeader.qml
+CoreEngineTab 1.0 CoreEngineTab.qml
+CoreOverviewPane 1.0 CoreOverviewPane.qml
+CoreCard 1.0 CoreCard.qml
+CoreBar 1.0 CoreBar.qml
+CoreGauge 1.0 CoreGauge.qml
+CoreStatusHeader 1.0 CoreStatusHeader.qml
+CoreCpuSection 1.0 CoreCpuSection.qml
+CoreGpuSection 1.0 CoreGpuSection.qml
+CoreMemorySection 1.0 CoreMemorySection.qml
+CoreEnvironmentalRow 1.0 CoreEnvironmentalRow.qml
+CoreLcdPane 1.0 CoreLcdPane.qml

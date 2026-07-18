@@ -16,7 +16,8 @@
 //   index 1 → Themes      (palette    "◑")
 //   index 2 → Wallpapers  (image      "⬚")
 //   index 3 → Control     (menu       "⋮")
-//   index 4 → Settings    (gear       "⚙")
+//   index 4 → Core        (activity   "󰢯")
+//   index 5 → Settings    (gear       "⚙")
 //
 // HTML REFERENCE:
 //   .nav-item.active { background: #ffffff; color: #000000 }
@@ -69,7 +70,8 @@ Rectangle {
         { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
         { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
         { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3 — Control module
-        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 4 — Settings
+        { key: "core",       label: "CORE",        icon: "󰢯" },   // index 4 — Core Engine
+        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 5 — Settings
     ]
 
     // =========================================================================

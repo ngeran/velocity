@@ -17,6 +17,7 @@ import Quickshell.Io
 import QtQuick
 import "components" as Components
 import "config" as Config
+import "services" as Services
 
 ShellRoot {
     id: root
@@ -26,6 +27,19 @@ ShellRoot {
     // =========================================================================
 
     property bool shown: false
+
+    // Eagerly instantiate the Core Engine publisher. QML singletons are lazy —
+    // nothing references CoreEngineService until the Core tab is opened, but the
+    // deepcool-py LCD feed (~/.cache/deepcool/metrics.json) must publish
+    // continuously for the process lifetime. Accessing it here (in onCompleted,
+    // which always runs, unlike an unread binding) creates it; a singleton then
+    // lives for the engine's lifetime and pulls in GpuService + ThermalService.
+    Component.onCompleted: {
+        // Reading a property (not a bare reference, which the JS engine treats
+        // as dead code) forces the lazy singleton to instantiate so its 1s
+        // publish Timer runs for the process lifetime.
+        Services.CoreEngineService.metricsPath
+    }
 
     // Screen-adaptive sizing — scale based on available window dimensions.
     // PanelWindow spans the full screen, so its width/height map to the screen.

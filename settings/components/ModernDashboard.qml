@@ -4,8 +4,7 @@
 // =============================================================================
 //
 // TAB ORDER (index-significant):
-//   0 Dashboard | 1 Themes | 2 Wallpapers | 3 Control | 4 Settings
-// (Control and Settings were swapped to match user request.)
+//   0 Dashboard | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Settings
 //
 // PURPOSE:
 //   Main container for all tabs. Delegates tab-0 (Dashboard) to
@@ -210,9 +209,9 @@ Item {
         Item {
             id: settingsTab
 
-            visible: root.currentTab === 4
-            opacity: root.currentTab === 4 ? 1.0 : 0.0
-            x: root.currentTab === 4 ? 0 : 20
+            visible: root.currentTab === 5
+            opacity: root.currentTab === 5 ? 1.0 : 0.0
+            x: root.currentTab === 5 ? 0 : 20
             anchors.fill: parent
 
             Behavior on opacity {
@@ -938,6 +937,26 @@ Item {
 
             // Settings are managed by SettingsConfigService singleton
             // All changes are automatically persisted to ~/.config/quickshell/settings-config.json
+        }
+
+        // =====================================================================
+        // TAB 4: CORE ENGINE (OLED telemetry dashboard + LCD control)
+        // =====================================================================
+
+        Components.CoreEngineTab {
+            id: coreEngineTab
+
+            visible: root.currentTab === 4
+            opacity: root.currentTab === 4 ? 1.0 : 0.0
+            x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
+            anchors.fill: parent
+
+            Behavior on opacity {
+                NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
+            }
+            Behavior on x {
+                NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
+            }
         }
     }
 }
