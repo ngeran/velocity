@@ -17,15 +17,15 @@ PanelWindow {
     id: card
     visible: activeTray !== ""
 
-    anchors.top: true
-    anchors.right: true
-    exclusionMode: ExclusionMode.Ignore
-    margins.top: Config.BarConfig.barHeight
-    margins.right: 0
-
-    implicitWidth: 260
-    implicitHeight: 220
+    // Full-screen transparent overlay. A click landing anywhere outside the
+    // dropdown closes it — the same click-outside dismissal the
+    // Fastfetch/ZaiUsage/Keybinds overlays use. The card itself is drawn above
+    // the backdrop and swallows clicks so interacting with it stays put.
+    anchors { top: true; bottom: true; left: true; right: true }
+    margins.top: Config.BarConfig.barHeight   // leave the bar itself interactive
     color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    aboveWindows: true
 
     property string activeTray: ""
     signal closeRequested()
@@ -47,14 +47,28 @@ PanelWindow {
         return ""
     }
 
+    // Click-catcher spanning the whole screen. Only clicks that miss the card
+    // land here (the card is stacked above it) → close.
+    MouseArea {
+        anchors.fill: parent
+        onClicked: card.closeRequested()
+    }
+
     // -------------------------------------------------------------------------
-    // BACKGROUND — Fully sharp, no rounded corners
+    // DROPDOWN CARD — pinned under the bar, top-right. Sharp corners (radius 0).
     // -------------------------------------------------------------------------
     Rectangle {
-        anchors.fill: parent
+        id: dropdown
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 0   // overlay already starts below the bar
+        width: 260
+        height: 220
         color: Config.BarConfig.colorBackground
-        radius: 0 // Set to 0 for sharp corners
-    }
+        radius: 0   // sharp corners
+
+        // Swallow clicks inside the card so they don't bubble to the backdrop.
+        MouseArea { anchors.fill: parent }
 
     // -------------------------------------------------------------------------
     // CONTENT
@@ -241,15 +255,20 @@ PanelWindow {
                 Slider {
                     id: volSlider
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 28        // generous vertical click band
+                    hoverEnabled: true
                     from: 0; to: 100
                     value: Services.AudioService.volume
                     onMoved: Services.AudioService.setVolume(value)
                     background: Rectangle {
+                        x: volSlider.leftPadding
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        implicitHeight: 3; width: volSlider.availableWidth; radius: 0
+                        implicitHeight: 6; width: volSlider.availableWidth; radius: 0
                         color: Qt.rgba(1,1,1,0.10)
                         Rectangle {
-                            height: parent.height; width: volSlider.visualPosition * parent.width; radius: 0
+                            height: parent.height
+                            width: volSlider.visualPosition * parent.width
+                            radius: 0
                             color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
@@ -257,10 +276,13 @@ PanelWindow {
                     handle: Rectangle {
                         x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        width: 10; height: 10; radius: 0
+                        width: 18; height: 18; radius: 0
                         color: Config.BarConfig.colorBackground
                         border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent
-                        border.width: 1
+                        border.width: 2
+                        // Grow on hover / press so the grab target reads as interactive.
+                        scale: volSlider.pressed ? 1.15 : (volSlider.hovered ? 1.1 : 1.0)
+                        Behavior on scale { NumberAnimation { duration: 90 } }
                     }
                 }
                 Item { height: 12 }
@@ -324,4 +346,5 @@ PanelWindow {
             }
         }
     }
+    }   // dropdown Rectangle
 }
