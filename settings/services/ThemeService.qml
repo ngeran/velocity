@@ -670,11 +670,14 @@ Item {
 
     // -------------------------------------------------------------------------
     // ghostty: managed palette block appended to the MAIN config. We read→strip
-    // the prior block→append a fresh one in `sh`+`sed` — NOT python3. python is
-    // not guaranteed on the runtime PATH, and every other syncer stays in pure
-    // sh/Qt; a missing python3 silently no-op'd this syncer (ghostty stalled on
-    // a stale palette while kitty/hyprlock updated). ghostty watches its main
-    // config and reloads on change, so no reload signal is needed.
+    // the prior block→rewrite in `sh` — NOT python3. python is not guaranteed on
+    // the runtime PATH, and every other syncer stays in pure sh/Qt; a missing
+    // python3 silently no-op'd this syncer (ghostty stalled on a stale palette
+    // while kitty/hyprlock updated). ghostty has NO reload signal (kitty uses
+    // SIGUSR1) — it reloads solely by watching its config by INODE, so the write
+    // MUST preserve the inode (see the note in _syncGhostty). Do NOT switch this
+    // syncer to _atomicWrite or `sed -i` — both rename → inode swap → watcher
+    // dies → running ghostty never reloads (the "not realtime" bug).
     // -------------------------------------------------------------------------
     function _syncGhostty(colors) {
         var ghosttyMain = themeService.homeDir + "/.config/ghostty/config";
@@ -689,14 +692,14 @@ Item {
             "palette = 2=" + colors.success,
             "palette = 3=" + colors.warning,
             "palette = 4=" + colors.primary,
-            "palette = 5=" + colors.secondary,
+            "palette = 5=" + colors.accent,
             "palette = 6=" + colors.info,
             "palette = 7=" + colors.text,
-            "palette = 8=" + colors.textDim,
+            "palette = 8=" + colors.outline,
             "palette = 9=" + colors.error,
             "palette = 10=" + colors.success,
             "palette = 11=" + colors.warning,
-            "palette = 12=" + colors.primary,
+            "palette = 12=" + colors.textDim,
             "palette = 13=" + colors.secondary,
             "palette = 14=" + colors.info,
             "palette = 15=" + colors.text
@@ -704,16 +707,24 @@ Item {
         var block = "# >>> quickshell-theme >>>\n" + ghosttyLines + "\n# <<< quickshell-theme <<<";
         // sh single-quote escape (same scheme as _atomicWrite); block has no quotes.
         var quoted = "'" + String(block).replace(/'/g, "'\\''") + "'";
-        // Ensure file exists, drop the old managed block (marker→EOF) and any
-        // trailing blank lines, then append the fresh block. User settings above
-        // the marker are preserved.
+        // Rewrite the config IN PLACE — preserve the file's inode. ghostty has no
+        // reload signal (unlike kitty's SIGUSR1); it reloads by WATCHING this file
+        // by inode. An atomic rename (sed -i, or _atomicWrite's tmp+rename) swaps
+        // the inode → the watcher dies (IN_IGNORED) → a RUNNING ghostty never
+        // reloads, so only a restart ever applied new themes. Fix: read the user
+        // content above the marker with plain `sed` (no -i → no inode change;
+        // $() also strips trailing newlines), then truncate+write the SAME file
+        // via '>' (preserves inode). User settings above the marker survive.
         var script =
             "f=" + ghosttyMain + " && " +
             "mkdir -p \"$(dirname \"$f\")\" && " +
             "{ [ -f \"$f\" ] || : > \"$f\"; } && " +
-            "sed -i '/# >>> quickshell-theme >>>/,$d' \"$f\" && " +
-            "sed -i -e :a -e '/^\\n*$/{$d;N;ba}' \"$f\" && " +
-            "printf '\\n\\n%s\\n' " + quoted + " >> \"$f\"";
+            "u=$(sed '/# >>> quickshell-theme >>>/,$d' \"$f\") && " +
+            "if [ -n \"$u\" ]; then " +
+                "printf '%s\\n\\n%s\\n' \"$u\" " + quoted + " > \"$f\"; " +
+            "else " +
+                "printf '\\n%s\\n' " + quoted + " > \"$f\"; " +
+            "fi";
         themeService._runSh(script, "sync ghostty");
     }
 
