@@ -9,7 +9,6 @@
 // CONTENT is the provided HUD reference, re-tinted by the LIVE theme
 // (Config.ThemeConfig.colors.*) so it recolors with the rest of the shell:
 //   - grid background (Repeater of thin lines), 8 corner brackets
-//   - a scanline that sweeps while shown (paused when hidden — CPU + burn-in)
 //   - a metric grid of segmented quota gauges (one per Z.ai window)
 //   - a token-total figure + a Canvas sparkline of the 5h session %
 // All static decorations stay dim (≤0.4 opacity) per the OLED burn-in policy.
@@ -130,27 +129,6 @@ PanelWindow {
                     width: 2; height: 14; color: root.cAccent
                     x: parent.isRight ? 12 : 0
                 }
-            }
-        }
-
-        // ----- (decoration) scanline — bright but MOVING, paused when hidden -----
-        Rectangle {
-            id: scanline
-            width: card.width
-            height: 3
-            x: 0
-            y: 0
-            z: 1
-            visible: root.shown
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: Qt.rgba(0,0,0,0) }
-                GradientStop { position: 0.5; color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.22) }
-                GradientStop { position: 1.0; color: Qt.rgba(0,0,0,0) }
-            }
-            NumberAnimation on y {
-                from: 0; to: card.height; duration: 4200
-                loops: Animation.Infinite; running: root.shown
             }
         }
 
