@@ -73,13 +73,6 @@ Rectangle {
                 Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
-            MprisControlView {
-                visible: body.activeSection === "media"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            }
-
             BrightnessControlView {
                 visible: body.activeSection === "display"
                 width: content.width

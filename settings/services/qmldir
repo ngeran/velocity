@@ -11,7 +11,6 @@ singleton SettingsConfigService 1.0 SettingsConfigService.qml
 singleton HypridleService 1.0 HypridleService.qml
 singleton AutostartService 1.0 AutostartService.qml
 singleton BrightnessService 1.0 BrightnessService.qml
-singleton MprisService 1.0 MprisService.qml
 singleton GpuService 1.0 GpuService.qml
 singleton ThermalService 1.0 ThermalService.qml
 singleton CoreEngineService 1.0 CoreEngineService.qml

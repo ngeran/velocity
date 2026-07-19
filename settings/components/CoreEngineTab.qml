@@ -1,8 +1,8 @@
 // =============================================================================
 // CoreEngineTab.qml — "Core Engine" tab (tab 4): side-nav + content swap.
 // =============================================================================
-// Left side-nav (Overview / Processors / Memory Banks / Environmental / LCD
-// Control) swaps the right-hand pane by key — each section is its OWN page,
+// Left side-nav (Overview / Processors / Memory & Env / LCD Control) swaps
+// the right-hand pane by key — each section is its OWN page,
 // not a scroll-within-one-column (mirrors the Control tab's nav pattern).
 // Colours are theme tokens (primary/secondary/warning); fonts are the shell's
 // (Inter display + JetBrains Mono). Section cards size to content (CoreCard).
@@ -21,8 +21,7 @@ Item {
     readonly property var navItems: [
         { key: "overview",      label: "OVERVIEW" },
         { key: "processors",    label: "PROCESSORS" },
-        { key: "memory",        label: "MEMORY BANKS" },
-        { key: "environmental", label: "ENVIRONMENTAL" },
+        { key: "memoryenv",     label: "MEMORY & ENV" },
         { key: "lcd",           label: "LCD CONTROL" }
     ]
 
@@ -94,21 +93,12 @@ Item {
             }
         }
 
-        // MEMORY BANKS — memory only
+        // MEMORY & ENV — combined memory bank + environmental (HudCard aesthetic)
         Flickable {
-            anchors.fill: parent; visible: root.active === "memory"
-            contentWidth: width; contentHeight: memCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: memCol; width: parent.width; spacing: 14
-                CoreMemorySection { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
-            }
-        }
-
-        // ENVIRONMENTAL — coolant / NVMe / disk / swap tiles
-        Flickable {
-            anchors.fill: parent; visible: root.active === "environmental"
-            contentWidth: width; contentHeight: envCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: envCol; width: parent.width; spacing: 14
-                CoreEnvironmentalRow { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
+            anchors.fill: parent; visible: root.active === "memoryenv"
+            contentWidth: width; contentHeight: memEnvCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
+            ColumnLayout { id: memEnvCol; width: parent.width; spacing: 14
+                CoreMemoryEnvPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
             }
         }
 

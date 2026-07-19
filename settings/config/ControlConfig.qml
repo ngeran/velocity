@@ -48,7 +48,6 @@ QtObject {
         { key: "network",   label: "NETWORK",   icon: "󰖩" },
         { key: "bluetooth", label: "BLUETOOTH", icon: "󰂯" },
         { key: "audio",     label: "AUDIO",     icon: "󰕾" },
-        { key: "media",     label: "MEDIA",     icon: "󰝧" },
         { key: "display",   label: "DISPLAY",   icon: "󰃜" }
     ]
 

@@ -22,7 +22,6 @@ SinkInputRow 1.0 SinkInputRow.qml
 SourceListView 1.0 SourceListView.qml
 SourceRow 1.0 SourceRow.qml
 BrightnessControlView 1.0 BrightnessControlView.qml
-MprisControlView 1.0 MprisControlView.qml
 IdentityWidget 1.0 IdentityWidget.qml
 NetworkWidget 1.0 NetworkWidget.qml
 TopNavBar 1.0 TopNavBar.qml
@@ -42,8 +41,7 @@ CoreGauge 1.0 CoreGauge.qml
 CoreStatusHeader 1.0 CoreStatusHeader.qml
 CoreCpuSection 1.0 CoreCpuSection.qml
 CoreGpuSection 1.0 CoreGpuSection.qml
-CoreMemorySection 1.0 CoreMemorySection.qml
-CoreEnvironmentalRow 1.0 CoreEnvironmentalRow.qml
+CoreMemoryEnvPane 1.0 CoreMemoryEnvPane.qml
 CoreLcdPane 1.0 CoreLcdPane.qml
 HudCard 1.0 HudCard.qml
 HudGauge 1.0 HudGauge.qml
