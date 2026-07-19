@@ -18,6 +18,7 @@ Item {
         font.family: Config.BarConfig.fontNerd
         font.pixelSize: Config.BarConfig.fontSizeIcon
         color: {
+            if (mouseArea.containsMouse) return Config.BarConfig.colorAccent
             if (root.isActive) return Config.BarConfig.colorAccent
             if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorText
             if (Services.BatteryService.charging)       return "#68d391"
@@ -29,7 +30,9 @@ Item {
     }
 
     MouseArea {
+        id: mouseArea
         anchors.fill: parent
+        hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.trayRequested()
     }

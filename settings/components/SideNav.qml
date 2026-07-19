@@ -41,9 +41,13 @@ Rectangle {
                 Rectangle {
                     anchors.fill: parent
                     radius: Config.ControlConfig.radius
-                    color: del.active ? Config.ControlConfig.accentSoft : "transparent"
+                    color: del.active ? Config.ControlConfig.accentSoft : (navMa.containsMouse ? Config.ControlConfig.accentSoft : "transparent")
+                    opacity: del.active ? 1.0 : (navMa.containsMouse ? 0.5 : 1.0)
                     border.color: del.active ? Config.ControlConfig.accent : "transparent"
                     border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
+                    Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 }
 
                 Row {
@@ -56,19 +60,23 @@ Rectangle {
                         text: modelData.icon
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 14
-                        color: del.active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
                         text: modelData.label
                         font.family: Config.ControlConfig.fontMono
                         font.pixelSize: 11
                         font.letterSpacing: 1
-                        color: del.active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        Behavior on color { ColorAnimation { duration: 120 } }
                     }
                 }
 
                 MouseArea {
+                    id: navMa
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: nav.sectionSelected(modelData.key)
                 }

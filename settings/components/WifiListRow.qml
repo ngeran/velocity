@@ -110,7 +110,7 @@ Item {
                     width: parent.width * Math.max(0, Math.min(1, row.net.signal / 100))
                     height: parent.height
                     color: row.net.inUse ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
-                    Behavior on width { NumberAnimation { duration: 300 } }
+                    Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                 }
             }
             Text {

@@ -60,7 +60,7 @@ Item {
         text: root._hasUnread ? "󰂚" : "󰂜"
         font.family: Config.BarConfig.fontNerd
         font.pixelSize: Config.BarConfig.fontSizeIcon
-        color: root.isActive
+        color: (root.isActive || hoverMa.containsMouse)
                ? Config.BarConfig.colorAccent
                : (root._hasUnread ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim)
         scale: hoverMa.containsMouse ? 1.08 : 1.0

@@ -44,34 +44,47 @@ Rectangle {
             }
 
             // --- Section views (populated per phase) ---
+            // Each fades in when its section becomes active (smooth swap).
             WifiListView {
                 visible: body.activeSection === "network"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             BtDeviceListView {
                 visible: body.activeSection === "bluetooth"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             SinkListView {
                 visible: body.activeSection === "audio"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             SourceListView {
                 visible: body.activeSection === "audio"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             MprisControlView {
                 visible: body.activeSection === "media"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             BrightnessControlView {
                 visible: body.activeSection === "display"
                 width: content.width
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             // --- Console log ---
