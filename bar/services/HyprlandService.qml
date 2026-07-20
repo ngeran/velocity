@@ -12,11 +12,13 @@
 //   switchTo(id: int) — Switch to workspace by ID
 //
 // IMPLEMENTATION
-//   - Polls `hyprctl activeworkspace -j` every 1.5s
-//   - Uses wtype to simulate SUPER + number keypress (workaround for broken dispatchers)
+//   - Streams Hyprland's socket2 event bus via `nc -U` (persistent, event-driven)
+//   - One-shot `hyprctl activeworkspace -j` at startup seeds the initial
+//     workspace (socket2 only fires on CHANGE, not at connect)
+//   - socat is NOT installed on this system, so nc -U is used instead
 //
-// NOTE: In Hyprland 0.55+ with Lua config, standard dispatchers are broken.
-// We use wtype to simulate SUPER + number keypresses as a workaround.
+// NOTE: switchTo uses the Lua dispatcher `hl.dsp.focus({ workspace = N })` —
+// Hyprland 0.55+ with Lua config dropped the classic `dispatch workspace N`.
 // =============================================================================
 
 pragma Singleton
@@ -35,38 +37,70 @@ Item {
     property int activeWorkspace: 1
 
     // =========================================================================
-    // WORKSPACE POLLING
+    // STARTUP SEED — socket2 only fires on CHANGE, not at connect, so read the
+    // current workspace once at launch to seed activeWorkspace. ──────────────
     // =========================================================================
 
     Process {
-        id: wsProc
+        id: seedProc
         command: ["bash", "-c", "hyprctl activeworkspace -j 2>&1"]
         property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { wsProc.buffer += data }
-        }
+        stdout: SplitParser { onRead: function(data) { seedProc.buffer += data } }
         onRunningChanged: {
             if (!running) {
                 try {
-                    const obj = JSON.parse(wsProc.buffer)
+                    var obj = JSON.parse(seedProc.buffer)
                     root.activeWorkspace = obj.id || 1
-                    console.log("[HyprlandService] Active workspace:", root.activeWorkspace)
+                    console.log("[HyprlandService] Seeded active workspace:", root.activeWorkspace)
                 } catch(e) {
-                    console.log("[HyprlandService] Parse error:", e, "buffer:", wsProc.buffer)
+                    console.log("[HyprlandService] Seed parse error:", e, "buffer:", seedProc.buffer)
                 }
-                wsProc.buffer = ""
+                seedProc.buffer = ""
             }
         }
     }
 
+    // =========================================================================
+    // EVENT STREAM — Hyprland socket2 via nc -U (persistent). Parses
+    // workspace>> / workspacev2>> / focusedmon>> and updates activeWorkspace
+    // instantly. Replaces the 1.5s hyprctl poll (zero latency, no per-tick
+    // fork). socat is NOT installed on this system, so nc -U is used instead
+    // (verified to stream socket2). ─────────────────────────────────────────
+    // =========================================================================
+
+    Process {
+        id: wsWatcher
+        // sh -c so the shell expands the runtime/instance-signature env vars.
+        command: ["sh", "-c", "nc -U \"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\""]
+        running: true
+        stdout: SplitParser {
+            onRead: function(line) {
+                var ev = "" + line
+                var id = 0
+                if (ev.indexOf("workspacev2>>") === 0) {
+                    // workspacev2>>id,name
+                    id = parseInt(ev.substring("workspacev2>>".length).split(",")[0], 10)
+                } else if (ev.indexOf("workspace>>") === 0) {
+                    // workspace>>id
+                    id = parseInt(ev.substring("workspace>>".length), 10)
+                } else if (ev.indexOf("focusedmon>>") === 0) {
+                    // focusedmon>>monname,workspaceid
+                    id = parseInt(ev.substring("focusedmon>>".length).split(",")[1], 10)
+                }
+                if (id > 0 && id !== root.activeWorkspace) {
+                    root.activeWorkspace = id
+                    console.log("[HyprlandService] Active workspace:", root.activeWorkspace)
+                }
+            }
+        }
+    }
+
+    // Watchdog: if the socket2 stream ever drops, reconnect + re-seed.
     Timer {
-        interval: 1500
+        interval: 5000
         running: true
         repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            if (!wsProc.running) wsProc.running = true
-        }
+        onTriggered: { if (!wsWatcher.running) { wsWatcher.running = true; seedProc.running = true } }
     }
 
     // =========================================================================
@@ -102,5 +136,6 @@ Item {
 
     Component.onCompleted: {
         console.log("[HyprlandService] Service loaded")
+        seedProc.running = true
     }
 }

@@ -52,13 +52,24 @@ Item {
                                        .toString().replace("file://", "") + "/deepcool/metrics.json"
 
     property Process publisher: Process { command: []; running: false }
+    // One-shot: ensures the deepcool cache dir exists at startup so publish()
+    // doesn't need a per-tick `mkdir -p` fork (mkdir is a separate binary).
+    property Process initProc: Process { command: []; running: false }
 
-    Component.onCompleted: console.log("[CoreEngine] publishing →", root.metricsPath)
+    Component.onCompleted: {
+        console.log("[CoreEngine] publishing →", root.metricsPath)
+        var dir = root.metricsPath.substring(0, root.metricsPath.lastIndexOf("/"))
+        root.initProc.command = ["sh", "-c", "mkdir -p '" + dir + "'"]
+        root.initProc.running = true
+    }
 
     // ── CPU aggregate + per-core from one /proc/stat read ───────────────────
     Process {
         id: cpuProc
-        command: ["sh", "-c", "grep '^cpu' /proc/stat"]
+        // read-builtin filter (not `grep`): one sh fork instead of sh+grep.
+        // Emits the same `cpu …` lines (one per line) so the per-core parser
+        // below is unchanged. Verified byte-identical to `grep '^cpu'`.
+        command: ["sh", "-c", "while IFS= read -r l; do case \"$l\" in cpu*) printf '%s\\n' \"$l\";; esac; done < /proc/stat"]
         property string buffer: ""
         // SplitParser emits each line WITHOUT its newline; re-add it so the
         // multi-line buffer keeps line boundaries (the single-line services in
@@ -109,9 +120,14 @@ Item {
     // ── CPU GHz: max scaling_cur_freq across cores (kHz → GHz) ──────────────
     Process {
         id: ghzProc
+        // read-builtin per core (not `cat`): used to fork `cat` once per core
+        // (N+1/tick ≈ 17/tick on 16 cores) — the single biggest forker in this
+        // service. Now a single sh fork. `read v < "$f"` parses scaling_cur_freq
+        // identically to `cat` (verified); same single-integer echo → parser
+        // unchanged.
         command: ["sh", "-c",
             "m=0; for f in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do " +
-            "[ -r \"$f\" ] || continue; v=$(cat \"$f\" 2>/dev/null); [ \"$v\" -gt \"$m\" ] && m=$v; done; echo \"$m\""]
+            "[ -r \"$f\" ] || continue; read v < \"$f\"; [ \"$v\" -gt \"$m\" ] && m=$v; done; echo \"$m\""]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { ghzProc.buffer += data } }
         onRunningChanged: {
@@ -197,28 +213,35 @@ Item {
         }
         var json = JSON.stringify(m)
         // printf to the path; single-quote-escape the JSON the same way
-        // SettingsConfigService.qml does. mkdir the ACTUAL parent dir (the path
-        // lives under ~/.cache/deepcool, which must exist before the redirect).
-        var dir = root.metricsPath.substring(0, root.metricsPath.lastIndexOf("/"))
+        // SettingsConfigService.qml does. The parent dir (~/.cache/deepcool) is
+        // ensured once at startup by initProc, so no per-tick `mkdir` fork.
         root.publisher.command = ["sh", "-c",
-            "mkdir -p '" + dir + "' && printf '%s' '" +
-            json.replace(/'/g, "'\\''") + "' > '" + root.metricsPath + "'"]
+            "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > '" + root.metricsPath + "'"]
         root.publisher.running = true
     }
 
     // ── 1s refresh + publish. Readers are async; publish() emits the previous
-    //    tick's values (≤1s stale) — fine for an LCD. ────────────────────────
+    //    tick's values (≤1s stale) — fine for an LCD. Guards prevent re-entry
+    //    if a reader outruns 1s. Disk is on its own slower timer below. ───────
     Timer {
         interval: 1000
         running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            cpuProc.running = true
-            ghzProc.running = true
-            memProc.running = true
-            diskProc.running = true
+            if (!cpuProc.running) cpuProc.running = true
+            if (!ghzProc.running) ghzProc.running = true
+            if (!memProc.running) memProc.running = true
             root.publish()
         }
+    }
+
+    // Disk capacity changes slowly — refresh every 30s, not every tick.
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: { if (!diskProc.running) diskProc.running = true }
     }
 }
