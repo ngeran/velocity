@@ -173,51 +173,33 @@ Item {
 
     property string lastCachedTimestamp: ""
 
-    // Polling timer for theme sync (FileView.onFileChanged doesn't fire reliably)
-    Timer {
-        id: cachePoller
-        interval: 1000  // Check every 1 second
-        running: true
-        repeat: true
-        onTriggered: themePoller.running = true
-    }
+    // Event-driven watcher (replaces the 1s `cat` poll). Fires the instant the
+    // settings process (ThemeService) or an external tool writes colors.json.
+    // The settings process uses the identical FileView pattern and is documented
+    // there as firing for cross-process writers, so the old "doesn't fire
+    // reliably" rationale was wrong. FileView.text is a METHOD in this build.
+    property var cacheWatcher: FileView {
+        path: root.themeFilePath
 
-    // Poller process for checking theme file changes
-    Process {
-        id: themePoller
-        command: ["cat", root.themeFilePath]
-        property string pollBuffer: ""
-        stdout: SplitParser {
-            onRead: function(data) {
-                themePoller.pollBuffer += data
-            }
-        }
-        onExited: function(code) {
-            if (!themePoller.pollBuffer || themePoller.pollBuffer.trim() === "") return
+        onFileChanged: {
+            let raw = cacheWatcher.text()
+            if (!raw || raw.trim() === "") return
+
             try {
-                var newData = themePoller.pollBuffer.trim()
-                // Check if data actually changed
-                if (newData === root.lastCachedData) {
-                    themePoller.pollBuffer = ""
-                    return
-                }
-
+                var newData = raw.trim()
                 var dataObj = JSON.parse(newData)
                 var newTimestamp = (dataObj.metadata && dataObj.metadata.applied) ? dataObj.metadata.applied : ""
                 if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
-                    themePoller.pollBuffer = ""
                     return  // No actual change
                 }
 
                 if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
-
                 root.lastCachedTimestamp = newTimestamp
                 root.lastCachedData = newData
                 root.applyTheme(dataObj)
             } catch (e) {
                 // Silent retry on parse error (file might be mid-write)
             }
-            themePoller.pollBuffer = ""
         }
     }
 
