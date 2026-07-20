@@ -41,47 +41,39 @@ Item {
     property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
     property string _lastRaw: ""   // dedup: only re-apply when bar-config.json actually changes
 
-    // Parse + apply a raw bar-config.json blob (shared by the FileView watcher
-    // and the startup reader). Dedups on _lastRaw so repeat reads are no-ops.
-    function _applyRawConfig(raw) {
-        if (!raw || raw.length === 0 || raw === _lastRaw) return  // dedup: skip empty/unchanged
-        _lastRaw = raw
-        try {
-            var data = JSON.parse(raw)
-            if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1)
-                barHeight = data.barHeight
-            if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
-                workspaceCount = data.workspaceCount
-            if (data.clockCity !== undefined)
-                clockCity = data.clockCity
-            if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
-                clockOffset = data.clockOffset
-            console.log("[BarConfig] Hot-reloaded bar-config.json")
-        } catch (e) {
-            console.log("[BarConfig] Failed to parse config:", e)
-        }
-    }
-
-    // Event-driven watcher (replaces the 2s `cat` poll). Fires the instant the
-    // settings process writes bar-config.json. FileView.text is a METHOD in this
-    // Quickshell build, not a property.
-    property var configWatcher: FileView {
-        path: root.configFilePath
-        onFileChanged: root._applyRawConfig(configWatcher.text())
-    }
-
-    // Startup read: FileView doesn't fire for an already-existing file at launch,
-    // so read it once on completion to restore the last-saved bar config.
     Process {
-        id: startupReader
-        command: ["sh", "-c", "cat " + root.configFilePath]
+        id: configLoader
+        command: []
         running: false
+
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data } }
+
+        stdout: SplitParser {
+            onRead: function(data) {
+                configLoader.buffer += data
+            }
+        }
+
         onRunningChanged: {
             if (!running) {
-                root._applyRawConfig(startupReader.buffer)
-                startupReader.buffer = ""
+                var raw = configLoader.buffer
+                configLoader.buffer = ""
+                if (raw.length === 0 || raw === _lastRaw) return  // dedup: skip empty/unchanged
+                _lastRaw = raw
+                try {
+                    var data = JSON.parse(raw)
+                    if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1)
+                        barHeight = data.barHeight
+                    if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
+                        workspaceCount = data.workspaceCount
+                    if (data.clockCity !== undefined)
+                        clockCity = data.clockCity
+                    if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
+                        clockOffset = data.clockOffset
+                    console.log("[BarConfig] Hot-reloaded bar-config.json")
+                } catch (e) {
+                    console.log("[BarConfig] Failed to parse config:", e)
+                }
             }
         }
     }
@@ -146,8 +138,19 @@ Item {
     // INITIALIZATION
     // =========================================================================
 
+    // Poll bar-config.json every 2s so the bar picks up Settings-tab changes
+    // (bar height, workspace dots, clock offset/city) without a restart. Mirrors
+    // the theme poller in ThemeConfig.qml; dedup avoids redundant re-application.
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: { configLoader.command = ["cat", configFilePath]; configLoader.running = true }
+    }
+
     Component.onCompleted: {
         console.log("[BarConfig] Loading config from:", configFilePath)
-        startupReader.running = true
+        configLoader.command = ["cat", configFilePath]
+        configLoader.running = true
     }
 }
