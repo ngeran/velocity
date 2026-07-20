@@ -158,6 +158,7 @@ Item {
     function reloadHypridle() {
         var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
         p.command = ["sh", "-c", "pkill -x hypridle; sleep 0.3; nohup hypridle -c " + root.configFilePath + " >> " + root.homeDir + "/.local/state/hypr/hypridle.log 2>&1 &"]
+        p.onExited.connect(function() { p.destroy() })  // free the one-shot wrapper (was leaked per reload)
         p.running = true
         console.log("[HypridleService] Reloading hypridle (kill + relaunch with -c)")
     }

@@ -71,6 +71,7 @@ Item {
                 console.error("[ThemeService] " + errorMsg);
                 CommandService.pushLog("[ThemeService] " + errorMsg, "error");
             }
+            proc.destroy();  // free the one-shot wrapper (was leaked per call)
         });
         return proc;
     }
@@ -181,6 +182,7 @@ Item {
                 console.error("[ThemeService] " + msg);
                 CommandService.pushLog("[ThemeService] " + msg, "error");
             }
+            p.destroy();  // free the one-shot wrapper (was leaked per write)
         });
         p.running = true;
         return p;

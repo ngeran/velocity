@@ -193,6 +193,7 @@ Item {
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
         var barWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
         barWriter.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > " + barConfigPath]
+        barWriter.onExited.connect(function() { barWriter.destroy() })  // free the one-shot wrapper (was leaked per save)
         barWriter.running = true
     }
 

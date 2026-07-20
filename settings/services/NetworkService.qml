@@ -30,6 +30,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -84,7 +85,7 @@ Item {
 
     Timer {
         interval: 3000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!linkProbe.running) linkProbe.running = true }
@@ -128,7 +129,7 @@ Item {
 
     Timer {
         interval: 4000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!wifiProbe.running) wifiProbe.running = true }
@@ -162,7 +163,7 @@ Item {
 
     Timer {
         interval: 3000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!ipProbe.running) ipProbe.running = true }
@@ -195,7 +196,7 @@ Item {
 
     Timer {
         interval: 1500
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!procNetDev.running) procNetDev.running = true }

@@ -69,6 +69,9 @@ ShellRoot {
 
     // Trigger hide timer when shown becomes false
     onShownChanged: {
+        // Broadcast open/close so background services can gate their poll timers
+        // (see SharedState.dashboardVisible). Every shown mutation funnels here.
+        Config.SharedState.dashboardVisible = root.shown
         if (!shown) {
             hideTimer.restart()
         }

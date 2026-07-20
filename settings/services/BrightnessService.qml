@@ -13,6 +13,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -31,7 +32,7 @@ Item {
     Timer {
         id: pollTimer
         interval: 2000  // Poll every 2 seconds
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         onTriggered: refreshBrightness()
     }

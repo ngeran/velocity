@@ -272,8 +272,8 @@ Item {
     Timer {
         id: refreshTimer
         interval: 60000
-        running:  true
-        repeat:   true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
+        repeat: true
         onTriggered: {
             if (root.wallpaperDir.length > 0) startScan()
         }

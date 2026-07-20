@@ -146,12 +146,13 @@ Item {
         poll.running = true
     }
 
-    // Single sh -c argv: read the key from the file (no secret in argv), honour
-    // an env override, then curl. tr strips any stray whitespace/newline.
+    // Read the key from the file (no secret in the sh -c argv), honour an env
+    // override, then feed it to curl via stdin (--config -) so it's not in
+    // curl's argv either. tr strips any stray whitespace/newline.
     function _pollCommand() {
         var cmd = "KEY=$(cat " + root.keyFile + " 2>/dev/null | tr -d '[:space:]'); " +
-                  "curl -s --max-time 10 -H \"Authorization: Bearer ${ZAI_API_KEY:-$KEY}\" " +
-                  root.apiUrl
+                  "printf 'header = \"Authorization: Bearer %s\"\\n' \"${ZAI_API_KEY:-$KEY}\" | " +
+                  "curl -s --max-time 10 --config - " + root.apiUrl
         return ["sh", "-c", cmd]
     }
 

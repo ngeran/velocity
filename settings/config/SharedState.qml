@@ -46,6 +46,14 @@ QtObject {
     property string diskUsage:           "0%"
 
     // =========================================================================
+    // DASHBOARD VISIBILITY — gate for background-service poll timers
+    // =========================================================================
+    // Set by shell.qml onShownChanged. Control services bind their poll
+    // Timer.running to this so they stop forking when the dashboard is closed.
+    // CoreEngine/Gpu/Thermal stay always-on (they feed the deepcool-py LCD).
+    property bool   dashboardVisible:        false
+
+    // =========================================================================
     // MUTATION HANDLERS
     // =========================================================================
 

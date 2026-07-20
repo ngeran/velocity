@@ -12,6 +12,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -148,7 +149,7 @@ Item {
     // ── Periodic uptime refresh ──────────────────────────────────────────────
     Timer {
         interval: 30000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: false
         onTriggered: root.refreshUptime()
@@ -227,7 +228,7 @@ Item {
     // ── Live metrics poll timer (5s) ─────────────────────────────────────────────────
     Timer {
         interval: 5000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: {

@@ -22,6 +22,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -135,7 +136,7 @@ Item {
     // -------------------------------------------------------------------------
     Timer {
         interval: 3000
-        running: true
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!statusProc.running) statusProc.running = true }

@@ -55,6 +55,7 @@ Item {
         root.dnd = on
         var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
         w.command = ["sh", "-c", "printf '%s' '" + (on ? "1" : "0") + "' > " + root._dndFlag]
+        w.onExited.connect(function() { w.destroy() })  // free the one-shot wrapper (was leaked per toggle)
         w.running = true
     }
 
@@ -113,6 +114,7 @@ Item {
                      "/org/freedesktop/Notifications",
                      "org.quickshell.NotifyBridge." + method,
                      "uint32:" + clickId]
+        p.onExited.connect(function() { p.destroy() })  // free the one-shot wrapper (was leaked per click)
         p.running = true
     }
 
