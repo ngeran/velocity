@@ -54,8 +54,13 @@
 //   resolving Config.ThemeConfig.colors.* and Config.ThemeConfig.metadata.*.
 //
 // =============================================================================
-// SYNC WITH: bar/config/ThemeConfig.qml — applyTheme(), updateColorToken(),
-// and colors/metadata defaults MUST match (bar + settings are separate processes).
+// SYNC WITH: bar/config/ThemeConfig.qml — the 16 color-token defaults, metadata
+// defaults, updateColorToken(), and applyTheme()'s token-mapping MUST stay
+// identical (bar + settings are separate processes). Divergences are INTENTIONAL:
+// settings has isUserInitiated (it's the WRITER — ThemeService mutates in-process)
+// and DELEGATES the OLED clamp to ThemeService; the bar has no isUserInitiated
+// (read-only) + an inline defensive clamp equivalent to ThemeService.clampOLED +
+// a poll intake. Both clamps produce the same result (verified).
 // =============================================================================
 
 pragma Singleton

@@ -11,8 +11,15 @@
 // instant updates when settings or external tools write the file).
 //
 // =============================================================================
-// SYNC WITH: settings/config/ThemeConfig.qml — applyTheme(), updateColorToken(),
-// and colors/metadata defaults MUST match (bar + settings are separate processes).
+// SYNC WITH: settings/config/ThemeConfig.qml — the 16 color-token defaults,
+// metadata defaults, updateColorToken(), and applyTheme()'s token-mapping MUST
+// stay identical (bar + settings are separate processes). Divergences here are
+// INTENTIONAL (don't "fix" them): no isUserInitiated (the bar is READ-ONLY — it
+// only reads colors.json that settings wrote), an inline OLED clamp as defense
+// (equivalent to ThemeService.clampOLED: 4 bg tokens → #000, luminance <0.18
+// text / <0.12 textDim → #e0e0e0 / #808080), and a POLL intake (FileView.onFileChanged
+// didn't fire reliably cross-process — see git history). The intake mechanism is
+// process-specific by design.
 // =============================================================================
 
 pragma Singleton

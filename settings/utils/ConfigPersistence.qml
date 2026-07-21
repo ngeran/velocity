@@ -47,8 +47,10 @@ QtObject {
         }
 
         var json = JSON.stringify(data, null, 2)
-        // Use printf to write file (handles special characters better)
-        saveProcess.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > '" + configPath + "'"]
+        // Atomic write: render to a per-PID tmp file, then rename. A crash
+        // mid-write leaves the OLD file intact (only an orphaned .tmp.$$ behind)
+        // — never a truncated/half-written config. Mirrors ThemeService._atomicWrite.
+        saveProcess.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > \"" + configPath + ".tmp.$$\" && mv -f \"" + configPath + ".tmp.$$\" \"" + configPath + "\""]
         saveProcess.running = true
         return true
     }
