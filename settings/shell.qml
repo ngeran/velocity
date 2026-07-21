@@ -79,13 +79,14 @@ ShellRoot {
 
     // =========================================================================
     // WORKSPACE WATCHER — auto-close when the user switches workspace.
-    // Event-driven via Hyprland's socket2 (no polling latency). socat streams
-    // events line-by-line; we dismiss on workspace>> / workspacev2>> /
-    // focusedmon>> (focus moving to another monitor is effectively a switch).
+    // Event-driven via Hyprland's socket2 (no polling latency). `nc -U` streams
+    // events line-by-line (socat isn't installed on this system; nc -U is the
+    // verified equivalent — see bar/services/HyprlandService.qml); we dismiss on
+    // workspace>> / workspacev2>> / focusedmon>> (focus to another monitor ≈ switch).
     // =========================================================================
     Process {
         id: workspaceWatcher
-        command: ["sh", "-c", "socat -u UNIX-CONNECT:\"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\" -"]
+        command: ["sh", "-c", "nc -U \"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\""]
         running: true
         stdout: SplitParser {
             onRead: function(line) {
