@@ -52,6 +52,7 @@ ColumnLayout {
         HudCard {
             accent: Config.ThemeConfig.colors.secondary
             Layout.fillWidth: true
+            Layout.fillHeight: true
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 10
 
@@ -121,6 +122,7 @@ ColumnLayout {
         HudCard {
             accent: Config.ThemeConfig.colors.warning
             Layout.fillWidth: true
+            Layout.fillHeight: true
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 10
 

@@ -29,7 +29,7 @@ RowLayout {
     HudCard {
         accent: Config.ThemeConfig.colors.warning
         Layout.fillWidth: true
-        Layout.alignment: Qt.AlignTop
+        Layout.fillHeight: true
         ColumnLayout {
             Layout.fillWidth: true; spacing: 10
 
@@ -109,7 +109,7 @@ RowLayout {
     HudCard {
         accent: Config.ThemeConfig.colors.secondary
         Layout.fillWidth: true
-        Layout.alignment: Qt.AlignTop
+        Layout.fillHeight: true
         ColumnLayout {
             Layout.fillWidth: true; spacing: 10
 

@@ -29,9 +29,11 @@ Rectangle {
     color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
     border.color: Config.ThemeConfig.colors.outlineVariant
     border.width: 1
-    // Size to content (16px top + 16px bottom padding), mirroring CoreCard.
+    // Preferred height = content + 16px top/bottom padding. We expose only
+    // implicitHeight (no competing `height` binding) so a layout can stretch
+    // this card with Layout.fillHeight to match a sibling's height; otherwise
+    // the layout sizes the card to this preferred height.
     implicitHeight: slot.implicitHeight + 32
-    height: implicitHeight
 
     // Inner content column.
     ColumnLayout {

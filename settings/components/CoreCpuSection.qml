@@ -84,7 +84,7 @@ ColumnLayout {
         HudCard {
             accent: Config.ThemeConfig.colors.primary
             Layout.preferredWidth: 300
-            Layout.alignment: Qt.AlignTop
+            Layout.fillHeight: true
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 12
 
@@ -174,7 +174,7 @@ ColumnLayout {
         HudCard {
             accent: Config.ThemeConfig.colors.secondary
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignTop
+            Layout.fillHeight: true
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 10
 
