@@ -24,6 +24,11 @@ Item {
     property string uptime: "—"
     property string userName: "user"
 
+    // Motherboard / chipset identity (static, read once from DMI sysfs)
+    property string boardVendor: "—"   // system vendor, e.g. "ASUS"
+    property string boardName: "—"     // board model, e.g. "TUF GAMING B650-E WIFI"
+    property string chipset: "—"       // parsed chipset code, e.g. "X870E", "B650E"
+
     // Live metrics (Step 3) - CPU, MEM, GPU, Disk usage percentages
     property real cpuPercent: 0
     property real memPercent: 0
@@ -47,6 +52,7 @@ Item {
         kernelProc.running = true
         hostnameProc.running = true
         userProc.running = true
+        boardProc.running = true
     }
 
     function refreshUptime() {
@@ -111,6 +117,50 @@ Item {
                 userProc.buffer = ""
             }
         }
+    }
+
+    // ── Motherboard / chipset: DMI sysfs (sys_vendor | board_name) ──────────
+    // Chipset (X870E/B650E/Z790/…) is parsed out of the board model string,
+    // which reliably embeds it (e.g. "TUF GAMING B650-E WIFI" → "B650E").
+    Process {
+        id: boardProc
+        command: ["sh", "-c",
+            "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data } }
+        onRunningChanged: {
+            if (!running && boardProc.buffer.length > 0) {
+                var parts = boardProc.buffer.split("|")
+                var sysv = (parts[0] || "").trim()
+                var name = root._cleanBoardName(parts[1] || "")
+                if (sysv.length > 0) root.boardVendor = sysv
+                if (name.length > 0) root.boardName = name
+                var cs = root._parseChipset(name)
+                if (cs.length > 0) root.chipset = cs
+                boardProc.buffer = ""
+            }
+        }
+    }
+
+    // Filter out generic placeholder board names that SMBIOS leaves when unset.
+    function _cleanBoardName(s) {
+        if (!s) return ""
+        var low = s.toLowerCase().trim()
+        var junk = ["default string", "to be filled by o.e.m.",
+                    "to be filled by o.e.m", "base board product name",
+                    "system product name", "system board product name",
+                    "not specified", "unknown", "none"]
+        if (junk.indexOf(low) >= 0) return ""
+        return s.trim()
+    }
+
+    // Extract a chipset code: optional A/B/X/H/Z prefix, 3 digits, optional -?E
+    // suffix. Covers AMD (X870E, B650E, A620, X670, B550…) and Intel (Z790, B760…).
+    function _parseChipset(s) {
+        if (!s) return ""
+        var m = s.match(/[ABXHZ]\d{3}-?E?/i)
+        if (!m) return ""
+        return m[0].replace("-", "").toUpperCase()
     }
 
     // ── Uptime: "up 2 hours, 15 minutes" ────────────────────────────────────

@@ -50,6 +50,9 @@ Item {
     property var disks: []                  // [{dev,mount,usedLabel,totalLabel,pct}]
     property int osAgeDays: 0
     property string installDate: ""         // "2026-07-04"
+    property string boardVendor: "—"        // system vendor, e.g. "ASUS"
+    property string boardName: "—"          // board model, e.g. "TUF GAMING B650-E WIFI"
+    property string chipset: "—"            // parsed chipset code, e.g. "X870E", "B650E"
 
     // =========================================================================
     // LIVE METRICS  (refreshed every 2s while active)
@@ -79,6 +82,7 @@ Item {
         root.loading = true
         if (!ffProc.running) ffProc.running = true
         if (!shellProc.running) shellProc.running = true
+        if (!boardProc.running) boardProc.running = true
         root.pollLive()
         if (!root.geoDone && !geoProc.running) geoProc.running = true
     }
@@ -109,6 +113,27 @@ Item {
         var b = bytes || 0
         if (b >= 1099511627776) return (Math.round(b / 1099511627776 * 100) / 100).toFixed(2) + " TiB"
         return (Math.round(b / 1073741824 * 100) / 100).toFixed(2) + " GiB"
+    }
+
+    // Filter out generic placeholder board names SMBIOS leaves when unset.
+    function _cleanBoardName(s) {
+        if (!s) return ""
+        var low = s.toLowerCase().trim()
+        var junk = ["default string", "to be filled by o.e.m.",
+                    "to be filled by o.e.m", "base board product name",
+                    "system product name", "system board product name",
+                    "not specified", "unknown", "none"]
+        if (junk.indexOf(low) >= 0) return ""
+        return s.trim()
+    }
+
+    // Extract a chipset code: optional A/B/X/H/Z prefix, 3 digits, optional -?E
+    // suffix. Covers AMD (X870E, B650E, A620, X670, B550…) and Intel (Z790, B760…).
+    function _parseChipset(s) {
+        if (!s) return ""
+        var m = s.match(/[ABXHZ]\d{3}-?E?/i)
+        if (!m) return ""
+        return m[0].replace("-", "").toUpperCase()
     }
 
     // =========================================================================
@@ -231,6 +256,32 @@ Item {
                     var slash = s.lastIndexOf("/")
                     root.shellName = slash >= 0 ? s.substring(slash + 1) : s
                 }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Motherboard / chipset identity — DMI sysfs (fastfetch's default module set
+    // has no Board block here, so read the kernel SMBIOS exposure directly:
+    // sys_vendor + board_name; the chipset is parsed out of the board name).
+    // =========================================================================
+    Process {
+        id: boardProc
+        property string buffer: ""
+        command: ["sh", "-c",
+            "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
+        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data } }
+        onRunningChanged: if (!running) {
+            var raw = boardProc.buffer
+            boardProc.buffer = ""
+            if (raw && raw.length > 0) {
+                var parts = raw.split("|")
+                var sysv = (parts[0] || "").trim()
+                var name = root._cleanBoardName(parts[1] || "")
+                if (sysv.length > 0) root.boardVendor = sysv
+                if (name.length > 0) root.boardName = name
+                var cs = root._parseChipset(name)
+                if (cs.length > 0) root.chipset = cs
             }
         }
     }

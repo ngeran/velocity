@@ -252,7 +252,7 @@ PanelWindow {
                     Rectangle {
                         Layout.columnSpan: 2
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 224
+                        Layout.preferredHeight: 209
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
                         border.color: root.cBorder; border.width: 1
 
@@ -355,6 +355,39 @@ PanelWindow {
                                                 text: Services.SystemInfoService.gpuDriver || "—"
                                                 color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.85)
                                                 font.family: root.fontM; font.pixelSize: 9
+                                            }
+                                        }
+                                    }
+
+                                    // BOARD (motherboard model + parsed chipset)
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Text { text: "BOARD"; color: root.cDim; font.family: root.fontM; font.pixelSize: 10; font.letterSpacing: 1 }
+                                            Item { Layout.fillWidth: true }
+                                            Text {
+                                                text: Services.SystemInfoService.boardName
+                                                color: root.cText
+                                                font.family: root.fontM; font.pixelSize: 14; font.bold: true
+                                                elide: Text.ElideRight; Layout.maximumWidth: 300
+                                            }
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Text {
+                                                text: Services.SystemInfoService.boardVendor
+                                                color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
+                                                font.family: root.fontM; font.pixelSize: 9
+                                                visible: Services.SystemInfoService.boardVendor !== "—" && Services.SystemInfoService.boardVendor.length > 0
+                                            }
+                                            Item { Layout.fillWidth: true }
+                                            Text {
+                                                text: "CHIPSET " + Services.SystemInfoService.chipset
+                                                color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
+                                                font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                                                visible: Services.SystemInfoService.chipset !== "—" && Services.SystemInfoService.chipset.length > 0
                                             }
                                         }
                                     }

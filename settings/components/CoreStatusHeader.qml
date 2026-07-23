@@ -29,6 +29,32 @@ CoreCard {
         Rectangle { width: 1; Layout.fillHeight: true; color: Config.ThemeConfig.colors.border }
         Text { text: "KERNEL: " + Services.SysInfoService.kernel; color: Config.ThemeConfig.colors.textDim
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+        Rectangle { width: 1; Layout.fillHeight: true; color: Config.ThemeConfig.colors.border }
+
+        // Motherboard model + parsed chipset badge (DMI identity)
+        RowLayout {
+            spacing: 6
+            Text {
+                text: "BOARD: "
+                      + (Services.SysInfoService.boardVendor !== "—" && Services.SysInfoService.boardVendor.length > 0
+                         ? Services.SysInfoService.boardVendor + " " : "")
+                      + Services.SysInfoService.boardName
+                color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                elide: Text.ElideRight; Layout.maximumWidth: 250
+            }
+            Rectangle {
+                visible: Services.SysInfoService.chipset !== "—" && Services.SysInfoService.chipset.length > 0
+                border.color: Config.ThemeConfig.colors.secondary; border.width: 1
+                height: 14; width: csChip.implicitWidth + 10
+                Text {
+                    id: csChip; anchors.centerIn: parent
+                    text: Services.SysInfoService.chipset
+                    color: Config.ThemeConfig.colors.secondary
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 7; font.bold: true
+                }
+            }
+        }
 
         Item { Layout.fillWidth: true }
 
