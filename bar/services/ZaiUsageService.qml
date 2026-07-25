@@ -67,6 +67,7 @@ Item {
     property string errorMessage: ""
     property string lastUpdated: ""
     property bool keyConfigured: false
+    property bool active: false             // overlay drives this with shown-state
 
     // ---- threshold re-arm state per window, keyed by window.key ----
     //   { <key>: { reset: <epochMs|null>, notified: [<thresholds>] } }
@@ -133,8 +134,9 @@ Item {
 
     Timer {
         interval: root.pollIntervalMs
-        running: true
+        running: root.active
         repeat: true
+        triggeredOnStart: true
         onTriggered: root.refresh()
     }
 

@@ -40,6 +40,7 @@ Item {
 
     property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
     property string _lastRaw: ""   // dedup: only re-apply when bar-config.json actually changes
+    property string _lastMtime: ""  // stat-mtime gate for the 2s poll (distinct from _lastRaw content dedup)
 
     Process {
         id: configLoader
@@ -138,14 +139,36 @@ Item {
     // INITIALIZATION
     // =========================================================================
 
+    // Stat-mtime gate: emits bar-config.json's mtime; only forks the cat+parse
+    // configLoader when the mtime changes. Mirrors ThemeConfig.qml.
+    Process {
+        id: statProc
+        command: ["sh", "-c", "printf '%s' \"$(stat -c %Y '" + configFilePath + "' 2>/dev/null)\""]
+        property string buffer: ""
+        stdout: SplitParser {
+            onRead: function(data) { statProc.buffer += data }
+        }
+        onRunningChanged: {
+            if (!running) {
+                var mtime = statProc.buffer.trim()
+                statProc.buffer = ""
+                if (mtime.length > 0 && mtime !== _lastMtime) {
+                    _lastMtime = mtime
+                    configLoader.command = ["cat", configFilePath]
+                    if (!configLoader.running) configLoader.running = true
+                }
+            }
+        }
+    }
+
     // Poll bar-config.json every 2s so the bar picks up Settings-tab changes
-    // (bar height, workspace dots, clock offset/city) without a restart. Mirrors
-    // the theme poller in ThemeConfig.qml; dedup avoids redundant re-application.
+    // (bar height, workspace dots, clock offset/city) without a restart. Now a
+    // stat-mtime gate (was a 2s cat+parse); configLoader's _lastRaw dedup is unchanged.
     Timer {
         interval: 2000
         running: true
         repeat: true
-        onTriggered: { configLoader.command = ["cat", configFilePath]; configLoader.running = true }
+        onTriggered: { if (!statProc.running) statProc.running = true }
     }
 
     Component.onCompleted: {

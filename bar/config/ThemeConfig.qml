@@ -179,14 +179,38 @@ Item {
     // =========================================================================
 
     property string lastCachedTimestamp: ""
+    property string lastFileMtime: ""   // stat-mtime gate (distinct from lastCachedTimestamp, which holds the JSON 'applied' field)
 
-    // Polling timer for theme sync (FileView.onFileChanged doesn't fire reliably)
+    // Polling timer for theme sync (FileView.onFileChanged doesn't fire reliably).
+    // Now a stat-mtime gate: cheap stat every 2s; cat+parse (themePoller) only
+    // runs when the mtime actually changes (was a 1s cat+parse ~60x/min).
     Timer {
         id: cachePoller
-        interval: 1000  // Check every 1 second
+        interval: 2000  // Stat every 2 seconds (was 1s cat+parse)
         running: true
         repeat: true
-        onTriggered: themePoller.running = true
+        onTriggered: { if (!statProc.running) statProc.running = true }
+    }
+
+    // Stat-mtime gate: emits colors.json's mtime. Only forks the cat+parse
+    // themePoller when the mtime differs from the last-seen value.
+    Process {
+        id: statProc
+        command: ["sh", "-c", "printf '%s' \"$(stat -c %Y '" + root.themeFilePath + "' 2>/dev/null)\""]
+        property string buffer: ""
+        stdout: SplitParser {
+            onRead: function(data) { statProc.buffer += data }
+        }
+        onRunningChanged: {
+            if (!running) {
+                var mtime = statProc.buffer.trim()
+                statProc.buffer = ""
+                if (mtime.length > 0 && mtime !== root.lastFileMtime) {
+                    root.lastFileMtime = mtime
+                    if (!themePoller.running) themePoller.running = true
+                }
+            }
+        }
     }
 
     // Poller process for checking theme file changes

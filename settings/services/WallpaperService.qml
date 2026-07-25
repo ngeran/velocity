@@ -155,39 +155,6 @@ Item {
     }
 
     // =========================================================================
-    // STEP 1.5 — Get available monitors
-    // =========================================================================
-
-    Process {
-        id: monitorGetter
-        command: ["sh", "-c", "hyprctl monitors -j"]
-        running: false
-
-        property string buf: ""
-
-        stdout: SplitParser {
-            onRead: data => { monitorGetter.buf += data }
-        }
-
-        onRunningChanged: {
-            if (!running && monitorGetter.buf.length > 0) {
-                try {
-                    var monitors = JSON.parse(monitorGetter.buf)
-                    if (monitors && monitors.length > 0) {
-                        // Set first monitor as default if none selected
-                        if (root.currentMonitor.length === 0) {
-                            root.currentMonitor = monitors[0].name
-                        }
-                    }
-                } catch (e) {
-                    console.log("[WallpaperService] Failed to parse monitors:", e)
-                }
-                monitorGetter.buf = ""
-            }
-        }
-    }
-
-    // =========================================================================
     // STEP 2 — Scan wallpaper directory for image files
     // =========================================================================
 
@@ -220,11 +187,9 @@ Item {
                     console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
                 }
 
-                // First run: start timer and apply an initial wallpaper
+                // First run: apply an initial wallpaper (cycleTimer auto-starts
+                // via its running binding once wallpaperList is non-empty).
                 if (root.wallpaperList.length > 0) {
-                    if (!cycleTimer.running && root.cyclingEnabled) {
-                        cycleTimer.running = true
-                    }
                     if (root.currentWallpaper.length === 0) {
                         applyWallpaper(selectRandomWallpaper())
                     }
@@ -380,7 +345,6 @@ Item {
     function toggleCycling() {
         console.log("[WallpaperService] toggleCycling")
         root.cyclingEnabled = !root.cyclingEnabled
-        cycleTimer.running  = root.cyclingEnabled && root.wallpaperList.length > 0
         console.log("[WallpaperService] toggleCycling ->", root.cyclingEnabled,
                     "timer running:", cycleTimer.running)
         saveConfig()
@@ -438,7 +402,7 @@ Item {
     Timer {
         id: cycleTimer
         interval:         root.cycleInterval
-        running:          false
+        running:          root.cyclingEnabled && root.wallpaperList.length > 0
         repeat:           true
         triggeredOnStart: false
 
@@ -517,7 +481,6 @@ Item {
         /// Set auto-cycling state explicitly
         function setCyclingEnabled(enabled: bool) {
             root.cyclingEnabled = enabled
-            cycleTimer.running  = enabled && root.wallpaperList.length > 0
             console.log("[WallpaperService] IPC: setCyclingEnabled ->", enabled)
         }
 

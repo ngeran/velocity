@@ -58,24 +58,6 @@ Item {
     // the bug where theme writes landed in literal "file:" dirs.
     readonly property string homeDir: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "")
 
-    // =========================================================================
-    // PROCESS CREATION WITH ERROR HANDLING
-    // =========================================================================
-
-    function createProcess(cmd, label) {
-        var proc = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        proc.command = cmd;
-        proc.onExited.connect(function(code) {
-            if (code !== 0) {
-                var errorMsg = "Process failed with exit code " + code + ": " + (label || "unknown");
-                console.error("[ThemeService] " + errorMsg);
-                CommandService.pushLog("[ThemeService] " + errorMsg, "error");
-            }
-            proc.destroy();  // free the one-shot wrapper (was leaked per call)
-        });
-        return proc;
-    }
-
     // Curated matrix representation for legacy interface alignment
     readonly property var curatedThemes: [
         "OLED Pure Black",

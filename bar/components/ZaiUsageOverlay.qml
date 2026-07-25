@@ -26,8 +26,8 @@ PanelWindow {
 
     property bool shown: false
     visible: false
-    function open()  { visible = true; shown = true; if (!Services.ZaiUsageService.loading) Services.ZaiUsageService.refresh() }
-    function close() { shown = false; hideTimer.restart() }
+    function open()  { visible = true; shown = true; Services.ZaiUsageService.active = true; if (!Services.ZaiUsageService.loading) Services.ZaiUsageService.refresh() }
+    function close() { shown = false; hideTimer.restart(); Services.ZaiUsageService.active = false }
     function toggle() { shown ? close() : open() }
 
     anchors { top: true; bottom: true; left: true; right: true }

@@ -4,7 +4,6 @@ module components
 ArchLogo 1.0 ArchLogo.qml
 ClockWidget 1.0 ClockWidget.qml
 WorkspaceWidget 1.0 WorkspaceWidget.qml
-WorkspaceButton 1.0 WorkspaceButton.qml
 NetworkIcon 1.0 NetworkIcon.qml
 BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml

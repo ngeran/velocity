@@ -147,7 +147,21 @@ PanelWindow {
                 Layout.margins: 12
                 spacing: 0
 
+                // nmcli absent — dim dash instead of a misleading "DISCONNECTED" pill
+                Text {
+                    visible: !Services.NetworkService.hasNetwork
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: "—"
+                    font.family: Config.BarConfig.fontFamily
+                    font.pixelSize: 28
+                    color: Config.BarConfig.colorTextDim
+                }
+
                 RowLayout {
+                    visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; spacing: 6
                     Rectangle {
                         width: typeLbl.implicitWidth + 12; height: 18
@@ -174,7 +188,7 @@ PanelWindow {
                     }
                     Item { Layout.fillWidth: true }
                 }
-                Item { height: 14 }
+                Item { height: 14; visible: Services.NetworkService.hasNetwork }
                 RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
                     Text { text: "SSID"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
                     Text { text: Services.NetworkService.ssid; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
@@ -184,13 +198,27 @@ PanelWindow {
                     Text { text: "IP"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
                     Text { text: Services.NetworkService.ipAddress; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
-                Item { Layout.fillHeight: true }
+                Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
             }
 
             // ── Bluetooth ──
             ColumnLayout {
                 Layout.fillWidth: true; Layout.margins: 12; spacing: 0
-                RowLayout { Layout.fillWidth: true; spacing: 6
+
+                // bluetoothctl absent — dim dash instead of a misleading "OFF" pill
+                Text {
+                    visible: !Services.BluetoothService.hasBluetooth
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: "—"
+                    font.family: Config.BarConfig.fontFamily
+                    font.pixelSize: 28
+                    color: Config.BarConfig.colorTextDim
+                }
+
+                RowLayout { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; spacing: 6
                     Rectangle {
                         width: btLbl.implicitWidth + 12; height: 18
                         radius: 0
@@ -202,12 +230,13 @@ PanelWindow {
                     }
                     Item { Layout.fillWidth: true }
                 }
-                Item { height: 10 }
-                Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(1,1,1,0.07) }
-                Item { height: 8 }
-                Text { text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
-                Item { height: 6 }
+                Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
+                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Qt.rgba(1,1,1,0.07) }
+                Item { height: 8; visible: Services.BluetoothService.hasBluetooth }
+                Text { visible: Services.BluetoothService.hasBluetooth; text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
+                Item { height: 6; visible: Services.BluetoothService.hasBluetooth }
                 Repeater {
+                    visible: Services.BluetoothService.hasBluetooth
                     model: Services.BluetoothService.connectedDeviceList ? Services.BluetoothService.connectedDeviceList.split(",") : []
                     delegate: RowLayout { Layout.fillWidth: true; spacing: 6
                         required property string modelData
@@ -215,9 +244,10 @@ PanelWindow {
                         Text { text: modelData.trim(); font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
                     }
                 }
-                Text { visible: Services.BluetoothService.deviceCount === 0; text: "No devices connected"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true }
-                Item { Layout.fillHeight: true }
+                Text { visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.deviceCount === 0; text: "No devices connected"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true }
+                Item { Layout.fillHeight: true; visible: Services.BluetoothService.hasBluetooth }
                 Rectangle {
+                    visible: Services.BluetoothService.hasBluetooth
                     Layout.fillWidth: true; height: 26
                     radius: 0
                     color: Services.BluetoothService.powered ? Qt.rgba(255,255,255,0.03) : Qt.rgba(0,220,229,0.08)
@@ -235,7 +265,22 @@ PanelWindow {
             // ── Volume ──
             ColumnLayout {
                 Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+
+                // wpctl absent — dim dash instead of a misleading "0%"
+                Text {
+                    visible: !Services.AudioService.hasAudio
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: "—"
+                    font.family: Config.BarConfig.fontFamily
+                    font.pixelSize: 28
+                    color: Config.BarConfig.colorTextDim
+                }
+
                 RowLayout {
+                    visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true; spacing: 10
                     Text {
                         text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
@@ -251,9 +296,10 @@ PanelWindow {
                     }
                     Item { Layout.fillWidth: true }
                 }
-                Item { height: 14 }
+                Item { height: 14; visible: Services.AudioService.hasAudio }
                 Slider {
                     id: volSlider
+                    visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28        // generous vertical click band
                     hoverEnabled: true
@@ -285,8 +331,9 @@ PanelWindow {
                         Behavior on scale { NumberAnimation { duration: 90 } }
                     }
                 }
-                Item { height: 12 }
+                Item { height: 12; visible: Services.AudioService.hasAudio }
                 Rectangle {
+                    visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true; height: 26
                     radius: 0
                     color: Services.AudioService.muted ? Qt.rgba(0,220,229,0.08) : Qt.rgba(255,255,255,0.03)

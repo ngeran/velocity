@@ -42,7 +42,6 @@ Item {
     Component.onCompleted: {
         root.refreshStatic()
         root.refreshUptime()
-        root.refreshLive()  // Start live metrics immediately
         console.log("[SysInfo] Service loaded")
     }
 

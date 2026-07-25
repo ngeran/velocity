@@ -10,6 +10,20 @@ Scope {
     property bool muted: false
     property bool syncLock: false
 
+    // wpctl presence — when absent we stop polling instead of forking a failing
+    // process forever and showing a misleading "0%" volume state.
+    property bool hasAudio: true
+
+    // One-shot presence probe; gates the poll timer on exit.
+    Process {
+        id: detectProc
+        command: ["sh", "-c", "command -v wpctl >/dev/null && wpctl get-volume @DEFAULT_SINK@ >/dev/null 2>&1"]
+        onExited: function(code) {
+            root.hasAudio = (code === 0)
+            audioPollTimer.running = root.hasAudio
+        }
+    }
+
     // -------------------------------------------------------------------------
     // STATUS PROBE — polls wpctl for volume + mute state
     // Output: "Volume: 0.40" (+ " [MUTED]" when muted)
@@ -37,6 +51,7 @@ Scope {
 
     // Poll every 2.5 s; skip if locked or already running
     Timer {
+        id: audioPollTimer
         interval: 2500; running: true; repeat: true
         onTriggered: {
             if (!root.syncLock && !statusProc.running)
@@ -102,4 +117,6 @@ Scope {
 
     function volumeUp()   { setVolume(Math.min(root.volume + 5, 100)) }
     function volumeDown() { setVolume(Math.max(root.volume - 5, 0))   }
+
+    Component.onCompleted: detectProc.running = true
 }

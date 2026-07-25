@@ -104,32 +104,16 @@ Item {
     }
 
     // =========================================================================
-    // WORKSPACE SWITCHING (via wtype keypress simulation)
+    // WORKSPACE SWITCHING — Hyprland 0.55+ Lua dispatcher (hl.dsp.focus)
     // =========================================================================
 
-    Process {
-        id: switchProc
-        property int targetWs: 1
-        // Use wtype to simulate SUPER + number keypress
-        command: ["bash", "-c", "wtype --key 125 --key " + ((targetWs % 10) + 2).toString() + " --key 125 2>&1"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { switchProc.buffer += data }
-        }
-        onRunningChanged: {
-            if (!running) {
-                console.log("[HyprlandService] Switch output:", switchProc.buffer.trim())
-                switchProc.buffer = ""
-            }
-        }
-    }
+    // Bare runner: switchTo() builds the hyprctl dispatch command inline.
+    Process { id: switchProc }
 
     function switchTo(idx: int) {
         console.log("[HyprlandService] Switching to workspace:", idx)
-        // Hyprland 0.55+ Lua config: the classic `hyprctl dispatch workspace N`
-        // is gone (it now evaluates Lua and errors). The correct form is the
-        // Lua dispatcher hl.dsp.focus({ workspace = N }). (The old wtype
-        // keypress hack never worked here — wtype isn't even installed.)
+        // Hyprland 0.55+ Lua config dropped `hyprctl dispatch workspace N`
+        // (it now evaluates Lua and errors). Use the Lua dispatcher form.
         switchProc.command = ["bash", "-c", "hyprctl dispatch 'hl.dsp.focus({ workspace = " + idx + " })' 2>&1"]
         switchProc.running = true
     }

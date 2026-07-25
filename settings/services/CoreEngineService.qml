@@ -51,7 +51,19 @@ Item {
     property string metricsPath: StandardPaths.writableLocation(StandardPaths.GenericCacheLocation)
                                        .toString().replace("file://", "") + "/deepcool/metrics.json"
 
-    property Process publisher: Process { command: []; running: false }
+    property Process publisher: Process {
+        command: []; running: false
+        // Rate-limited failure log: publish() fires every ~1s; if the metrics.json
+        // write keeps failing (e.g. perms), surface it via CommandService at most
+        // once per 10s instead of spamming the log every tick.
+        property real _lastFailLogMs: 0
+        onExited: function(code) {
+            if (code !== 0 && Date.now() - publisher._lastFailLogMs > 10000) {
+                publisher._lastFailLogMs = Date.now()
+                CommandService.pushLog("[CoreEngine] publish failed exit=" + code, "error")
+            }
+        }
+    }
     // One-shot: ensures the deepcool cache dir exists at startup so publish()
     // doesn't need a per-tick `mkdir -p` fork (mkdir is a separate binary).
     property Process initProc: Process { command: []; running: false }

@@ -64,6 +64,7 @@ Item {
     }
 
     Timer {
+        id: pollTimer
         interval: 10000
         running: true
         repeat: true
@@ -89,5 +90,11 @@ Item {
         root.onAc = acOnline || !root.hasBattery
         root.percentage = bat ? bat.capacity : 100
         root.charging = bat ? (bat.status === "charging") : false
+
+        // Desktop (no system battery + on AC): state is static, stop polling.
+        // Laptops (hasBattery) keep polling unchanged.
+        if (!root.hasBattery && root.onAc) {
+            pollTimer.running = false
+        }
     }
 }

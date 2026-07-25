@@ -11,6 +11,20 @@ Item {
     property int deviceCount: 0
     property string connectedDeviceList: ""   // comma-separated; "" = no devices
 
+    // bluetoothctl presence — when absent we stop polling instead of forking a
+    // failing process forever and showing a misleading "OFF" state.
+    property bool hasBluetooth: true
+
+    // One-shot presence probe; gates the poll timer on exit.
+    Process {
+        id: detectProc
+        command: ["sh", "-c", "command -v bluetoothctl >/dev/null && bluetoothctl show >/dev/null 2>&1"]
+        onExited: function(code) {
+            root.hasBluetooth = (code === 0)
+            btPollTimer.running = root.hasBluetooth
+        }
+    }
+
     Process {
         id: btShowProc
         command: ["bluetoothctl", "show"]
@@ -41,6 +55,7 @@ Item {
     }
 
     Timer {
+        id: btPollTimer
         interval: 6000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: {
             if (!btShowProc.running) btShowProc.running = true
@@ -63,4 +78,6 @@ Item {
         root.powered = !root.powered   // optimistic update
         refreshTimer.restart()
     }
+
+    Component.onCompleted: detectProc.running = true
 }
