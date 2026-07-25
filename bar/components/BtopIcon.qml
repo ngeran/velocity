@@ -1,9 +1,9 @@
 // =============================================================================
-// BtopIcon.qml — bar trigger that reveals btop in a centered floating window
+// BtopIcon.qml — bar trigger that opens the native System Monitor overlay
 // =============================================================================
-// Mirrors ArchLogo.qml's fastfetch pattern: clicking toggles a kitty window of
-// class "btop-float", which a Hyprland rule (configs/hypr/rules.lua) centers and
-// sizes to a fixed 1000x700. Click again (or press 'q' inside btop) to close.
+// Clicking fires a one-shot Quickshell IPC call that toggles the settings
+// process's SystemMonitorOverlay (a themed, realtime btop replacement — see
+// settings/components/SystemMonitorOverlay.qml). Closes via Esc / click-outside.
 // =============================================================================
 
 import QtQuick
@@ -29,7 +29,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: btopProc.running = !btopProc.running
+        onClicked: btopProc.running = true
     }
 
     // Tooltip on hover
@@ -48,15 +48,7 @@ Item {
 
     Process {
         id: btopProc
-        command: [
-            "kitty",
-            "--class", "btop-float",
-            "--title", "btop",
-            "-o", "shell_integration=disabled",
-            "-o", "window_padding_width=10",
-            "-o", "confirm_os_window_close=0",
-            "-o", "cursor_blink_interval=0",
-            "btop"
-        ]
+        // One-shot IPC toggle into the settings process's SystemMonitorOverlay.
+        command: ["quickshell", "ipc", "-c", "settings", "call", "systemMonitor", "toggle"]
     }
 }
