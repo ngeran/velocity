@@ -175,18 +175,6 @@ ShellRoot {
     }
 
     // =========================================================================
-    // IPC HANDLER — toggle the SystemMonitor overlay (bar BtopIcon / SUPER+T)
-    // =========================================================================
-    IpcHandler {
-        id: systemMonitorIpc
-        target: "systemMonitor"
-
-        function toggle() {
-            systemMonitor.toggle()
-        }
-    }
-
-    // =========================================================================
     // PANEL WINDOW — transparent full-width top stage
     // =========================================================================
     PanelWindow {
@@ -278,12 +266,5 @@ ShellRoot {
     // =========================================================================
     Components.PowerMenu {
         id: powerMenu
-    }
-
-    // =========================================================================
-    // SYSTEM MONITOR — full-screen realtime overlay (native btop replacement)
-    // =========================================================================
-    Components.SystemMonitorOverlay {
-        id: systemMonitor
     }
 }

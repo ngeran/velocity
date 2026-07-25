@@ -111,11 +111,6 @@ ShellRoot {
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
 
-            Components.BtopIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
-            }
-
             Components.NotificationButton {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2

@@ -14,4 +14,3 @@ singleton BrightnessService 1.0 BrightnessService.qml
 singleton GpuService 1.0 GpuService.qml
 singleton ThermalService 1.0 ThermalService.qml
 singleton CoreEngineService 1.0 CoreEngineService.qml
-singleton SystemMonitorService 1.0 SystemMonitorService.qml
