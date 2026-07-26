@@ -1,31 +1,59 @@
 // =============================================================================
-// CalendarWidget.qml — Ultra-Minimalist Bento Calendar
+// CalendarWidget.qml — "TEMPORAL MAP" calendar (Dashboard tab)
+// =============================================================================
+// Square hero calendar for the redesigned Dashboard's left column. Lives inside
+// a DashboardCard (showBrackets) content slot — its body is `Item { anchors.fill
+// }`, matching the slot's Item/anchors.fill contract.
+//
+// V8.00 redesign (mockup-faithful):
+//   • Headline month + year with a "TEMPORAL MAP" eyebrow + prev/next month nav.
+//   • MON-start week header (startOffset = (getDay()+6)%7).
+//   • Today cell = primary outline + ~5% primary tint fill + bold primary text,
+//     shown ONLY while viewing the current month (navigates away → no highlight).
+//   • Weekend dimming retained. All colours are live ThemeConfig tokens.
 // =============================================================================
 
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
-import "." as Components
 
 Item {
     id: calRoot
 
     // -------------------------------------------------------------------------
-    // Logic: Date Calculations
+    // "Now" (refreshed once a minute so the today-highlight rolls over at midnight)
     // -------------------------------------------------------------------------
-    property var    _now:          new Date()
-    property int    _todayDay:     _now.getDate()
-    property int    _todayMonth:   _now.getMonth()
-    property int    _todayYear:    _now.getFullYear()
-    
-    property var    _firstOfMonth: new Date(_todayYear, _todayMonth, 1)
-    property int    _startOffset:  _firstOfMonth.getDay() 
-    property int    _daysInMonth:  new Date(_todayYear, _todayMonth + 1, 0).getDate()
-    property int    _cellCount:    42 // Fixed 6-row grid for visual stability
-
+    property var _now: new Date()
     Timer {
         interval: 60000; running: true; repeat: true
         onTriggered: calRoot._now = new Date()
+    }
+
+    readonly property int _todayDay:   calRoot._now.getDate()
+    readonly property int _todayMonth: calRoot._now.getMonth()
+    readonly property int _todayYear:  calRoot._now.getFullYear()
+
+    // -------------------------------------------------------------------------
+    // View state — the month being looked at. Prev/next shift it; "today" badge
+    // only highlights when the viewed month IS the current month.
+    // -------------------------------------------------------------------------
+    property int viewMonth: calRoot._todayMonth
+    property int viewYear:  calRoot._todayYear
+
+    readonly property bool _isThisMonth: (viewMonth === _todayMonth && viewYear === _todayYear)
+
+    property var _firstOfMonth: new Date(viewYear, viewMonth, 1)
+    readonly property int _startOffset: (calRoot._firstOfMonth.getDay() + 6) % 7   // MON-start
+    readonly property int _daysInMonth: new Date(viewYear, viewMonth + 1, 0).getDate()
+    readonly property int _cellCount: 42   // fixed 6-row grid
+
+    function _shiftMonth(delta) {
+        var m = calRoot.viewMonth + delta
+        var y = calRoot.viewYear
+        if (m < 0)       { m = 11; y -= 1 }
+        else if (m > 11) { m = 0;  y += 1 }
+        calRoot.viewMonth = m
+        calRoot.viewYear  = y
     }
 
     ColumnLayout {
@@ -33,54 +61,73 @@ Item {
         anchors.margins: 4
         spacing: 0
 
-        // --- SECTION: Widget Header ---
-        Components.WidgetHeader {
-            icon: "󰃭"
-            label: "CALENDAR"
-            Layout.bottomMargin: 15
-        }
-
-        // --- SECTION: Month/Year Display ---
+        // --- Header: eyebrow + headline month/year + prev/next nav ------------
         RowLayout {
             Layout.fillWidth: true
-            Layout.bottomMargin: 24 
-            spacing: 12
+            Layout.bottomMargin: 18
+            spacing: 8
 
-            Text {
-                text: Qt.formatDateTime(calRoot._now, "MMMM").toUpperCase()
-                color: Config.ThemeConfig.colors.primary
-                font.pixelSize: 20
-                font.weight: Font.ExtraBold
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 0.5
-            }
-
-            Text {
-                text: Qt.formatDateTime(calRoot._now, "yyyy")
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 20
-                font.weight: Font.Light
-                font.family: Config.SettingsConfig.fontFamily
-                opacity: 0.4
+            ColumnLayout {
+                spacing: 3
+                Text {
+                    text: "TEMPORAL MAP"
+                    color: Config.ThemeConfig.colors.primary
+                    font.family: Config.ControlConfig.fontMono
+                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 2.0
+                }
+                Text {
+                    text: Qt.formatDateTime(calRoot._firstOfMonth, "MMMM").toUpperCase()
+                          + "  " + calRoot.viewYear
+                    color: Config.ThemeConfig.colors.text
+                    font.family: Config.SettingsConfig.fontFamily
+                    font.pixelSize: 22; font.weight: Font.DemiBold
+                }
             }
 
             Item { Layout.fillWidth: true }
+
+            // Prev / Next month chevrons
+            Repeater {
+                model: [ -1, 1 ]
+                delegate: Rectangle {
+                    Layout.preferredWidth: 30
+                    Layout.preferredHeight: 30
+                    color: navMa.containsMouse ? Config.ThemeConfig.colors.primary : "transparent"
+                    border.color: Config.ThemeConfig.colors.outlineVariant
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData < 0 ? "‹" : "›"
+                        color: navMa.containsMouse
+                               ? Config.ThemeConfig.colors.background
+                               : Config.ThemeConfig.colors.text
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 16; font.bold: true
+                    }
+
+                    MouseArea {
+                        id: navMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: calRoot._shiftMonth(modelData)
+                    }
+                }
+            }
         }
 
-        // --- SECTION: Day Labels (S M T W T F S) ---
+        // --- Week header (MON-start) -----------------------------------------
         GridLayout {
             columns: 7
             columnSpacing: 2
+            rowSpacing: 2
             Layout.fillWidth: true
-            Layout.bottomMargin: 10
-            
+            Layout.bottomMargin: 8
+
             Repeater {
-                model: ["S", "M", "T", "W", "T", "F", "S"]
-                // Item wrapper (zero intrinsic width) matches the date-grid
-                // delegate below, so GridLayout splits all 7 columns evenly
-                // instead of sizing each column to its letter's glyph width
-                // ("M"/"W" are wider than "T"/"S", which was throwing the
-                // header out of alignment with the numbers underneath).
+                model: ["M", "T", "W", "T", "F", "S", "S"]
                 delegate: Item {
                     Layout.fillWidth: true
                     implicitHeight: dayLabel.implicitHeight
@@ -88,17 +135,16 @@ Item {
                         id: dayLabel
                         anchors.centerIn: parent
                         text: modelData
-                        color: Config.ThemeConfig.colors.secondary
-                        opacity: 0.5
-                        font.pixelSize: 10
-                        font.weight: Font.Bold
+                        color: Config.ThemeConfig.colors.textDim
+                        font.pixelSize: 10; font.bold: true
                         font.family: Config.SettingsConfig.fontFamily
+                        font.letterSpacing: 1
                     }
                 }
             }
         }
 
-        // --- SECTION: The Calendar Grid ---
+        // --- Day grid ---------------------------------------------------------
         GridLayout {
             id: dateGrid
             columns: 7
@@ -117,43 +163,41 @@ Item {
 
                     readonly property int  dayNum:      index - calRoot._startOffset + 1
                     readonly property bool isActualDay: dayNum > 0 && dayNum <= calRoot._daysInMonth
-                    readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay
-                    readonly property bool isWeekend:   (index % 7 === 0) || (index % 7 === 6)
+                    readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay && calRoot._isThisMonth
+                    // MON-start grid → columns 5 (SAT) & 6 (SUN) are the weekend.
+                    readonly property bool isWeekend:   (index % 7 === 5) || (index % 7 === 6)
 
-                    // 1. Today Highlight — sharp hairline frame (no radius, no bounce)
+                    // Today highlight — primary outline + ~5% primary tint fill.
                     Rectangle {
-                        anchors.centerIn: parent
-                        width: parent.width * 0.8
-                        height: parent.height * 0.8
-                        radius: 0
-                        color: "transparent"
+                        anchors.fill: parent
+                        color: parent.isToday
+                               ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.06)
+                               : "transparent"
                         border.width: 1
-                        border.color: Config.ThemeConfig.colors.secondary
-                        visible: isToday
-                        opacity: isToday ? 1.0 : 0.0
-                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
+                        border.color: parent.isToday
+                                      ? Config.ThemeConfig.colors.primary
+                                      : "transparent"
+                        visible: parent.isToday
+                        Behavior on color { ColorAnimation { duration: 160 } }
                     }
 
-                    // 2. Day Number
                     Text {
                         anchors.centerIn: parent
-                        text: isActualDay ? dayNum : ""
+                        text: parent.isActualDay ? parent.dayNum : ""
                         font.pixelSize: 12
                         font.family: Config.SettingsConfig.fontFamily
-                        font.weight: isToday ? Font.Bold : Font.Normal
-                        
+                        font.weight: parent.isToday ? Font.Bold : Font.Normal
                         color: {
-                            if (isToday) return Config.ThemeConfig.colors.secondary;
-                            if (isActualDay) {
-                                return isWeekend ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.primary;
+                            if (parent.isToday) return Config.ThemeConfig.colors.primary
+                            if (parent.isActualDay) {
+                                return parent.isWeekend
+                                       ? Config.ThemeConfig.colors.textDim
+                                       : Config.ThemeConfig.colors.text
                             }
-                            return "transparent";
+                            return "transparent"
                         }
-                        
-                        opacity: (isWeekend && !isToday) ? 0.35 : 1.0
+                        opacity: (parent.isWeekend && parent.isActualDay && !parent.isToday) ? 0.5 : 1.0
                     }
-                    
-                    // The Indicator Dot has been removed to keep the numbers clear.
                 }
             }
         }

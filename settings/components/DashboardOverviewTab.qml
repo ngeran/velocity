@@ -1,96 +1,86 @@
 // =============================================================================
-// DashboardOverviewTab.qml — Tactical left-heavy command layout
-// VERSION: V2.01 — Clock+Calendar (left) | CPU+Storage (right top) |
-//                 Network+Identity (right bottom). All cards tactical.
+// DashboardOverviewTab.qml — "TEMPORAL MAP" dashboard
+// VERSION: V8.04 — CALENDAR (perfect square) + 2×2 GRID, fills the viewport
 //
-// Explicit pixel math on an Item root (no Column/anchors.fill circular bindings
-// — see V1.04..V1.06 history). Cards are placed by absolute x/y/width/height
-// derived only from root.width/root.height. Each card is a tactical DashboardCard
-// (showBrackets + accent); colours follow the live theme (multi-accent mapping:
-// clock/calendar=warning, processor=secondary, storage=success, network=secondary,
-// identity=primary). Reuses the existing Clock/Calendar/Network/Identity widgets
-// unchanged; ProcessorArrayWidget + StorageMatrixWidget are new.
+// LAYOUT (below the shared Header / right of the shared SidebarNav):
+//   ┌──────────────┬─────────────────────┐
+//   │              │ THEME     │ DISPLAY  │
+//   │  TEMPORAL    │ switcher  │  matrix  │
+//   │  MAP cal     ├───────────┼──────────┤
+//   │  (square)    │ SPECTRAL  │ SYSTEM   │
+//   │              │  tokens   │ ref cap  │
+//   └──────────────┴─────────────────────┘
+//
+// The calendar is a PERFECT SQUARE sized to the content height — it fills top-to
+// bottom with no void. The 2×2 widget grid takes the remaining width and fills
+// the height; each card distributes its content to fill its cell. No empty space.
+//
+// Every colour reads from Config.ThemeConfig.colors → recolours live with the
+// active theme. requestTab(int) bubbles to ModernDashboard (Theme CHANGE → Themes).
 // =============================================================================
 
-import "." as Components
 import QtQuick
+import QtQuick.Layouts
+import "." as Components
 import "../config" as Config
 
 Item {
     id: root
     anchors.fill: parent
 
-    readonly property string layoutVersion: "V2.00"
+    readonly property string layoutVersion: "V8.04"
 
-    // ── geometry (derived from root.width/height only) ──────────────────────
-    readonly property real pad: 16          // outer margin
-    readonly property real gap: 12          // between cards
+    // Bubble a tab-switch request up to ModernDashboard.
+    signal requestTab(int index)
 
-    readonly property real cw: root.width  - pad * 2
-    readonly property real ch: root.height - pad * 2
+    // ── Geometry: fill the viewport. The calendar is a PERFECT SQUARE sized to
+    //    the content height (so it fills top-to-bottom with no void); the 2×2
+    //    grid takes the remaining width and fills the height. ─────────────────
+    readonly property real _margin: 16
+    readonly property real _gap: 12
+    readonly property real _calSide: (root.height > 0 && root.width > 0)
+        ? Math.min(root.height - 2 * root._margin,
+                   (root.width - 2 * root._margin - root._gap) * 0.55)
+        : 0   // 0 until the anchor chain resolves root.height (avoids an init warning)
 
-    // left column (~32%) + right region
-    readonly property real leftW:  Math.round((cw - gap) * 0.32)
-    readonly property real rightX: pad + leftW + gap
-    readonly property real rightW: cw - leftW - gap
+    // =========================================================================
+    // BODY — fills the content area edge to edge (no scrolling, no voids)
+    // =========================================================================
+    RowLayout {
+        anchors.fill: parent
+        anchors.margins: root._margin
+        spacing: root._gap
 
-    // left column split: clock 42% / calendar rest
-    readonly property real clockH: Math.round((ch - gap) * 0.42)
-    readonly property real calY:   pad + clockH + gap
-    readonly property real calH:   ch - clockH - gap
+        // ── Temporal Map calendar — perfect square, fills the full height ──
+        Components.DashboardCard {
+            accent: Config.ThemeConfig.colors.primary
+            showBrackets: true
+            Layout.preferredWidth: root._calSide
+            Layout.preferredHeight: root._calSide
+            Components.CalendarWidget { anchors.fill: parent }
+        }
 
-    // right top (60%) split: processor 58% / storage rest
-    readonly property real topH:   Math.round((ch - gap) * 0.60)
-    readonly property real procW:  Math.round((rightW - gap) * 0.58)
-    readonly property real storX:  rightX + procW + gap
-    readonly property real storW:  rightW - procW - gap
+        // ── 2×2 grid: the rest of the widgets, each filling its cell ──
+        GridLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            columns: 2
+            rowSpacing: root._gap
+            columnSpacing: root._gap
 
-    // right bottom (rest) split: network 62% / identity rest
-    readonly property real botY:   pad + topH + gap
-    readonly property real botH:   ch - topH - gap
-    readonly property real netW:   Math.round((rightW - gap) * 0.62)
-    readonly property real idX:    rightX + netW + gap
-    readonly property real idW:    rightW - netW - gap
-
-    // ── LEFT: System Clock ──────────────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.pad; y: root.pad; width: root.leftW; height: root.clockH
-        accent: Config.ThemeConfig.colors.warning; showBrackets: true
-        Components.ClockWidget { anchors.fill: parent }
-    }
-
-    // ── LEFT: Calendar ──────────────────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.pad; y: root.calY; width: root.leftW; height: root.calH
-        accent: Config.ThemeConfig.colors.warning; showBrackets: true
-        Components.CalendarWidget { anchors.fill: parent }
-    }
-
-    // ── RIGHT TOP: CPU info ─────────────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.rightX; y: root.pad; width: root.procW; height: root.topH
-        accent: Config.ThemeConfig.colors.secondary; showBrackets: true
-        Components.CpuInfoWidget { anchors.fill: parent }
-    }
-
-    // ── RIGHT TOP: Storage Matrix ───────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.storX; y: root.pad; width: root.storW; height: root.topH
-        accent: Config.ThemeConfig.colors.success; showBrackets: true
-        Components.StorageMatrixWidget { anchors.fill: parent }
-    }
-
-    // ── RIGHT BOTTOM: Network ───────────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.rightX; y: root.botY; width: root.netW; height: root.botH
-        accent: Config.ThemeConfig.colors.secondary; showBrackets: true
-        Components.NetworkWidget { anchors.fill: parent }
-    }
-
-    // ── RIGHT BOTTOM: Identity ──────────────────────────────────────────────
-    Components.DashboardCard {
-        x: root.idX; y: root.botY; width: root.idW; height: root.botH
-        accent: Config.ThemeConfig.colors.primary; showBrackets: true
-        Components.IdentityWidget { anchors.fill: parent }
+            Components.ActiveThemeCard {     // Theme Switcher  (top-left)
+                Layout.fillWidth: true; Layout.fillHeight: true
+                onChangeRequested: root.requestTab(1)   // → Themes tab
+            }
+            Components.DisplayInfoCard {     // Display Matrix (top-right)
+                Layout.fillWidth: true; Layout.fillHeight: true
+            }
+            Components.ActivePaletteCard {   // Spectral Tokens (bottom-left)
+                Layout.fillWidth: true; Layout.fillHeight: true
+            }
+            Components.ActiveWallpaperCard { // System Reference Capture (bottom-right)
+                Layout.fillWidth: true; Layout.fillHeight: true
+            }
+        }
     }
 }

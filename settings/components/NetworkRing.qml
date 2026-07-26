@@ -271,6 +271,7 @@ Item {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
+            visible: ringRoot.label === ""
             text:  ringRoot.activeZone
             color: ringRoot._tDim
             font.pixelSize:   Math.round(ringRoot.width * 0.065)

@@ -35,11 +35,18 @@ Rectangle {
     // the layout sizes the card to this preferred height.
     implicitHeight: slot.implicitHeight + 32
 
-    // Inner content column.
+    // Inner content column. Slot is anchored on ALL FOUR sides so it fills the
+    // card when a layout stretches it — that lets a consumer drop an
+    // `Item { Layout.fillHeight: true }` spacer to pin a footer to the bottom
+    // (or grow a hero element) instead of leaving dead space. implicitHeight is
+    // still content-driven, so an unstretched card sizes exactly to its content
+    // and existing top-aligned cards are visually unchanged.
     ColumnLayout {
         id: slot
-        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-        anchors.leftMargin: 16; anchors.rightMargin: 16; anchors.topMargin: 16
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.top: parent.top; anchors.bottom: parent.bottom
+        anchors.leftMargin: 16; anchors.rightMargin: 16
+        anchors.topMargin: 16; anchors.bottomMargin: 16
         spacing: root.contentSpacing
     }
 

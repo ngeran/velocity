@@ -59,17 +59,17 @@ Item {
     }
 
     // =========================================================================
-    // TOP NAVIGATION HEADER
+    // SIDEBAR NAVIGATION (was a horizontal TopNavBar across the top; the
+    // control-console mockup calls for a 64px vertical sidebar instead)
     // =========================================================================
 
-    Components.TopNavBar {
+    Components.SidebarNav {
         id: navBar
         anchors {
             top: parent.top
             left: parent.left
-            right: parent.right
+            bottom: parent.bottom
         }
-        height: parent.height * (1.0 / 12.0)
         currentIndex: root.currentTab
         onTabSelected: function(index) {
             root.currentTab = index
@@ -77,14 +77,28 @@ Item {
     }
 
     // =========================================================================
-    // MAIN CONTENT AREA
+    // SHARED HEADER — Clock + Identity, spans every tab (not just Dashboard)
+    // =========================================================================
+
+    Components.Header {
+        id: dashboardHeader
+        anchors {
+            top: parent.top
+            left: navBar.right
+            right: parent.right
+        }
+        height: 72
+    }
+
+    // =========================================================================
+    // MAIN CONTENT AREA — below the shared header, right of the sidebar
     // =========================================================================
 
     Item {
         id: contentArea
         anchors {
-            top: navBar.bottom
-            left: parent.left
+            top: dashboardHeader.bottom
+            left: navBar.right
             right: parent.right
             bottom: parent.bottom
         }
@@ -101,6 +115,9 @@ Item {
             opacity: root.currentTab === 0 ? 1.0 : 0.0
             x: root.currentTab === 0 ? 0 : -20
             anchors.fill: parent
+
+            // Dashboard → tab deep-links (Theme Switcher CHANGE, footer CONFIG)
+            onRequestTab: function(index) { root.currentTab = index }
 
             Behavior on opacity {
                 NumberAnimation {
