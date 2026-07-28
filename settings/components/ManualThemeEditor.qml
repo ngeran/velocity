@@ -147,15 +147,6 @@ Item {
         spacing: 8
 
         Text {
-            text: "MANUAL THEME COLOR EDITOR"
-            font.pixelSize: 13
-            font.family: Config.SettingsConfig.fontFamily
-            font.bold: true
-            color: Config.ThemeConfig.colors.text
-            Layout.fillWidth: true
-        }
-
-        Text {
             text: "Click a swatch to pick, or type a hex value. Changes apply live to QuickShell + ghostty."
             font.pixelSize: 9
             font.family: Config.SettingsConfig.fontFamily
@@ -282,15 +273,20 @@ Item {
             wrapMode: Text.Wrap
         }
 
-        // Token grid — 4 columns, no Flickable. The 16-token grid is only ~4
-        // rows tall, so it displays inline; this stops the saved-schemes
-        // section below from stealing its height and forcing a scroll.
+        // Token grid — 3 columns (was 4). 4 columns needed ~700px+ to lay
+        // out cleanly, which the editor's actual allocated width couldn't
+        // guarantee; GridLayout would then compress each column below the
+        // label's content width, and the label — having no elide — simply
+        // painted past its box, with the swatch rendered on top of it.
+        // 3 columns needs ~530px, which comfortably fits, and the label
+        // now has elide as a permanent safety net if space ever tightens
+        // again (e.g. narrower window, longer future token name).
         GridLayout {
             id: tokenGrid
             Layout.fillWidth: true
-            columns: 4
-            columnSpacing: 10
-            rowSpacing: 6
+            columns: 3
+            columnSpacing: 14
+            rowSpacing: 8
 
                 Repeater {
                     model: root.colorTokens
@@ -304,7 +300,8 @@ Item {
                             font.pixelSize: 9
                             font.family: Config.SettingsConfig.fontFamily
                             color: Config.ThemeConfig.colors.text
-                            Layout.preferredWidth: 52
+                            Layout.preferredWidth: 78
+                            elide: Text.ElideRight
                         }
 
                         // Swatch (click → open picker). Reactive to ThemeConfig.colors.
@@ -354,6 +351,10 @@ Item {
                     }
                 }
             }
+
+        // Spacer — pins the save + saved-schemes group to the bottom of the
+        // column so the editor fills the available height (no internal scroll).
+        Item { Layout.fillHeight: true }
 
         // ── Save current scheme + reset (one row to save vertical space) ──
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant; Layout.topMargin: 6; Layout.bottomMargin: 6 }

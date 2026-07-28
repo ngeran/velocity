@@ -15,6 +15,11 @@ Rectangle {
     // =========================================================================
     property string themeName: ""
     property bool isActive: false
+    // Overridable size — defaults preserve every existing call site's
+    // 160x90 look. Pass these explicitly when the card should flex to
+    // fill a GridLayout cell instead (see ThemeModule's curated grid).
+    property real cardWidth: 148
+    property real cardHeight: 64
     signal clicked()
 
     // =========================================================================
@@ -60,9 +65,12 @@ Rectangle {
     // =========================================================================
     // VISUAL ARCHITECTURE HIERARCHY
     // =========================================================================
-    width:  160
-    height: 90
-    color:  themeColors.surface
+    implicitWidth:  cardWidth
+    implicitHeight: cardHeight
+    color:  "#000000"   // always pure OLED black — the preset's own surface
+                         // color used to tint every card differently; the
+                         // swatch strip is the only place palette color
+                         // should show up now.
     border.color: {
         if (isActive) return themeColors.accent
         if (interactiveClickArea.activeFocus) return Config.ThemeConfig.colors.primary
@@ -84,76 +92,58 @@ Rectangle {
         radius:  0
     }
 
+    // Active checkmark — top-right flag on the currently-applied preset.
+    Text {
+        visible: root.isActive
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 3
+        anchors.rightMargin: 5
+        text: "✓"
+        font.family: Config.SettingsConfig.fontFamily
+        font.pixelSize: 12
+        font.bold: true
+        color: themeColors.accent
+    }
+
     ColumnLayout {
         anchors {
             fill: parent
-            leftMargin:  12
-            rightMargin: 12
-            topMargin:   10
-            bottomMargin: 10
+            leftMargin:  10
+            rightMargin: 10
+            topMargin:   8
+            bottomMargin: 8
         }
-        spacing: 6
+        spacing: 5
 
         // Theme String Identification Label Node
         Text {
             Layout.fillWidth: true
             text:            root.themeName
-            font.pixelSize:  12
+            font.pixelSize:  11
             font.family: Config.SettingsConfig.fontFamily
             font.bold:       isActive
             color:           isActive ? Config.ThemeConfig.colors.text : themeColors.text
             elide:           Text.ElideRight
         }
 
+        Item { Layout.fillHeight: true }
+
         // Color Swatch Strip Layout Grid Component Block
         Row {
             Layout.fillWidth: true
-            spacing: 3
+            spacing: 2
 
             Repeater {
                 model: root.themeColors.swatches
                 delegate: Rectangle {
-                    width:  8
-                    height: 12
+                    width:  7
+                    height: 10
                     color:  modelData
                     border.color: Config.ThemeConfig.colors.border
                     border.width: 1
                     radius: Config.SettingsConfig.radiusMd
                 }
-            }
-        }
-
-        Item { Layout.fillHeight: true }
-
-        // Core Status Interactive Tag Row Module
-        RowLayout {
-            Layout.fillWidth: true
-
-            Rectangle {
-                id: tagWrapper
-                visible: root.isActive
-                Layout.preferredWidth:  statusLabel.implicitWidth + 8
-                Layout.preferredHeight: 14
-                color:        "transparent"
-                border.color: themeColors.accent
-                border.width: 1
-                radius:       0
-
-                Text {
-                    id: statusLabel
-                    anchors.centerIn: parent
-                    text:            "ACTIVE"
-                    font.pixelSize:  8
-                    font.family: Config.SettingsConfig.fontFamily
-                    font.letterSpacing: 1.0
-                    color:           themeColors.accent
-                }
-            }
-
-            // Consistent baseline alignment element spacer
-            Item {
-                visible: !root.isActive
-                Layout.preferredHeight: 14
             }
         }
     }
