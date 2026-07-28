@@ -39,6 +39,7 @@ Item {
     property real diskUsedTB: 0
     property real diskTotalTB: 0
     property real diskPct: 0
+    property var disks: []          // [{device,fstype,mount,usedGB,totalGB,pct}] all real data filesystems
 
     // ── internal CPU delta state ────────────────────────────────────────────
     property real _cpuPrevBusy: 0
@@ -174,20 +175,57 @@ Item {
         }
     }
 
-    // ── Disk capacity (df / → GiB → TB) ─────────────────────────────────────
+    // ── Disk: all real data filesystems (df → GiB) ─────────────────────────
+    // Parses every mounted filesystem, drops pseudo/boot FS (tmpfs, vfat,
+    // efivarfs, …), and exposes the rest as `disks[]` for the Storage card.
+    // The root "/" entry also back-fills diskUsedTB/diskTotalTB/diskPct so the
+    // deepcool LCD feed keeps working. df's size/used/avail are 1K-blocks →
+    // /1048576 = GiB (the codebase's "GB"). New drives auto-appear.
+    //
+    // IMPORTANT: SplitParser emits one callback per line WITHOUT the trailing
+    // newline — a multi-line `df` would otherwise collapse into one blob and
+    // split("\n") would yield a single element. Re-append "\n" (same trick
+    // cpuProc uses for /proc/stat) before splitting.
     Process {
         id: diskProc
-        command: ["bash", "-c", "df / | awk 'NR==2{printf \"%.1f %.1f %d\", $3/1048576, $2/1048576, $5}'"]
+        command: ["bash", "-c", "df --output=source,fstype,size,used,avail,pcent,target 2>/dev/null"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && diskProc.buffer.trim().length) {
-                var f = diskProc.buffer.trim().split(/\s+/)
-                var usedGiB = parseFloat(f[0]), totalGiB = parseFloat(f[1]), pct = parseInt(f[2], 10)
-                if (!isNaN(usedGiB)) {
-                    root.diskUsedTB = +(usedGiB / 1024).toFixed(2)
-                    root.diskTotalTB = +(totalGiB / 1024).toFixed(2)
-                    root.diskPct = isNaN(pct) ? 0 : pct
+                var lines = diskProc.buffer.trim().split("\n")
+                // pseudo / virtual / boot filesystems to skip — keep real data FS.
+                var skip = { tmpfs:1, devtmpfs:1, ramfs:1, squashfs:1, overlay:1,
+                    iso9660:1, efivarfs:1, vfat:1, fuseblk:1, autofs:1, mqueue:1,
+                    hugetlbfs:1, "9p":1, fusectl:1, configfs:1, debugfs:1, sysfs:1,
+                    proc:1, cgroup:1, cgroup2:1, nsfs:1, binfmt_misc:1, pstore:1,
+                    securityfs:1, tracefs:1, rpc_pipefs:1, devpts:1 }
+                var disks = []
+                var rootEntry = null
+                for (var i = 1; i < lines.length; i++) {
+                    var f = lines[i].trim().split(/\s+/)
+                    if (f.length < 7) continue
+                    var fstype = f[1]
+                    if (skip[fstype]) continue
+                    var sizeK = parseFloat(f[2]), usedK = parseFloat(f[3]), availK = parseFloat(f[4])
+                    if (isNaN(sizeK) || sizeK <= 0) continue
+                    var pct = parseInt(f[5], 10)
+                    var target = f.slice(6).join(" ")
+                    var d = {
+                        device: f[0], fstype: fstype, mount: target,
+                        usedGB: +(usedK / 1048576).toFixed(1),
+                        availGB: +(availK / 1048576).toFixed(1),
+                        totalGB: +(sizeK / 1048576).toFixed(1),
+                        pct: isNaN(pct) ? 0 : pct
+                    }
+                    disks.push(d)
+                    if (target === "/") rootEntry = d
+                }
+                root.disks = disks
+                if (rootEntry) {
+                    root.diskUsedTB = +(rootEntry.usedGB / 1024).toFixed(2)
+                    root.diskTotalTB = +(rootEntry.totalGB / 1024).toFixed(2)
+                    root.diskPct = rootEntry.pct
                 }
                 diskProc.buffer = ""
             }

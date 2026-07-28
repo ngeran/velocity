@@ -16,11 +16,11 @@ import "../services" as Services
 Item {
     id: root
 
-    property string active: "overview"
+    property string active: "processors"
 
     readonly property var navItems: [
-        { key: "overview",      label: "OVERVIEW" },
         { key: "processors",    label: "PROCESSORS" },
+        { key: "gpu",           label: "GPU" },
         { key: "memoryenv",     label: "MEMORY & ENV" },
         { key: "lcd",           label: "LCD CONTROL" }
     ]
@@ -37,7 +37,7 @@ Item {
             anchors.fill: parent; anchors.margins: 14; spacing: 6
             Item { width: parent.width; height: 46
                 Column { spacing: 2
-                    Text { text: "CORE ENGINE"; color: Config.ThemeConfig.colors.primary; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 15; font.bold: true; font.italic: true }
+                    Text { text: "CORE ENGINE"; color: Config.ThemeConfig.colors.primary; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 15; font.bold: true }
                     Text { text: "STABLE V2.4.0 // CMD_CTR_PRO"; color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; opacity: 0.7 }
                 }
             }
@@ -75,12 +75,12 @@ Item {
         anchors.left: sideNav.right; anchors.top: parent.top; anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.leftMargin: 12
 
-        // OVERVIEW — compact at-a-glance summary (no per-core matrix)
+        // GPU — NVIDIA telemetry: util gauge + sparkline + VRAM + top processes
         Flickable {
-            anchors.fill: parent; visible: root.active === "overview"
-            contentWidth: width; contentHeight: ovWrap.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: ovWrap; width: parent.width; spacing: 0
-                CoreOverviewPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
+            anchors.fill: parent; visible: root.active === "gpu"
+            contentWidth: width; contentHeight: gpuCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
+            ColumnLayout { id: gpuCol; width: parent.width; spacing: 14
+                CoreGpuSection { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
             }
         }
 

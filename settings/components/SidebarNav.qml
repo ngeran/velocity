@@ -37,7 +37,7 @@ Rectangle {
         { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
         { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
         { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3
-        { key: "core",       label: "CORE",        icon: "󰢯" },   // index 4
+        { key: "core",       label: "CORE",        icon: "▦" },   // index 4  (plain Unicode — renders under Inter; was a Nerd Font PUA glyph that showed as a box)
         { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 5
     ]
 
