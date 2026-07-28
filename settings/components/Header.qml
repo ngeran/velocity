@@ -1,21 +1,20 @@
 // =============================================================================
 // settings/components/Header.qml
-// Shared Header Bar — compact single-row strip, matches the mockup exactly
-// (date block | Local/Athens/UTC triple clock | identity), NOT the tall hero
-// ClockWidget/IdentityWidget cards. Spans every tab (Dashboard, Themes, etc.)
-// — sits above contentArea in ModernDashboard.qml.
+// Shared Header Bar — compact single-row strip (date | Athens/Local/UTC clocks
+// | identity). Spans every tab (Dashboard, Themes, etc.) — sits above
+// contentArea in ModernDashboard.qml.
 //
-// VERSION: V2.10 — the clock group is now anchored to the header's horizontal
-// CENTRE (which is the screen centre, since the dashboard card is itself
-// centred on screen), instead of being spacer-centred between the DATE and
-// IDENTITY blocks (whose widths differ, which pulled LOCAL off-screen-centre).
-// DATE pins left, IDENTITY pins right, clocks pin centre → LOCAL sits dead-
-// centre on screen, each time centred between its dividers.
-//
-// Identity here duplicates IdentityWidget's minimal load (name/role/online)
-// rather than importing that widget directly, since IdentityWidget's own
-// layout (avatar + host/shell/wm stat rows + status footer) is card-sized,
-// not strip-sized.
+// VERSION: V3.1 — fixes uneven divider/clock spacing from V3.0.
+//   1) Stat columns now share a fixed Layout.preferredWidth, so ATHENS /
+//      LOCAL / UTC no longer render at different intrinsic widths (LOCAL's
+//      big:true value and UNIVERSAL's longer label used to skew things).
+//   2) The clock trio is anchored directly to headerRoot's horizontal
+//      center instead of being sandwiched between two Layout.fillWidth
+//      spacers — true centering no longer depends on the Date block and
+//      Identity block happening to be the same width (they never are).
+//   Dividers now travel with their adjacent block (Date+divider on the
+//   left, divider+Identity on the right) rather than floating in a
+//   variable-width gap.
 //
 // SIZING: intrinsically ~72px tall. ModernDashboard.qml sets height: 72.
 // =============================================================================
@@ -98,21 +97,92 @@ Rectangle {
         }
     }
 
-    // ── layout ────────────────────────────────────────────────────────────
-    // DATE pinned left · clocks pinned to horizontalCentre · identity pinned
-    // right. Anchoring the clock group to the centre (rather than spacer-
-    // centring it between the unequal DATE/identity blocks) puts LOCAL at the
-    // screen's horizontal centre.
+    // ── shared building blocks ───────────────────────────────────────────────
 
-    // -- Date block (left) --
+    // Hairline vertical divider — every separator in the header uses this,
+    // so spacing/height/colour can never drift between blocks.
+    component Divider: Rectangle {
+        Layout.fillHeight: true
+        Layout.topMargin: 18
+        Layout.bottomMargin: 18
+        Layout.preferredWidth: 1
+        Layout.alignment: Qt.AlignVCenter
+        // NOTE: colors.border reads as near-invisible against a pure-black OLED
+        // background — using textDim at low opacity instead so the separator
+        // is actually visible, while staying subtle (not a filled bar).
+        color: Config.ThemeConfig.colors.textDim
+        opacity: 0.35
+    }
+
+    // Small caption-over-value pair used by the three clocks. `big` bumps the
+    // value's size/weight for the LOCAL (primary) reading.
+    //
+    // FIX: all three Stat instances now get an identical fixed
+    // Layout.preferredWidth (statColumnWidth, sized to fit the longest
+    // label "UNIVERSAL (UTC)" plus the big LOCAL value comfortably), and
+    // both Texts fill that width with horizontalAlignment: Text.AlignHCenter
+    // instead of Layout.alignment on a variable-width ColumnLayout. That's
+    // what actually keeps the dividers equidistant from the text — before,
+    // each Stat sized itself to its own longest child, so ATHENS / LOCAL /
+    // UTC were all different widths despite the RowLayout's spacing being
+    // a constant 28px.
+    component Stat: ColumnLayout {
+        property string label: ""
+        property string value: ""
+        property bool accent: false
+        property bool big: false
+        spacing: 2
+        Layout.preferredWidth: headerRoot.statColumnWidth
+        Layout.fillWidth: false
+
+        Text {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: parent.label
+            color: Config.ThemeConfig.colors.textDim
+            font.pixelSize: 8; font.bold: true
+            font.family: Config.SettingsConfig.fontFamily
+            font.letterSpacing: 1.5
+        }
+        Text {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: parent.value
+            color: parent.accent ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.text
+            font.pixelSize: parent.big ? 24 : 18
+            font.bold: true
+            font.family: Config.SettingsConfig.fontFamily
+        }
+    }
+
+    // Shared width for every Stat column — sized to comfortably fit the
+    // longest label ("UNIVERSAL (UTC)") and the big LOCAL value. Bump this
+    // if fonts/labels change and text starts clipping.
+    readonly property int statColumnWidth: 108
+
+    // ── layout ────────────────────────────────────────────────────────────
+    // Three independent groups instead of one long RowLayout:
+    //   - dateGroup   anchored to headerRoot's left edge
+    //   - clockTrio   anchored to headerRoot's true horizontal center
+    //   - identityGroup anchored to headerRoot's right edge
+    // This is what actually fixes centering: previously the clock trio's
+    // position depended on two Layout.fillWidth spacers splitting the
+    // *leftover* space evenly, which only centers the trio if the Date
+    // block and Identity block happen to be equal width. They never are
+    // (date text vs. name+role text differ), so the whole trio silently
+    // drifted off-center. Anchoring straight to parent.horizontalCenter
+    // removes that dependency entirely.
+
+    // -- Date block (+ its own trailing divider) --
     RowLayout {
-        id: dateBlock
-        anchors.left: parent.left; anchors.leftMargin: 20
+        id: dateGroup
+        anchors.left: parent.left
+        anchors.leftMargin: 24
         anchors.verticalCenter: parent.verticalCenter
         spacing: 10
 
         Rectangle {
-            width: 36; height: 36
+            width: 34; height: 34
             color: "transparent"
             border.color: Config.ThemeConfig.colors.outlineVariant
             border.width: 1
@@ -120,12 +190,12 @@ Rectangle {
                 anchors.centerIn: parent
                 text: "󰃭"
                 font.family: "JetBrainsMono Nerd Font"
-                font.pixelSize: 16
+                font.pixelSize: 15
                 color: Config.ThemeConfig.colors.secondary
             }
         }
         ColumnLayout {
-            spacing: 1
+            spacing: 2
             Text {
                 text: "DATE"
                 color: Config.ThemeConfig.colors.textDim
@@ -140,21 +210,34 @@ Rectangle {
                 font.family: Config.SettingsConfig.fontFamily
             }
         }
+
+        Item { Layout.preferredWidth: 10 }  // breathing room before the divider
+        Divider {}
     }
 
-    Rectangle {   // divider after date
-        anchors.left: dateBlock.right; anchors.leftMargin: 20
-        anchors.top: parent.top; anchors.topMargin: 10
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 10
-        width: 1; color: Config.ThemeConfig.colors.border
-    }
-
-    // -- Identity block (right) --
+    // -- Clock trio (Athens | Local | Universal), evenly spaced --
     RowLayout {
-        id: identityBlock
-        anchors.right: parent.right; anchors.rightMargin: 20
+        id: clockTrio
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 28
+        Stat { label: "ATHENS (EET)";    value: headerRoot.athensTime }
+        Divider {}
+        Stat { label: "LOCAL (LCT)";     value: headerRoot.localTime; accent: true; big: true }
+        Divider {}
+        Stat { label: "UNIVERSAL (UTC)"; value: headerRoot.utcTime }
+    }
+
+    // -- Identity block (+ its own leading divider) --
+    RowLayout {
+        id: identityGroup
+        anchors.right: parent.right
+        anchors.rightMargin: 24
         anchors.verticalCenter: parent.verticalCenter
         spacing: 10
+
+        Divider {}
+        Item { Layout.preferredWidth: 10 }  // breathing room after the divider
 
         Item {
             width: 34; height: 34
@@ -191,7 +274,7 @@ Rectangle {
         }
 
         ColumnLayout {
-            spacing: 1
+            spacing: 2
             Text {
                 text: headerRoot.userName.toUpperCase()
                 color: Config.ThemeConfig.colors.text
@@ -204,90 +287,6 @@ Rectangle {
                 font.pixelSize: 8
                 font.family: Config.SettingsConfig.fontFamily
                 font.letterSpacing: 1.2
-            }
-        }
-    }
-
-    Rectangle {   // divider before identity
-        anchors.right: identityBlock.left; anchors.rightMargin: 20
-        anchors.top: parent.top; anchors.topMargin: 10
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 10
-        width: 1; color: Config.ThemeConfig.colors.border
-    }
-
-    // -- Triple clock (ATHENS | LOCAL | UNIVERSAL) — distributed evenly across
-    // the central region between the DATE and IDENTITY blocks. Three equal-
-    // width columns with dividers between them, so the times + separators are
-    // spaced evenly horizontally (each time centred in its column).
-    RowLayout {
-        anchors.left: dateBlock.right
-        anchors.leftMargin: 40      // clear the DATE divider
-        anchors.right: identityBlock.left
-        anchors.rightMargin: 40     // clear the IDENTITY divider
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 24
-
-        ColumnLayout {   // ATHENS (left third)
-            spacing: 2
-            Layout.fillWidth: true
-            Text {
-                text: "ATHENS (EET)"
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 8; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 1.5
-            }
-            Text {
-                text: headerRoot.athensTime
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.secondary
-                font.pixelSize: 20; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-            }
-        }
-
-        Rectangle { Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; width: 1; color: Config.ThemeConfig.colors.border }
-
-        ColumnLayout {   // LOCAL (centre third)
-            spacing: 2
-            Layout.fillWidth: true
-            Text {
-                text: "LOCAL (LCT)"
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 8; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 1.5
-            }
-            Text {
-                text: headerRoot.localTime
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.text
-                font.pixelSize: 24; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-            }
-        }
-
-        Rectangle { Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; width: 1; color: Config.ThemeConfig.colors.border }
-
-        ColumnLayout {   // UNIVERSAL (right third)
-            spacing: 2
-            Layout.fillWidth: true
-            Text {
-                text: "UNIVERSAL (UTC)"
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 8; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
-                font.letterSpacing: 1.5
-            }
-            Text {
-                text: headerRoot.utcTime
-                Layout.alignment: Qt.AlignHCenter
-                color: Config.ThemeConfig.colors.text
-                font.pixelSize: 20; font.bold: true
-                font.family: Config.SettingsConfig.fontFamily
             }
         }
     }

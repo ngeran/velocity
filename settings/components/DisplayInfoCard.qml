@@ -81,34 +81,38 @@ HudCard {
         }
     }
 
-    // Reusable key/value row with a hairline divider underneath.
+    // Reusable key/value row with a hairline divider underneath. The value
+    // fills the row and right-aligns + elides from the left, so a narrow grid
+    // cell never overflows the card (keeps the resolution height visible).
     component SpecRow: RowLayout {
         property string keyText: ""
         property string valueText: "—"
         Layout.fillWidth: true
-        Layout.fillHeight: true
         spacing: 8
 
         Text {
             text: parent.keyText
             color: Config.ThemeConfig.colors.textDim
             font.family: Config.SettingsConfig.fontFamily
-            font.pixelSize: 11
+            font.pixelSize: 10
             Layout.alignment: Qt.AlignVCenter
         }
-        Item { Layout.fillWidth: true }
         Text {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignRight
             text: parent.valueText
             color: Config.ThemeConfig.colors.text
             font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 11; font.bold: true
+            font.pixelSize: 10; font.bold: true
             font.letterSpacing: 0.5
+            elide: Text.ElideLeft
             Layout.alignment: Qt.AlignVCenter
         }
     }
 
     ColumnLayout {
         Layout.fillWidth: true
+        Layout.fillHeight: true
         spacing: 6
 
         // Header — icon + DISPLAY MATRIX
@@ -162,17 +166,33 @@ HudCard {
             valueText: root.mon.scale ? (root.mon.scale.toFixed(2) + "×") : "—"
         }
 
-        // Footer — make / model
-        Text {
-            Layout.fillWidth: true
-            text: {
-                var m = (root.mon.make + " " + root.mon.model).trim()
-                return m.length ? m.toUpperCase() : (root.mon.name ? root.mon.name.toUpperCase() : "PRIMARY")
+        Item { Layout.fillHeight: true }   // rows packed at the top; footer pinned to the bottom
+
+        // Footer — monitor make/model: a bordered chip, centred, a touch larger.
+        Rectangle {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: 26
+            Layout.maximumWidth: parent.width
+            Layout.preferredWidth: monitorLabel.implicitWidth + 24
+            color: "transparent"
+            border.color: Config.ThemeConfig.colors.outlineVariant
+            border.width: 1
+
+            Text {
+                id: monitorLabel
+                anchors.centerIn: parent
+                width: parent.width - 16
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                text: {
+                    var m = (root.mon.make + " " + root.mon.model).trim()
+                    return m.length ? m.toUpperCase() : (root.mon.name ? root.mon.name.toUpperCase() : "PRIMARY")
+                }
+                color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontMono
+                font.pixelSize: 10; font.bold: true
+                font.letterSpacing: 1
             }
-            color: Config.ThemeConfig.colors.textDim
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-            elide: Text.ElideRight
-            font.letterSpacing: 1
         }
     }
 }

@@ -25,13 +25,17 @@ HudCard {
         Layout.fillWidth: true
         spacing: 8
 
-        // Eyebrow (top)
+        // Eyebrow (top) — "ACTIVE THEME" / letterSpacing 2.0 to match the
+        // codename style used on DisplayInfoCard / ActivePaletteCard, so the
+        // four dashboard cards read as one family instead of two dialects.
         Text {
-            text: "CURRENT ENVIRONMENT"
-            color: Config.ThemeConfig.colors.textDim
+            text: "ACTIVE THEME"
+            color: Config.ThemeConfig.colors.warning
             font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+            font.pixelSize: 9; font.bold: true; font.letterSpacing: 2.0
         }
+
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
         Item { Layout.fillHeight: true }   // centre the identity vertically
 
@@ -82,26 +86,40 @@ HudCard {
 
         Item { Layout.fillHeight: true }   // pin the button to the bottom
 
-        // CHANGE button (bottom, full width)
+        // CHANGE button (bottom, full width). Stays transparent at all times —
+        // no filled hover state, per the burn-in policy. Hover reads through
+        // the border brightening to the accent, the label warming to match,
+        // and a hairline accent underline growing in from the center: the
+        // same "outline gets louder" language every other control in this
+        // system already uses, just applied consistently here too.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
-            color: changeMa.containsMouse ? Config.ThemeConfig.colors.warning : "transparent"
+            color: "transparent"
             border.color: changeMa.containsMouse
                           ? Config.ThemeConfig.colors.warning
                           : Config.ThemeConfig.colors.outlineVariant
             border.width: 1
-            Behavior on color { ColorAnimation { duration: 120 } }
             Behavior on border.color { ColorAnimation { duration: 120 } }
 
             Text {
                 anchors.centerIn: parent
                 text: "CHANGE"
                 color: changeMa.containsMouse
-                       ? Config.ThemeConfig.colors.background
+                       ? Config.ThemeConfig.colors.warning
                        : Config.ThemeConfig.colors.text
                 font.family: Config.ControlConfig.fontMono
                 font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                height: 2
+                width: changeMa.containsMouse ? parent.width * 0.4 : 0
+                color: Config.ThemeConfig.colors.warning
+                Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
             }
 
             MouseArea {

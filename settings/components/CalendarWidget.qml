@@ -92,16 +92,19 @@ Item {
                 delegate: Rectangle {
                     Layout.preferredWidth: 30
                     Layout.preferredHeight: 30
-                    color: navMa.containsMouse ? Config.ThemeConfig.colors.primary : "transparent"
-                    border.color: Config.ThemeConfig.colors.outlineVariant
+                    color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, navMa.containsMouse ? 0.06 : 0.0)
+                    border.color: navMa.containsMouse
+                                  ? Config.ThemeConfig.colors.primary
+                                  : Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
 
                     Text {
                         anchors.centerIn: parent
                         text: modelData < 0 ? "‹" : "›"
                         color: navMa.containsMouse
-                               ? Config.ThemeConfig.colors.background
+                               ? Config.ThemeConfig.colors.primary
                                : Config.ThemeConfig.colors.text
                         font.family: Config.ControlConfig.fontMono
                         font.pixelSize: 16; font.bold: true

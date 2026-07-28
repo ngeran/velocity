@@ -1,24 +1,63 @@
 // =============================================================================
 // ActivePaletteCard.qml — Dashboard identity card: "SPECTRAL TOKENS"
 // =============================================================================
-// HudCard aesthetic. V8.03: the swatch grid FILLS the cell height (tall swatches)
-// with the memory bar pinned to the bottom — no internal void. Swatch tokens are
-// read straight from ThemeConfig (recolours live on every apply); memory comes
-// from CoreEngineService.ramPct.
+// HudCard aesthetic. Header + divider, then four key/value TokenRows
+// (PRIMARY / ACCENT / WARNING / TEXT) — the same row pattern as
+// DisplayInfoCard's SpecRow, so the two spec-sheet cards read as a pair.
+// Each row shows a small colour chip + hex, read live from ThemeConfig
+// (updates automatically on every theme apply).
+//
+// NOTE: an earlier version of this comment described a tall swatch-grid
+// layout with a memory usage bar pinned to the bottom (from
+// CoreEngineService.ramPct). That never made it into this file — worth
+// deciding whether it's still wanted before it goes stale again.
 // =============================================================================
 
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
-import "../services" as Services
 
 HudCard {
     id: root
     accent: Config.ThemeConfig.colors.primary
 
-    ColumnLayout {
+    // Reusable token row — label (left) + small colour chip + hex (right),
+    // laid out like DisplayInfoCard's SpecRow so the two cards read as a pair.
+    component TokenRow: RowLayout {
+        property string label: ""
+        property string hex: "#000000"
         Layout.fillWidth: true
         spacing: 8
+
+        Text {
+            text: parent.label
+            color: Config.ThemeConfig.colors.textDim
+            font.family: Config.SettingsConfig.fontFamily
+            font.pixelSize: 10
+            Layout.alignment: Qt.AlignVCenter
+        }
+        Item { Layout.fillWidth: true }
+        Rectangle {
+            Layout.preferredWidth: 12
+            Layout.preferredHeight: 12
+            Layout.alignment: Qt.AlignVCenter
+            color: parent.hex
+            border.color: Config.ThemeConfig.colors.outlineVariant
+            border.width: 1
+        }
+        Text {
+            text: ("" + parent.hex).toUpperCase()
+            color: Config.ThemeConfig.colors.text
+            font.family: Config.ControlConfig.fontMono
+            font.pixelSize: 10; font.bold: true
+            Layout.alignment: Qt.AlignVCenter
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: 6
 
         // Header — title + token id
         RowLayout {
@@ -38,77 +77,16 @@ HudCard {
             }
         }
 
-        // Four hero swatches — fill the cell height. Faint token tint fill +
-        // solid bottom accent bar (the token at full strength).
-        GridLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            columns: 4
-            rowSpacing: 6
-            columnSpacing: 6
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
-            Repeater {
-                model: [
-                    Config.ThemeConfig.colors.primary,
-                    Config.ThemeConfig.colors.secondary,
-                    Config.ThemeConfig.colors.warning,
-                    Config.ThemeConfig.colors.text
-                ]
-                delegate: Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: Config.ThemeConfig.tint(modelData, 0.18)
-                    border.color: Config.ThemeConfig.tint(modelData, 0.45)
-                    border.width: 1
-                    clip: true
+        TokenRow { label: "PRIMARY"; hex: Config.ThemeConfig.colors.primary }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+        TokenRow { label: "ACCENT";  hex: Config.ThemeConfig.colors.secondary }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+        TokenRow { label: "WARNING"; hex: Config.ThemeConfig.colors.warning }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+        TokenRow { label: "TEXT";    hex: Config.ThemeConfig.colors.text }
 
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        height: 4
-                        color: modelData
-                    }
-                }
-            }
-        }
-
-        // System Memory Load — live bar from CoreEngineService.ramPct (bottom).
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 4
-
-            RowLayout {
-                Layout.fillWidth: true
-                Text {
-                    text: "SYSTEM MEMORY LOAD"
-                    color: Config.ThemeConfig.colors.textDim
-                    font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    text: Math.round(Services.CoreEngineService.ramPct) + "%"
-                    color: Config.ThemeConfig.colors.warning
-                    font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 3
-                color: Config.ThemeConfig.colors.outlineVariant
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: parent.width * (Math.max(0, Math.min(100, Services.CoreEngineService.ramPct)) / 100)
-                    color: Config.ThemeConfig.colors.warning
-                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                }
-            }
-        }
+        Item { Layout.fillHeight: true }   // pin the token rows to the top of the card
     }
 }

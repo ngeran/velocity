@@ -157,7 +157,16 @@ Item {
     // "#rrggbb" string (any colors.* token) and an alpha in 0..1.
     // =========================================================================
     function tint(hex, alpha) {
-        var h = (hex || "#000000").replace("#", "")
+        // Accepts a "#rrggbb" string (any colors.* token) OR a QML `color`
+        // (ControlConfig.accent / accentDim / accentSoft arrive as a colour
+        // object, not a string — .replace would throw on it and silently fall
+        // back to black). Colour objects expose r/g/b in 0..1, so use them
+        // directly; otherwise parse the hex string.
+        if (hex && hex.r !== undefined && hex.g !== undefined) {
+            return Qt.rgba(hex.r, hex.g, hex.b, alpha)
+        }
+        var h = ((hex || "#000000") + "").replace("#", "")
+        if (h.length === 8) h = h.substring(0, 6)        // tolerate #rrggbbaa
         if (h.length !== 6) return Qt.rgba(0, 0, 0, alpha)
         return Qt.rgba(parseInt(h.substring(0, 2), 16) / 255,
                        parseInt(h.substring(2, 4), 16) / 255,

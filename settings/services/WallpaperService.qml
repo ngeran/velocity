@@ -91,6 +91,10 @@ Item {
             if (data.currentWallpaper !== undefined) {
                 root.currentWallpaper = data.currentWallpaper
             }
+            // Sync the loaded wallpaper into SharedState so dashboard widgets
+            // (e.g. the Active Wallpaper preview) show it immediately on
+            // startup — not only after a wallpaper is freshly applied.
+            Config.SharedState.updateWallpaper(root.currentWallpaper)
         }
 
         onSaved: function(success) {

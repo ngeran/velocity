@@ -22,6 +22,7 @@ Item {
         // Nudge the active section's service to refresh (no-ops until phases 3-5).
         if (activeSection === "network")   Services.NetworkControlService.refreshStatus()
         else if (activeSection === "audio") {}   // AudioControlService polls on its own
+        else if (activeSection === "display") Services.MonitorService.refresh()
     }
 
     Rectangle {

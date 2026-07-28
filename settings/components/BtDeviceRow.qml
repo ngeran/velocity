@@ -1,227 +1,335 @@
 // =============================================================================
-// BtDeviceRow.qml — one bluetooth device row
-// Changes vs original:
-//   • Detects unpaired / pairing / paired+disconnected / connected states
-//   • Inline action button adapts: [ PAIR ] → [ CONNECT ] → [ DISCONNECT ]
-//   • pairingTo / connectingTo bindings drive spinner and amber colour
-//   • [×] forget button on hover for paired devices
-//   • Left accent bar for connected device
+// BtDeviceRow.qml — one bluetooth device row (tactical HUD)
+// =============================================================================
+// Reads `dev`: { mac, name, alias, icon, connected, paired, trusted,
+// battery(-1=unknown), rssi(0-100, 0=unknown) } from
+// BluetoothControlService.devices. `beacon` selects the card context:
+//   • beacon === true  → unpaired scanned device (AVAIL_BEACONS card)
+//   • beacon === false → paired device (PAIRED_NODES card)
+// Behaviour:
+//   • connected row → left accent bar + CONNECTED chip + TERMINATE button
+//   • busy (pairing/connecting) → spinner + amber tint + PAIRING/CONNECTING chip
+//   • paired/disconnected → PAIRED chip + INITIATE button
+//   • unpaired beacon → NEW chip + PAIR button
+//   • paired row + hover → [×] forget (BluetoothControlService.remove)
+//
+// NOTE on click handling: the row MouseArea covers the whole row, so the
+// action button / [×] sub-areas would be shadowed. `propagateComposedEvents`
+// lets the row decline the click (mouse.accepted = false) so it falls through
+// to the buttons beneath — same trick as WifiListRow. All colours are live
+// ThemeConfig tokens; none are hardcoded.
 // =============================================================================
 
 import QtQuick
+import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
 Item {
     id: row
     width: parent ? parent.width : 400
-    height: 26
+    height: 30
 
-    property var dev: ({ mac: "", name: "", connected: false, paired: false, trusted: false, battery: -1 })
+    // ── INTERFACE (instantiated by the list view) ──────────────────────────────
+    property var dev: ({ mac: "", name: "", alias: "", icon: "",
+                         connected: false, paired: false, trusted: false,
+                         battery: -1, rssi: 0 })
+    property bool beacon: false   // true = AVAIL_BEACONS, false = PAIRED_NODES
 
+    // ── Busy state — driven by the service's serialized action queue ──────────
     readonly property bool pairing:    Services.BluetoothControlService.pairingTo    === dev.mac
     readonly property bool connecting: Services.BluetoothControlService.connectingTo === dev.mac
     readonly property bool busy:       pairing || connecting
 
-    // -------------------------------------------------------------------------
-    // BACKGROUND
-    // -------------------------------------------------------------------------
+    // ── Icon glyph map (dev.icon → Nerd Font). Order matters: "headphone" and
+    //    "microphone" must be tested before "phone" (both contain "phone"). ────
+    readonly property string iconGlyph: {
+        var i = (dev.icon || "").toLowerCase()
+        if (i.indexOf("mouse")      !== -1) return "󰍽"
+        if (i.indexOf("keyboard")   !== -1) return "󰌌"
+        if (i.indexOf("headset")    !== -1) return "󰋋"
+        if (i.indexOf("headphone")  !== -1) return "󰟌"
+        if (i.indexOf("audio-card") !== -1) return "󰓅"
+        if (i.indexOf("speaker")    !== -1) return "󰓃"
+        if (i.indexOf("microphone") !== -1) return "󰄰"
+        if (i.indexOf("phone")      !== -1) return "󰄞"
+        if (i.indexOf("camera")     !== -1) return "󰄜"
+        if (i.indexOf("gaming")     !== -1) return "󰊴"
+        if (i.indexOf("computer")   !== -1) return "󰢹"
+        return "󰂯"   // generic bluetooth glyph (fallback)
+    }
+
+    // ── Signal metrics — lit-bar count + colour, derived from rssi (0-100) ────
+    // beacon: ceil(rssi/25); paired: prefer rssi thresholds, fall back to battery.
+    readonly property int litBeaconBars: dev.rssi > 0 ? Math.ceil(dev.rssi / 25) : 0
+    readonly property int litPairedBars: {
+        if (dev.rssi > 0)
+            return dev.rssi >= 75 ? 4 : dev.rssi >= 50 ? 3 : dev.rssi >= 25 ? 2 : 1
+        if (dev.battery >= 75) return 4
+        if (dev.battery >= 50) return 3
+        if (dev.battery >= 25) return 2
+        if (dev.battery > 0)   return 1
+        return 0
+    }
+    readonly property color barColor: (dev.connected || dev.rssi >= 50)
+                                       ? Config.ControlConfig.accent
+                                       : Config.ThemeConfig.colors.warning
+
+    // ── State chip — text/colour shared via row props so the chip stays the
+    //    single consumer of one source of truth. NEW is the "uncoloured" state
+    //    (transparent bg + border colours.border; text still textDim). ─────────
+    readonly property string stateText: dev.connected ? "CONNECTED"
+                                         : row.busy   ? (row.pairing ? "PAIRING" : "CONNECTING")
+                                         : dev.paired ? "PAIRED"
+                                         : "NEW"
+    readonly property color stateColor: dev.connected ? Config.ThemeConfig.colors.success
+                                         : row.busy   ? Config.ThemeConfig.colors.warning
+                                         : dev.paired ? Config.ControlConfig.accent
+                                         : Config.ThemeConfig.colors.textDim
+    readonly property bool stateColored: dev.connected || row.busy || dev.paired
+
+    // ── Action button label/border (TERMINATE / INITIATE / PAIR) ───────────────
+    readonly property string actionText: dev.connected ? "TERMINATE"
+                                         : dev.paired  ? "INITIATE"
+                                         : "PAIR"
+    readonly property color actionBorderColor: dev.connected ? Config.ThemeConfig.colors.error
+                                                : Config.ControlConfig.accent
+
+    // ── Background tint by state ──────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
-        color: {
-            if (row.dev.connected) return Qt.rgba(0, 0.863, 0.898, 0.08)
-            if (row.busy)          return Qt.rgba(1, 0.78, 0, 0.06)
-            if (ma.containsMouse)  return Config.ControlConfig.accentSoft
-            return "transparent"
-        }
+        color: dev.connected ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10)
+               : row.busy   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
+               : ma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6)
+               : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
-    // Left accent bar for connected device
+    // ── Left accent bar (connected) ───────────────────────────────────────────
     Rectangle {
-        visible: row.dev.connected
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        visible: dev.connected
+        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 2
         color: Config.ControlConfig.accent
     }
 
-    // -------------------------------------------------------------------------
-    // CONTENT ROW
-    // -------------------------------------------------------------------------
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
-        anchors.leftMargin: 4
-        anchors.right: parent.right
-        anchors.rightMargin: 4
+    // ── Content ─────────────────────────────────────────────────────────────────
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: 8; anchors.rightMargin: 6
         spacing: 8
 
-        // Status indicator
-        Text {
-            width: 14
-            text: {
-                if (row.pairing)        return "◌"
-                if (row.connecting)     return "◌"
-                if (row.dev.connected)  return "●"
-                if (row.dev.paired)     return "◎"
-                return "○"
-            }
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 12
-            color: {
-                if (row.busy)          return "#ffca28"
-                if (row.dev.connected) return Config.ControlConfig.accent
-                if (row.dev.paired)    return Config.ThemeConfig.colors.textDim
-                return Config.ThemeConfig.colors.border
-            }
-            RotationAnimator on rotation {
-                running: row.busy
-                from: 0; to: 360
-                duration: 900
-                loops: Animation.Infinite
-            }
-        }
-
-        // Name / MAC
-        Text {
-            width: 150
-            text: row.dev.name || row.dev.mac
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 11
-            color: {
-                if (row.busy)          return "#ffca28"
-                if (row.dev.connected) return Config.ControlConfig.accent
-                return Config.ThemeConfig.colors.text
-            }
-            elide: Text.ElideRight
-        }
-
-        // MAC address
-        Text {
-            width: 120
-            text: row.dev.mac
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 9
-            color: Config.ThemeConfig.colors.textDim
-            elide: Text.ElideRight
-        }
-
-        // State badges
-        Text {
-            width: 52
-            text: row.dev.paired ? "PAIRED" : "NEW"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 9
-            font.bold: true
-            color: row.dev.paired
-                   ? Config.ControlConfig.logSuccess
-                   : "#ffca28"
-        }
-
-        Text {
-            width: 56
-            visible: row.dev.trusted
-            text: "TRUSTED"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 9
-            font.bold: true
-            color: Config.ControlConfig.accent
-        }
-
-        // Battery
-        Text {
-            visible: row.dev.battery >= 0
-            text: row.dev.battery + "%"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 10
-            color: row.dev.battery < 20 ? "#ff5555" : Config.ThemeConfig.colors.textDim
-        }
-
-        // Spacer
-        Item { width: 1 }
-
-        // Action button — adapts to state
+        // (1) Icon box — bordered square, Nerd Font glyph from dev.icon.
         Rectangle {
-            visible: !row.busy
-            width: actionLabel.implicitWidth + 16
-            height: 18
-            color: actionMA.containsMouse
-                   ? (row.dev.connected ? "#ff5555" : Config.ControlConfig.accent)
-                   : "transparent"
-            border.color: row.dev.connected ? "#ff5555" : Config.ControlConfig.accent
+            Layout.preferredWidth: 22; Layout.preferredHeight: 18
+            Layout.alignment: Qt.AlignVCenter
+            color: "transparent"
+            border.color: dev.connected ? Config.ControlConfig.accent
+                                        : Config.ThemeConfig.colors.border
             border.width: 1
-
             Text {
-                id: actionLabel
                 anchors.centerIn: parent
-                text: {
-                    if (row.dev.connected) return "DISCONNECT"
-                    if (row.dev.paired)    return "CONNECT"
-                    return "PAIR"
+                text: row.iconGlyph
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
+                color: dev.connected ? Config.ControlConfig.accent
+                                      : Config.ThemeConfig.colors.textDim
+            }
+        }
+
+        // (2) Name (elided) + MAC beneath (dim mono).
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            Text {
+                Layout.fillWidth: true
+                text: dev.name || dev.alias || dev.mac
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
+                font.bold: dev.connected || row.busy
+                color: row.busy        ? Config.ThemeConfig.colors.warning
+                       : dev.connected ? Config.ControlConfig.accent
+                       : Config.ThemeConfig.colors.text
+                elide: Text.ElideRight
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: (dev.mac || "").length > 0
+                text: dev.mac
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                color: Config.ThemeConfig.colors.textDim
+                elide: Text.ElideRight
+            }
+        }
+
+        // (3) Signal meter — two render modes sharing the 44-wide slot:
+        //     • beacon: 4 compact horizontal segments + "−NN dBm" label
+        //     • paired: 4 rising vertical bars + "BAT NN%" label
+        //     (clip:true guards the right edge if the label runs long.)
+        Item {
+            Layout.preferredWidth: 60; Layout.preferredHeight: row.height
+            Layout.alignment: Qt.AlignVCenter
+            clip: true
+
+            // ── beacon mode: horizontal segments + dBm text ──
+            RowLayout {
+                id: beaconMeter
+                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                visible: row.beacon
+                spacing: 3
+                Row {
+                    spacing: 1
+                    Repeater {
+                        model: 4
+                        Rectangle {
+                            width: 3; height: 2
+                            color: index < row.litBeaconBars ? Config.ControlConfig.accent
+                                                             : Config.ThemeConfig.colors.border
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                    }
                 }
-                font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 9
-                font.bold: true
-                color: actionMA.containsMouse
-                       ? Config.ThemeConfig.colors.background
-                       : (row.dev.connected ? "#ff5555" : Config.ControlConfig.accent)
+                Text {
+                    visible: dev.rssi > 0
+                    // dBm = round(rssi/2) − 100; rssi 0-100 → -100..-50, so always
+                    // negative — show the real minus sign (U+2212) for readability.
+                    text: "−" + Math.abs(Math.round(dev.rssi / 2) - 100) + " dBm"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    color: Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
+                }
             }
 
-            MouseArea {
-                id: actionMA
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    mouse.accepted = true
-                    if (row.dev.connected) {
-                        Services.BluetoothControlService.disconnect(row.dev.mac)
-                    } else if (row.dev.paired) {
-                        Services.BluetoothControlService.connect(row.dev.mac)
-                    } else {
-                        // pair() internally queues pair → trust → connect
-                        Services.BluetoothControlService.pair(row.dev.mac)
+            // ── paired mode: rising vertical bars + BAT% text ──
+            RowLayout {
+                id: pairedMeter
+                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                visible: !row.beacon
+                spacing: 3
+                RowLayout {
+                    spacing: 2
+                    Repeater {
+                        model: 4
+                        Rectangle {
+                            Layout.preferredWidth: 3
+                            Layout.preferredHeight: 4 + index * 2      // 4,6,8,10 — rising bars
+                            Layout.alignment: Qt.AlignBottom           // shared baseline
+                            color: index < row.litPairedBars ? row.barColor
+                                                            : Config.ThemeConfig.colors.border
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                    }
+                }
+                Text {
+                    visible: dev.battery >= 0
+                    text: "BAT " + dev.battery + "%"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    color: dev.battery < 20 ? Config.ThemeConfig.colors.error
+                                            : Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
+        // (4) State chip — content-sized (min(70, label+12)), left-aligned in
+        //     the 70-wide slot so the ACTION column lines up across rows.
+        Item {
+            Layout.preferredWidth: 70; Layout.preferredHeight: 16
+            Layout.alignment: Qt.AlignVCenter
+            Rectangle {
+                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(70, stateLabel.implicitWidth + 12); height: 16
+                color: row.stateColored ? Config.ThemeConfig.tint(row.stateColor, 0.10)
+                                        : "transparent"
+                border.color: row.stateColored ? row.stateColor
+                                               : Config.ThemeConfig.colors.border
+                border.width: 1
+                Text {
+                    id: stateLabel
+                    anchors.centerIn: parent; width: parent.width - 8
+                    text: row.stateText
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                    color: row.stateColor
+                    elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+
+        // (5) Action button — content-sized (label+16), left-aligned in the
+        //     80-wide slot. Hidden while busy; the spinner below takes over.
+        Item {
+            Layout.preferredWidth: 80; Layout.preferredHeight: 18
+            Layout.alignment: Qt.AlignVCenter
+            Rectangle {
+                visible: !row.busy
+                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                width: actionLabel.implicitWidth + 16; height: 18
+                color: actionMA.containsMouse ? row.actionBorderColor : "transparent"
+                border.color: row.actionBorderColor; border.width: 1
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Text {
+                    id: actionLabel
+                    anchors.centerIn: parent
+                    text: row.actionText
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    color: actionMA.containsMouse ? Config.ThemeConfig.colors.background
+                                                  : row.actionBorderColor
+                }
+                MouseArea {
+                    id: actionMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        mouse.accepted = true
+                        if (dev.connected)   Services.BluetoothControlService.disconnect(dev.mac)
+                        else if (dev.paired) Services.BluetoothControlService.connect(dev.mac)
+                        else                 Services.BluetoothControlService.pair(dev.mac)   // pair → trust → connect
                     }
                 }
             }
+            // Busy spinner — replaces the action button while pairing/connecting.
+            Text {
+                visible: row.busy
+                anchors.left: parent.left; anchors.leftMargin: 2
+                anchors.verticalCenter: parent.verticalCenter
+                text: "◌"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 12
+                color: Config.ThemeConfig.colors.warning
+                RotationAnimator on rotation {
+                    running: row.busy; from: 0; to: 360; duration: 900; loops: Animation.Infinite
+                }
+            }
         }
 
-        // Busy label
-        Text {
-            visible: row.busy
-            text: row.pairing ? "PAIRING..." : "CONNECTING..."
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 9
-            font.bold: true
-            color: "#ffca28"
-        }
-
-        // [×] forget — only on paired devices while hovering
-        Text {
-            visible: row.dev.paired && ma.containsMouse && !row.busy
-            text: "[×]"
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 10
-            color: "#ff5555"
+        // (6) [×] forget — hover only for paired devices (click falls through
+        //     from the row MouseArea via propagateComposedEvents).
+        Item {
+            Layout.preferredWidth: 16; Layout.preferredHeight: row.height
+            Layout.alignment: Qt.AlignVCenter
+            visible: dev.paired && ma.containsMouse && !row.busy
+            Text {
+                anchors.centerIn: parent
+                text: "×"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 14; font.bold: true
+                color: Config.ThemeConfig.colors.error
+            }
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     mouse.accepted = true
-                    Services.BluetoothControlService.remove(row.dev.mac)
+                    Services.BluetoothControlService.remove(dev.mac)
                 }
             }
         }
     }
 
-    // Hover detection for the whole row (for background + forget button)
+    // ── Row hover (drives background tint + [×] visibility). Declines the click
+    //    (mouse.accepted = false) so it falls through to the buttons beneath.
     MouseArea {
         id: ma
         anchors.fill: parent
         hoverEnabled: true
-        // clicks fall through to individual buttons above
+        cursorShape: Qt.PointingHandCursor
         propagateComposedEvents: true
         onClicked: mouse.accepted = false
     }

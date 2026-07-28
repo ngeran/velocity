@@ -6,16 +6,15 @@
 //   linkProbe   (3s)  nmcli -t -f TYPE,STATE,DEVICE,CONNECTION device
 //   wifiActive  (4s)  nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi   (active AP)
 //   ipProbe     (3s)  ip -4 route get 1                          (IPv4)
-//   wifiList    (10s) nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi
+//   wifiList    (10s) nmcli -t -f IN-USE,BSSID,SSID,SIGNAL,SECURITY,CHAN dev wifi
 //
 // connectionStatus is a nested var object → reassigned as a whole (via
 // _setStatus) so QML change signals fire (in-place mutation does not).
 // wifiNetworks reassigned as a new array for the same reason.
 //
-// nmcli terse lines are ":"-separated; SSID may contain ':' and SECURITY may
-// contain spaces (e.g. "WPA2 802.1X"). Lines are TRIMMED (IN-USE is space-
-// padded). So: parts[0]=IN-USE, parts[last]=SECURITY, parts[last-1]=SIGNAL,
-// the middle slice = SSID.
+// wifiNetworks items: { ssid, signal(0-100), security, inUse, chan, bssid }.
+// `connectingTo` holds the SSID mid-connect (drives the row spinner); cleared
+// in connectProc.onExited. See _parseWifiList for the BSSID/colon handling.
 // =============================================================================
 
 pragma Singleton
@@ -39,6 +38,10 @@ Item {
 
     property var wifiNetworks: []
     property bool scanning: false
+
+    // SSID currently being connected to (cleared on success/failure). Drives
+    // the row's connecting spinner/tint — was previously read but never set.
+    property string connectingTo: ""
 
     // -------------------------------------------------------------------------
     // LINK PROBE — type / connected / interface
@@ -118,7 +121,7 @@ Item {
 
     Process {
         id: wifiListProc
-        command: ["sh", "-c", "nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi 2>/dev/null"]
+        command: ["sh", "-c", "nmcli -t -f IN-USE,BSSID,SSID,SIGNAL,SECURITY,CHAN dev wifi 2>/dev/null"]
         property string buffer: ""
         property bool isScanRefresh: false
         stdout: SplitParser {
@@ -253,6 +256,7 @@ Item {
                 var detail = connectProc.buffer.trim()
                 CommandService.pushLog("[network] connect failed (exit " + code + ")" + (detail ? ": " + detail : ""), "error")
             }
+            root.connectingTo = ""          // clear connecting state (success or failure)
             connectProc.buffer = ""
         }
     }
@@ -263,6 +267,7 @@ Item {
             return
         }
         connectProc.lastSsid = ssid
+        root.connectingTo = ssid           // mark this SSID as "connecting" (UI spinner)
         var cmd = ["nmcli", "device", "wifi", "connect", ssid]
         if (password && password.length > 0) cmd = cmd.concat(["password", password])
         connectProc.command = cmd
@@ -304,25 +309,36 @@ Item {
         root.connectionStatus = Object.assign({}, root.connectionStatus, patch)
     }
 
+    // nmcli escapes colons that occur INSIDE a value (BSSID, SSID) as "\:", so
+    // only an unescaped ":" is a real field separator. Un-escape to a placeholder,
+    // split on ":", then restore — yielding fixed-order fields with no positional
+    // guessing: IN-USE, BSSID, SSID, SIGNAL, SECURITY, CHAN.
     function _parseWifiList(raw) {
         var lines = (raw || "").trim().split("\n")
         var best = {}
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim()
             if (line.length === 0) continue
-            var parts = line.split(":")
-            if (parts.length < 4) continue
 
-            var inUse = (parts[0] === "*")
-            var security = parts[parts.length - 1]
-            var signal = parseInt(parts[parts.length - 2]) || 0
-            var ssid = parts.slice(1, parts.length - 2).join(":")
+            var parts = line.replace(/\\:/g, "__C__").split(":")
+                            .map(function(p) { return p.replace(/__C__/g, ":") })
+            if (parts.length < 6) continue
 
-            if (!ssid || ssid === "--") continue
+            var inUse    = (parts[0] === "*")
+            var bssid    = parts[1]
+            var ssid     = parts[2]
+            var signal   = parseInt(parts[3]) || 0
+            var security = parts[4]
+            var chan     = parts[5]
+
+            if (!ssid || ssid === "--") continue   // skip hidden / empty SSIDs
 
             var existing = best[ssid]
             if (!existing || signal > existing.signal) {
-                best[ssid] = { ssid: ssid, signal: signal, security: security, inUse: inUse }
+                best[ssid] = {
+                    ssid: ssid, signal: signal, security: security,
+                    inUse: inUse, chan: chan, bssid: bssid
+                }
             } else if (inUse) {
                 best[ssid].inUse = true
             }

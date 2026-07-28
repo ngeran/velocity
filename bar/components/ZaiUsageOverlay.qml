@@ -61,6 +61,75 @@ PanelWindow {
         return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
     }
 
+    // ---- tokens consumed (derived from remaining + pct — no service change needed) ----
+    // If ZaiUsageService starts exposing a raw "used" field per window, prefer that instead.
+    function usedTokensFor(m) {
+        if (!m) return null
+        if (m.used !== undefined && m.used !== null) return m.used
+        if (m.remaining !== undefined && m.remaining !== null && m.pct !== undefined && m.pct < 100) {
+            var total = m.remaining / (1 - m.pct / 100)
+            return Math.max(0, total - m.remaining)
+        }
+        return null
+    }
+    function totalUsedTokens() {
+        var wins = Services.ZaiUsageService.windows
+        var sum = 0, any = false
+        for (var i = 0; i < wins.length; i++) {
+            var u = root.usedTokensFor(wins[i])
+            if (u !== null) { sum += u; any = true }
+        }
+        return any ? sum : null
+    }
+
+    // ---- Z.ai quota multiplier window (peak = 14:00–18:00 UTC+8 == 06:00–10:00 UTC) ----
+    readonly property int zaiPeakStartUtcMin: 6 * 60
+    readonly property int zaiPeakEndUtcMin: 10 * 60
+    readonly property int zaiPeakMultiplier: 3
+    readonly property int zaiOffPeakMultiplier: 1   // promo through end of Sep 2026 — revert to 2 after
+
+    property bool zaiIsPeak: false
+    property int zaiMultiplier: 1
+    property string zaiNextChangeLabel: ""
+    property string zaiPeakLocalLabel: ""   // e.g. "PEAK (3x) DAILY 02:00–06:00 LOCAL"
+
+    function updateZaiMultiplier() {
+        var now = new Date()
+        var utcMin = now.getUTCHours() * 60 + now.getUTCMinutes()
+        var inPeak = utcMin >= root.zaiPeakStartUtcMin && utcMin < root.zaiPeakEndUtcMin
+        root.zaiIsPeak = inPeak
+        root.zaiMultiplier = inPeak ? root.zaiPeakMultiplier : root.zaiOffPeakMultiplier
+
+        var boundaryUtcMin = inPeak ? root.zaiPeakEndUtcMin : root.zaiPeakStartUtcMin
+        var boundary = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+                                          Math.floor(boundaryUtcMin / 60), boundaryUtcMin % 60, 0))
+        if (boundary <= now) boundary.setUTCDate(boundary.getUTCDate() + 1)
+        var hh = boundary.getHours().toString().padStart(2, "0")
+        var mm = boundary.getMinutes().toString().padStart(2, "0")
+        root.zaiNextChangeLabel = (inPeak
+            ? ("→ " + root.zaiOffPeakMultiplier + "x AT " + hh + ":" + mm)
+            : ("→ " + root.zaiPeakMultiplier + "x AT " + hh + ":" + mm))
+
+        // fixed daily peak window, converted once to local clock time (handles DST automatically)
+        var pStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+                                        Math.floor(root.zaiPeakStartUtcMin / 60), root.zaiPeakStartUtcMin % 60, 0))
+        var pEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+                                      Math.floor(root.zaiPeakEndUtcMin / 60), root.zaiPeakEndUtcMin % 60, 0))
+        var psh = pStart.getHours().toString().padStart(2, "0")
+        var psm = pStart.getMinutes().toString().padStart(2, "0")
+        var peh = pEnd.getHours().toString().padStart(2, "0")
+        var pem = pEnd.getMinutes().toString().padStart(2, "0")
+        root.zaiPeakLocalLabel = "PEAK (" + root.zaiPeakMultiplier + "×) DAILY " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL // 1× ALL OTHER HOURS"
+    }
+
+    Timer {
+        interval: 30000
+        running: root.shown
+        repeat: true
+        onTriggered: root.updateZaiMultiplier()
+    }
+    Component.onCompleted: root.updateZaiMultiplier()
+
     // =========================================================================
     // DIM BACKDROP (click-outside = close)
     // =========================================================================
@@ -162,6 +231,43 @@ PanelWindow {
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Item { Layout.fillWidth: true }
+
+                // ---- quota multiplier badge (1x/2x/3x, time-zone aware) ----
+                Rectangle {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: multiplierCol.implicitWidth + 20
+                    Layout.preferredHeight: 34
+                    color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                    border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
+                    border.width: 1
+
+                    ColumnLayout {
+                        id: multiplierCol
+                        anchors.centerIn: parent
+                        spacing: 0
+                        RowLayout {
+                            spacing: 6
+                            Layout.alignment: Qt.AlignHCenter
+                            Text {
+                                text: root.zaiMultiplier + "×"
+                                color: root.zaiIsPeak ? root.cWarn : root.cAccent
+                                font.family: root.fontM; font.pixelSize: 14; font.bold: true
+                            }
+                            Text {
+                                text: "QUOTA RATE"
+                                color: root.cDim
+                                font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                            }
+                        }
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: root.zaiNextChangeLabel
+                            color: root.cDim
+                            font.family: root.fontM; font.pixelSize: 8
+                        }
+                    }
+                }
+
                 ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
                     spacing: 1
@@ -194,6 +300,13 @@ PanelWindow {
                 font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+
+            Text {
+                Layout.fillWidth: true
+                text: root.zaiPeakLocalLabel
+                color: root.zaiIsPeak ? root.cWarn : root.cDim
+                font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+            }
 
             // ---- error state ----
             Text {
@@ -298,6 +411,13 @@ PanelWindow {
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
+                                    property var used: root.usedTokensFor(modelData)
+                                    text: (used !== null) ? (root.formatTokens(used) + " USED") : ""
+                                    color: root.cDim
+                                    font.family: root.fontM; font.pixelSize: 8
+                                }
+                                Text { text: "  ·  "; color: root.cDim; font.family: root.fontM; font.pixelSize: 8 }
+                                Text {
                                     text: (modelData.remaining != null) ? (root.formatTokens(modelData.remaining) + " LEFT") : "—"
                                     color: root.cDim
                                     font.family: root.fontM; font.pixelSize: 8
@@ -342,6 +462,30 @@ PanelWindow {
                         }
                         Text {
                             text: Services.ZaiUsageService.peakLabel + " WINDOW"
+                            color: root.cDim
+                            font.family: root.fontM; font.pixelSize: 9
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // total tokens consumed across all windows
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 2
+                        Text {
+                            text: "TOKENS CONSUMED"
+                            color: root.cAccent
+                            font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        }
+                        Text {
+                            property var total: root.totalUsedTokens()
+                            text: (total !== null) ? root.formatTokens(total) : "—"
+                            color: root.cText
+                            font.family: root.fontM; font.pixelSize: 26; font.bold: true
+                        }
+                        Text {
+                            text: "ACROSS ALL WINDOWS"
                             color: root.cDim
                             font.family: root.fontM; font.pixelSize: 9
                         }
