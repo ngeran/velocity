@@ -91,7 +91,7 @@ Item {
 
             // ── LEFT: DISPLAY + SLOTS ──────────────────────────────────────
             ColumnLayout {
-                Layout.fillWidth: true; spacing: 12
+                Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
 
                 CoreCard {
                     contentSpacing: 8; accent: Config.ThemeConfig.colors.warning; Layout.fillWidth: true
@@ -203,7 +203,7 @@ Item {
 
             // ── RIGHT: live rotating LCD preview ───────────────────────────
             CoreCard {
-                accent: Config.ThemeConfig.colors.primary; Layout.preferredWidth: 226; Layout.alignment: Qt.AlignTop
+                accent: Config.ThemeConfig.colors.primary; Layout.preferredWidth: 226; Layout.fillHeight: true; Layout.alignment: Qt.AlignTop
                 ColumnLayout { Layout.fillWidth: true; spacing: 8
                     RowLayout { Layout.fillWidth: true; spacing: 8
                         Text { text: "󰍛"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18; color: Config.ThemeConfig.colors.primary }
@@ -212,9 +212,9 @@ Item {
                             Text { text: root.lcdEnabled ? ("ROT " + root.rotation + "°  •  °" + root.unit) : "DISABLED"; color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                         }
                     }
-                    Item { Layout.fillWidth: true; Layout.preferredWidth: 190; Layout.preferredHeight: 190; Layout.alignment: Qt.AlignHCenter
+                    Item { id: previewWrap; Layout.fillWidth: true; Layout.preferredHeight: previewWrap.width; Layout.alignment: Qt.AlignHCenter
                         Rectangle { anchors.fill: parent; radius: 16; color: "#000000"; border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-                            Rectangle { anchors.centerIn: parent; width: 168; height: 168; radius: 12; color: "#050505"; clip: true; rotation: root.rotation
+                            Rectangle { anchors.fill: parent; anchors.margins: 11; radius: 12; color: "#050505"; clip: true; rotation: root.rotation
                                 ColumnLayout { anchors.fill: parent; anchors.margins: 14; spacing: 8
                                     RowLayout { Layout.fillWidth: true
                                         Item { Layout.fillWidth: true }
