@@ -92,6 +92,14 @@ PanelWindow {
     property int zaiMultiplier: 1
     property string zaiNextChangeLabel: ""
     property string zaiPeakLocalLabel: ""   // e.g. "PEAK (3x) DAILY 02:00–06:00 LOCAL"
+    property int zaiPeakLocalStartMin: 0    // peak window start, minutes-of-day, local clock
+    property int zaiPeakLocalEndMin: 0      // peak window end, minutes-of-day, local clock
+    property int zaiNowLocalMin: 0          // current time, minutes-of-day, local clock
+
+    // ---- model advisor: which Z.ai model tier makes sense right now ----
+    readonly property var zaiModelAdvice: root.zaiIsPeak
+        ? { model: "GLM-4.7", tag: "LIGHTER TIER", note: "PEAK WINDOW — " + root.zaiPeakMultiplier + "× DRAW ON GLM-5.2 / GLM-5-TURBO. RESERVE THOSE FOR WORK THAT NEEDS THEM; ROUTE ROUTINE / BOILERPLATE TASKS TO GLM-4.7 INSTEAD." }
+        : { model: "GLM-5.2 / GLM-5-TURBO", tag: "FULL HEADROOM", note: "OFF-PEAK WINDOW — " + root.zaiOffPeakMultiplier + "× DRAW (PROMO THRU SEP 2026, THEN 2×). BEST TIME TO RUN HEAVY OR COMPLEX CODING TASKS ON THE TOP-TIER MODELS." }
 
     function updateZaiMultiplier() {
         var now = new Date()
@@ -119,7 +127,11 @@ PanelWindow {
         var psm = pStart.getMinutes().toString().padStart(2, "0")
         var peh = pEnd.getHours().toString().padStart(2, "0")
         var pem = pEnd.getMinutes().toString().padStart(2, "0")
-        root.zaiPeakLocalLabel = "PEAK (" + root.zaiPeakMultiplier + "×) DAILY " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL // 1× ALL OTHER HOURS"
+        root.zaiPeakLocalLabel = "PEAK (" + root.zaiPeakMultiplier + "×) DAILY " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL // " + root.zaiOffPeakMultiplier + "× ALL OTHER HOURS"
+
+        root.zaiPeakLocalStartMin = pStart.getHours() * 60 + pStart.getMinutes()
+        root.zaiPeakLocalEndMin = pEnd.getHours() * 60 + pEnd.getMinutes()
+        root.zaiNowLocalMin = now.getHours() * 60 + now.getMinutes()
     }
 
     Timer {
@@ -235,28 +247,31 @@ PanelWindow {
                 // ---- quota multiplier badge (1x/2x/3x, time-zone aware) ----
                 Rectangle {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: multiplierCol.implicitWidth + 20
-                    Layout.preferredHeight: 34
-                    color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                    Layout.preferredWidth: multiplierCol.implicitWidth + 24
+                    Layout.preferredHeight: 40
+                    color: root.zaiIsPeak
+                        ? Qt.rgba(root.cWarn.r, root.cWarn.g, root.cWarn.b, 0.12)
+                        : Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
                     border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
                     border.width: 1
+                    Behavior on color { ColorAnimation { duration: 250 } }
 
                     ColumnLayout {
                         id: multiplierCol
                         anchors.centerIn: parent
-                        spacing: 0
+                        spacing: 1
                         RowLayout {
-                            spacing: 6
+                            spacing: 7
                             Layout.alignment: Qt.AlignHCenter
                             Text {
                                 text: root.zaiMultiplier + "×"
                                 color: root.zaiIsPeak ? root.cWarn : root.cAccent
-                                font.family: root.fontM; font.pixelSize: 14; font.bold: true
+                                font.family: root.fontM; font.pixelSize: 16; font.bold: true
                             }
                             Text {
-                                text: "QUOTA RATE"
-                                color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                                text: root.zaiIsPeak ? "PEAK RATE" : "OFF-PEAK RATE"
+                                color: root.zaiIsPeak ? root.cWarn : root.cAccent
+                                font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
                             }
                         }
                         Text {
@@ -301,11 +316,132 @@ PanelWindow {
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
 
-            Text {
+            // ---- rate + model advisor strip ----
+            Rectangle {
+                visible: !Services.ZaiUsageService.hasError
                 Layout.fillWidth: true
-                text: root.zaiPeakLocalLabel
-                color: root.zaiIsPeak ? root.cWarn : root.cDim
-                font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                Layout.preferredHeight: 96
+                color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.30)
+                border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
+                border.width: 1
+                Behavior on border.color { ColorAnimation { duration: 250 } }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 18
+
+                    // ---- left: recommended model for right now ----
+                    ColumnLayout {
+                        Layout.preferredWidth: 250
+                        Layout.fillHeight: true
+                        spacing: 3
+                        RowLayout {
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; color: root.zaiIsPeak ? root.cWarn : root.cAccent }
+                            Text {
+                                text: root.zaiModelAdvice.tag
+                                color: root.zaiIsPeak ? root.cWarn : root.cAccent
+                                font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                            }
+                        }
+                        Text {
+                            text: "USE  ·  " + root.zaiModelAdvice.model
+                            color: root.cText
+                            font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: root.zaiModelAdvice.note
+                            color: root.cDim
+                            font.family: root.fontM; font.pixelSize: 8
+                            wrapMode: Text.WordWrap
+                            verticalAlignment: Text.AlignTop
+                        }
+                    }
+
+                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: root.cBorder }
+
+                    // ---- right: 24h local timeline, peak band + live NOW marker ----
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 6
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.zaiPeakLocalLabel
+                            color: root.zaiIsPeak ? root.cWarn : root.cDim
+                            font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                            elide: Text.ElideRight
+                        }
+                        Canvas {
+                            id: zaiTimeline
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                var w = width, h = height, midY = h / 2, barH = 12
+                                ctx.clearRect(0, 0, w, h)
+
+                                // base track = off-peak color
+                                ctx.fillStyle = root.cAccent.toString()
+                                ctx.globalAlpha = 0.18
+                                ctx.fillRect(0, midY - barH / 2, w, barH)
+
+                                // peak band (handles wrap past midnight)
+                                var s = root.zaiPeakLocalStartMin / 1440
+                                var e = root.zaiPeakLocalEndMin / 1440
+                                ctx.fillStyle = root.cWarn.toString()
+                                ctx.globalAlpha = 0.6
+                                if (e > s) {
+                                    ctx.fillRect(s * w, midY - barH / 2, (e - s) * w, barH)
+                                } else {
+                                    ctx.fillRect(s * w, midY - barH / 2, w - s * w, barH)
+                                    ctx.fillRect(0, midY - barH / 2, e * w, barH)
+                                }
+                                ctx.globalAlpha = 1
+
+                                // hour ticks every 6h
+                                ctx.strokeStyle = root.cBorder.toString()
+                                ctx.lineWidth = 1
+                                ctx.globalAlpha = 0.6
+                                for (var i = 0; i <= 4; i++) {
+                                    var x = w * i / 4
+                                    ctx.beginPath(); ctx.moveTo(x, midY - barH / 2 - 3); ctx.lineTo(x, midY + barH / 2 + 3); ctx.stroke()
+                                }
+                                ctx.globalAlpha = 1
+
+                                // live NOW marker
+                                var nx = (root.zaiNowLocalMin / 1440) * w
+                                ctx.strokeStyle = root.cText.toString()
+                                ctx.lineWidth = 2
+                                ctx.beginPath(); ctx.moveTo(nx, midY - barH / 2 - 6); ctx.lineTo(nx, midY + barH / 2 + 6); ctx.stroke()
+                            }
+                            Connections {
+                                target: root
+                                function onZaiNowLocalMinChanged() { zaiTimeline.requestPaint() }
+                                function onCAccentChanged() { zaiTimeline.requestPaint() }
+                            }
+                            Component.onCompleted: zaiTimeline.requestPaint()
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "00:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "06:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "12:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "18:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "24:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                        }
+                    }
+                }
             }
 
             // ---- error state ----
