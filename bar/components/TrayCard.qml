@@ -30,6 +30,22 @@ PanelWindow {
     property string activeTray: ""
     signal closeRequested()
 
+    // HOVER-OUT DISMISSAL
+    // The card closes shortly after the cursor leaves the dropdown — but only
+    // once the cursor has actually entered it. This guard means opening a tray
+    // (cursor still on the bar icon) doesn't immediately start the close timer;
+    // you have to move into the card and back out for it to dismiss on hover.
+    property bool hasHoveredDropdown: false
+    onActiveTrayChanged: {
+        hoverCloseTimer.stop()        // any open / switch / close cancels a pending close
+        card.hasHoveredDropdown = false
+    }
+    Timer {
+        id: hoverCloseTimer
+        interval: 450
+        onTriggered: if (card.activeTray !== "") card.closeRequested()
+    }
+
     readonly property string headerIcon: {
         if (activeTray === "network")
             return Services.NetworkService.isConnected
@@ -69,6 +85,22 @@ PanelWindow {
 
         // Swallow clicks inside the card so they don't bubble to the backdrop.
         MouseArea { anchors.fill: parent }
+
+        // Hover tracking drives the hover-out dismissal. HoverHandler is a
+        // passive pointer handler, so it doesn't steal clicks/hover from the
+        // slider or buttons inside the card — it just reports whether the
+        // cursor is within the dropdown's bounds.
+        HoverHandler {
+            id: ddHover
+            onHoveredChanged: {
+                if (hovered) {
+                    hoverCloseTimer.stop()
+                    card.hasHoveredDropdown = true
+                } else if (card.hasHoveredDropdown) {
+                    hoverCloseTimer.restart()
+                }
+            }
+        }
 
     // -------------------------------------------------------------------------
     // CONTENT
@@ -197,6 +229,37 @@ PanelWindow {
                 RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
                     Text { text: "IP"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
                     Text { text: Services.NetworkService.ipAddress; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                }
+                Item { height: 8; visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi" }
+                RowLayout {
+                    visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
+                    Layout.fillWidth: true; spacing: 8
+                    Text { text: "SIGNAL"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
+                    Text { text: Services.NetworkService.signalStrength + "%"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
+                    Item { Layout.fillWidth: true }
+                    // 4-bar signal meter — bars fill from the bottom (classic
+                    // phone-style strength), active past each 25% threshold.
+                    Item {
+                        height: 14
+                        width: sigBars.implicitWidth
+                        Row {
+                            id: sigBars
+                            anchors.bottom: parent.bottom
+                            spacing: 2
+                            Repeater {
+                                model: 4
+                                Rectangle {
+                                    width: 4
+                                    height: 4 + index * 3
+                                    radius: 0
+                                    color: Services.NetworkService.signalStrength > index * 25
+                                           ? Config.BarConfig.colorAccent
+                                           : Qt.rgba(1, 1, 1, 0.12)
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                }
+                            }
+                        }
+                    }
                 }
                 Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
             }

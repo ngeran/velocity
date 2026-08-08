@@ -13,6 +13,10 @@ Item {
     property string ssid: ""
     property string ipAddress: ""
 
+    // Active Wi-Fi signal strength (0–100). Only meaningful for
+    // connectionType === "wifi"; reset to 0 for ethernet / disconnected.
+    property int signalStrength: 0
+
     // nmcli presence — when absent we stop polling instead of forking a failing
     // process forever and showing a misleading "DISCONNECTED" state.
     property bool hasNetwork: true
@@ -46,6 +50,7 @@ Item {
                         root.connectionType = "ethernet"
                         root.ssid = trimmed.substring("802-3-ethernet:".length)
                         root.isConnected = true
+                        root.signalStrength = 0   // ethernet has no RF signal
                         if (Config.DebugConfig.debugEnabled) console.log("[NetworkService] Found Ethernet:", root.ssid)
                     }
                 } else {
@@ -100,6 +105,23 @@ Item {
         }
     }
 
+    // Active Wi-Fi signal strength (0–100). Uses the cached scan (--rescan no)
+    // so it never triggers a fresh scan mid-poll. Emits nothing when not on
+    // Wi-Fi, leaving signalStrength at whatever the last connection state set.
+    Process {
+        id: signalProc
+        command: ["sh", "-c", "nmcli -t -f ACTIVE,SIGNAL device wifi list --rescan no 2>/dev/null | grep '^yes:' | head -1 | cut -d: -f2"]
+        stdout: SplitParser {
+            onRead: function(data) {
+                var s = data.trim()
+                if (s !== "") {
+                    var n = parseInt(s, 10)
+                    if (!isNaN(n)) root.signalStrength = n
+                }
+            }
+        }
+    }
+
     Timer {
         id: netPollTimer
         interval: 5000
@@ -113,6 +135,7 @@ Item {
                 // Keep current state until we get new data
             }
             if (!netProc.running) netProc.running = true
+            if (!signalProc.running) signalProc.running = true
         }
     }
 
@@ -121,6 +144,7 @@ Item {
         root.isConnected = false
         root.ssid = ""
         root.ipAddress = ""
+        root.signalStrength = 0
         if (Config.DebugConfig.debugEnabled) console.log("[NetworkService] Reset")
     }
 
