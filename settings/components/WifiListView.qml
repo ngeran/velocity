@@ -27,6 +27,21 @@ Column {
     // Lit signal segments for the connected card (same tiers as the row).
     readonly property int linkBars: view.cs.signal >= 75 ? 4 : view.cs.signal >= 50 ? 3 : view.cs.signal >= 25 ? 2 : view.cs.signal > 0 ? 1 : 0
 
+    // Minimum signal a scan-row needs to be shown (0 = ALL). Default 50 hides
+    // weak/noisy APs. The active link is force-included even below threshold so
+    // the network you're on never vanishes from its own table.
+    property int minSignal: 50
+    readonly property var filteredNets: {
+        var all = Services.NetworkControlService.wifiNetworks
+        if (view.minSignal <= 0) return all
+        var out = []
+        for (var i = 0; i < all.length; i++) {
+            var n = all[i]
+            if (n.signal >= view.minSignal || n.inUse) out.push(n)
+        }
+        return out
+    }
+
     // Label/value stat pair (used by the connected card).
     component Stat: RowLayout {
         property string label: ""
@@ -43,6 +58,30 @@ Column {
             color: Config.ThemeConfig.colors.text
             elide: Text.ElideRight
             Layout.maximumWidth: 120
+        }
+    }
+
+    // Segmented MIN SIGNAL button (ALL / ≥50% / ≥70%) — sets minSignal.
+    component FilterSeg: Rectangle {
+        property string label: ""
+        property bool active: false
+        property int value: 0
+        height: 18
+        width: segLbl.implicitWidth + 14
+        color: active ? Config.ControlConfig.accent
+                      : (segMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent")
+        border.color: active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+        border.width: 1
+        Behavior on color { ColorAnimation { duration: 100 } }
+        Text {
+            id: segLbl; anchors.centerIn: parent
+            text: parent.label
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+            color: parent.active ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
+        }
+        MouseArea {
+            id: segMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: view.minSignal = value
         }
     }
 
@@ -318,6 +357,31 @@ Column {
         accent: Config.ThemeConfig.colors.primary
         contentSpacing: 0
 
+        // Signal-strength filter — hides weak APs below the selected threshold.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8; Layout.rightMargin: 6
+            spacing: 6
+            Text {
+                text: "MIN SIGNAL"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                color: Config.ThemeConfig.colors.textDim
+                Layout.alignment: Qt.AlignVCenter
+            }
+            FilterSeg { label: "ALL";  value: 0;  active: view.minSignal === 0 }
+            FilterSeg { label: "≥50%"; value: 50; active: view.minSignal === 50 }
+            FilterSeg { label: "≥70%"; value: 70; active: view.minSignal === 70 }
+            Item { Layout.fillWidth: true }
+            Text {
+                visible: view.minSignal > 0
+                Layout.alignment: Qt.AlignVCenter
+                text: view.filteredNets.length + "/" + Services.NetworkControlService.wifiNetworks.length
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                color: Config.ThemeConfig.colors.textDim
+            }
+        }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
         // Column header — mirrors the row's column geometry (left margin, glyph
         // spacer, SSID fill, SIGNAL = bars+gap+%, SECURITY chip slot, CHAN, ×)
         // so every column lines up between the header and the rows beneath it.
@@ -336,7 +400,7 @@ Column {
 
         // Network rows
         Repeater {
-            model: Services.NetworkControlService.wifiNetworks
+            model: view.filteredNets
             delegate: WifiListRow {
                 width: parent.width
                 net: modelData
@@ -347,12 +411,27 @@ Column {
             }
         }
 
-        // Empty state
+        // Empty state — nothing found at all
         Text {
             Layout.fillWidth: true
             visible: Services.NetworkControlService.wifiNetworks.length === 0
                      && !Services.NetworkControlService.scanning
             text: "// no networks visible — press RESCAN to search"
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+            color: Config.ThemeConfig.colors.textDim
+            Layout.topMargin: 8; Layout.bottomMargin: 6
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        // Empty state — networks exist but all fall below the filter threshold
+        Text {
+            Layout.fillWidth: true
+            visible: Services.NetworkControlService.wifiNetworks.length > 0
+                     && view.filteredNets.length === 0
+                     && !Services.NetworkControlService.scanning
+            text: "// " + Services.NetworkControlService.wifiNetworks.length
+                  + " weak network" + (Services.NetworkControlService.wifiNetworks.length !== 1 ? "s" : "")
+                  + " hidden — lower MIN SIGNAL to show"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6
