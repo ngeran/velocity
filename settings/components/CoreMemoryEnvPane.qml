@@ -139,7 +139,7 @@ ColumnLayout {
                     Item { Layout.fillWidth: true }
                     RowLayout { spacing: 5
                         Rectangle { width: 8; height: 8; radius: 4; color: Config.ThemeConfig.colors.success
-                            SequentialAnimation on opacity { loops: Animation.Infinite
+                            SequentialAnimation on opacity { loops: Animation.Infinite; running: Config.SharedState.dashboardVisible
                                 NumberAnimation { to: 0.3; duration: 700 } NumberAnimation { to: 1; duration: 700 } } }
                         Text { text: "SENSORS LIVE"; color: Config.ThemeConfig.colors.textDim
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }

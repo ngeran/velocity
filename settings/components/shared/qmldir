@@ -1,2 +1,0 @@
-# settings/components/shared/qmldir
-# Shared UI primitives removed — the app uses WidgetHeader + inline patterns.

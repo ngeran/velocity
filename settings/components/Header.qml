@@ -44,7 +44,7 @@ Rectangle {
     property var _now: new Date()
 
     Timer {
-        interval: 1000; running: true; repeat: true; triggeredOnStart: true
+        interval: 1000; running: Config.SharedState.dashboardVisible; repeat: true; triggeredOnStart: true
         onTriggered: headerRoot._now = new Date()
     }
 

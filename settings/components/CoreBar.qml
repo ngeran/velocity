@@ -10,6 +10,11 @@ Item {
     property color barColor: Config.ThemeConfig.colors.secondary
     property color trackColor: Config.ThemeConfig.colors.outlineVariant
     property real barHeight: 4
+    // Animate width transitions? Default false: CoreBar is used for live
+    // telemetry (CPU/GPU/memory) that refreshes ~1×/s — animating width on
+    // every tick produces N concurrent 250ms relayouts across the grid for no
+    // perceptible benefit. Set animate: true only for interactive sliders.
+    property bool animate: false
     height: barHeight
     clip: false
 
@@ -33,6 +38,6 @@ Item {
         width: parent.width * root._frac
         height: parent.height
         color: root.barColor
-        Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on width { enabled: root.animate; NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
     }
 }

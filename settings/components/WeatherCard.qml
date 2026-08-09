@@ -48,7 +48,7 @@ HudCard {
     Process {
         id: wxProc
         command: ["sh", "-c", "curl -s --max-time 8 'wttr.in/?format=%l|%t|%f|%C|%h|%w|%p|%P&m'"]
-        running: true
+        running: Config.SharedState.dashboardVisible
         stdout: SplitParser {
             onRead: function(line) {
                 var s = ("" + line).trim()
@@ -70,7 +70,7 @@ HudCard {
 
     // Refresh every 10 minutes.
     Timer {
-        interval: 600000; running: true; repeat: true
+        interval: 600000; running: Config.SharedState.dashboardVisible; repeat: true
         onTriggered: { wxProc.running = false; wxProc.running = true }
     }
 

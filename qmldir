@@ -1,2 +1,3 @@
 # qmldir for top-level QuickShell components
-LockScreen 1.0 LockScreen.qml
+# (vestigial — each process is launched with -c <bar|settings|login> and imports
+#  its own submodules; nothing imports the root module. Kept as a marker.)

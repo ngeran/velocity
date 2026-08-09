@@ -30,6 +30,11 @@ Item {
 
     property int currentTab: 0
 
+    // Persisted Core-tab sub-section (processors/gpu/memoryenv/lcd). The Core
+    // tab is lazy-loaded (destroyed when the panel hides), so without this its
+    // `active` selection would reset to "processors" on every reopen.
+    property string coreActiveSection: "processors"
+
     // =========================================================================
     // PUBLIC FUNCTIONS
     // =========================================================================
@@ -959,20 +964,37 @@ Item {
         // =====================================================================
         // TAB 4: CORE ENGINE (OLED telemetry dashboard + LCD control)
         // =====================================================================
+        // Lazy-loaded: the Core tab binds to always-on telemetry (CoreEngine 1s,
+        // ThermalService, GpuService) through dozens of Text bindings that would
+        // re-evaluate every second even while the panel is closed. Gating the
+        // Loader on SharedState.dashboardVisible destroys the whole subtree when
+        // the panel is hidden, eliminating that steady-state churn. While open
+        // the tab persists, so the opacity/x slide animation still works.
+        // (coreEngineTab had an unreferenced id — dropped.)
 
-        Components.CoreEngineTab {
-            id: coreEngineTab
+        Loader {
+            anchors.fill: parent
+            active: Config.SharedState.dashboardVisible
 
             visible: root.currentTab === 4
             opacity: root.currentTab === 4 ? 1.0 : 0.0
             x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
-            anchors.fill: parent
 
             Behavior on opacity {
                 NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
             }
             Behavior on x {
                 NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
+            }
+
+            sourceComponent: Component {
+                Components.CoreEngineTab {
+                    anchors.fill: parent
+                    // Restore the persisted sub-section (the tab is recreated on
+                    // each reopen) and keep it in sync as the user navigates.
+                    Component.onCompleted: active = root.coreActiveSection
+                    onActiveChanged: root.coreActiveSection = active
+                }
             }
         }
     }

@@ -80,7 +80,7 @@ Item {
     }
 
     Timer {
-        interval: root.intervalMs; running: true; repeat: true; triggeredOnStart: true
+        interval: root.intervalMs; running: Config.SharedState.dashboardVisible; repeat: true; triggeredOnStart: true
         onTriggered: {
             var s = root.buffer.slice()
             s.push(root.value)

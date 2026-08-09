@@ -25,7 +25,7 @@ Item {
     // -------------------------------------------------------------------------
     property var _now: new Date()
     Timer {
-        interval: 60000; running: true; repeat: true
+        interval: 60000; running: Config.SharedState.dashboardVisible; repeat: true
         onTriggered: calRoot._now = new Date()
     }
 

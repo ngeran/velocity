@@ -94,7 +94,7 @@ ColumnLayout {
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5 }
                     Item { Layout.fillWidth: true }
                     Rectangle { width: 7; height: 7; radius: 4; color: Config.ThemeConfig.colors.success
-                        SequentialAnimation on opacity { loops: Animation.Infinite
+                        SequentialAnimation on opacity { loops: Animation.Infinite; running: Config.SharedState.dashboardVisible
                             NumberAnimation { to: 0.3; duration: 700 } NumberAnimation { to: 1; duration: 700 } } }
                 }
 

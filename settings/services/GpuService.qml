@@ -23,6 +23,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -130,7 +131,10 @@ Item {
     function refresh() {
         if (root.vendor === "nvidia") {
             gpuProc.running = true
-            appsProc.running = true
+            // appsProc (per-process list) feeds only the Core tab's
+            // TOP_GPU_PROCESSES Repeater — not the deepcool-LCD metrics.json
+            // feed — so skip the second nvidia-smi fork while the panel is closed.
+            if (Config.SharedState.dashboardVisible) appsProc.running = true
         }
         // else: future amd/intel branch
     }

@@ -244,6 +244,7 @@ Item {
                 width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.success
                 Layout.alignment: Qt.AlignVCenter
                 SequentialAnimation on opacity {
+                    running: Config.SharedState.dashboardVisible
                     loops: Animation.Infinite
                     NumberAnimation { to: 0.25; duration: 850 }
                     NumberAnimation { to: 1.0; duration: 850 }
