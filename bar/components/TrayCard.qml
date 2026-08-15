@@ -79,7 +79,19 @@ PanelWindow {
         anchors.right: parent.right
         anchors.topMargin: 0   // overlay already starts below the bar
         width: 260
-        height: 220
+        // Both network and bluetooth share the network body's height so the two
+        // popups are the same size. networkBody has no top-level Repeater, so its
+        // implicitHeight is reliable (+55 = header 34 + separator 1 + outer
+        // margins 20). Bluetooth's device list IS a top-level Repeater, so its
+        // own implicitHeight can't be trusted — instead the Math.max() floor
+        // (sized from deviceCount) guarantees the box never shrinks below its
+        // content. This matters because networkBody collapses to ~147px when
+        // Wi-Fi is off/disconnected (e.g. right after toggling Wi-Fi), which
+        // would otherwise clip the bluetooth list + DISABLE button.
+        height: card.activeTray === "network" ? (networkBody.implicitHeight + 55)
+              : card.activeTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
+                                                            162 + Math.max(15, Services.BluetoothService.deviceCount * 16))
+              : 220
         color: Config.BarConfig.colorBackground
         radius: 0   // sharp corners
 
@@ -175,6 +187,7 @@ PanelWindow {
 
             // ── Network ──
             ColumnLayout {
+                id: networkBody
                 Layout.fillWidth: true
                 Layout.margins: 12
                 spacing: 0
@@ -261,11 +274,54 @@ PanelWindow {
                         }
                     }
                 }
+                // ── link diagnostics: gateway / DNS / latency ──
+                Item { height: 10; visible: Services.NetworkService.isConnected }
+                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Qt.rgba(1,1,1,0.07) }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
+                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
+                    Text { text: "GATEWAY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                    Text { text: Services.NetworkService.gateway ? Services.NetworkService.gateway : "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
+                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
+                    Text { text: "DNS"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                    Text { text: Services.NetworkService.dns ? Services.NetworkService.dns : "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
+                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
+                    Text { text: "LATENCY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                    Text {
+                        text: Services.NetworkService.latencyMs >= 0 ? (Math.round(Services.NetworkService.latencyMs) + " ms") : "—"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true
+                        color: Services.NetworkService.latencyMs < 0 ? Config.BarConfig.colorTextDim
+                              : Services.NetworkService.latencyMs < 50 ? Config.ThemeConfig.colors.success
+                              : Services.NetworkService.latencyMs < 150 ? Config.ThemeConfig.colors.warning
+                              : Config.ThemeConfig.colors.error
+                    }
+                }
+
+                // ── Wi-Fi radio on/off toggle ──
+                Item { height: 10; visible: Services.NetworkService.hasNetwork }
+                Rectangle {
+                    visible: Services.NetworkService.hasNetwork
+                    Layout.fillWidth: true; height: 26; radius: 0
+                    color: Services.NetworkService.wifiRadio ? Qt.rgba(255,255,255,0.03) : Qt.rgba(0,220,229,0.08)
+                    border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    RowLayout { anchors.centerIn: parent; spacing: 6
+                        Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
+                        Text { text: Services.NetworkService.wifiRadio ? "DISABLE WI-FI" : "ENABLE WI-FI"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
+                    }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
+                }
+
                 Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
             }
 
             // ── Bluetooth ──
             ColumnLayout {
+                id: btBody
                 Layout.fillWidth: true; Layout.margins: 12; spacing: 0
 
                 // bluetoothctl absent — dim dash instead of a misleading "OFF" pill
@@ -323,6 +379,10 @@ PanelWindow {
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
                 }
+
+                // Nudge the DISABLE/ENABLE button 15px up from the bottom edge of
+                // the (wifi-matching) box so it isn't flush against it.
+                Item { height: 15; visible: Services.BluetoothService.hasBluetooth }
             }
 
             // ── Volume ──

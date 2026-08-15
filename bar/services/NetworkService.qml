@@ -1,4 +1,4 @@
-/** Version: 21.1 - Fixed reset timing **/
+/** Version: 23 - primary DNS only + Wi-Fi radio on/off toggle **/
 pragma Singleton
 import QtQuick
 import Quickshell.Io
@@ -21,6 +21,13 @@ Item {
     // process forever and showing a misleading "DISCONNECTED" state.
     property bool hasNetwork: true
 
+    // ── Link diagnostics for the WiFi popup ──────────────────────────────
+    property string gateway: ""     // default IPv4 gateway, e.g. "10.0.0.1"
+    property string iface: ""       // active interface, e.g. "wlp10s0"
+    property string dns: ""         // PRIMARY DNS server only, e.g. "75.75.75.75"
+    property real latencyMs: -1     // ping RTT (avg) to a target; -1 = no reply
+    property bool wifiRadio: true   // Wi-Fi radio on/off (nmcli radio wifi)
+
     // One-shot presence probe; gates the poll timer on exit.
     Process {
         id: detectProc
@@ -28,6 +35,7 @@ Item {
         onExited: function(code) {
             root.hasNetwork = (code === 0)
             netPollTimer.running = root.hasNetwork
+            diagTimer.running = root.hasNetwork
         }
     }
 
@@ -122,6 +130,87 @@ Item {
         }
     }
 
+    // ── Gateway + active interface: `default via <gw> dev <iface>` ──────────
+    Process {
+        id: gwProc
+        command: ["sh", "-c", "ip -4 route show default 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { gwProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var line = gwProc.buffer.trim()
+                gwProc.buffer = ""
+                var m = line.match(/via\s+(\S+)\s+dev\s+(\S+)/)
+                if (m) { root.gateway = m[1]; root.iface = m[2] }
+                else { root.gateway = ""; root.iface = "" }
+            }
+        }
+    }
+
+    // ── PRIMARY DNS only: nmcli terse emits `IP4.DNS[1]:<ip>` (':' separator) ─
+    Process {
+        id: dnsProc
+        command: ["sh", "-c", "nmcli -t -f IP4.DNS dev show 2>/dev/null | grep ':' | head -1"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { dnsProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var line = dnsProc.buffer.trim()
+                dnsProc.buffer = ""
+                if (line.indexOf(":") !== -1) {
+                    root.dns = line.substring(line.indexOf(":") + 1).trim()
+                } else {
+                    root.dns = ""
+                }
+            }
+        }
+    }
+
+    // ── Latency: one ping to a stable target (1s timeout so it can't hang) ──
+    Process {
+        id: pingProc
+        command: ["sh", "-c", "ping -c 1 -W 1 1.1.1.1 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { pingProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var out = pingProc.buffer
+                pingProc.buffer = ""
+                // rtt min/avg/max/mdev = a/b/c/d ms  → avg = group 2
+                var m = out.match(/rtt[^=]*=\s*([0-9.]+)\/([0-9.]+)/)
+                root.latencyMs = m ? parseFloat(m[2]) : -1
+            }
+        }
+    }
+
+    // ── Wi-Fi radio state (on/off) for the popup toggle ─────────────────────
+    Process {
+        id: radioProc
+        command: ["sh", "-c", "nmcli -t -f WIFI radio wifi 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { radioProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                root.wifiRadio = radioProc.buffer.trim().indexOf("enabled") !== -1
+                radioProc.buffer = ""
+            }
+        }
+    }
+
+    // Runs the toggle command. (Quickshell.exec() does NOT exist in this build.)
+    Process { id: radioToggleProc }
+
+    // Re-probe the radio shortly after a toggle (before the next 5s poll).
+    Timer { id: radioRefresh; interval: 1500; onTriggered: if (!radioProc.running) radioProc.running = true }
+
+    // Toggle the Wi-Fi radio. Optimistic flip + a fresh probe to confirm.
+    function toggleRadio() {
+        radioToggleProc.command = ["nmcli", "radio", "wifi", root.wifiRadio ? "off" : "on"]
+        radioToggleProc.running = true
+        root.wifiRadio = !root.wifiRadio
+        radioRefresh.restart()
+    }
+
     Timer {
         id: netPollTimer
         interval: 5000
@@ -136,6 +225,23 @@ Item {
             }
             if (!netProc.running) netProc.running = true
             if (!signalProc.running) signalProc.running = true
+            if (!radioProc.running) radioProc.running = true
+        }
+    }
+
+    // Gateway / DNS / latency refresh — slower cadence (these change rarely
+    // and ping is a network round-trip). Only fires while connected.
+    Timer {
+        id: diagTimer
+        interval: 10000
+        repeat: true
+        triggeredOnStart: true
+        running: root.hasNetwork
+        onTriggered: {
+            if (!root.isConnected) return
+            if (!gwProc.running) gwProc.running = true
+            if (!dnsProc.running) dnsProc.running = true
+            if (!pingProc.running) pingProc.running = true
         }
     }
 
@@ -145,6 +251,10 @@ Item {
         root.ssid = ""
         root.ipAddress = ""
         root.signalStrength = 0
+        root.gateway = ""
+        root.iface = ""
+        root.dns = ""
+        root.latencyMs = -1
         if (Config.DebugConfig.debugEnabled) console.log("[NetworkService] Reset")
     }
 

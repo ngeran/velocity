@@ -73,8 +73,12 @@ Item {
         }
     }
 
+    // Quickshell.exec() does NOT exist in this build — run the command via Process.
+    Process { id: powerProc }
+
     function togglePower() {
-        Quickshell.exec(["bluetoothctl", "power", root.powered ? "off" : "on"])
+        powerProc.command = ["bluetoothctl", "power", root.powered ? "off" : "on"]
+        powerProc.running = true
         root.powered = !root.powered   // optimistic update
         refreshTimer.restart()
     }
