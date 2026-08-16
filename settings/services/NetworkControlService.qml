@@ -251,8 +251,19 @@ Item {
         id: connectProc
         property string lastSsid: ""
         property string buffer: ""
+        // The PSK travels over stdin, never argv — argv is world-readable in
+        // /proc for the lifetime of the command (Omarchy enterpriseConnect
+        // pattern: stdinEnabled + write() on start, wiped immediately after).
+        property string pendingSecret: ""
+        stdinEnabled: true
         stdout: SplitParser { onRead: function(data) { connectProc.buffer += data } }
         stderr: SplitParser { onRead: function(data) { connectProc.buffer += data } }
+        onStarted: {
+            if (pendingSecret !== "") {
+                write(pendingSecret + "\n")
+                pendingSecret = ""
+            }
+        }
         onExited: function(code) {
             if (code === 0) {
                 CommandService.pushLog("[network] connected to " + connectProc.lastSsid, "success")
@@ -274,9 +285,11 @@ Item {
         }
         connectProc.lastSsid = ssid
         root.connectingTo = ssid           // mark this SSID as "connecting" (UI spinner)
-        var cmd = ["nmcli", "device", "wifi", "connect", ssid]
-        if (password && password.length > 0) cmd = cmd.concat(["password", password])
-        connectProc.command = cmd
+        // --ask makes nmcli read missing secrets from stdin (a saved profile
+        // supplies its stored PSK and never prompts; open networks skip the
+        // prompt entirely). The password itself rides stdin, not argv.
+        connectProc.pendingSecret = (password && password.length > 0) ? password : ""
+        connectProc.command = ["nmcli", "--ask", "device", "wifi", "connect", ssid]
         connectProc.buffer = ""
         connectProc.running = true
         CommandService.pushLog("[network] connecting to " + ssid + "...", "output")
