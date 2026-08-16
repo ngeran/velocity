@@ -1,8 +1,9 @@
-/** Version: 24 - popup-gated polling (Omarchy pattern) + hung-process watchdog **/
+/** Version: 25 - interface throughput (popup-gated) via NetworkModel.js **/
 pragma Singleton
 import QtQuick
 import Quickshell.Io
 import "../config" as Config
+import "NetworkModel.js" as Model
 
 Item {
     id: root
@@ -27,6 +28,16 @@ Item {
     property string dns: ""         // PRIMARY DNS server only, e.g. "75.75.75.75"
     property real latencyMs: -1     // ping RTT (avg) to a target; -1 = no reply
     property bool wifiRadio: true   // Wi-Fi radio on/off (nmcli radio wifi)
+
+    // ── Interface throughput (popup-only): live rates are deltas of the sysfs
+    // counters; totals are the raw since-interface-up counters. Empty rate
+    // strings mean "no sample yet" — the fold in NetworkModel.js guards iface
+    // changes and counter resets so neither can fake a spike.
+    property string rxRate: ""
+    property string txRate: ""
+    property string rxTotal: ""
+    property string txTotal: ""
+    property var _stats: null       // last sample {iface, rx, tx, t}
 
     // One-shot presence probe; gates the poll timer on exit.
     Process {
@@ -192,7 +203,14 @@ Item {
     property bool popupOpen: false
 
     onPopupOpenChanged: {
-        if (!popupOpen) return
+        if (!popupOpen) {
+            // Drop the throughput baseline so reopening can't compute a rate
+            // across the closed gap (Omarchy: reset history on close).
+            root._stats = null
+            root.rxRate = ""
+            root.txRate = ""
+            return
+        }
         // Fetch-on-open: no waiting for the next timer tick.
         if (!signalProc.running) signalProc.running = true
         if (!radioProc.running)  radioProc.running = true
@@ -200,6 +218,40 @@ Item {
         if (isConnected && !gwProc.running)   gwProc.running = true
         if (isConnected && !dnsProc.running)  dnsProc.running = true
         if (isConnected && !pingProc.running) pingProc.running = true
+        if (isConnected && !statsProc.running) statsProc.running = true
+    }
+
+    // ── Interface throughput: raw sysfs counters for the active iface ────────
+    Process {
+        id: statsProc
+        command: ["sh", "-c",
+            "cat /sys/class/net/" + root.iface + "/statistics/rx_bytes " +
+            "    /sys/class/net/" + root.iface + "/statistics/tx_bytes 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { statsProc.buffer += data } }
+        onRunningChanged: {
+            if (!running) {
+                var s = Model.parseStats(statsProc.buffer)
+                statsProc.buffer = ""
+                if (s && root.iface) {
+                    var r = Model.throughputState(root._stats, root.iface, s.rx, s.tx, Date.now())
+                    root.rxRate = r.rxRate
+                    root.txRate = r.txRate
+                    root.rxTotal = r.rxTotal
+                    root.txTotal = r.txTotal
+                    root._stats = r.state
+                }
+            }
+        }
+    }
+
+    // 2s while the popup is open — rates want a short window to feel live.
+    Timer {
+        id: statsTimer
+        interval: 2000
+        repeat: true
+        running: root.hasNetwork && root.popupOpen
+        onTriggered: if (root.isConnected && !statsProc.running) statsProc.running = true
     }
 
     // ── Wi-Fi radio state (on/off) for the popup toggle ─────────────────────
@@ -282,6 +334,7 @@ Item {
             if (gwProc.running)     gwProc.running = false
             if (dnsProc.running)    dnsProc.running = false
             if (pingProc.running)   pingProc.running = false
+            if (statsProc.running)  statsProc.running = false
         }
     }
 
@@ -295,6 +348,11 @@ Item {
         root.iface = ""
         root.dns = ""
         root.latencyMs = -1
+        root.rxRate = ""
+        root.txRate = ""
+        root.rxTotal = ""
+        root.txTotal = ""
+        root._stats = null
         if (Config.DebugConfig.debugEnabled) console.log("[NetworkService] Reset")
     }
 

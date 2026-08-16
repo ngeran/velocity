@@ -118,6 +118,7 @@ Item {
     }
 
     readonly property color fillRest:        withAlpha(colors.text, 0.04)       // neutral pill / idle button
+    readonly property color fillHover:       withAlpha(colors.text, 0.08)       // hover fill on interactive rows/buttons
     readonly property color hairline:        withAlpha(colors.text, 0.07)       // section separators
     readonly property color hairlineSoft:    withAlpha(colors.text, 0.12)       // slider/meter tracks, inactive bars
     readonly property color accentTint:      withAlpha(colors.secondary, 0.10)  // connected/status pills

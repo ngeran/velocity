@@ -314,12 +314,40 @@ PanelWindow {
                     }
                 }
 
+                // ── live throughput: rate · cumulative since iface up ──
+                Item { height: 8; visible: Services.NetworkService.isConnected }
+                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
+                    Text { text: "RX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                    Text {
+                        // Empty rate = no sample yet (distinguished from a
+                        // genuine 0 B/s idle line).
+                        text: Services.NetworkService.rxRate === "" ? "—"
+                              : Services.NetworkService.rxRate + "  ·  " + Services.NetworkService.rxTotal
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText
+                        Layout.fillWidth: true; elide: Text.ElideRight
+                    }
+                }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
+                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
+                    Text { text: "TX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                    Text {
+                        text: Services.NetworkService.txRate === "" ? "—"
+                              : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText
+                        Layout.fillWidth: true; elide: Text.ElideRight
+                    }
+                }
+
                 // ── Wi-Fi radio on/off toggle ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; height: 26; radius: 0
-                    color: Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
+                    color: {
+                        if (wifiBtnArea.containsMouse)
+                            return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
+                        return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
+                    }
                     border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -327,7 +355,7 @@ PanelWindow {
                         Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
                         Text { text: Services.NetworkService.wifiRadio ? "DISABLE WI-FI" : "ENABLE WI-FI"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
                     }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
+                    MouseArea { id: wifiBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
                 }
 
                 Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
@@ -387,6 +415,14 @@ PanelWindow {
                         height: 18
                         required property var modelData
 
+                        // Subtle row hover fill — pairs with the revealed
+                        // disconnect affordance.
+                        Rectangle {
+                            anchors.fill: parent
+                            color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+
                         // Hover catcher sits UNDER the content row so the
                         // disconnect button (with its own MouseArea) still gets
                         // clicks; plain Texts pass hover through.
@@ -439,7 +475,11 @@ PanelWindow {
                     visible: Services.BluetoothService.hasBluetooth
                     Layout.fillWidth: true; height: 26
                     radius: 0
-                    color: Services.BluetoothService.powered ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
+                    color: {
+                        if (btBtnArea.containsMouse)
+                            return Services.BluetoothService.powered ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
+                        return Services.BluetoothService.powered ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
+                    }
                     border.color: Services.BluetoothService.powered ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -447,7 +487,7 @@ PanelWindow {
                         Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.BluetoothService.powered ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
                         Text { text: Services.BluetoothService.powered ? "DISABLE" : "ENABLE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.BluetoothService.powered ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
                     }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
+                    MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
                 }
 
                 // Nudge the DISABLE/ENABLE button 15px up from the bottom edge of
@@ -532,7 +572,11 @@ PanelWindow {
                     visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true; height: 26
                     radius: 0
-                    color: Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
+                    color: {
+                        if (muteBtnArea.containsMouse)
+                            return Services.AudioService.muted ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillHover
+                        return Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
+                    }
                     border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -540,7 +584,7 @@ PanelWindow {
                         Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
                         Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
                     }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {
+                    MouseArea { id: muteBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {
                         Services.AudioService.toggleMute()
                         Services.OsdService.showMute(Services.AudioService.muted)
                     } }
