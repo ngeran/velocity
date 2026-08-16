@@ -93,33 +93,33 @@ ShellRoot {
             Components.WeatherWidget {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
-                Layout.rightMargin: 4   // breathing room before the wifi icon
+                Layout.rightMargin: 44   // breathing room before the wifi icon
             }
 
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 4
+                Layout.leftMargin: -4
                 isActive: panelWindow.activeTray === "network"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
             }
 
             Components.BluetoothIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: -6
                 isActive: panelWindow.activeTray === "bluetooth"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
             }
 
             Components.VolumeIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: -6
                 isActive: panelWindow.activeTray === "volume"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
             }
 
             Components.BatteryIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: -6
                 isActive: panelWindow.activeTray === "power"  // Changed from "battery" to "power"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
