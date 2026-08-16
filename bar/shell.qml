@@ -90,6 +90,11 @@ ShellRoot {
 
             // --- RIGHT SIDE ---
 
+            Components.WeatherWidget {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 2
+            }
+
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
