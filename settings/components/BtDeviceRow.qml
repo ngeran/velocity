@@ -302,22 +302,39 @@ Item {
 
         // (6) [×] forget — hover only for paired devices (click falls through
         //     from the row MouseArea via propagateComposedEvents).
+        //     Two-step inline confirm: the first click arms ("SURE?", 3 s
+        //     auto-disarm window), a second click forgets. Forgetting is the
+        //     one irreversible action here — disconnects stay one-click.
         Item {
-            Layout.preferredWidth: 16; Layout.preferredHeight: row.height
+            id: forgetBtn
+            Layout.preferredWidth: forgetArmed ? 52 : 16
+            Layout.preferredHeight: row.height
             Layout.alignment: Qt.AlignVCenter
             visible: dev.paired && ma.containsMouse && !row.busy
+
+            property bool forgetArmed: false
+            Behavior on Layout.preferredWidth { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+
+            Timer { id: disarmTimer; interval: 3000; onTriggered: forgetBtn.forgetArmed = false }
+
             Text {
                 anchors.centerIn: parent
-                text: "×"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 14; font.bold: true
-                color: Config.ThemeConfig.colors.error
+                text: forgetBtn.forgetArmed ? "SURE?" : "×"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: forgetBtn.forgetArmed ? 9 : 14
+                font.bold: true
+                color: forgetBtn.forgetArmed ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
             }
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     mouse.accepted = true
-                    Services.BluetoothControlService.remove(dev.mac)
+                    if (!forgetBtn.forgetArmed) {
+                        forgetBtn.forgetArmed = true
+                        disarmTimer.restart()
+                    } else {
+                        Services.BluetoothControlService.remove(dev.mac)
+                    }
                 }
             }
         }

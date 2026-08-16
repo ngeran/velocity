@@ -243,14 +243,16 @@ Column {
     Item {
         id: pwDialog
         width: view.width
-        height: visible ? 36 : 0
+        height: visible ? (errorText !== "" ? 54 : 36) : 0
         visible: false
         clip: true
 
         property string targetSsid: ""
+        property string errorText: ""   // set when a previous attempt failed
 
-        function open(ssid) {
+        function open(ssid, errMsg) {
             targetSsid = ssid
+            errorText = errMsg || ""
             passField.text = ""
             passField.echoMode = TextInput.Password
             visible = true
@@ -260,6 +262,7 @@ Column {
             visible = false
             passField.text = ""
             targetSsid = ""
+            errorText = ""
         }
         function submit() {
             if (passField.text.length === 0) return
@@ -268,6 +271,19 @@ Column {
         }
 
         Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+        // Failure reason line (e.g. "Wrong password") under the field when the
+        // prompt was reopened by a failed attempt.
+        Text {
+            visible: pwDialog.errorText !== ""
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 3
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            text: pwDialog.errorText
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            color: Config.ThemeConfig.colors.error
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -436,6 +452,17 @@ Column {
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6
             horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
+    // Wrong-password reprompt (Omarchy pattern): when a connect attempt fails
+    // classification says the password was wrong, reopen the passphrase prompt
+    // for that SSID with the reason shown — retype instead of re-navigating.
+    Connections {
+        target: Services.NetworkControlService
+        function onConnectFailed(ssid, reasonKey, reasonLabel) {
+            if (reasonKey === "wrong-password" && ssid && ssid.length > 0)
+                pwDialog.open(ssid, reasonLabel)
         }
     }
 

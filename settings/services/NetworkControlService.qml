@@ -22,6 +22,7 @@ pragma Singleton
 import QtQuick
 import Quickshell.Io
 import "../config" as Config
+import "NetworkControlModel.js" as Model
 
 Item {
     id: root
@@ -42,6 +43,12 @@ Item {
     // SSID currently being connected to (cleared on success/failure). Drives
     // the row's connecting spinner/tint — was previously read but never set.
     property string connectingTo: ""
+
+    // Last connect failure, classified (key/label from NetworkControlModel).
+    // The signal carries the same info for views: WifiListView reopens the
+    // passphrase prompt on "wrong-password" (Omarchy reprompt pattern).
+    property string lastConnectError: ""
+    signal connectFailed(string ssid, string reasonKey, string reasonLabel)
 
     // -------------------------------------------------------------------------
     // LINK PROBE — type / connected / interface
@@ -270,8 +277,10 @@ Item {
                 root.refreshStatus()
                 root.refreshList()
             } else {
-                var detail = connectProc.buffer.trim()
-                CommandService.pushLog("[network] connect failed (exit " + code + ")" + (detail ? ": " + detail : ""), "error")
+                var r = Model.connectFailureReason(connectProc.buffer)
+                root.lastConnectError = r.label
+                CommandService.pushLog("[network] connect failed: " + r.label, "error")
+                root.connectFailed(connectProc.lastSsid, r.key, r.label)
             }
             root.connectingTo = ""          // clear connecting state (success or failure)
             connectProc.buffer = ""
