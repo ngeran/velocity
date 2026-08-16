@@ -35,6 +35,7 @@ Item {
         onWheel: (event) => {
             if (event.angleDelta.y > 0) Services.AudioService.volumeUp()
             else Services.AudioService.volumeDown()
+            Services.OsdService.showVolume(Services.AudioService.volume, Services.AudioService.muted)
         }
     }
 }

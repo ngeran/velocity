@@ -9,3 +9,4 @@ singleton BatteryService 1.0 BatteryService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton ZaiUsageService 1.0 ZaiUsageService.qml
 singleton SystemInfoService 1.0 SystemInfoService.qml
+singleton OsdService 1.0 OsdService.qml

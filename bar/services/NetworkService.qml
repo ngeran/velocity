@@ -1,4 +1,4 @@
-/** Version: 23 - primary DNS only + Wi-Fi radio on/off toggle **/
+/** Version: 24 - popup-gated polling (Omarchy pattern) + hung-process watchdog **/
 pragma Singleton
 import QtQuick
 import Quickshell.Io
@@ -35,7 +35,7 @@ Item {
         onExited: function(code) {
             root.hasNetwork = (code === 0)
             netPollTimer.running = root.hasNetwork
-            diagTimer.running = root.hasNetwork
+            // diagTimer gates itself via its `running:` binding (hasNetwork && popupOpen)
         }
     }
 
@@ -79,8 +79,8 @@ Item {
                 if (!root.isConnected) {
                     root._reset()
                 }
-                // Now get IP if connected
-                if (root.isConnected) {
+                // Now get IP if connected — popup-only data, skip while closed
+                if (root.isConnected && root.popupOpen) {
                     getIP()
                 }
             }
@@ -183,6 +183,25 @@ Item {
         }
     }
 
+    // ── Popup gating ─────────────────────────────────────────────────────────
+    // The bar icon only needs isConnected/connectionType (netProc). Everything
+    // below — signal strength (a full wifi-list query), radio state, gateway/
+    // DNS/latency — exists solely for the TrayCard popup, so it is fetched on
+    // open and polled only while open (Omarchy: "detail data is fetched exactly
+    // when visible"). Set by TrayCard.onActiveTrayChanged.
+    property bool popupOpen: false
+
+    onPopupOpenChanged: {
+        if (!popupOpen) return
+        // Fetch-on-open: no waiting for the next timer tick.
+        if (!signalProc.running) signalProc.running = true
+        if (!radioProc.running)  radioProc.running = true
+        if (isConnected) getIP()
+        if (isConnected && !gwProc.running)   gwProc.running = true
+        if (isConnected && !dnsProc.running)  dnsProc.running = true
+        if (isConnected && !pingProc.running) pingProc.running = true
+    }
+
     // ── Wi-Fi radio state (on/off) for the popup toggle ─────────────────────
     Process {
         id: radioProc
@@ -211,6 +230,9 @@ Item {
         radioRefresh.restart()
     }
 
+    // Always-on state poll (5s): ONLY netProc — it is the one probe the bar
+    // icon itself depends on (connection type / SSID). signalProc rides along
+    // at the same cadence but only while the popup is open.
     Timer {
         id: netPollTimer
         interval: 5000
@@ -219,29 +241,47 @@ Item {
         triggeredOnStart: true
         onTriggered: {
             if (Config.DebugConfig.debugEnabled) console.log("[NetworkService] Polling...")
-            // Only reset if we're not already connected (prevents flash)
-            if (!root.isConnected) {
-                // Keep current state until we get new data
-            }
             if (!netProc.running) netProc.running = true
-            if (!signalProc.running) signalProc.running = true
-            if (!radioProc.running) radioProc.running = true
+            if (root.popupOpen && !signalProc.running) signalProc.running = true
         }
     }
 
     // Gateway / DNS / latency refresh — slower cadence (these change rarely
-    // and ping is a network round-trip). Only fires while connected.
+    // and ping is a network round-trip). Popup-only: stops dead while the
+    // TrayCard is closed.
     Timer {
         id: diagTimer
         interval: 10000
         repeat: true
         triggeredOnStart: true
-        running: root.hasNetwork
+        running: root.hasNetwork && root.popupOpen
         onTriggered: {
             if (!root.isConnected) return
             if (!gwProc.running) gwProc.running = true
             if (!dnsProc.running) dnsProc.running = true
             if (!pingProc.running) pingProc.running = true
+        }
+    }
+
+    // Hung-process reaper (Omarchy tailscale pattern): every poll is skipped
+    // while its own Process is still running, so one that never exits — nmcli
+    // can hang on a D-Bus hiccup — silently stops all refreshing, and it stays
+    // stopped. Sweep anything still running well inside the poll interval so
+    // the next tick starts clean. Normal probes finish in well under a second,
+    // so anything caught by this sweep is by definition stuck.
+    Timer {
+        id: netWatchdog
+        interval: 15000
+        repeat: true
+        running: true
+        onTriggered: {
+            if (netProc.running)    netProc.running = false
+            if (ipProc.running)     ipProc.running = false
+            if (signalProc.running) signalProc.running = false
+            if (radioProc.running)  radioProc.running = false
+            if (gwProc.running)     gwProc.running = false
+            if (dnsProc.running)    dnsProc.running = false
+            if (pingProc.running)   pingProc.running = false
         }
     }
 

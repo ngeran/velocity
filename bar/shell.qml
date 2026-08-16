@@ -57,6 +57,13 @@ ShellRoot {
             onClicked: panelWindow.activeTray = ""
         }
 
+        // One-popup-at-a-time (Omarchy requestPopout pattern): opening a tray
+        // card closes the notification center...
+        onActiveTrayChanged: {
+            if (activeTray !== "" && notificationCenter.shown)
+                notificationCenter.close()
+        }
+
         RowLayout {
             anchors.fill: parent
             spacing: 0
@@ -150,6 +157,15 @@ ShellRoot {
         id: notificationCenter
     }
 
+    // ...and opening the notification center closes the tray card.
+    Connections {
+        target: notificationCenter
+        function onShownChanged() {
+            if (notificationCenter.shown && panelWindow.activeTray !== "")
+                panelWindow.activeTray = ""
+        }
+    }
+
     // =========================================================================
     // FASTFETCH OVERLAY — system info (toggled by the ArchLogo bar icon)
     // =========================================================================
@@ -166,6 +182,27 @@ ShellRoot {
 
     Components.ZaiUsageOverlay {
         id: zaiUsageOverlay
+    }
+
+    // =========================================================================
+    // OSD — volume / mute feedback card (renders OsdService state)
+    // =========================================================================
+    Components.Osd { }
+
+    // OSD IPC hook — lives here (not in the singleton) because IpcHandler
+    // doesn't resolve inside qmldir-declared singletons in this Quickshell
+    // build. Lets Hyprland keybinds / scripts drive the OSD.
+    IpcHandler {
+        target: "osd"
+        function volume(value: int, muted: bool): string {
+            Services.OsdService.showVolume(value, muted)
+            return "ok"
+        }
+        function mute(muted: bool): string {
+            Services.OsdService.showMute(muted)
+            return "ok"
+        }
+        function ping(): string { return "ok" }
     }
 
     // =========================================================================

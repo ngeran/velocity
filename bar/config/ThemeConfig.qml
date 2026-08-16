@@ -102,6 +102,30 @@ Item {
     }
 
     // =========================================================================
+    // DERIVED SURFACES — state-alpha tiers (Omarchy interactive vocabulary)
+    // -------------------------------------------------------------------------
+    // Fixed alphas over theme roles instead of hardcoded Qt.rgba() literals,
+    // so every tint in the bar re-derives when the theme swaps. withAlpha()
+    // takes a HEX STRING token (the colors.* values) — never a color object
+    // (a color has no .replace; that is exactly the old tint() bug).
+    // =========================================================================
+    function withAlpha(hex, a) {
+        var h = (hex || "#ffffff").replace("#", "")
+        if (h.length !== 6) return Qt.rgba(1, 1, 1, a)
+        return Qt.rgba(parseInt(h.substring(0, 2), 16) / 255,
+                       parseInt(h.substring(2, 4), 16) / 255,
+                       parseInt(h.substring(4, 6), 16) / 255, a)
+    }
+
+    readonly property color fillRest:        withAlpha(colors.text, 0.04)       // neutral pill / idle button
+    readonly property color hairline:        withAlpha(colors.text, 0.07)       // section separators
+    readonly property color hairlineSoft:    withAlpha(colors.text, 0.12)       // slider/meter tracks, inactive bars
+    readonly property color accentTint:      withAlpha(colors.secondary, 0.10)  // connected/status pills
+    readonly property color accentTintSoft:  withAlpha(colors.secondary, 0.08)  // action-button accent state
+    readonly property color successTint:     withAlpha(colors.success, 0.15)
+    readonly property color errorTint:       withAlpha(colors.error, 0.15)
+
+    // =========================================================================
     // THEME APPLICATION
     // =========================================================================
 

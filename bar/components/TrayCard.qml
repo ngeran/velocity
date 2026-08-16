@@ -15,7 +15,8 @@ import "../config" as Config
 
 PanelWindow {
     id: card
-    visible: activeTray !== ""
+    // Keep the window alive through the fade-out (opacity > 0 while closing).
+    visible: activeTray !== "" || dropdown.opacity > 0
 
     // Full-screen transparent overlay. A click landing anywhere outside the
     // dropdown closes it — the same click-outside dismissal the
@@ -28,6 +29,10 @@ PanelWindow {
     aboveWindows: true
 
     property string activeTray: ""
+    // The tray that is open OR was last open — stays frozen during the fade-out
+    // so the closing view's content, header and height don't flash to another
+    // body while the 140ms fade runs.
+    property string lastTray: ""
     signal closeRequested()
 
     // HOVER-OUT DISMISSAL
@@ -37,8 +42,13 @@ PanelWindow {
     // you have to move into the card and back out for it to dismiss on hover.
     property bool hasHoveredDropdown: false
     onActiveTrayChanged: {
+        if (activeTray !== "") lastTray = activeTray
         hoverCloseTimer.stop()        // any open / switch / close cancels a pending close
         card.hasHoveredDropdown = false
+        // Popup-gated polling: detail probes run only while their popup is the
+        // active one (fetch fires immediately on open; timers stop on close).
+        Services.NetworkService.popupOpen = activeTray === "network"
+        Services.BluetoothService.popupOpen = activeTray === "bluetooth"
     }
     Timer {
         id: hoverCloseTimer
@@ -47,19 +57,19 @@ PanelWindow {
     }
 
     readonly property string headerIcon: {
-        if (activeTray === "network")
+        if (lastTray === "network")
             return Services.NetworkService.isConnected
                 ? (Services.NetworkService.connectionType === "wifi" ? "󰖩" : "󰈀") : "󰖪"
-        if (activeTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
-        if (activeTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
-        if (activeTray === "power")     return Services.BatteryService.glyph
+        if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
+        if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
+        if (lastTray === "power")     return Services.BatteryService.glyph
         return ""
     }
     readonly property string headerTitle: {
-        if (activeTray === "network")   return "NETWORK"
-        if (activeTray === "bluetooth") return "BLUETOOTH"
-        if (activeTray === "volume")    return "VOLUME"
-        if (activeTray === "power")     return "POWER"
+        if (lastTray === "network")   return "NETWORK"
+        if (lastTray === "bluetooth") return "BLUETOOTH"
+        if (lastTray === "volume")    return "VOLUME"
+        if (lastTray === "power")     return "POWER"
         return ""
     }
 
@@ -80,20 +90,24 @@ PanelWindow {
         anchors.topMargin: 0   // overlay already starts below the bar
         width: 260
         // Both network and bluetooth share the network body's height so the two
-        // popups are the same size. networkBody has no top-level Repeater, so its
-        // implicitHeight is reliable (+55 = header 34 + separator 1 + outer
-        // margins 20). Bluetooth's device list IS a top-level Repeater, so its
-        // own implicitHeight can't be trusted — instead the Math.max() floor
-        // (sized from deviceCount) guarantees the box never shrinks below its
-        // content. This matters because networkBody collapses to ~147px when
-        // Wi-Fi is off/disconnected (e.g. right after toggling Wi-Fi), which
-        // would otherwise clip the bluetooth list + DISABLE button.
-        height: card.activeTray === "network" ? (networkBody.implicitHeight + 55)
-              : card.activeTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
-                                                            162 + Math.max(15, Services.BluetoothService.deviceCount * 16))
+        // popups are the same size (+55 = header 34 + separator 1 + outer
+        // margins 20). Since the bluetooth device list moved into a ListView
+        // with an explicit capped height, btBody.implicitHeight is reliable —
+        // the Math.max() keeps the bluetooth box at the wifi height while never
+        // shrinking below its own content (relevant when Wi-Fi is off, which
+        // collapses networkBody to ~147px).
+        // Keyed on lastTray so the height stays frozen through the fade-out.
+        height: card.lastTray === "network" ? (networkBody.implicitHeight + 55)
+              : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
+                                                          btBody.implicitHeight + 55)
               : 220
         color: Config.BarConfig.colorBackground
         radius: 0   // sharp corners
+
+        // 140ms OutCubic fade (Omarchy popup idiom); the window's keep-alive
+        // visibility (visible: activeTray !== "" || opacity > 0) lets this run.
+        opacity: card.activeTray !== "" ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         // Swallow clicks inside the card so they don't bubble to the backdrop.
         MouseArea { anchors.fill: parent }
@@ -171,7 +185,7 @@ PanelWindow {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: Qt.rgba(1, 1, 1, 0.07)
+            color: Config.ThemeConfig.hairline
         }
 
         // ── BODY ──
@@ -179,9 +193,9 @@ PanelWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: {
-                if (card.activeTray === "bluetooth") return 1
-                if (card.activeTray === "volume")    return 2
-                if (card.activeTray === "power")     return 3
+                if (card.lastTray === "bluetooth") return 1
+                if (card.lastTray === "volume")    return 2
+                if (card.lastTray === "power")     return 3
                 return 0
             }
 
@@ -211,7 +225,7 @@ PanelWindow {
                     Rectangle {
                         width: typeLbl.implicitWidth + 12; height: 18
                         radius: 0
-                        color: Services.NetworkService.isConnected ? Qt.rgba(0,220,229,0.10) : Qt.rgba(255,255,255,0.04)
+                        color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                         border.width: 1
                         Text { id: typeLbl; anchors.centerIn: parent
@@ -222,7 +236,7 @@ PanelWindow {
                     Rectangle {
                         width: connLbl.implicitWidth + 14; height: 18
                         radius: 0
-                        color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Qt.rgba(255,255,255,0.04)
+                        color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
@@ -267,7 +281,7 @@ PanelWindow {
                                     radius: 0
                                     color: Services.NetworkService.signalStrength > index * 25
                                            ? Config.BarConfig.colorAccent
-                                           : Qt.rgba(1, 1, 1, 0.12)
+                                           : Config.ThemeConfig.hairlineSoft
                                     Behavior on color { ColorAnimation { duration: 120 } }
                                 }
                             }
@@ -276,7 +290,7 @@ PanelWindow {
                 }
                 // ── link diagnostics: gateway / DNS / latency ──
                 Item { height: 10; visible: Services.NetworkService.isConnected }
-                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Qt.rgba(1,1,1,0.07) }
+                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
                 Item { height: 8; visible: Services.NetworkService.isConnected }
                 RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
                     Text { text: "GATEWAY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
@@ -305,7 +319,7 @@ PanelWindow {
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; height: 26; radius: 0
-                    color: Services.NetworkService.wifiRadio ? Qt.rgba(255,255,255,0.03) : Qt.rgba(0,220,229,0.08)
+                    color: Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
                     border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -341,7 +355,7 @@ PanelWindow {
                     Rectangle {
                         width: btLbl.implicitWidth + 12; height: 18
                         radius: 0
-                        color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Qt.rgba(255,255,255,0.04)
+                        color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Config.ThemeConfig.fillRest
                         border.color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
@@ -350,17 +364,73 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
-                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Qt.rgba(1,1,1,0.07) }
+                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
                 Item { height: 8; visible: Services.BluetoothService.hasBluetooth }
                 Text { visible: Services.BluetoothService.hasBluetooth; text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
                 Item { height: 6; visible: Services.BluetoothService.hasBluetooth }
-                Repeater {
+                // Capped ListView instead of an unbounded Repeater: sizes to its
+                // content up to ~4 rows and scrolls beyond that — and because
+                // the height is explicit, btBody.implicitHeight becomes
+                // reliable (Repeater delegates never were, which is what forced
+                // the old hand-tuned height formula in the dropdown binding).
+                ListView {
+                    id: btDeviceList
                     visible: Services.BluetoothService.hasBluetooth
-                    model: Services.BluetoothService.connectedDeviceList ? Services.BluetoothService.connectedDeviceList.split(",") : []
-                    delegate: RowLayout { Layout.fillWidth: true; spacing: 6
-                        required property string modelData
-                        Text { text: "󰂱"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorAccent }
-                        Text { text: modelData.trim(); font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: count > 0 ? Math.min(contentHeight, 64) : 0
+                    clip: true
+                    interactive: contentHeight > height
+                    spacing: 0
+                    model: Services.BluetoothService.devices
+                    delegate: Item {
+                        width: btDeviceList.width
+                        height: 18
+                        required property var modelData
+
+                        // Hover catcher sits UNDER the content row so the
+                        // disconnect button (with its own MouseArea) still gets
+                        // clicks; plain Texts pass hover through.
+                        MouseArea {
+                            id: rowHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 6
+                            Text { text: "󰂱"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorAccent }
+                            Text {
+                                text: modelData.name
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                                color: Config.BarConfig.colorText
+                                Layout.fillWidth: true; elide: Text.ElideRight
+                            }
+                            // Battery % when the device reports one (MX-style
+                            // mice/headsets do), dim right-aligned.
+                            Text {
+                                visible: Services.BluetoothService.deviceBatteries[modelData.address] !== undefined
+                                text: Services.BluetoothService.deviceBatteries[modelData.address] + "%"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                                color: Config.BarConfig.colorTextDim
+                            }
+                            // Hover-revealed disconnect (Omarchy row idiom).
+                            Text {
+                                visible: rowHover.containsMouse
+                                text: "✕"
+                                font.pixelSize: 10
+                                color: disconnectArea.containsMouse ? Config.ThemeConfig.colors.error : Config.BarConfig.colorTextDim
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                MouseArea {
+                                    id: disconnectArea
+                                    anchors.fill: parent
+                                    anchors.margins: -6   // generous hit target
+                                    cursorShape: Qt.PointingHandCursor
+                                    hoverEnabled: true
+                                    onClicked: Services.BluetoothService.disconnectDevice(modelData.address)
+                                }
+                            }
+                        }
                     }
                 }
                 Text { visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.deviceCount === 0; text: "No devices connected"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true }
@@ -369,7 +439,7 @@ PanelWindow {
                     visible: Services.BluetoothService.hasBluetooth
                     Layout.fillWidth: true; height: 26
                     radius: 0
-                    color: Services.BluetoothService.powered ? Qt.rgba(255,255,255,0.03) : Qt.rgba(0,220,229,0.08)
+                    color: Services.BluetoothService.powered ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
                     border.color: Services.BluetoothService.powered ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -428,12 +498,15 @@ PanelWindow {
                     hoverEnabled: true
                     from: 0; to: 100
                     value: Services.AudioService.volume
-                    onMoved: Services.AudioService.setVolume(value)
+                    onMoved: {
+                        Services.AudioService.setVolume(value)
+                        Services.OsdService.showVolume(value, Services.AudioService.muted)
+                    }
                     background: Rectangle {
                         x: volSlider.leftPadding
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
                         implicitHeight: 6; width: volSlider.availableWidth; radius: 0
-                        color: Qt.rgba(1,1,1,0.10)
+                        color: Config.ThemeConfig.hairlineSoft
                         Rectangle {
                             height: parent.height
                             width: volSlider.visualPosition * parent.width
@@ -459,7 +532,7 @@ PanelWindow {
                     visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true; height: 26
                     radius: 0
-                    color: Services.AudioService.muted ? Qt.rgba(0,220,229,0.08) : Qt.rgba(255,255,255,0.03)
+                    color: Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
                     border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -467,7 +540,10 @@ PanelWindow {
                         Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
                         Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
                     }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMute() }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {
+                        Services.AudioService.toggleMute()
+                        Services.OsdService.showMute(Services.AudioService.muted)
+                    } }
                 }
             }
 
@@ -479,22 +555,22 @@ PanelWindow {
                         width: pwrLbl.implicitWidth + 16; height: 18
                         radius: 0
                         color: {
-                            if (!Services.BatteryService.hasBattery)      return Qt.rgba(0,220,229,0.10)
-                            if (Services.BatteryService.charging)          return Qt.rgba(104,211,145,0.15)
-                            if (Services.BatteryService.percentage <= 20)  return Qt.rgba(248,113,113,0.15)
-                            return Qt.rgba(255,255,255,0.04)
+                            if (!Services.BatteryService.hasBattery)      return Config.ThemeConfig.accentTint
+                            if (Services.BatteryService.charging)          return Config.ThemeConfig.successTint
+                            if (Services.BatteryService.percentage <= 20)  return Config.ThemeConfig.errorTint
+                            return Config.ThemeConfig.fillRest
                         }
                         border.color: {
                             if (!Services.BatteryService.hasBattery)      return Config.BarConfig.colorAccent
-                            if (Services.BatteryService.charging)          return "#68d391"
-                            if (Services.BatteryService.percentage <= 20)  return "#f87171"
+                            if (Services.BatteryService.charging)          return Config.ThemeConfig.colors.success
+                            if (Services.BatteryService.percentage <= 20)  return Config.ThemeConfig.colors.error
                             return Config.BarConfig.colorBorder
                         }
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 200 } }
                         Text { id: pwrLbl; anchors.centerIn: parent; text: Services.BatteryService.stateLabel
                             font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                            color: { if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorAccent; if (Services.BatteryService.charging) return "#68d391"; if (Services.BatteryService.percentage <= 20) return "#f87171"; return Config.BarConfig.colorTextDim }
+                            color: { if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorAccent; if (Services.BatteryService.charging) return Config.ThemeConfig.colors.success; if (Services.BatteryService.percentage <= 20) return Config.ThemeConfig.colors.error; return Config.BarConfig.colorTextDim }
                         }
                     }
                     Item { Layout.fillWidth: true }
@@ -503,7 +579,7 @@ PanelWindow {
                 RowLayout { visible: Services.BatteryService.hasBattery; Layout.fillWidth: true; spacing: 0
                     Text { text: "CHARGE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 52 }
                     Text { text: Services.BatteryService.percentage + "%"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
-                        color: { if (Services.BatteryService.charging) return "#68d391"; if (Services.BatteryService.percentage <= 20) return "#f87171"; if (Services.BatteryService.percentage <= 50) return "#fbbf24"; return Config.BarConfig.colorText }
+                        color: { if (Services.BatteryService.charging) return Config.ThemeConfig.colors.success; if (Services.BatteryService.percentage <= 20) return Config.ThemeConfig.colors.error; if (Services.BatteryService.percentage <= 50) return Config.ThemeConfig.colors.warning; return Config.BarConfig.colorText }
                         Behavior on color { ColorAnimation { duration: 200 } }
                     }
                 }

@@ -15,3 +15,4 @@ KeybindsOverlay 1.0 KeybindsOverlay.qml
 NotificationCard 1.0 NotificationCard.qml
 NotificationButton 1.0 NotificationButton.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
+Osd 1.0 Osd.qml
