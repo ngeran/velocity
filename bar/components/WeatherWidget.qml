@@ -9,7 +9,10 @@ import "../config" as Config
 
 Item {
     id: root
-    width: weatherRow.implicitWidth + 6
+    // Extra trailing pad: Nerd Font glyphs overshoot their advance width, so
+    // the condition glyph's ink can visually collide with the next tray icon
+    // even when the layouts don't overlap.
+    width: weatherRow.implicitWidth + 12
     height: Config.BarConfig.barHeight
     visible: Services.WeatherService.hasData
 

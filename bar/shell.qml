@@ -93,11 +93,12 @@ ShellRoot {
             Components.WeatherWidget {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
+                Layout.rightMargin: 4   // breathing room before the wifi icon
             }
 
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 4
                 isActive: panelWindow.activeTray === "network"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
             }
