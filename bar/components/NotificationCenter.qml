@@ -41,6 +41,7 @@ PanelWindow {
     // defer visible=false until the slide-out finishes (so it can animate)
     onShownChanged: {
         Services.NotificationService.panelOpen = root.shown   // suppress auto-dismiss while open
+        if (root.shown) Services.NotificationService.markAllRead()   // viewing clears the badge; tier clock starts
         if (!shown) hideTimer.restart()
     }
     Timer {

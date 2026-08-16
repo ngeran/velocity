@@ -59,15 +59,33 @@ Item {
         w.running = true
     }
 
-    // Auto-dismiss: every 3s drop notifications older than 10s so the center
-    // doesn't linger forever — but never while the panel is open (user is reading).
+    // Auto-dismiss with urgency-tiered lifetimes (Omarchy pattern). READ rows
+    // expire by tier; UNREAD rows never auto-expire (dropping an unseen row
+    // silently drops the badge too — the user never learns it existed); CRITICAL
+    // rows persist even when read until explicitly dismissed/cleared. On expiry
+    // the originating app is told via the bridge (NotificationClosed semantics),
+    // so it stops tracking the notification.
+    //   low (0) → 6s after read · normal (1) → 12s after read · critical (2) → never
+    function _lifetimeMs(urgency) {
+        if (urgency >= 2) return 0
+        if (urgency === 1) return 12000
+        return 6000
+    }
+
     Timer {
         interval: 3000; running: true; repeat: true
         onTriggered: {
-            if (root.panelOpen) return
-            var cutoff = Date.now() - 10000
+            if (root.panelOpen) return   // user is reading
+            var nowMs = Date.now()
             for (var i = root.model.count - 1; i >= 0; i--) {
-                if (root.model.get(i).timestamp < cutoff) root.model.remove(i)
+                var row = root.model.get(i)
+                if (!row.read) continue                    // unseen → keep (badge truth)
+                var life = root._lifetimeMs(row.urgency)
+                if (life === 0) continue                   // critical → keep
+                if ((row.readAt || row.timestamp) + life < nowMs) {
+                    if (row.clickId) root.dismissDbus(row.clickId)
+                    root.model.remove(i)
+                }
             }
             root._recount()
         }
@@ -95,7 +113,8 @@ Item {
             body: body || "",
             urgency: (urgency === undefined ? 1 : urgency),
             timestamp: Date.now(),
-            read: root.dnd   // silent (no badge bump) under Do-Not-Disturb
+            read: root.dnd,   // silent (no badge bump) under Do-Not-Disturb
+            readAt: 0         // set when marked read — tier clock starts at READ
         })
         root.nextId++
         root._recount()
@@ -123,13 +142,21 @@ Item {
 
     function markRead(id) {
         for (var i = 0; i < root.model.count; i++) {
-            if (root.model.get(i).id === id) { root.model.setProperty(i, "read", true); break }
+            if (root.model.get(i).id === id) {
+                root.model.setProperty(i, "read", true)
+                root.model.setProperty(i, "readAt", Date.now())
+                break
+            }
         }
         root._recount()
     }
 
     function markAllRead() {
-        for (var i = 0; i < root.model.count; i++) root.model.setProperty(i, "read", true)
+        var nowMs = Date.now()
+        for (var i = 0; i < root.model.count; i++) {
+            root.model.setProperty(i, "read", true)
+            root.model.setProperty(i, "readAt", nowMs)
+        }
         root._recount()
     }
 
@@ -162,6 +189,14 @@ Item {
         }
 
         function clear() { root.clearAll() }
+
+        // Inspection / scripting hooks: mark everything read and dump the model.
+        function readAll() { root.markAllRead() }
+        function list(): string {
+            var rows = []
+            for (var i = 0; i < root.model.count; i++) rows.push(root.model.get(i))
+            return JSON.stringify(rows)
+        }
     }
 
     Component.onCompleted: {
