@@ -248,6 +248,15 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                 }
                 Item { height: 14; visible: Services.NetworkService.hasNetwork }
+                // Named state (Omarchy): radio-off otherwise reads as a broken
+                // "everything empty" popup — say why it's empty.
+                Text {
+                    visible: Services.NetworkService.hasNetwork && !Services.NetworkService.wifiRadio && !Services.NetworkService.isConnected
+                    Layout.fillWidth: true
+                    text: "Wi-Fi radio is off — enable it below"
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.italic: true
+                    color: Config.BarConfig.colorTextDim
+                }
                 RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
                     Text { text: "SSID"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
                     Text { text: Services.NetworkService.ssid; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
@@ -469,7 +478,14 @@ PanelWindow {
                         }
                     }
                 }
-                Text { visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.deviceCount === 0; text: "No devices connected"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true }
+                // Named empty states (Omarchy): off vs powered-but-nothing say
+                // different things, and point at where full management lives.
+                Text {
+                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.deviceCount === 0
+                    text: Services.BluetoothService.powered ? "No devices connected — pairing lives in Settings ▸ Control"
+                                                           : "Bluetooth is off"
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true
+                }
                 Item { Layout.fillHeight: true; visible: Services.BluetoothService.hasBluetooth }
                 Rectangle {
                     visible: Services.BluetoothService.hasBluetooth
