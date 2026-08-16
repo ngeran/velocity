@@ -82,52 +82,78 @@ PanelWindow {
         return any ? sum : null
     }
 
-    // ---- Z.ai quota multiplier window (peak = 14:00–18:00 UTC+8 == 06:00–10:00 UTC) ----
-    readonly property int zaiPeakStartUtcMin: 6 * 60
-    readonly property int zaiPeakEndUtcMin: 10 * 60
+    // ---- Z.ai quota multiplier window (peak = Mon–Fri 14:00–18:00 UTC+8; weekends 1× all day) ----
+    readonly property int zaiPeakStartSgtMin: 14 * 60   // Singapore wall-clock minutes
+    readonly property int zaiPeakEndSgtMin: 18 * 60
     readonly property int zaiPeakMultiplier: 3
     readonly property int zaiOffPeakMultiplier: 1   // promo through end of Sep 2026 — revert to 2 after
 
     property bool zaiIsPeak: false
+    property bool zaiIsWeekend: false
     property int zaiMultiplier: 1
     property string zaiNextChangeLabel: ""
-    property string zaiPeakLocalLabel: ""   // e.g. "PEAK (3x) DAILY 02:00–06:00 LOCAL"
+    property string zaiPeakLocalLabel: ""   // e.g. "PEAK (3×) MON–FRI 02:00–06:00 LOCAL"
     property int zaiPeakLocalStartMin: 0    // peak window start, minutes-of-day, local clock
     property int zaiPeakLocalEndMin: 0      // peak window end, minutes-of-day, local clock
     property int zaiNowLocalMin: 0          // current time, minutes-of-day, local clock
 
     // ---- model advisor: which Z.ai model tier makes sense right now ----
     readonly property var zaiModelAdvice: root.zaiIsPeak
-        ? { model: "GLM-4.7", tag: "LIGHTER TIER", note: "PEAK WINDOW — " + root.zaiPeakMultiplier + "× DRAW ON GLM-5.2 / GLM-5-TURBO. RESERVE THOSE FOR WORK THAT NEEDS THEM; ROUTE ROUTINE / BOILERPLATE TASKS TO GLM-4.7 INSTEAD." }
-        : { model: "GLM-5.2 / GLM-5-TURBO", tag: "FULL HEADROOM", note: "OFF-PEAK WINDOW — " + root.zaiOffPeakMultiplier + "× DRAW (PROMO THRU SEP 2026, THEN 2×). BEST TIME TO RUN HEAVY OR COMPLEX CODING TASKS ON THE TOP-TIER MODELS." }
+        ? { model: "GLM-4.7", tag: "LIGHTER TIER", note: "PEAK WINDOW — " + root.zaiPeakMultiplier + "× DRAW ON GLM-5.3 / GLM-5-TURBO. RESERVE THOSE FOR WORK THAT NEEDS THEM; ROUTE ROUTINE / BOILERPLATE TASKS TO GLM-4.7 (1× ALL DAY)." }
+        : { model: "GLM-5.3 / GLM-5-TURBO", tag: "FULL HEADROOM", note: "OFF-PEAK WINDOW — " + root.zaiOffPeakMultiplier + "× DRAW (PROMO THRU SEP 2026, THEN 2×). BEST TIME FOR HEAVY TASKS ON GLM-5.3 — NEW FLAGSHIP (+50% VS 5.2, 1M CTX)." }
 
     function updateZaiMultiplier() {
         var now = new Date()
-        var utcMin = now.getUTCHours() * 60 + now.getUTCMinutes()
-        var inPeak = utcMin >= root.zaiPeakStartUtcMin && utcMin < root.zaiPeakEndUtcMin
+
+        // Peak = Mon–Fri 14:00–18:00 Singapore time (UTC+8); weekends are off-peak all day.
+        // Work on a UTC+8-shifted date so day/minute checks land on Z.ai's calendar.
+        var sgt = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+        var sgtDow = sgt.getUTCDay()               // 0=Sun … 6=Sat
+        var sgtMin = sgt.getUTCHours() * 60 + sgt.getUTCMinutes()
+        root.zaiIsWeekend = sgtDow === 0 || sgtDow === 6
+        var inPeak = !root.zaiIsWeekend
+            && sgtMin >= root.zaiPeakStartSgtMin && sgtMin < root.zaiPeakEndSgtMin
         root.zaiIsPeak = inPeak
         root.zaiMultiplier = inPeak ? root.zaiPeakMultiplier : root.zaiOffPeakMultiplier
 
-        var boundaryUtcMin = inPeak ? root.zaiPeakEndUtcMin : root.zaiPeakStartUtcMin
-        var boundary = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-                                          Math.floor(boundaryUtcMin / 60), boundaryUtcMin % 60, 0))
-        if (boundary <= now) boundary.setUTCDate(boundary.getUTCDate() + 1)
-        var hh = boundary.getHours().toString().padStart(2, "0")
-        var mm = boundary.getMinutes().toString().padStart(2, "0")
-        root.zaiNextChangeLabel = (inPeak
-            ? ("→ " + root.zaiOffPeakMultiplier + "x AT " + hh + ":" + mm)
-            : ("→ " + root.zaiPeakMultiplier + "x AT " + hh + ":" + mm))
+        // Next rate change = first peak enter/exit boundary after now, scanning forward
+        // day-by-day (Sat/Sun have no boundaries, so Friday evening rolls to Monday).
+        // SGT wall clock hh:mm on (Y,M,D) as a real instant = Date.UTC(...) minus 8h.
+        var boundary = null
+        for (var d = 0; d < 8 && boundary === null; d++) {
+            var y = sgt.getUTCFullYear(), m = sgt.getUTCMonth(), dom = sgt.getUTCDate() + d
+            var dow = new Date(Date.UTC(y, m, dom)).getUTCDay()
+            if (dow === 0 || dow === 6) continue
+            var mins = [root.zaiPeakStartSgtMin, root.zaiPeakEndSgtMin]
+            for (var c = 0; c < mins.length && boundary === null; c++) {
+                var t = Date.UTC(y, m, dom, Math.floor(mins[c] / 60), mins[c] % 60, 0) - 8 * 60 * 60 * 1000
+                if (t > now.getTime()) boundary = new Date(t)
+            }
+        }
+        if (boundary !== null) {
+            var hh = boundary.getHours().toString().padStart(2, "0")
+            var mm = boundary.getMinutes().toString().padStart(2, "0")
+            var dayTag = boundary.toDateString() === now.toDateString()
+                ? ""
+                : ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][boundary.getDay()] + " "
+            root.zaiNextChangeLabel = "→ " + (inPeak ? root.zaiOffPeakMultiplier : root.zaiPeakMultiplier)
+                + "× AT " + dayTag + hh + ":" + mm
+        }
 
-        // fixed daily peak window, converted once to local clock time (handles DST automatically)
-        var pStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-                                        Math.floor(root.zaiPeakStartUtcMin / 60), root.zaiPeakStartUtcMin % 60, 0))
-        var pEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-                                      Math.floor(root.zaiPeakEndUtcMin / 60), root.zaiPeakEndUtcMin % 60, 0))
+        // fixed Mon–Fri peak window, converted once to local clock time (handles DST automatically)
+        var pStart = new Date(Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth(), sgt.getUTCDate(),
+                                        Math.floor(root.zaiPeakStartSgtMin / 60), root.zaiPeakStartSgtMin % 60, 0)
+                              - 8 * 60 * 60 * 1000)
+        var pEnd = new Date(Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth(), sgt.getUTCDate(),
+                                      Math.floor(root.zaiPeakEndSgtMin / 60), root.zaiPeakEndSgtMin % 60, 0)
+                            - 8 * 60 * 60 * 1000)
         var psh = pStart.getHours().toString().padStart(2, "0")
         var psm = pStart.getMinutes().toString().padStart(2, "0")
         var peh = pEnd.getHours().toString().padStart(2, "0")
         var pem = pEnd.getMinutes().toString().padStart(2, "0")
-        root.zaiPeakLocalLabel = "PEAK (" + root.zaiPeakMultiplier + "×) DAILY " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL // " + root.zaiOffPeakMultiplier + "× ALL OTHER HOURS"
+        root.zaiPeakLocalLabel = root.zaiIsWeekend
+            ? "WEEKEND — " + root.zaiOffPeakMultiplier + "× ALL DAY // PEAK (" + root.zaiPeakMultiplier + "×) MON–FRI " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL"
+            : "PEAK (" + root.zaiPeakMultiplier + "×) MON–FRI " + psh + ":" + psm + "–" + peh + ":" + pem + " LOCAL // " + root.zaiOffPeakMultiplier + "× ALL OTHER HOURS + WEEKENDS"
 
         root.zaiPeakLocalStartMin = pStart.getHours() * 60 + pStart.getMinutes()
         root.zaiPeakLocalEndMin = pEnd.getHours() * 60 + pEnd.getMinutes()
@@ -392,11 +418,11 @@ PanelWindow {
                                 ctx.globalAlpha = 0.18
                                 ctx.fillRect(0, midY - barH / 2, w, barH)
 
-                                // peak band (handles wrap past midnight)
+                                // peak band (handles wrap past midnight); dimmed on weekends — those hours are 1× all day
                                 var s = root.zaiPeakLocalStartMin / 1440
                                 var e = root.zaiPeakLocalEndMin / 1440
                                 ctx.fillStyle = root.cWarn.toString()
-                                ctx.globalAlpha = 0.6
+                                ctx.globalAlpha = root.zaiIsWeekend ? 0.22 : 0.6
                                 if (e > s) {
                                     ctx.fillRect(s * w, midY - barH / 2, (e - s) * w, barH)
                                 } else {
@@ -424,6 +450,7 @@ PanelWindow {
                             Connections {
                                 target: root
                                 function onZaiNowLocalMinChanged() { zaiTimeline.requestPaint() }
+                                function onZaiIsWeekendChanged() { zaiTimeline.requestPaint() }
                                 function onCAccentChanged() { zaiTimeline.requestPaint() }
                             }
                             Component.onCompleted: zaiTimeline.requestPaint()

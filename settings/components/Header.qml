@@ -80,6 +80,13 @@ Rectangle {
 
     Component.onCompleted: identityLoader.running = true
 
+    // System Logs overlay lives in the BAR process — toggle it via Quickshell
+    // IPC (cross-process, WeatherWidget.qml precedent).
+    Process {
+        id: logsToggleProc
+        command: ["quickshell", "ipc", "-c", "bar", "call", "logs", "toggle"]
+    }
+
     Process {
         id: identityLoader
         command: ["sh", "-c", "cat ~/.config/ngeran/identity/identity.txt 2>/dev/null; test -f ~/.config/ngeran/identity/avatar.png && echo HAS_AVATAR"]
@@ -213,6 +220,32 @@ Rectangle {
 
         Item { Layout.preferredWidth: 10 }  // breathing room before the divider
         Divider {}
+
+        // System Logs launcher — toggles the BAR process's overlay cross-process
+        // (same shape as bar/components/WeatherWidget.qml calling settings IPC).
+        // clockTrio is anchored to the header's true horizontal center, so this
+        // extra left-side width cannot shift the clocks.
+        Rectangle {
+            width: 34; height: 34
+            color: "transparent"
+            border.color: logsMouse.containsMouse ? Config.ThemeConfig.colors.secondary
+                                                  : Config.ThemeConfig.colors.outlineVariant
+            border.width: 1
+            Text {
+                anchors.centerIn: parent
+                text: "󰗋"
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 15
+                color: Config.ThemeConfig.colors.secondary
+            }
+            MouseArea {
+                id: logsMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: logsToggleProc.running = true
+            }
+        }
     }
 
     // -- Clock trio (Athens | Local | Universal), evenly spaced --

@@ -11,3 +11,4 @@ singleton ZaiUsageService 1.0 ZaiUsageService.qml
 singleton SystemInfoService 1.0 SystemInfoService.qml
 singleton OsdService 1.0 OsdService.qml
 singleton WeatherService 1.0 WeatherService.qml
+singleton LogService 1.0 LogService.qml

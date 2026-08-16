@@ -124,6 +124,13 @@ ShellRoot {
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
             }
 
+            Components.LogsIcon {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: -6
+                isActive: logsOverlay.shown
+                onTriggered: logsOverlay.toggle()
+            }
+
             Components.NotificationButton {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
@@ -186,6 +193,13 @@ ShellRoot {
         id: keybindsOverlay
     }
 
+    // =========================================================================
+    // LOGS OVERLAY — system journal viewer (bar icon / SUPER+T / settings IPC)
+    // =========================================================================
+    Components.LogsOverlay {
+        id: logsOverlay
+    }
+
     Components.ZaiUsageOverlay {
         id: zaiUsageOverlay
     }
@@ -243,6 +257,16 @@ ShellRoot {
 
         function toggle() {
             zaiUsageOverlay.toggle()
+        }
+    }
+
+    // Logs overlay toggle (for SUPER+T — see configs/hypr/keybindings.lua)
+    IpcHandler {
+        id: logsIpc
+        target: "logs"
+
+        function toggle() {
+            logsOverlay.toggle()
         }
     }
 

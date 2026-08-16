@@ -17,3 +17,5 @@ NotificationButton 1.0 NotificationButton.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
 Osd 1.0 Osd.qml
 WeatherWidget 1.0 WeatherWidget.qml
+LogsIcon 1.0 LogsIcon.qml
+LogsOverlay 1.0 LogsOverlay.qml
