@@ -89,9 +89,22 @@ Item {
     }
 
     function refresh() {
-        cpuTempProc.running = true
-        nvmeProc.running = true
-        coolantProc.running = true
+        if (!cpuTempProc.running)  cpuTempProc.running = true
+        if (!nvmeProc.running)     nvmeProc.running = true
+        if (!coolantProc.running)  coolantProc.running = true
+    }
+
+    // Hung-process reaper: always-on LCD feed — a stuck hwmon read would
+    // silently stop it forever (guards skip while a Process reports running).
+    Timer {
+        interval: 15000
+        repeat: true
+        running: true
+        onTriggered: {
+            if (cpuTempProc.running)  cpuTempProc.running = false
+            if (nvmeProc.running)     nvmeProc.running = false
+            if (coolantProc.running)  coolantProc.running = false
+        }
     }
 
     // Temps move slowly; 5s is enough and keeps the hwmon scan cheap.

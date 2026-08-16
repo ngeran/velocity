@@ -19,11 +19,19 @@ Item {
     property string activeSection: "network"
 
     onActiveSectionChanged: {
+        // Publish the active section so services can section-gate their polls
+        // (NetworkControlService's wifi scans only run on the network section).
+        Config.SharedState.controlSection = activeSection
         // Nudge the active section's service to refresh (no-ops until phases 3-5).
         if (activeSection === "network")   Services.NetworkControlService.refreshStatus()
         else if (activeSection === "audio") {}   // AudioControlService polls on its own
         else if (activeSection === "display") Services.MonitorService.refresh()
     }
+
+    // The section INITIAL value ("network") is set at construction — no change
+    // signal fires — so publish it here too, or the section-gated wifi polls
+    // never start when the Control tab opens straight to the default section.
+    Component.onCompleted: Config.SharedState.controlSection = root.activeSection
 
     Rectangle {
         id: baseBg

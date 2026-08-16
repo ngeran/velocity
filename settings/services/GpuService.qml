@@ -130,13 +130,28 @@ Item {
 
     function refresh() {
         if (root.vendor === "nvidia") {
-            gpuProc.running = true
+            if (!gpuProc.running) gpuProc.running = true
             // appsProc (per-process list) feeds only the Core tab's
             // TOP_GPU_PROCESSES Repeater — not the deepcool-LCD metrics.json
             // feed — so skip the second nvidia-smi fork while the panel is closed.
-            if (Config.SharedState.dashboardVisible) appsProc.running = true
+            if (Config.SharedState.dashboardVisible && !appsProc.running) appsProc.running = true
         }
         // else: future amd/intel branch
+    }
+
+    // Hung-process reaper: this feed is ALWAYS-ON (CoreEngine publishes it to
+    // the deepcool LCD) and nvidia-smi can hang on driver hiccups — a stuck
+    // Process would silently kill the LCD feed forever because the guards
+    // above skip every refresh while it reports running. Anything still alive
+    // at this sweep (normal reads finish in well under a second) is stuck.
+    Timer {
+        interval: 15000
+        repeat: true
+        running: true
+        onTriggered: {
+            if (gpuProc.running)  gpuProc.running = false
+            if (appsProc.running) appsProc.running = false
+        }
     }
 
     Timer {

@@ -158,7 +158,10 @@ Item {
 
     Timer {
         interval: 3000
-        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
+        // Section-gated: window open AND the network section on screen (the
+        // section-change nudge handles instant data on entry).
+        running: Config.SharedState.dashboardVisible
+              && Config.SharedState.controlSection === "network"
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -170,7 +173,10 @@ Item {
 
     Timer {
         interval: 10000
-        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
+        // The full wifi-list query is the most expensive poll in the process —
+        // run it only while the network section is actually on screen.
+        running: Config.SharedState.dashboardVisible
+              && Config.SharedState.controlSection === "network"
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!wifiListProc.running) wifiListProc.running = true }

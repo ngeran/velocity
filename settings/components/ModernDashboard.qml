@@ -30,6 +30,17 @@ Item {
 
     property int currentTab: 0
 
+    // Window-visibility funnel (injected from shell.qml). CRITICAL: this file,
+    // like every service, imports "../config", while shell.qml imports "config"
+    // — different import URIs, which Quickshell treats as separate singleton
+    // instances. shell.qml's own `SharedState.dashboardVisible = shown` write
+    // therefore never reached the services' poll-timer gates and all
+    // dashboard-gated polling silently never ran. Writing the value from HERE
+    // (property injection, Omarchy's fix for the same relative-import trap)
+    // puts it on the instance the services actually read.
+    property bool windowShown: false
+    onWindowShownChanged: Config.SharedState.dashboardVisible = windowShown
+
     // Persisted Core-tab sub-section (processors/gpu/memoryenv/lcd). The Core
     // tab is lazy-loaded (destroyed when the panel hides), so without this its
     // `active` selection would reset to "processors" on every reopen.

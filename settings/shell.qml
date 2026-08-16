@@ -233,6 +233,10 @@ ShellRoot {
         Components.ModernDashboard {
             id: dashboard
 
+            // Injected so ModernDashboard can funnel visibility into the
+            // SharedState instance the services read (see its windowShown).
+            windowShown: root.shown
+
             z: 1   // paint above the dim backdrop
             width: root.cardWidth
             height: root.cardHeight
