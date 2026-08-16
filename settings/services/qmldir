@@ -1,5 +1,4 @@
 singleton ThemeService 1.0 ThemeService.qml
-singleton NetworkService 1.0 NetworkService.qml
 singleton SysInfoService 1.0 SysInfoService.qml
 singleton NetworkControlService 1.0 NetworkControlService.qml
 singleton BluetoothControlService 1.0 BluetoothControlService.qml
