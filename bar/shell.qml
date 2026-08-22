@@ -24,6 +24,17 @@ import "config" as Config
 import "services" as Services
 
 ShellRoot {
+    // EventService must be EAGER: QML singletons construct lazily on first
+    // DEREFERENCE — and a never-read property binding may never evaluate.
+    // Touching it imperatively at shell start guarantees construction (the
+    // collector's journal tail + generation watcher depend on it).
+    Component.onCompleted: {
+        // Member access (not a bare reference — those never evaluate) to
+        // force EventService construction: QML singletons build lazily and
+        // nothing else references the collector until a panel binds it.
+        console.log("[shell] EventService online:", Services.EventService.events.count, "events")
+    }
+
     PanelWindow {
         id: panelWindow
 

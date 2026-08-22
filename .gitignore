@@ -54,3 +54,6 @@ __pycache__/
 # OS specific
 Thumbs.db
 .DS_Store
+
+# Event tracker state (seeded by tools/backfill-events.sh, appended by EventService)
+events.jsonl
