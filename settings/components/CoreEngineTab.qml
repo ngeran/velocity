@@ -22,7 +22,8 @@ Item {
         { key: "processors",    label: "PROCESSORS" },
         { key: "gpu",           label: "GPU" },
         { key: "memoryenv",     label: "MEMORY & ENV" },
-        { key: "lcd",           label: "LCD CONTROL" }
+        { key: "lcd",           label: "LCD CONTROL" },
+        { key: "events",        label: "EVENTS" }
     ]
 
     // ── left side-nav ───────────────────────────────────────────────────
@@ -108,6 +109,16 @@ Item {
             contentWidth: width; contentHeight: lcdCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
             ColumnLayout { id: lcdCol; width: parent.width; spacing: 14
                 CoreLcdPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
+            }
+        }
+
+        // EVENTS — system event timeline (Xids, boots, nix switches) from
+        // the bar's EventService collector, read via EventsReader
+        Flickable {
+            anchors.fill: parent; visible: root.active === "events"
+            contentWidth: width; contentHeight: eventsCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
+            ColumnLayout { id: eventsCol; width: parent.width; spacing: 14
+                CoreEventsPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
             }
         }
     }

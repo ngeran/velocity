@@ -39,3 +39,4 @@ ActivePaletteCard 1.0 ActivePaletteCard.qml
 ActiveWallpaperCard 1.0 ActiveWallpaperCard.qml
 DisplayInfoCard 1.0 DisplayInfoCard.qml
 WeatherCard 1.0 WeatherCard.qml
+CoreEventsPane 1.0 CoreEventsPane.qml
