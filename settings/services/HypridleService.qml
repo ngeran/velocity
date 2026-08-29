@@ -100,19 +100,6 @@ Item {
     // CONFIG WRITING — generate the full config from the current values
     // =========================================================================
 
-    property Process writeProcess: Process {
-        command: []
-        running: false
-        onExited: function(exitCode) {
-            if (exitCode === 0) {
-                console.log("[HypridleService] Wrote", configFilePath, "- reloading hypridle")
-                reloadHypridle()
-            } else {
-                console.error("[HypridleService] Failed to write config, exit", exitCode)
-            }
-        }
-    }
-
     function saveConfig() {
         // Generate the complete hypridle.conf from the live property values. This is
         // more robust than editing the read-only template text in place (which can't
@@ -145,10 +132,19 @@ Item {
                 "    on-timeout = systemctl suspend\n" +
                 "}\n"
         }
-        // Write via a temp file + atomic mv: mv only needs the DIRECTORY writable
-        // (not the target), so this works even though the seeded file is read-only.
-        writeProcess.command = ["sh", "-c", "mkdir -p " + root.homeDir + "/.cache/hypr && printf '%s' '" + conf.replace(/'/g, "'\\''") + "' > " + root.configFilePath + ".tmp && mv " + root.configFilePath + ".tmp " + root.configFilePath]
-        writeProcess.running = true
+        // Write via the settings process's single write funnel (ThemeService
+        // _atomicWrite: tmp + atomic mv). mv only needs the DIRECTORY writable
+        // (not the target), so this works even though the seeded file is
+        // read-only — the reason this site was atomic before the funnel. The
+        // completion callback preserves the old write→reload chain.
+        ThemeService._atomicWrite(root.configFilePath, conf, function(ok) {
+            if (ok) {
+                console.log("[HypridleService] Wrote", configFilePath, "- reloading hypridle")
+                reloadHypridle()
+            } else {
+                console.error("[HypridleService] Failed to write config")
+            }
+        })
     }
 
     // =========================================================================

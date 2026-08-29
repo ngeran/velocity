@@ -155,7 +155,7 @@ Item {
     //   nvim dofile, rofi) never see a half-written file. Single quotes in the
     //   payload are escaped; paths are space-free under ~ so left bare for $$.
     // =========================================================================
-    function _runSh(script, label) {
+    function _runSh(script, label, onDone) {
         var p = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
         p.command = ["sh", "-c", script];
         p.onExited.connect(function(code) {
@@ -164,18 +164,20 @@ Item {
                 console.error("[ThemeService] " + msg);
                 CommandService.pushLog("[ThemeService] " + msg, "error");
             }
+            if (onDone) onDone(code === 0);   // before destroy: receiver still valid
             p.destroy();  // free the one-shot wrapper (was leaked per write)
         });
         p.running = true;
         return p;
     }
 
-    function _atomicWrite(path, content) {
+    function _atomicWrite(path, content, onDone) {
         var dir = path.substring(0, path.lastIndexOf("/"));
         var safe = String(content).replace(/'/g, "'\\''");
         themeService._runSh(
             "mkdir -p " + dir + " && printf '%s' '" + safe + "' > " + path + ".tmp.$$ && mv -f " + path + ".tmp.$$ " + path,
-            "write " + path
+            "write " + path,
+            onDone
         );
     }
 

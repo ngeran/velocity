@@ -63,20 +63,6 @@ Item {
     property string configFilePath: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString()
                                        .replace("file://", "") + "/quickshell/settings-config.json"
 
-    // Process for saving config
-    property Process saveProcess: Process {
-        command: []
-        running: false
-
-        onExited: function(exitCode) {
-            if (exitCode === 0) {
-                console.log("[SettingsConfigService] Config saved successfully")
-            } else {
-                console.log("[SettingsConfigService] Failed to save config, exit code:", exitCode)
-            }
-        }
-    }
-
     // Process for loading config
     property Process loadProcess: Process {
         command: []
@@ -121,8 +107,9 @@ Item {
         }
 
         var json = JSON.stringify(config, null, 2)
-        saveProcess.command = ["sh", "-c", "mkdir -p ~/.config/quickshell && printf '%s' '" + json.replace(/'/g, "'\\''") + "' > '" + root.configFilePath + "'"]
-        saveProcess.running = true
+        // Single write funnel for the whole settings process (atomic tmp+mv —
+        // readers never see a half-written file; rename-compat verified in bar).
+        ThemeService._atomicWrite(root.configFilePath, json)
 
         // Also write bar-specific config for cross-process sync
         saveBarConfig()
@@ -191,10 +178,7 @@ Item {
         }
         var json = JSON.stringify(barConfig, null, 2)
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
-        var barWriter = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        barWriter.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > " + barConfigPath]
-        barWriter.onExited.connect(function() { barWriter.destroy() })  // free the one-shot wrapper (was leaked per save)
-        barWriter.running = true
+        ThemeService._atomicWrite(barConfigPath, json)
     }
 
     // =========================================================================
