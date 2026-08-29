@@ -17,6 +17,10 @@ Item {
     Row {
         id: layoutRow
         anchors.centerIn: parent
+        // ADJUSTMENT: Move the entire row down by 2px to vertically center
+        // the keyboard icon with the text glyph. The Nerd Font icon sits
+        // slightly high in its bounding box; this offset compensates for it.
+        anchors.verticalCenterOffset: 0
         spacing: 5
         Text {
             text: "󰌌"   // nf-md-keyboard
