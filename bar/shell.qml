@@ -24,6 +24,45 @@ import "config" as Config
 import "services" as Services
 
 ShellRoot {
+    id: shellRoot
+
+    // =========================================================================
+    // LAZY OVERLAYS — load-on-first-use, keep-warm afterwards.
+    // -------------------------------------------------------------------------
+    // The five overlay windows (NotificationCenter, Fastfetch, Keybinds, Logs,
+    // ZaiUsage) used to be constructed at bar launch — ~2400 lines of subtree
+    // built before anything was ever opened. Each now loads on its first
+    // toggle and stays warm (unload-on-close was rejected: between onLoaded
+    // setting wanted=false and item.toggle() setting shown=true, the active
+    // binding can re-evaluate to false and unload mid-open).
+    // =========================================================================
+    property bool ncWanted: false
+    property bool fastfetchWanted: false
+    property bool keybindsWanted: false
+    property bool logsWanted: false
+    property bool zaiWanted: false
+
+    function toggleNotificationCenter() {
+        if (ncLoader.item) ncLoader.item.toggle()
+        else shellRoot.ncWanted = true        // load; onLoaded completes the open
+    }
+    function toggleFastfetch() {
+        if (fastfetchLoader.item) fastfetchLoader.item.toggle()
+        else shellRoot.fastfetchWanted = true
+    }
+    function toggleKeybinds() {
+        if (keybindsLoader.item) keybindsLoader.item.toggle()
+        else shellRoot.keybindsWanted = true
+    }
+    function toggleLogs() {
+        if (logsLoader.item) logsLoader.item.toggle()
+        else shellRoot.logsWanted = true
+    }
+    function toggleZaiUsage() {
+        if (zaiLoader.item) zaiLoader.item.toggle()
+        else shellRoot.zaiWanted = true
+    }
+
     // EventService must be EAGER: QML singletons construct lazily on first
     // DEREFERENCE — and a never-read property binding may never evaluate.
     // Touching it imperatively at shell start guarantees construction (the
@@ -71,8 +110,8 @@ ShellRoot {
         // One-popup-at-a-time (Omarchy requestPopout pattern): opening a tray
         // card closes the notification center...
         onActiveTrayChanged: {
-            if (activeTray !== "" && notificationCenter.shown)
-                notificationCenter.close()
+            if (activeTray !== "" && ncLoader.item && ncLoader.item.shown)
+                ncLoader.item.close()
         }
 
         RowLayout {
@@ -84,7 +123,7 @@ ShellRoot {
             Components.ArchLogo {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Config.BarConfig.barPadding
-                onTriggered: fastfetchOverlay.toggle()
+                onTriggered: shellRoot.toggleFastfetch()
             }
 
             Components.WorkspaceWidget {
@@ -143,15 +182,15 @@ ShellRoot {
             Components.LogsIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: -6
-                isActive: logsOverlay.shown
-                onTriggered: logsOverlay.toggle()
+                isActive: logsLoader.item ? logsLoader.item.shown : false
+                onTriggered: shellRoot.toggleLogs()
             }
 
             Components.NotificationButton {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
-                isActive: notificationCenter.shown
-                onCenterRequested: notificationCenter.toggle()
+                isActive: ncLoader.item ? ncLoader.item.shown : false
+                onCenterRequested: shellRoot.toggleNotificationCenter()
             }
 
             Item {
@@ -180,44 +219,83 @@ ShellRoot {
     }
 
     // =========================================================================
-    // NOTIFICATION CENTER — slide-in panel (toggled by NotificationButton)
+    // NOTIFICATION CENTER — slide-in panel (lazy; toggled by NotificationButton)
     // =========================================================================
-    Components.NotificationCenter {
-        id: notificationCenter
+    Loader {
+        id: ncLoader
+        active: shellRoot.ncWanted
+        sourceComponent: ncComponent
+        onLoaded: item.toggle()   // complete the open that triggered the load
+    }
+    Component {
+        id: ncComponent
+        Components.NotificationCenter { }
     }
 
     // ...and opening the notification center closes the tray card.
+    // (target null-safe: no connection until the center has loaded)
     Connections {
-        target: notificationCenter
+        target: ncLoader.item
         function onShownChanged() {
-            if (notificationCenter.shown && panelWindow.activeTray !== "")
+            if (ncLoader.item && ncLoader.item.shown && panelWindow.activeTray !== "")
                 panelWindow.activeTray = ""
         }
     }
 
     // =========================================================================
-    // FASTFETCH OVERLAY — system info (toggled by the ArchLogo bar icon)
+    // FASTFETCH OVERLAY — system info (lazy; toggled by the ArchLogo icon)
     // =========================================================================
-    Components.FastfetchOverlay {
-        id: fastfetchOverlay
+    Loader {
+        id: fastfetchLoader
+        active: shellRoot.fastfetchWanted
+        sourceComponent: fastfetchComponent
+        onLoaded: item.toggle()
+    }
+    Component {
+        id: fastfetchComponent
+        Components.FastfetchOverlay { }
     }
 
     // =========================================================================
-    // KEYBINDS OVERLAY — mod+K cheat-sheet (toggled via IPC)
+    // KEYBINDS OVERLAY — mod+K cheat-sheet (lazy; toggled via IPC)
     // =========================================================================
-    Components.KeybindsOverlay {
-        id: keybindsOverlay
+    Loader {
+        id: keybindsLoader
+        active: shellRoot.keybindsWanted
+        sourceComponent: keybindsComponent
+        onLoaded: item.toggle()
+    }
+    Component {
+        id: keybindsComponent
+        Components.KeybindsOverlay { }
     }
 
     // =========================================================================
-    // LOGS OVERLAY — system journal viewer (bar icon / SUPER+T / settings IPC)
+    // LOGS OVERLAY — system journal viewer (lazy; bar icon / SUPER+T / IPC)
     // =========================================================================
-    Components.LogsOverlay {
-        id: logsOverlay
+    Loader {
+        id: logsLoader
+        active: shellRoot.logsWanted
+        sourceComponent: logsComponent
+        onLoaded: item.toggle()
+    }
+    Component {
+        id: logsComponent
+        Components.LogsOverlay { }
     }
 
-    Components.ZaiUsageOverlay {
-        id: zaiUsageOverlay
+    // =========================================================================
+    // Z.AI USAGE OVERLAY — quota HUD (lazy; toggled via IPC)
+    // =========================================================================
+    Loader {
+        id: zaiLoader
+        active: shellRoot.zaiWanted
+        sourceComponent: zaiComponent
+        onLoaded: item.toggle()
+    }
+    Component {
+        id: zaiComponent
+        Components.ZaiUsageOverlay { }
     }
 
     // =========================================================================
@@ -272,7 +350,7 @@ ShellRoot {
         target: "keybinds"
 
         function toggle() {
-            keybindsOverlay.toggle()
+            shellRoot.toggleKeybinds()
         }
     }
 
@@ -282,7 +360,7 @@ ShellRoot {
         target: "zaiUsage"
 
         function toggle() {
-            zaiUsageOverlay.toggle()
+            shellRoot.toggleZaiUsage()
         }
     }
 
@@ -292,7 +370,7 @@ ShellRoot {
         target: "logs"
 
         function toggle() {
-            logsOverlay.toggle()
+            shellRoot.toggleLogs()
         }
     }
 
