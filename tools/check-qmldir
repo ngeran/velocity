@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# =============================================================================
+# check-qmldir — bidirectional qmldir <-> file consistency check
+# =============================================================================
+# In every module directory (services/, components/, config/, utils/ under
+# bar/ and settings/):
+#   forward:  every type registered in qmldir has its .qml file on disk
+#   reverse:  every .qml file in the dir is registered in its qmldir
+#
+# Root shell.qml files are deliberately exempt (the root qmldirs are vestigial
+# markers). Exit 1 on any mismatch — safe for pre-commit / CI.
+#
+# Usage: tools/check-qmldir   (from anywhere; resolves its own repo root)
+# =============================================================================
+set -u
+cd "$(dirname "$0")/.." || exit 1
+fail=0
+
+shopt -s nullglob
+for qmldir in bar/*/qmldir settings/*/qmldir; do
+    dir=$(dirname "$qmldir")
+
+    # Registered files: lines ending in "<Name> <ver> <File>.qml" (covers both
+    # `singleton X 1.0 X.qml` and `X 1.0 X.qml`); comments stripped first so a
+    # commented-out registration actually counts as unregistered.
+    registered=$(grep -vE '^[[:space:]]*#' "$qmldir" | grep -E '\.qml[[:space:]]*$' | awk '{print $NF}' | sort -u)
+
+    # Forward: registered -> exists
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ ! -f "$dir/$f" ]; then
+            echo "MISSING FILE: $qmldir registers $f but $dir/$f does not exist"
+            fail=1
+        fi
+    done <<< "$registered"
+
+    # Reverse: on-disk -> registered OR same-dir-used. QML files can
+    # instantiate same-directory types without qmldir registration (implicit
+    # dir import) — but CROSS-directory references (Services.X / Components.X)
+    # require registration. So an unregistered file is fine only if its type
+    # name appears within its own directory; anything else is an orphan or a
+    # broken cross-dir import.
+    for f in "$dir"/*.qml; do
+        base=$(basename "$f")
+        typename="${base%.qml}"
+        if ! grep -qx "$base" <<< "$registered"; then
+            if grep -rqE "\b${typename}\s*\{" "$dir" --include="*.qml" --exclude="$base"; then
+                :   # used via same-dir implicit import — fine
+            else
+                echo "ORPHAN-OR-BROKEN-IMPORT: $f is unregistered and has no same-dir reference (cross-dir Services./Components. imports NEED registration)"
+                fail=1
+            fi
+        fi
+    done
+done
+
+if [ "$fail" -ne 0 ]; then
+    echo "check-qmldir: FAILED"
+    exit 1
+fi
+echo "check-qmldir: OK (qmldir <-> files consistent)"
