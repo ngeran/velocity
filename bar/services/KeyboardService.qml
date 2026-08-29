@@ -161,6 +161,7 @@ Scope {
         // Optimistic flip — the activelayout event confirms it right after.
         if (layoutCount > 1)
             activeIndex = (activeIndex + 1) % layoutCount
+        OsdService.showLayout(activeCode !== "" ? activeCode.toUpperCase() : "")
         switchProc.lastDevice = keyboardName !== "" ? keyboardName : "main"
         switchProc.command = ["hyprctl", "switchxkblayout", switchProc.lastDevice, "next"]
         switchProc.running = true

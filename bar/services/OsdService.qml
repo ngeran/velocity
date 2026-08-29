@@ -1,5 +1,5 @@
 // =============================================================================
-// OsdService.qml — on-screen display state (volume / mute feedback)
+// OsdService.qml — on-screen display state (volume / mute / layout / workspace)
 // =============================================================================
 // Pure state + auto-hide timing; the Osd window component (in shell.qml)
 // renders it. Triggers call show*() right after they mutate AudioService —
@@ -53,5 +53,17 @@ Item {
 
     function showMute(muted) {
         show(muted ? "󰝟" : "󰕾", 0, false, muted ? "MUTED" : "UNMUTED")
+    }
+
+    // Keyboard layout switch feedback ("US" / "GR") — optimistic label from the
+    // switch call; the activelayout event corrects it right after.
+    function showLayout(label) {
+        show("󰌌", 0, false, label || "")
+    }
+
+    // Workspace switch feedback (bar-click initiated only — compositor keybinds
+    // may drive their own OSD; no double-flash).
+    function showWorkspace(id, name) {
+        show("󰍹", 0, false, (name && name.length > 0) ? name : ("WS " + id))
     }
 }
