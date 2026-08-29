@@ -57,3 +57,4 @@ Thumbs.db
 
 # Event tracker state (seeded by tools/backfill-events.sh, appended by EventService)
 events.jsonl
+notifications.jsonl

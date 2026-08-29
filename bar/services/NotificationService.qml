@@ -45,6 +45,59 @@ Item {
     property bool panelOpen: false   // set by NotificationCenter — suppresses reaping while open
     readonly property string _dndFlag: "~/.config/quickshell/dnd.flag"
 
+    // -------------------------------------------------------------------------
+    // PERSISTENCE — notifications.jsonl through the bar's write funnel
+    // (EventService._atomicWrite). The model survives bar restarts; unread and
+    // critical rows are what matters (read rows expire by tier anyway).
+    // Restored rows get clickId=0 — the previous session's DBus action ids
+    // died with it.
+    // -------------------------------------------------------------------------
+    readonly property string storePath: "~/.config/quickshell/notifications.jsonl"
+    readonly property int storeMax: 200
+
+    function _persist() {
+        var lines = []
+        for (var i = root.model.count - 1; i >= 0 && lines.length < root.storeMax; i--) {
+            var r = root.model.get(i)                       // oldest first on disk
+            lines.push(JSON.stringify({
+                id: r.id, appName: r.appName, summary: r.summary, body: r.body,
+                urgency: r.urgency, timestamp: r.timestamp,
+                read: r.read, readAt: r.readAt || 0
+            }))
+        }
+        EventService._atomicWrite(root.storePath, lines.join("\n") + "\n")
+    }
+
+    property Process _storeReader: Process {
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { _storeReader.buffer += data } }
+        onRunningChanged: if (!running) {
+            var lines = _storeReader.buffer.split("\n")
+            _storeReader.buffer = ""
+            var restored = []
+            for (var i = lines.length - 1; i >= 0; i--) {   // disk oldest-first
+                var l = lines[i].trim()
+                if (!l) continue
+                try { restored.push(JSON.parse(l)) } catch (e) { /* skip malformed */ }
+            }
+            var maxId = 0
+            for (var j = 0; j < restored.length; j++) {     // insert(0) oldest→newest
+                var d = restored[j]
+                root.model.insert(0, {
+                    id: d.id, clickId: 0,
+                    appName: d.appName, appIcon: "",
+                    summary: d.summary, body: d.body, urgency: d.urgency,
+                    timestamp: d.timestamp, read: d.read === true, readAt: d.readAt || 0
+                })
+                if (d.id > maxId) maxId = d.id
+            }
+            if (maxId >= root.nextId) root.nextId = maxId + 1
+            root._recount()
+            console.log("[NotificationService] restored " + restored.length + " notifications")
+        }
+    }
+
     property Process _dndReader: Process {
         command: []; running: false
         property string buffer: ""
@@ -77,6 +130,7 @@ Item {
         onTriggered: {
             if (root.panelOpen) return   // user is reading
             var nowMs = Date.now()
+            var removed = 0
             for (var i = root.model.count - 1; i >= 0; i--) {
                 var row = root.model.get(i)
                 if (!row.read) continue                    // unseen → keep (badge truth)
@@ -85,8 +139,10 @@ Item {
                 if ((row.readAt || row.timestamp) + life < nowMs) {
                     if (row.clickId) root.dismissDbus(row.clickId)
                     root.model.remove(i)
+                    removed++
                 }
             }
+            if (removed > 0) root._persist()
             root._recount()
         }
     }
@@ -118,6 +174,7 @@ Item {
         })
         root.nextId++
         root._recount()
+        root._persist()
     }
 
     // Click-to-open: tell the forwarder (org.quickshell.NotifyBridge) to emit
@@ -149,6 +206,7 @@ Item {
             }
         }
         root._recount()
+        root._persist()
     }
 
     function markAllRead() {
@@ -158,6 +216,7 @@ Item {
             root.model.setProperty(i, "readAt", nowMs)
         }
         root._recount()
+        root._persist()
     }
 
     function remove(id) {
@@ -165,11 +224,13 @@ Item {
             if (root.model.get(i).id === id) { root.model.remove(i); break }
         }
         root._recount()
+        root._persist()
     }
 
     function clearAll() {
         root.model.clear()
         root.unreadCount = 0
+        root._persist()
     }
 
     // -------------------------------------------------------------------------
@@ -202,5 +263,7 @@ Item {
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", "cat " + root._dndFlag + " 2>/dev/null || true"]
         _dndReader.running = true
+        _storeReader.command = ["sh", "-c", "cat " + root.storePath + " 2>/dev/null || true"]
+        _storeReader.running = true
     }
 }
