@@ -31,18 +31,20 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ## Architecture
 
 ### Entry point
-- **`shell.qml`** — The only file Quickshell reads. Uses `Variants` to spawn one `PanelWindow` per detected screen, anchoring each to the top edge with `WlrLayerShell.Top`.
+- **`shell.qml`** — The only file Quickshell reads. One `PanelWindow` anchored to the top edge (`WlrLayerShell.Top`) on the primary screen — single-monitor today (no `Variants`).
 
 ### Three-layer separation
 
 1. **`config/BarConfig.qml`** (singleton) — All design tokens: colours, sizes, fonts, workspace count. This is the single source of truth for theming.
 
-2. **`services/*.qml`** (singletons) — Background data bridges. Each uses a `Process` or `SocketNotifier` to expose reactive state:
-   - `HyprlandService` — Reads workspace state via `hyprctl` + socket2 IPC
-   - `BluetoothService` — Polls `bluetoothctl` for power/connection state
-   - `NetworkService` — Polls `nmcli` for connection type + signal strength
-   - `AudioService` — Polls `wpctl` (PipeWire) for volume + mute state
-   - `BatteryService` — Polls `upower` for battery percentage + charging state
+2. **`services/*.qml`** (singletons) — Background data bridges. Event-driven where Quickshell has a native client; forked `Process` probes only where it doesn't (idle cost: zero recurring forks):
+   - `HyprlandService` — THE socket2 owner (`nc -U` stream, watchdog); re-emits every raw event on `socketEvent(line)` for subscribers. Workspace switch via the Lua-config dispatcher (`hyprctl dispatch 'hl.dsp.focus(...)'`)
+   - `BluetoothService` — Native `Quickshell.Bluetooth` (BlueZ): powered/devices/battery as bindings; toggle + disconnect are property writes
+   - `NetworkService` — Native `Quickshell.Networking` for bar state (type/SSID/connected); wifi scanner leased to `popupOpen`; diagnostics (IP/gateway/DNS/ping/throughput) are popup-gated one-shot probes
+   - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
+   - `BatteryService` — Native `Quickshell.Services.UPower` (daemon enabled in omni-nix; peripheral batteries filtered by `powerSupply`)
+   - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
+   - `ClockWidget` uses `SystemClock { precision: Minutes }` — zero-poll, boundary-exact
 
 3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`.
 
@@ -139,15 +141,16 @@ To move the bar to the bottom, edit `shell.qml` and change `anchors.top` → `an
 | Tool | Used by |
 |------|---------|
 | `quickshell` | Runtime framework |
-| `socat` | Hyprland socket2 event streaming |
-| `hyprctl` | Workspace state queries |
-| `bluetoothctl` | Bluetooth state |
-| `nmcli` | Network state |
-| `wpctl` | Volume/mute (PipeWire) |
-| `upower` | Battery state |
-| `impala` | Network TUI |
-| `bluetui` | Bluetooth TUI |
-| `wiremix` | Audio TUI |
+| Tool | Used by |
+|------|---------|
+| `quickshell` | Runtime framework (0.3.0: Pipewire, UPower, Bluetooth, Networking native clients) |
+| `nc` (netcat) | The one socket2 consumer (`nc -U`; socat is NOT installed) |
+| `hyprctl` | Workspace seed + Lua dispatcher (`hl.dsp.*`) + keyboard layout probes |
+| `upower` | Daemon (enabled in omni-nix) behind the native UPower client |
+| `journalctl` | EventService kernel incident tail |
+| `nmcli` | Popup-gated diagnostics only (DNS) — settings process also uses it |
+| `bluetoothctl` / `wpctl` | Settings process only (control services); the bar is native |
+| `impala` / `bluetui` / `wiremix` | TUIs launched from tray icons |
 
 **On NixOS:** All packages managed via `~/.omni-nix/flake.nix`.
 
@@ -159,4 +162,5 @@ To move the bar to the bottom, edit `shell.qml` and change `anchors.top` → `an
 - Font assumes JetBrains Mono; falls back to `monospace`.
 - For HiDPI screens, adjust `BarConfig.barHeight`.
 - `kitty` is used for launching TUI apps with floating window class.
-- **Theme sync:** Bar watches `~/.cache/theme/colors.json` via `FileView.onFileChanged` in `config/ThemeConfig.qml`. When the settings process changes the theme, the bar updates within ~1s. The Stylix seed at `~/.config/quickshell/stylix-palette.json` is loaded on bar startup if `colors.json` has source `"stylix"`.
+- **Theme/config sync:** Bar watches `~/.cache/theme/colors.json` + `bar-config.json` via FileView (`watchChanges` + `onTextChanged` + a 2s forced `reload()` — reload is ASYNC, a synchronous `text()` reads stale; the whole contract is documented in the files). Updates land ≤2s after the settings process writes. The Stylix seed at `~/.config/quickshell/stylix-palette.json` is loaded on bar startup if `colors.json` has source `"stylix"`.
+- **Editing singletons that own Timers/Processes:** make ONE atomic edit or `systemctl --user restart quickshell-bar` after — split hot-reloads leave the old timer alive against removed ids.
