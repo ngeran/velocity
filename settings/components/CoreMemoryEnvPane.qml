@@ -23,17 +23,10 @@ ColumnLayout {
     id: root
     spacing: 14
 
-    // cool → warm → hot severity colour, mapped to live theme tokens.
-    function tempTier(t) {
-        if (t >= 75) return Config.ThemeConfig.colors.error
-        if (t >= 55) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
-    function diskTier(p) {
-        if (p >= 85) return Config.ThemeConfig.colors.error
-        if (p >= 70) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
+    // Tier ramps delegate to ThemeConfig.tierColor — thresholds stay here,
+    // colour mapping is centralized so a theme swap retints every ramp.
+    function tempTier(t) { return Config.ThemeConfig.tierColor(t, 55, 75) }
+    function diskTier(p) { return Config.ThemeConfig.tierColor(p, 70, 85) }
     // "/" → "SYSTEM"; "/mnt/WD_BLACK-500GB" → "WD_BLACK-500GB"
     function driveLabel(mount) {
         return mount === "/" ? "SYSTEM" : (mount.split("/").pop() || mount)
@@ -73,6 +66,22 @@ ColumnLayout {
                         color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
                 }
                 CoreBar { Layout.fillWidth: true; barHeight: 8; value: Services.CoreEngineService.ramPct; barColor: Config.ThemeConfig.colors.warning }
+
+                // 2-min RAM history — service-owned ring buffer, primary line
+                // so the series reads the same as in the CPU LOAD HISTORY chart.
+                ColumnLayout { Layout.fillWidth: true; spacing: 4
+                    RowLayout { Layout.fillWidth: true
+                        Text { text: "RAM HISTORY"; color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.0 }
+                        Item { Layout.fillWidth: true }
+                        Text { text: "2 MIN"; color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
+                    }
+                    CoreSparkline { Layout.fillWidth: true; Layout.preferredHeight: 44
+                        points: Services.CoreEngineService.memoryHistory
+                        lineColor: Config.ThemeConfig.colors.primary
+                        fixedMaximum: 100 }
+                }
 
                 // available + swap metric tiles
                 RowLayout {

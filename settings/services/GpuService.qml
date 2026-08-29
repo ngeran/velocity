@@ -24,6 +24,7 @@ pragma Singleton
 import QtQuick
 import Quickshell.Io
 import "../config" as Config
+import "History.js" as History
 
 Item {
     id: root
@@ -44,6 +45,10 @@ Item {
     property real clockMHz: 0
     property bool present: false    // backend returned parseable data
     property var processes: []      // [{ pid, name, memMiB }] desc by mem, capped
+
+    // ── 2-min rolling utilisation history ({time,value}) for the Core chart —
+    // singleton-owned so it survives the dashboard Loader teardown on close.
+    property var gpuHistory: []
 
     // ── NVIDIA backend — telemetry ────────────────────────────────────────
     // Fields: temp.gpu, util.gpu, mem.used, mem.total, power.draw, fan.speed,
@@ -77,6 +82,8 @@ Item {
                     root.fanPct = isNaN(f[5]) ? 0 : f[5]
                     root.clockMHz = isNaN(f[6]) ? 0 : f[6]
                     root.present = true
+                    root.gpuHistory = History.appendHistory(root.gpuHistory, Date.now(), root.util,
+                                                             120000, 130)
                 }
                 gpuProc.buffer = ""
             }

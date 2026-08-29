@@ -160,6 +160,14 @@ ShellRoot {
             panelWindow.visible = true
             dashboard.openControlTab("system")
         }
+
+        // Deep-link to the Core tab (defaults to Processors; section keys:
+        // processors | gpu | memoryenv | lcd | events)
+        function openCore(section: string) {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openCoreTab(section || "processors")
+        }
     }
 
     // =========================================================================

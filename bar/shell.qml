@@ -101,6 +101,11 @@ ShellRoot {
 
             // --- RIGHT SIDE ---
 
+            Components.KeyboardWidget {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: Config.BarConfig.iconSpacing
+            }
+
             Components.WeatherWidget {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 2
@@ -248,6 +253,16 @@ ShellRoot {
         function toggle() {
             panelWindow.visible = !panelWindow.visible
             console.log("[Bar] Visibility toggled:", panelWindow.visible)
+        }
+    }
+
+    // Keyboard layout cycle (for SUPER+SHIFT+SPACE — see configs/hypr/keybindings.lua)
+    IpcHandler {
+        id: keyboardIpc
+        target: "keyboard"
+
+        function next() {
+            Services.KeyboardService.switchNext()
         }
     }
 

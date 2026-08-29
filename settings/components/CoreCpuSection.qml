@@ -22,16 +22,10 @@ ColumnLayout {
 
     readonly property int coreCount: Services.CoreEngineService.perCoreLoad.length
 
-    function tempTier(t) {
-        if (t >= 75) return Config.ThemeConfig.colors.error
-        if (t >= 55) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
-    function loadTier(v) {
-        if (v >= 85) return Config.ThemeConfig.colors.error
-        if (v >= 50) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
+    // Tier ramps delegate to ThemeConfig.tierColor — thresholds stay here,
+    // colour mapping is centralized so a theme swap retints every ramp.
+    function tempTier(t) { return Config.ThemeConfig.tierColor(t, 55, 75) }
+    function loadTier(v) { return Config.ThemeConfig.tierColor(v, 50, 85) }
     function schedLabel(v) { return v > 80 ? "HIGH" : (v > 40 ? "ACTIVE" : "OPTIMIZED") }
 
     // ── 1. SPEC STRIP ───────────────────────────────────────────────────
@@ -72,6 +66,59 @@ ColumnLayout {
             ColumnLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 8; anchors.topMargin: 8; anchors.bottomMargin: 8; spacing: 2
                 Text { text: "AVG LOAD"; color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.0 }
                 Text { text: Math.round(Services.CoreEngineService.cpuUsage) + " %"; color: root.loadTier(Services.CoreEngineService.cpuUsage); font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 15; font.bold: true }
+            }
+        }
+    }
+
+    // ── 1b. LOAD HISTORY — 2-min CPU + RAM overlay (omarchy-style) ──────
+    // CPU = solid accent line + soft fill; RAM = dashed primary line, no
+    // fill, one shared pinned 0-100 scale so the two series are directly
+    // comparable. History is owned by CoreEngineService (singleton) so it
+    // survives panel close/reopen.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 96
+        color: Qt.rgba(0, 0, 0, 0.4); border.color: Config.ThemeConfig.colors.border; border.width: 1
+
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 10; spacing: 6
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Text { text: "LOAD HISTORY"; color: Config.ThemeConfig.colors.primary
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5 }
+                Item { Layout.fillWidth: true }
+                RowLayout { spacing: 4
+                    Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.accent }
+                    Text { text: "CPU"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true }
+                }
+                RowLayout { spacing: 4
+                    Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.primary }
+                    Text { text: "RAM"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true }
+                }
+                Text { text: "2 MIN"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.letterSpacing: 1 }
+            }
+
+            Item {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                CoreSparkline {
+                    anchors.fill: parent
+                    points: Services.CoreEngineService.cpuHistory
+                    lineColor: Config.ThemeConfig.colors.accent
+                    fixedMaximum: 100
+                }
+                CoreSparkline {
+                    anchors.fill: parent
+                    points: Services.CoreEngineService.memoryHistory
+                    lineColor: Config.ThemeConfig.colors.primary
+                    fillEnabled: false; dashed: true; lineWidth: 1.2
+                    fixedMaximum: 100
+                }
+                Text { text: "100%"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 7 }
             }
         }
     }
@@ -123,7 +170,12 @@ ColumnLayout {
                                 Text { text: "°C"; color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                                 Item { Layout.fillWidth: true }
                             }
-                            CoreBar { Layout.fillWidth: true; barHeight: 3; value: Services.ThermalService.cpuTemp; barColor: root.tempTier(Services.ThermalService.cpuTemp) }
+                            // Package temp only spans a useful band (omarchy
+                            // trick): drawing 57°C as 57% of a meter makes a
+                            // cold chip look half-loaded — anchor at 30-100°C.
+                            CoreBar { Layout.fillWidth: true; barHeight: 3
+                                value: Math.max(0, Math.min(100, (Services.ThermalService.cpuTemp - 30) * 100 / 70))
+                                barColor: root.tempTier(Services.ThermalService.cpuTemp) }
                         }
                     }
                     Rectangle {   // UTILIZATION

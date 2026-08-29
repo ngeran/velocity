@@ -175,6 +175,21 @@ Item {
     }
 
     // =========================================================================
+    // SEVERITY COLOR — value + thresholds → tiered token colour
+    // -------------------------------------------------------------------------
+    // Single authority for the cool → warm → hot ramps (ported from
+    // omarchy-system-monitor's levelColor). Core sections keep thin local
+    // wrappers (tempTier/loadTier/…) that only pick thresholds; the colour
+    // mapping lives here so every ramp retints identically on a theme swap.
+    // =========================================================================
+    function tierColor(value, warn, crit) {
+        if (!isFinite(value) || value < 0) return root.colors.secondary
+        if (value >= crit) return root.colors.error
+        if (value >= warn) return root.colors.warning
+        return root.colors.secondary
+    }
+
+    // =========================================================================
     // BULK INTAKE — apply a parsed JSON payload
     // -------------------------------------------------------------------------
     // Accepts the historical { colors: {...}, metadata: {...} } schema emitted

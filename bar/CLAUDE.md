@@ -53,6 +53,7 @@ shell.qml (root layout)
 ├── WorkspaceWidget.qml → WorkspaceButton.qml (repeater)
 ├── ClockWidget.qml (centered)
 └── System tray icons (right-aligned)
+    ├── KeyboardWidget.qml (click → cycle XKB layout US/GR)
     ├── NetworkIcon.qml (click → impala)
     ├── BluetoothIcon.qml (click → bluetui)
     ├── VolumeIcon.qml (scroll → volume, click → wiremix)
@@ -69,6 +70,9 @@ Every directory has a `qmldir` file. Components/services are registered there an
 
 ### Workspaces
 - **Click dot**: Switch to that workspace
+
+### Keyboard (US/GR)
+- **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by `KeyboardService` via socket2 `activelayout` events). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (via `quickshell ipc -c bar call keyboard next`).
 
 ### Network (W)
 - **Click**: Launch impala network TUI

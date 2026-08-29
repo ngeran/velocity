@@ -61,6 +61,15 @@ Item {
         controlModule.activeSection = section
     }
 
+    function openCoreTab(section) {
+        var idx = -1
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "core") { idx = i; break }
+        }
+        if (idx >= 0) root.currentTab = idx
+        root.coreActiveSection = section || "processors"
+    }
+
     // =========================================================================
     // BACKGROUND
     // =========================================================================

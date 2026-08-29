@@ -11,6 +11,7 @@ BatteryIcon 1.0 BatteryIcon.qml
 TrayCard 1.0 TrayCard.qml
 NotificationCenter 1.0 NotificationCenter.qml
 FastfetchOverlay 1.0 FastfetchOverlay.qml
+KeyboardWidget 1.0 KeyboardWidget.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 NotificationCard 1.0 NotificationCard.qml
 NotificationButton 1.0 NotificationButton.qml

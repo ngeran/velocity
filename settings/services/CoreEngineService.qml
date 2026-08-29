@@ -12,8 +12,13 @@
 // SysInfoService is left untouched — this service is self-sufficient for the LCD
 // feed to avoid coupling cadence (bar polls 5s; the LCD wants ~1s).
 //
-// Process + SplitParser + Timer idiom mirrors SysInfoService.qml; JSON write
-// (printf > path with single-quote escaping) mirrors SettingsConfigService.qml.
+// READER ENGINE (ported from omarchy-system-monitor's Metrics.qml): /proc and
+// /sys are read with FileView.reload() on the timer — ZERO forked processes
+// per tick (the old engine forked sh+free every second and sh again for GHz).
+// watchChanges stays false because inotify doesn't fire on procfs anyway.
+// History ring buffers (cpuHistory/memoryHistory, 2-min window via History.js)
+// live HERE, singleton-owned, so charts survive the dashboard Loader being
+// torn down on panel close.
 //
 // =============================================================================
 
@@ -22,6 +27,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
+import "History.js" as History
 
 Item {
     id: root
@@ -40,6 +46,12 @@ Item {
     property real diskTotalTB: 0
     property real diskPct: 0
     property var disks: []          // [{device,fstype,mount,usedGB,totalGB,pct}] all real data filesystems
+
+    // ── 2-min rolling history for the Core charts ({time,value}, oldest first)
+    property var cpuHistory: []
+    property var memoryHistory: []
+    readonly property int historyWindowMs: 120000
+    readonly property int historyMaxSamples: 130
 
     // ── internal CPU delta state ────────────────────────────────────────────
     property real _cpuPrevBusy: 0
@@ -76,103 +88,113 @@ Item {
         root.initProc.running = true
     }
 
-    // ── CPU aggregate + per-core from one /proc/stat read ───────────────────
-    Process {
-        id: cpuProc
-        // read-builtin filter (not `grep`): one sh fork instead of sh+grep.
-        // Emits the same `cpu …` lines (one per line) so the per-core parser
-        // below is unchanged. Verified byte-identical to `grep '^cpu'`.
-        command: ["sh", "-c", "while IFS= read -r l; do case \"$l\" in cpu*) printf '%s\\n' \"$l\";; esac; done < /proc/stat"]
-        property string buffer: ""
-        // SplitParser emits each line WITHOUT its newline; re-add it so the
-        // multi-line buffer keeps line boundaries (the single-line services in
-        // SysInfoService don't need this, but the per-core parse does).
-        stdout: SplitParser { onRead: function(data) { cpuProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && cpuProc.buffer.length) {
-                var lines = cpuProc.buffer.trim().split("\n")
-                var perCore = []
-                var prev = root._perCorePrev
-                for (var i = 0; i < lines.length; i++) {
-                    var f = lines[i].trim().split(/\s+/)
-                    if (f.length < 5) continue
-                    var label = f[0]
-                    var user = +f[1], nice = +f[2], sys = +f[3], idle = +f[4]
-                    var iowait = f.length > 5 ? +f[5] : 0
-                    var irq    = f.length > 6 ? +f[6] : 0
-                    var softirq= f.length > 7 ? +f[7] : 0
-                    var steal  = f.length > 8 ? +f[8] : 0
-                    var busy = user + nice + sys + irq + softirq
-                    var total = busy + idle + iowait + steal
-                    if (label === "cpu") {
-                        var db = busy - root._cpuPrevBusy
-                        var dt = total - root._cpuPrevTotal
-                        if (dt > 0 && root._cpuPrevTotal > 0)
-                            root.cpuUsage = Math.max(0, Math.min(100, Math.round(db / dt * 100)))
-                        root._cpuPrevBusy = busy
-                        root._cpuPrevTotal = total
-                    } else if (label.length > 3 && label.substring(0, 3) === "cpu") {
-                        var idx = label.substring(3)
-                        var p = prev[idx]
-                        var pct = 0
-                        if (p) {
-                            var ddt = total - p.total
-                            if (ddt > 0) pct = Math.max(0, Math.min(100, Math.round((busy - p.busy) / ddt * 100)))
-                        }
-                        prev[idx] = { busy: busy, total: total }
-                        perCore.push(pct)
-                    }
-                }
-                root._perCorePrev = prev
-                root.perCoreLoad = perCore
-                cpuProc.buffer = ""
-            }
-        }
+    // ── CPU aggregate + per-core from /proc/stat (FileView, no fork) ────────
+    FileView {
+        id: statFile
+        path: "/proc/stat"
+        watchChanges: false
+        onLoaded: root.parseStat(text())
     }
 
-    // ── CPU GHz: max scaling_cur_freq across cores (kHz → GHz) ──────────────
-    Process {
-        id: ghzProc
-        // read-builtin per core (not `cat`): used to fork `cat` once per core
-        // (N+1/tick ≈ 17/tick on 16 cores) — the single biggest forker in this
-        // service. Now a single sh fork. `read v < "$f"` parses scaling_cur_freq
-        // identically to `cat` (verified); same single-integer echo → parser
-        // unchanged.
-        command: ["sh", "-c",
-            "m=0; for f in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do " +
-            "[ -r \"$f\" ] || continue; read v < \"$f\"; [ \"$v\" -gt \"$m\" ] && m=$v; done; echo \"$m\""]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { ghzProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var v = parseInt((ghzProc.buffer || "").trim(), 10)
-                if (!isNaN(v) && v > 0) root.cpuGhz = +(v / 1000000).toFixed(2)
-                ghzProc.buffer = ""
+    function parseStat(raw) {
+        var lines = String(raw).trim().split("\n")
+        var perCore = []
+        var prev = root._perCorePrev
+        for (var i = 0; i < lines.length; i++) {
+            var f = lines[i].trim().split(/\s+/)
+            if (f.length < 5 || f[0].substring(0, 3) !== "cpu") continue
+            var label = f[0]
+            var user = +f[1], nice = +f[2], sys = +f[3], idle = +f[4]
+            var iowait = f.length > 5 ? +f[5] : 0
+            var irq    = f.length > 6 ? +f[6] : 0
+            var softirq= f.length > 7 ? +f[7] : 0
+            var steal  = f.length > 8 ? +f[8] : 0
+            var busy = user + nice + sys + irq + softirq
+            var total = busy + idle + iowait + steal
+            if (label === "cpu") {
+                var db = busy - root._cpuPrevBusy
+                var dt = total - root._cpuPrevTotal
+                if (dt > 0 && root._cpuPrevTotal > 0)
+                    root.cpuUsage = Math.max(0, Math.min(100, Math.round(db / dt * 100)))
+                root._cpuPrevBusy = busy
+                root._cpuPrevTotal = total
+            } else if (label.length > 3 && label.substring(0, 3) === "cpu") {
+                var idx = label.substring(3)
+                var p = prev[idx]
+                var pct = 0
+                if (p) {
+                    var ddt = total - p.total
+                    if (ddt > 0) pct = Math.max(0, Math.min(100, Math.round((busy - p.busy) / ddt * 100)))
+                }
+                prev[idx] = { busy: busy, total: total }
+                perCore.push(pct)
             }
         }
+        root._perCorePrev = prev
+        root.perCoreLoad = perCore
+        if (root._cpuPrevTotal > 0)
+            root.cpuHistory = History.appendHistory(root.cpuHistory, Date.now(), root.cpuUsage,
+                                                    root.historyWindowMs, root.historyMaxSamples)
     }
 
-    // ── RAM + Swap from one `free` call (KiB → GB) ──────────────────────────
-    Process {
-        id: memProc
-        command: ["bash", "-c",
-            "free | awk '/^Mem:/{mu=$3/1048576; mt=$2/1048576; mp=($2>0?$3/$2*100:0)} " +
-            "/^Swap:/{su=$3/1048576; st=$2/1048576; sp=($2>0?$3/$2*100:0)} " +
-            "END{printf \"%.2f %.2f %.1f %.2f %.2f %.1f\", mu,mt,mp,su,st,sp}'"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { memProc.buffer += data } }
-        onRunningChanged: {
-            if (!running && memProc.buffer.trim().length) {
-                var f = memProc.buffer.trim().split(/\s+/)
-                var mu = parseFloat(f[0]), mt = parseFloat(f[1]), mp = parseFloat(f[2])
-                var su = parseFloat(f[3]), st = parseFloat(f[4]), sp = parseFloat(f[5])
-                if (!isNaN(mu)) {
-                    root.ramUsedGB = mu; root.ramTotalGB = mt; root.ramPct = mp
-                    root.swapUsedGB = su; root.swapTotalGB = st; root.swapPct = sp
-                }
-                memProc.buffer = ""
-            }
+    // ── CPU GHz: max "cpu MHz" across cores in /proc/cpuinfo (FileView) ─────
+    // Replaces the scaling_cur_freq sh loop — verified equal on this box
+    // (4799 vs 4799.654 MHz at the same instant; both are the kernel's current
+    // per-core frequency).
+    FileView {
+        id: cpuinfoFile
+        path: "/proc/cpuinfo"
+        watchChanges: false
+        onLoaded: root.parseCpuinfo(text())
+    }
+
+    function parseCpuinfo(raw) {
+        var lines = String(raw).split("\n")
+        var max = 0
+        for (var i = 0; i < lines.length; i++) {
+            if (lines[i].indexOf("cpu MHz") !== 0) continue
+            var v = parseFloat(lines[i].split(":")[1])
+            if (isFinite(v) && v > max) max = v
         }
+        if (max > 0) root.cpuGhz = +(max / 1000).toFixed(2)
+    }
+
+    // ── RAM + Swap from /proc/meminfo (FileView, no fork) ───────────────────
+    // Matches this box's `free` (modern procps): used = MemTotal − MemAvailable
+    // (kernel estimate; verified 4.95GB vs 4.95GB). Falls back to the classic
+    // total − free − buffers − cached − sreclaimable if MemAvailable is absent.
+    FileView {
+        id: memFile
+        path: "/proc/meminfo"
+        watchChanges: false
+        onLoaded: root.parseMeminfo(text())
+    }
+
+    function parseMeminfo(raw) {
+        var info = {}
+        var lines = String(raw).split("\n")
+        for (var i = 0; i < lines.length; i++) {
+            var c = lines[i].indexOf(":")
+            if (c < 0) continue
+            info[lines[i].substring(0, c).trim()] = parseFloat(lines[i].substring(c + 1))
+        }
+        var total = info["MemTotal"] || 0
+        if (total > 0) {
+            var used = isFinite(info["MemAvailable"])
+                ? Math.max(0, total - info["MemAvailable"])
+                : Math.max(0, total - (info["MemFree"] || 0) - (info["Buffers"] || 0)
+                                          - (info["Cached"] || 0) - (info["SReclaimable"] || 0))
+            root.ramUsedGB = +(used / 1048576).toFixed(2)
+            root.ramTotalGB = +(total / 1048576).toFixed(2)
+            root.ramPct = +(used / total * 100).toFixed(1)
+            root.memoryHistory = History.appendHistory(root.memoryHistory, Date.now(), root.ramPct,
+                                                        root.historyWindowMs, root.historyMaxSamples)
+        }
+        var st = info["SwapTotal"] || 0
+        var sf = info["SwapFree"] || 0
+        root.swapTotalGB = +(st / 1048576).toFixed(2)
+        root.swapUsedGB = +((st - sf) / 1048576).toFixed(2)
+        root.swapPct = st > 0 ? +((st - sf) / st * 100).toFixed(1) : 0
     }
 
     // ── Disk: all real data filesystems (df → GiB) ─────────────────────────
@@ -184,8 +206,7 @@ Item {
     //
     // IMPORTANT: SplitParser emits one callback per line WITHOUT the trailing
     // newline — a multi-line `df` would otherwise collapse into one blob and
-    // split("\n") would yield a single element. Re-append "\n" (same trick
-    // cpuProc uses for /proc/stat) before splitting.
+    // split("\n") would yield a single element. Re-append "\n" before splitting.
     Process {
         id: diskProc
         command: ["bash", "-c", "df --output=source,fstype,size,used,avail,pcent,target 2>/dev/null"]
@@ -270,18 +291,18 @@ Item {
         root.publisher.running = true
     }
 
-    // ── 1s refresh + publish. Readers are async; publish() emits the previous
-    //    tick's values (≤1s stale) — fine for an LCD. Guards prevent re-entry
-    //    if a reader outruns 1s. Disk is on its own slower timer below. ───────
+    // ── 1s refresh + publish. FileView reads are near-instant; publish()
+    //    emits the previous tick's values (≤1s stale) — fine for an LCD.
+    //    Disk is on its own slower timer below. ──────────────────────────────
     Timer {
         interval: 1000
         running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            if (!cpuProc.running) cpuProc.running = true
-            if (!ghzProc.running) ghzProc.running = true
-            if (!memProc.running) memProc.running = true
+            statFile.reload()
+            cpuinfoFile.reload()
+            memFile.reload()
             root.publish()
         }
     }

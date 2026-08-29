@@ -20,21 +20,11 @@ ColumnLayout {
     id: root
     spacing: 12
 
-    function tempTier(t) {
-        if (t >= 75) return Config.ThemeConfig.colors.error
-        if (t >= 55) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
-    function loadTier(v) {
-        if (v >= 85) return Config.ThemeConfig.colors.error
-        if (v >= 50) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
-    function vramTier(v) {
-        if (v >= 90) return Config.ThemeConfig.colors.error
-        if (v >= 70) return Config.ThemeConfig.colors.warning
-        return Config.ThemeConfig.colors.secondary
-    }
+    // Tier ramps delegate to ThemeConfig.tierColor — thresholds stay here,
+    // colour mapping is centralized so a theme swap retints every ramp.
+    function tempTier(t) { return Config.ThemeConfig.tierColor(t, 55, 75) }
+    function loadTier(v) { return Config.ThemeConfig.tierColor(v, 50, 85) }
+    function vramTier(v) { return Config.ThemeConfig.tierColor(v, 70, 90) }
 
     // processes[] is sorted desc by memMiB in GpuService → [0] is the max.
     readonly property real procMaxMem: (Services.GpuService.processes.length > 0
@@ -116,17 +106,22 @@ ColumnLayout {
                     Item { Layout.fillWidth: true }
                 }
 
-                // utilization history (HudSpark owns its own rolling buffer)
+                // utilization history — service-owned 2-min ring buffer
+                // (GpuService.gpuHistory), drawn by CoreSparkline. Line stays
+                // warning-token so it reads as a distinct series next to the
+                // CPU (accent) and RAM (primary) charts.
                 ColumnLayout { Layout.fillWidth: true; spacing: 4
                     RowLayout { Layout.fillWidth: true
                         Text { text: "UTIL FLOW"; color: Config.ThemeConfig.colors.textDim
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.0 }
                         Item { Layout.fillWidth: true }
-                        Text { text: "2.0s"; color: Config.ThemeConfig.colors.textDim
+                        Text { text: "2 MIN"; color: Config.ThemeConfig.colors.textDim
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                     }
-                    HudSpark { Layout.fillWidth: true; Layout.preferredHeight: 44
-                        value: Services.GpuService.util; max: 100; accent: root.loadTier(Services.GpuService.util) }
+                    CoreSparkline { Layout.fillWidth: true; Layout.preferredHeight: 44
+                        points: Services.GpuService.gpuHistory
+                        lineColor: Config.ThemeConfig.colors.warning
+                        fixedMaximum: 100 }
                 }
 
                 GridLayout {

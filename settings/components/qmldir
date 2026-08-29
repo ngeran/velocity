@@ -27,13 +27,13 @@ WidgetHeader 1.0 WidgetHeader.qml
 CoreEngineTab 1.0 CoreEngineTab.qml
 CoreCard 1.0 CoreCard.qml
 CoreBar 1.0 CoreBar.qml
+CoreSparkline 1.0 CoreSparkline.qml
 CoreCpuSection 1.0 CoreCpuSection.qml
 CoreGpuSection 1.0 CoreGpuSection.qml
 CoreMemoryEnvPane 1.0 CoreMemoryEnvPane.qml
 CoreLcdPane 1.0 CoreLcdPane.qml
 HudCard 1.0 HudCard.qml
 HudGauge 1.0 HudGauge.qml
-HudSpark 1.0 HudSpark.qml
 ActiveThemeCard 1.0 ActiveThemeCard.qml
 ActivePaletteCard 1.0 ActivePaletteCard.qml
 ActiveWallpaperCard 1.0 ActiveWallpaperCard.qml
