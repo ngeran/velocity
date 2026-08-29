@@ -74,20 +74,50 @@ ShellRoot {
         console.log("[shell] EventService online:", Services.EventService.events.count, "events")
     }
 
-    PanelWindow {
-        id: panelWindow
+    // The bar window that most recently hosted a tray card — TrayCard follows
+    // it (screen + state). Per-output ownership WITHOUT the full popover
+    // system: each bar variant owns its activeTray; the ShellRoot tracks which
+    // one is showing so the single TrayCard renders on the right output.
+    property var trayOwner: null
 
-        property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
+    // =========================================================================
+    // BARS — one PanelWindow per real output (Variants; hotplug-safe)
+    // =========================================================================
+    Variants {
+        id: bars
+        model: Quickshell.screens
 
-        // =========================================================================
-        // POSITIONING
-        // =========================================================================
+        PanelWindow {
+            id: panelWindow
 
-        anchors {
-            top: true
-            left: true
-            right: true
-        }
+            property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
+
+            // Placeholder/zero-sized screens (connector hotplug churn) must
+            // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
+            // userHidden keeps the IPC toggle out of the binding (assignment
+            // would break it).
+            readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
+            property bool userHidden: false
+            visible: validScreen && !userHidden
+
+            // A bar showing a tray card becomes the tray owner (its output
+            // hosts the TrayCard until closed).
+            onActiveTrayChanged: {
+                if (activeTray !== "") {
+                    shellRoot.trayOwner = panelWindow
+                    if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
+                }
+            }
+
+            // =========================================================================
+            // POSITIONING
+            // =========================================================================
+
+            anchors {
+                top: true
+                left: true
+                right: true
+            }
 
         // =========================================================================
         // APPEARANCE (from config)
@@ -107,12 +137,8 @@ ShellRoot {
             onClicked: panelWindow.activeTray = ""
         }
 
-        // One-popup-at-a-time (Omarchy requestPopout pattern): opening a tray
-        // card closes the notification center...
-        onActiveTrayChanged: {
-            if (activeTray !== "" && ncLoader.item && ncLoader.item.shown)
-                ncLoader.item.close()
-        }
+        // (one-popup-at-a-time + tray-owner registration live in the
+        //  onActiveTrayChanged at the top of this window)
 
         RowLayout {
             anchors.fill: parent
@@ -209,13 +235,16 @@ ShellRoot {
             anchors.centerIn: parent
         }
     }
+    }   // Variants (per-output bars)
 
     // =========================================================================
-    // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume/Power
+    // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume/Power.
+    // Follows the tray OWNER (the bar that opened the card): state AND screen.
     // =========================================================================
     Components.TrayCard {
-        activeTray: panelWindow.activeTray
-        onCloseRequested: panelWindow.activeTray = ""
+        activeTray: shellRoot.trayOwner ? shellRoot.trayOwner.activeTray : ""
+        onCloseRequested: if (shellRoot.trayOwner) shellRoot.trayOwner.activeTray = ""
+        screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
     }
 
     // =========================================================================
@@ -237,8 +266,9 @@ ShellRoot {
     Connections {
         target: ncLoader.item
         function onShownChanged() {
-            if (ncLoader.item && ncLoader.item.shown && panelWindow.activeTray !== "")
-                panelWindow.activeTray = ""
+            if (ncLoader.item && ncLoader.item.shown && shellRoot.trayOwner
+                && shellRoot.trayOwner.activeTray !== "")
+                shellRoot.trayOwner.activeTray = ""
         }
     }
 
@@ -329,8 +359,15 @@ ShellRoot {
         target: "barToggle"
 
         function toggle() {
-            panelWindow.visible = !panelWindow.visible
-            console.log("[Bar] Visibility toggled:", panelWindow.visible)
+            // All bars together (per-output variants). Flip userHidden so the
+            // validScreen binding stays intact.
+            const insts = bars.instances || []
+            let anyVisible = false
+            for (let i = 0; i < insts.length; i++)
+                if (insts[i].visible) { anyVisible = true; break }
+            for (let i = 0; i < insts.length; i++)
+                insts[i].userHidden = anyVisible
+            console.log("[Bar] Visibility toggled:", !anyVisible)
         }
     }
 
