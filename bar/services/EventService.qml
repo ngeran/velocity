@@ -34,7 +34,9 @@
 //
 //   ALWAYS-ON Deliberately NOT popup-gated (unlike LogService): the value
 //             IS the history. Idle cost: one journalctl -f -k child + a
-//             10-min readlink — negligible.
+//             10-min readlink — negligible. A watchdog (LogService pattern)
+//             heals a dead stream: missing the crash line is the one failure
+//             this service exists to prevent.
 //
 //   STARTUP   Construction is forced by a member dereference in shell.qml
 //             (QML singletons build lazily; nothing else references this
@@ -84,6 +86,7 @@ Item {
     readonly property string eventsPath: homeDir + "/.config/quickshell/events.jsonl"
 
     property string _lastGen: ""
+    property bool _manualStop: false          // intended stream stops (LogService idiom)
 
     Component.onCompleted: {
         console.log("[EventService] Service loaded")
@@ -147,6 +150,13 @@ Item {
     // INGEST (live kernel stream)
     // =========================================================================
     function _ingest(line) {
+        // Cheap substring gate before JSON.parse: every emit rule fires only
+        // on NVRM / EXT4-fs / I-O error text, so a line containing none of it
+        // can be skipped unparsed (kernel logs are quiet at idle, but a burst
+        // — the exact moment this service exists for — must not parse per line).
+        if (line.indexOf("NVRM") === -1 &&
+            line.indexOf("EXT4-fs error") === -1 &&
+            line.indexOf("I/O error") === -1) return
         var j
         try { j = JSON.parse(line) } catch (e) { return }
         var msg = j.MESSAGE || ""
@@ -166,6 +176,28 @@ Item {
         id: followProc
         command: ["sh", "-c", "journalctl -f -k -o json --no-pager 2>/dev/null"]
         stdout: SplitParser { onRead: function(line) { root._ingest(line) } }
+        // journalctl can die (journald restart, disk pressure) — auto-heal.
+        onExited: if (!root._manualStop) followRestartTimer.restart()
+    }
+
+    // 60ms gap so a stop → start actually respawns the child (re-setting
+    // `running` immediately on a not-yet-reaped Process is unreliable).
+    Timer {
+        id: followRestartTimer
+        interval: 60
+        onTriggered: {
+            root._manualStop = false
+            if (!followProc.running) followProc.running = true
+        }
+    }
+
+    // Watchdog (LogService pattern) — 5s tick; heals a death onExited missed.
+    Timer {
+        interval: 5000
+        repeat: true
+        running: true
+        onTriggered: if (!followProc.running && !root._manualStop)
+                         followRestartTimer.restart()
     }
 
     // =========================================================================
