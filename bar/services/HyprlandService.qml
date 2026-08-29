@@ -16,6 +16,9 @@
 //   - One-shot `hyprctl activeworkspace -j` at startup seeds the initial
 //     workspace (socket2 only fires on CHANGE, not at connect)
 //   - socat is NOT installed on this system, so nc -U is used instead
+//   - THE socket2 owner for the bar: every raw event line is re-emitted on
+//     socketEvent(line) so other services subscribe instead of opening their
+//     own nc consumer (KeyboardService held a second stream before).
 //
 // NOTE: switchTo uses the Lua dispatcher `hl.dsp.focus({ workspace = N })` —
 // Hyprland 0.55+ with Lua config dropped the classic `dispatch workspace N`.
@@ -35,6 +38,9 @@ Item {
     // =========================================================================
 
     property int activeWorkspace: 1
+
+    // Raw socket2 line, re-emitted for subscriber services (KeyboardService).
+    signal socketEvent(string line)
 
     // =========================================================================
     // STARTUP SEED — socket2 only fires on CHANGE, not at connect, so read the
@@ -76,6 +82,7 @@ Item {
         stdout: SplitParser {
             onRead: function(line) {
                 var ev = "" + line
+                root.socketEvent(ev)   // subscribers first, then our own parse
                 var id = 0
                 if (ev.indexOf("workspacev2>>") === 0) {
                     // workspacev2>>id,name

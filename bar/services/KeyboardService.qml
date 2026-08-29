@@ -4,7 +4,9 @@
 // Ported from omarchy-keymaps (~/github/omarchy/omarchy-keymaps):
 //   state   hyprctl -j devices       → keyboards[].active_keymap / index
 //   list    hyprctl getoption input:kb_layout -j (set in look-and-feel.lua)
-//   events  socket2 "activelayout>>" / "configreloaded" lines (nc -U stream)
+//   events  HyprlandService.socketEvent lines ("activelayout>>" /
+//           "configreloaded") — the bar owns exactly ONE socket2 nc consumer;
+//           this service subscribes instead of streaming its own
 //   switch  hyprctl switchxkblayout <device> next
 //
 // NOTE: hyprctl exits 0 even for "device not found" — success is judged by
@@ -112,35 +114,19 @@ Scope {
     }
 
     // -------------------------------------------------------------------------
-    // EVENT STREAM — socket2 (activelayout / configreloaded)
+    // EVENT STREAM — subscribe to HyprlandService (the bar's single socket2
+    // owner) for activelayout / configreloaded
     // -------------------------------------------------------------------------
-    Process {
-        id: watcher
-        // sh -c so the shell expands the runtime/instance-signature env vars.
-        command: ["sh", "-c",
-            "nc -U \"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\""]
-        running: true
-        stdout: SplitParser {
-            onRead: data => {
-                const ev = "" + data
-                if (ev.indexOf("activelayout>>") === 0) {
-                    // activelayout>>device,layout — ignore other keyboards
-                    const dev = ev.slice("activelayout>>".length).split(",")[0]
-                    if (root.keyboardName === "" || dev === root.keyboardName) root.probe()
-                } else if (ev.indexOf("configreloaded") === 0) {
-                    root.probe(true)   // layout list itself may have changed
-                }
-            }
-        }
-    }
-
-    // Watchdog: restart the stream (and re-seed) if it ever drops.
-    Timer {
-        interval: 5000; running: true; repeat: true
-        onTriggered: {
-            if (!watcher.running) {
-                watcher.running = true
-                root.probe()
+    Connections {
+        target: HyprlandService
+        function onSocketEvent(line) {
+            const ev = "" + line
+            if (ev.indexOf("activelayout>>") === 0) {
+                // activelayout>>device,layout — ignore other keyboards
+                const dev = ev.slice("activelayout>>".length).split(",")[0]
+                if (root.keyboardName === "" || dev === root.keyboardName) root.probe()
+            } else if (ev.indexOf("configreloaded") === 0) {
+                root.probe(true)   // layout list itself may have changed
             }
         }
     }
