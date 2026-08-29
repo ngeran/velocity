@@ -28,7 +28,39 @@ PanelWindow {
         if (showing) root.visible = true
         else hideTimer.restart()
     }
-    Keys.onEscapePressed: root.showing = false
+
+    // ---- inline two-step confirm (Shibumi pattern: no modal, 5s expiry) ----
+    // Destructive tiles (shutdown/restart) arm a pending command instead of
+    // executing; the strip below the header asks Confirm/Cancel and expires.
+    property string pendingCmd: ""
+    property string pendingLabel: ""
+    readonly property bool confirming: pendingCmd !== ""
+    Timer {
+        id: confirmExpiry
+        interval: 5000
+        onTriggered: root._cancelConfirm()
+    }
+    function requestConfirm(cmd, label) {
+        root.pendingCmd = cmd
+        root.pendingLabel = label
+        confirmExpiry.restart()
+    }
+    function _cancelConfirm() {
+        root.pendingCmd = ""
+        root.pendingLabel = ""
+        confirmExpiry.stop()
+    }
+    function _doConfirm() {
+        var cmd = root.pendingCmd
+        root._cancelConfirm()
+        systemCmd.execute(cmd)
+    }
+
+    Keys.onEscapePressed: {
+        // Escape defuses the armed confirm first, then closes the menu.
+        if (root.confirming) root._cancelConfirm()
+        else root.showing = false
+    }
 
     aboveWindows: true
     focusable: true
@@ -135,6 +167,66 @@ PanelWindow {
 
             Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
 
+            // confirm strip — appears only while a destructive action is armed
+            Rectangle {
+                visible: root.confirming
+                Layout.fillWidth: true
+                Layout.preferredHeight: 46
+                color: "transparent"
+                border.color: root.cErr; border.width: 1
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+                opacity: root.confirming ? 1 : 0
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 12
+
+                    Text {
+                        text: "CONFIRM " + root.pendingLabel + "?"
+                        color: root.cErr
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 12; font.bold: true; font.letterSpacing: 2
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Text {
+                        text: "· 5s"
+                        color: root.cDim
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 9
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {   // CANCEL
+                        width: 92; height: 26
+                        color: cancelMa.containsMouse ? root.cBorder : "transparent"
+                        border.color: root.cBorder; border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Text { anchors.centerIn: parent; text: "CANCEL"
+                               color: root.cText; font.family: Config.ControlConfig.fontMono
+                               font.pixelSize: 10; font.bold: true }
+                        MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root._cancelConfirm() }
+                    }
+                    Rectangle {   // CONFIRM
+                        width: 100; height: 26
+                        color: confirmMa.containsMouse ? root.cErr : "transparent"
+                        border.color: root.cErr; border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Text { anchors.centerIn: parent; text: "CONFIRM"
+                               color: confirmMa.containsMouse ? root.cBg : root.cErr
+                               font.family: Config.ControlConfig.fontMono
+                               font.pixelSize: 10; font.bold: true
+                               Behavior on color { ColorAnimation { duration: 120 } } }
+                        MouseArea { id: confirmMa; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root._doConfirm() }
+                    }
+                }
+            }
+
             // 2×2 action grid
             GridLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
@@ -143,12 +235,12 @@ PanelWindow {
                 Components.PowerTile {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     accent: root.cErr; iconText: "⏻"; labelText: "SHUTDOWN"
-                    onActivated: systemCmd.execute("systemctl poweroff")
+                    onActivated: root.requestConfirm("systemctl poweroff", "SHUTDOWN")
                 }
                 Components.PowerTile {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     accent: root.cWarn; iconText: "↺"; labelText: "RESTART"
-                    onActivated: systemCmd.execute("systemctl reboot")
+                    onActivated: root.requestConfirm("systemctl reboot", "RESTART")
                 }
                 Components.PowerTile {
                     Layout.fillWidth: true; Layout.fillHeight: true
