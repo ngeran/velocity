@@ -1,25 +1,33 @@
 // =============================================================================
-// NetworkControlService.qml — nmcli network control (status + wifi management)
+// NetworkControlService.qml — native NM state + wifi list (nmcli for actions)
 // =============================================================================
 //
-// PROBES (all use the proven `sh -c` + SplitParser + onRunningChanged pattern):
-//   linkProbe   (3s)  nmcli -t -f TYPE,STATE,DEVICE,CONNECTION device
-//   wifiActive  (4s)  nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi   (active AP)
-//   ipProbe     (3s)  ip -4 route get 1                          (IPv4)
-//   wifiList    (10s) nmcli -t -f IN-USE,BSSID,SSID,SIGNAL,SECURITY,CHAN dev wifi
+// STATE is native (Quickshell.Bluetooth's sibling patterns from T9): the
+// connection card (type/connected/iface/ssid/signal) and the wifi list rebuild
+// from the Networking devices/networks models — zero forked state probes (the
+// old code forked link/wifi-active/list nmcli queries every 3-10s). The wifi
+// scanner is LEASED to the network section being on screen (the networks model
+// only populates while scanning; continuous scanning wastes radio otherwise).
+// IPv4 still rides one gated `ip route` probe (not exposed natively).
+//
+// ACTIONS stay nmcli (user-triggered, one process each): the connect flow's
+// --ask/saved-profile handling and error taxonomy (wrong-password reprompt)
+// are richer than the native requestConnectWithPsk path; the scan button
+// keeps one bounded `nmcli rescan` fork to force fresh results NOW.
 //
 // connectionStatus is a nested var object → reassigned as a whole (via
 // _setStatus) so QML change signals fire (in-place mutation does not).
 // wifiNetworks reassigned as a new array for the same reason.
 //
-// wifiNetworks items: { ssid, signal(0-100), security, inUse, chan, bssid }.
-// `connectingTo` holds the SSID mid-connect (drives the row spinner); cleared
-// in connectProc.onExited. See _parseWifiList for the BSSID/colon handling.
+// wifiNetworks items: { ssid, signal(0-100), security, inUse, chan, bssid }
+// — chan/bssid are not exposed natively and unused by the row; kept as
+// empty strings for shape compatibility.
 // =============================================================================
 
 pragma Singleton
 
 import QtQuick
+import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config
 import "NetworkControlModel.js" as Model
@@ -41,7 +49,7 @@ Item {
     property bool scanning: false
 
     // SSID currently being connected to (cleared on success/failure). Drives
-    // the row's connecting spinner/tint — was previously read but never set.
+    // the row's connecting spinner/tint.
     property string connectingTo: ""
 
     // Last connect failure, classified (key/label from NetworkControlModel).
@@ -51,63 +59,130 @@ Item {
     signal connectFailed(string ssid, string reasonKey, string reasonLabel)
 
     // -------------------------------------------------------------------------
-    // LINK PROBE — type / connected / interface
+    // NATIVE MODELS — device set + the wifi device + its networks
     // -------------------------------------------------------------------------
-
-    Process {
-        id: linkProbe
-        command: ["sh", "-c", "nmcli -t -f TYPE,STATE,DEVICE,CONNECTION device | grep -E '^(wifi|ethernet):connected' | head -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { linkProbe.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var line = linkProbe.buffer.trim()
-                if (line.length > 0) {
-                    var parts = line.split(":")
-                    root._setStatus({
-                        type: parts[0] || "",
-                        connected: (parts[1] === "connected"),
-                        iface: parts[2] || ""
-                    })
-                } else {
-                    root._setStatus({ type: "", connected: false, iface: "", ssid: "", signal: 0 })
-                }
-                linkProbe.buffer = ""
-            }
+    // The connected managed device the card reports; wifi wins over wired.
+    readonly property var activeDev: {
+        const devs = Networking.devices.values || []
+        let wired = null
+        for (let i = 0; i < devs.length; i++) {
+            const d = devs[i]
+            if (!d.nmManaged || !d.connected) continue
+            if (d.type === DeviceType.Wifi) return d
+            if (d.type === DeviceType.Wired) wired = d
         }
+        return wired
+    }
+
+    readonly property var wifiDev: {
+        const devs = Networking.devices.values || []
+        for (let i = 0; i < devs.length; i++)
+            if (devs[i].type === DeviceType.Wifi) return devs[i]
+        return null
+    }
+
+    // The connected network on the wifi device (null while the scanner lease
+    // is off — the networks model only exists while scanning).
+    readonly property var activeNet: {
+        if (!activeDev || activeDev.type !== DeviceType.Wifi || !wifiDev) return null
+        const nets = wifiDev.networks.values || []
+        for (let i = 0; i < nets.length; i++)
+            if (nets[i].connected) return nets[i]
+        return null
+    }
+
+    // SCANNER LEASE: wifi data is only shown in the network section — scan
+    // exactly while that section is on screen. Null-target-safe.
+    Binding {
+        target: root.wifiDev
+        property: "scannerEnabled"
+        value: Config.SharedState.dashboardVisible
+              && Config.SharedState.controlSection === "network"
+    }
+
+    Component.onCompleted: console.log("[NetControl] native: nm=" +
+        (Networking.backend === NetworkBackendType.NetworkManager) +
+        " type=" + connectionStatus.type + " ssid=" + connectionStatus.ssid)
+
+    // Fires only while the scanner lease is on (section visible) — settles and
+    // hotplug are visible in the journal.
+    onWifiNetworksChanged: console.log("[NetControl] wifi now " + wifiNetworks.length)
+
+    // Registry enumeration is async — resync when models change.
+    Connections {
+        target: Networking.devices
+        function onValuesChanged() { root._syncNativeStatus() }
+    }
+    Connections {
+        target: root.wifiDev ? root.wifiDev.networks : null
+        function onValuesChanged() { root._collectWifi() }
     }
 
     // -------------------------------------------------------------------------
-    // ACTIVE WIFI PROBE — SSID + signal of the connected AP
+    // STATE SYNC — rebuild the card + list from live native objects (no forks)
     // -------------------------------------------------------------------------
+    function _syncNativeStatus() {
+        const d = activeDev
+        if (!d) {
+            _setStatus({ type: "", connected: false, iface: "", ssid: "", signal: 0 })
+            return
+        }
+        const isWifi = (d.type === DeviceType.Wifi)
+        const n = activeNet
+        _setStatus({
+            type: isWifi ? "wifi" : "ethernet",
+            connected: true,
+            iface: d.name,
+            ssid: (isWifi && n) ? n.name : "",
+            signal: (isWifi && n) ? Math.round(n.signalStrength * 100) : 0
+        })
+    }
 
-    Process {
-        id: wifiActive
-        command: ["sh", "-c", "nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi | grep '^yes:' | head -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { wifiActive.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var line = wifiActive.buffer.trim()
-                if (line.length > 0) {
-                    var parts = line.split(":")
-                    var sig = parseInt(parts[parts.length - 1]) || 0
-                    root._setStatus({
-                        ssid: parts.slice(1, parts.length - 1).join(":"),
-                        signal: sig
-                    })
-                } else if (root.connectionStatus.type !== "ethernet") {
-                    root._setStatus({ ssid: "", signal: 0 })
-                }
-                wifiActive.buffer = ""
-            }
+    // WifiNetwork.security is an enum — map to the row's display vocabulary.
+    function _secString(sec) {
+        switch (sec) {
+            case WifiSecurityType.Wpa3SuiteB192:
+            case WifiSecurityType.Sae:          return "WPA3"
+            case WifiSecurityType.Wpa2Eap:
+            case WifiSecurityType.Wpa2Psk:      return "WPA2"
+            case WifiSecurityType.WpaEap:
+            case WifiSecurityType.WpaPsk:       return "WPA"
+            case WifiSecurityType.StaticWep:
+            case WifiSecurityType.DynamicWep:   return "WEP"
+            case WifiSecurityType.Leap:         return "LEAP"
+            case WifiSecurityType.Owe:          return "OWE"
+            case WifiSecurityType.Open:         return ""
+            default:                            return "SECURE"
         }
     }
 
-    // -------------------------------------------------------------------------
-    // IP PROBE — IPv4 of the default route
-    // -------------------------------------------------------------------------
+    function _collectWifi() {
+        if (!wifiDev) { root.wifiNetworks = []; return }
+        const nets = wifiDev.networks.values || []
+        const best = {}
+        for (let i = 0; i < nets.length; i++) {
+            const n = nets[i]
+            const ssid = n.name
+            if (!ssid) continue
+            const sig = Math.round((n.signalStrength || 0) * 100)
+            const row = {
+                ssid: ssid, signal: sig, security: _secString(n.security),
+                inUse: n.connected, chan: "", bssid: ""
+            }
+            const existing = best[ssid]
+            if (!existing || sig > existing.signal) best[ssid] = row
+            else if (row.inUse) best[ssid].inUse = true
+        }
+        const arr = []
+        for (let s in best)
+            if (Object.prototype.hasOwnProperty.call(best, s)) arr.push(best[s])
+        arr.sort(function(a, b) { return b.signal - a.signal })
+        root.wifiNetworks = arr
+    }
 
+    // -------------------------------------------------------------------------
+    // IPv4 PROBE — not exposed natively; gated one-shot
+    // -------------------------------------------------------------------------
     Process {
         id: ipProbe
         command: ["sh", "-c", "ip -4 route get 1 2>/dev/null"]
@@ -123,76 +198,27 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // WIFI LIST PROBE — all visible networks
+    // SWEEP — 3s while the network section is on screen: native resync (zero
+    // forks; catches per-device/network property drift between model signals)
+    // + the one gated IPv4 probe.
     // -------------------------------------------------------------------------
-
-    Process {
-        id: wifiListProc
-        command: ["sh", "-c", "nmcli -t -f IN-USE,BSSID,SSID,SIGNAL,SECURITY,CHAN dev wifi 2>/dev/null"]
-        property string buffer: ""
-        property bool isScanRefresh: false
-        stdout: SplitParser {
-            onRead: function(data) {
-                wifiListProc.buffer += data + "\n"
-            }
-        }
-        onRunningChanged: {
-            // Process exited — give SplitParser one event-loop tick to finish
-            // delivering any buffered lines before we parse.
-            if (!running) wifiParseTimer.restart()
-        }
-    }
-
-    Timer {
-        id: wifiParseTimer
-        interval: 50
-        repeat: false
-        onTriggered: {
-            var nets = root._parseWifiList(wifiListProc.buffer)
-            root.wifiNetworks = nets
-            if (wifiListProc.isScanRefresh) {
-                root.scanning = false
-                scanTimeoutTimer.stop()
-                wifiListProc.isScanRefresh = false
-            }
-            wifiListProc.buffer = ""
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // POLLING TIMERS
-    // -------------------------------------------------------------------------
-
     Timer {
         interval: 3000
-        // Section-gated: window open AND the network section on screen (the
-        // section-change nudge handles instant data on entry).
         running: Config.SharedState.dashboardVisible
               && Config.SharedState.controlSection === "network"
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            if (!linkProbe.running) linkProbe.running = true
-            if (!wifiActive.running) wifiActive.running = true
+            root._syncNativeStatus()
+            root._collectWifi()
             if (!ipProbe.running) ipProbe.running = true
         }
     }
 
-    Timer {
-        interval: 10000
-        // The full wifi-list query is the most expensive poll in the process —
-        // run it only while the network section is actually on screen.
-        running: Config.SharedState.dashboardVisible
-              && Config.SharedState.controlSection === "network"
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: { if (!wifiListProc.running) wifiListProc.running = true }
-    }
-
     // -------------------------------------------------------------------------
-    // SCAN
+    // SCAN — one bounded nmcli rescan to force fresh results NOW, then collect
+    // from the native model after the kernel settles.
     // -------------------------------------------------------------------------
-
     Process {
         id: rescanProc
         property string buffer: ""
@@ -202,7 +228,6 @@ Item {
         onRunningChanged: {
             if (!running) {
                 rescanProc.buffer = ""
-                // Give kernel 2s to populate scan cache, then fetch
                 rescanSettleTimer.restart()
             }
         }
@@ -212,10 +237,13 @@ Item {
         id: rescanSettleTimer
         interval: 2000
         repeat: false
-        onTriggered: root.refreshList(true)
+        onTriggered: {
+            root.scanning = false
+            root._collectWifi()
+        }
     }
 
-    // Safety valve — if rescanProc never fires onRunningChanged, clear spinner
+    // Safety valve — if rescan never completes, clear the spinner.
     Timer {
         id: scanTimeoutTimer
         interval: 10000
@@ -224,7 +252,7 @@ Item {
             if (root.scanning) {
                 root.scanning = false
                 CommandService.pushLog("[network] scan timed out", "warning")
-                root.refreshList(false)
+                root._collectWifi()
             }
         }
     }
@@ -237,23 +265,16 @@ Item {
         scanTimeoutTimer.restart()
     }
 
-    function refreshList(fromScan) {
-        if (!wifiListProc.running) {
-            if (fromScan) wifiListProc.isScanRefresh = true
-            wifiListProc.running = true
-        }
-    }
-
+    function refreshList(fromScan) { root._collectWifi() }
     function refreshStatus() {
-        if (!linkProbe.running) linkProbe.running = true
-        if (!wifiActive.running) wifiActive.running = true
+        root._syncNativeStatus()
+        root._collectWifi()
         if (!ipProbe.running) ipProbe.running = true
     }
 
     // -------------------------------------------------------------------------
-    // CONNECT / DISCONNECT
+    // CONNECT / DISCONNECT — nmcli (see header: error taxonomy + saved profiles)
     // -------------------------------------------------------------------------
-
     Process {
         id: connectProc
         property string lastSsid: ""
@@ -275,7 +296,6 @@ Item {
             if (code === 0) {
                 CommandService.pushLog("[network] connected to " + connectProc.lastSsid, "success")
                 root.refreshStatus()
-                root.refreshList()
             } else {
                 var r = Model.connectFailureReason(connectProc.buffer)
                 root.lastConnectError = r.label
@@ -329,54 +349,11 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // PARSERS / HELPERS
+    // HELPERS
     // -------------------------------------------------------------------------
 
     // Reassign the whole object so change signals fire (nested-var gotcha).
     function _setStatus(patch) {
         root.connectionStatus = Object.assign({}, root.connectionStatus, patch)
-    }
-
-    // nmcli escapes colons that occur INSIDE a value (BSSID, SSID) as "\:", so
-    // only an unescaped ":" is a real field separator. Un-escape to a placeholder,
-    // split on ":", then restore — yielding fixed-order fields with no positional
-    // guessing: IN-USE, BSSID, SSID, SIGNAL, SECURITY, CHAN.
-    function _parseWifiList(raw) {
-        var lines = (raw || "").trim().split("\n")
-        var best = {}
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim()
-            if (line.length === 0) continue
-
-            var parts = line.replace(/\\:/g, "__C__").split(":")
-                            .map(function(p) { return p.replace(/__C__/g, ":") })
-            if (parts.length < 6) continue
-
-            var inUse    = (parts[0] === "*")
-            var bssid    = parts[1]
-            var ssid     = parts[2]
-            var signal   = parseInt(parts[3]) || 0
-            var security = parts[4]
-            var chan     = parts[5]
-
-            if (!ssid || ssid === "--") continue   // skip hidden / empty SSIDs
-
-            var existing = best[ssid]
-            if (!existing || signal > existing.signal) {
-                best[ssid] = {
-                    ssid: ssid, signal: signal, security: security,
-                    inUse: inUse, chan: chan, bssid: bssid
-                }
-            } else if (inUse) {
-                best[ssid].inUse = true
-            }
-        }
-
-        var arr = []
-        for (var s in best) {
-            if (Object.prototype.hasOwnProperty.call(best, s)) arr.push(best[s])
-        }
-        arr.sort(function(a, b) { return b.signal - a.signal })
-        return arr
     }
 }
