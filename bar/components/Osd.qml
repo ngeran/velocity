@@ -41,6 +41,7 @@ PanelWindow {
     // (tightBoundingRect) rather than advance width; progress OSDs pin the
     // column to the widest glyph so the bar doesn't shift across thresholds.
     readonly property int iconInkWidth: Math.ceil(iconMetrics.tightBoundingRect.width)
+    readonly property int iconInkHeight: Math.ceil(iconMetrics.tightBoundingRect.height)
     readonly property int iconWidth: Services.OsdService.hasProgress
         ? Math.max(iconInkWidth, Math.ceil(widestIconMetrics.tightBoundingRect.width))
         : iconInkWidth
@@ -72,12 +73,15 @@ PanelWindow {
             Item {
                 width: osdWindow.iconWidth
                 height: parent.height
-                // Sit the glyph's ink flush in the column, centered when the
-                // column is wider than this particular glyph.
+                // Sit the glyph's INK flush in the column and centered on the
+                // row — both axes compensate by tightBoundingRect (cell-based
+                // centering leaves high-bearing glyphs like the keyboard riding
+                // visibly above the text baseline).
                 Text {
                     x: Math.round((osdWindow.iconWidth - osdWindow.iconInkWidth) / 2
                                   - iconMetrics.tightBoundingRect.x)
-                    anchors.verticalCenter: parent.verticalCenter
+                    y: Math.round((parent.height - osdWindow.iconInkHeight) / 2
+                                  - iconMetrics.tightBoundingRect.y)
                     text: Services.OsdService.icon
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: osdWindow.iconPixelSize
