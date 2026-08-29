@@ -2,14 +2,18 @@
 // BatteryService.qml — battery / AC power state monitoring
 // =============================================================================
 //
-// One-shot probe walks /sys/class/power_supply/*. A system battery is any
-// device named BAT* of type Battery; a Mains device reports AC online state.
+// Native UPower client (event-driven DBus; zero forks, zero timers). Replaced
+// the 10 s sysfs sh-loop walk. Requires services.upower.enable in NixOS
+// (added 2026-08-29); without the daemon this degrades to desktop defaults
+// (no battery, on AC) — same as a desktop sysfs walk reports.
 //
-// A machine with NO system battery is treated as on AC (it must be plugged in
-// to run), so desktops report hasBattery=false, onAc=true.
+// A system battery is any PRESENT device flagged powerSupply. Peripheral
+// batteries are not: the hidpp mouse battery (85 %, discharging) reports
+// power supply: no — verified live — so it never flips the bar into
+// "on battery".
 //
-// PROPERTIES
-//   hasBattery : bool   — a system battery (BAT*) is present
+// PROPERTIES (unchanged from the sysfs version — BatteryIcon/TrayCard intact)
+//   hasBattery : bool   — a system battery device is present
 //   onAc       : bool   — running on AC / wall power
 //   percentage : int    — battery charge (0-100; 100 when no battery)
 //   charging   : bool   — battery is charging
@@ -20,16 +24,46 @@
 pragma Singleton
 
 import QtQuick
-import Quickshell.Io
+import Quickshell.Services.UPower
 
 Item {
     id: root
     visible: false
 
-    property bool hasBattery: false
-    property bool onAc: true
-    property int percentage: 100
-    property bool charging: false
+    // The system battery: first present device that is a power supply.
+    // Re-evaluates when devices appear/disappear or flags change
+    // (ObjectModel.values + property notifies from the DBus state).
+    readonly property var sysBattery: {
+        const devs = UPower.devices.values || []
+        for (var i = 0; i < devs.length; i++) {
+            var d = devs[i]
+            if (d.isPresent && d.powerSupply) return d
+        }
+        return null
+    }
+
+    property bool hasBattery: sysBattery !== null
+    property bool onAc: !UPower.onBattery || !hasBattery   // desktop default: AC
+    property int percentage: sysBattery ? Math.round(sysBattery.percentage) : 100
+    property bool charging: sysBattery ? sysBattery.state === UPowerDevice.Charging
+                                       : false
+
+    Component.onCompleted: console.log(
+        "[BatteryService] native UPower: hasBattery=" + hasBattery +
+        " onAc=" + onAc + " pct=" + percentage + " charging=" + charging +
+        " devices=" + (UPower.devices.values ? UPower.devices.values.length : 0) +
+        " stateCharging=" + UPowerDevice.Charging)   // canary: validates enum scope
+
+    // DBus enumeration is async — log when the device set lands/changes so
+    // hotplug (dock, laptop battery) is visible in the journal.
+    Connections {
+        target: UPower.devices
+        function onValuesChanged() {
+            console.log("[BatteryService] devices now " +
+                        (UPower.devices.values ? UPower.devices.values.length : 0) +
+                        " hasBattery=" + hasBattery)
+        }
+    }
 
     readonly property string glyph: {
         if (!root.hasBattery) return "󰇄"        // power plug (AC)
@@ -48,53 +82,5 @@ Item {
         if (root.charging) return "CHARGING"
         if (root.percentage >= 95) return "FULLY CHARGED"
         return "ON BATTERY"
-    }
-
-    Process {
-        id: probe
-        command: ["sh", "-c", "for d in /sys/class/power_supply/*/; do n=$(basename \"$d\"); t=$(cat \"$d/type\" 2>/dev/null); if [ \"$t\" = \"Battery\" ]; then case \"$n\" in BAT*) echo \"BAT|$(cat \"$d/capacity\" 2>/dev/null)|$(cat \"$d/status\" 2>/dev/null)\";; esac; elif [ \"$t\" = \"Mains\" ]; then echo \"AC|$(cat \"$d/online\" 2>/dev/null)\"; fi; done"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { probe.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                root._parse(probe.buffer)
-                probe.buffer = ""
-            }
-        }
-    }
-
-    Timer {
-        id: pollTimer
-        interval: 10000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: { if (!probe.running) probe.running = true }
-    }
-
-    function _parse(raw) {
-        var lines = (raw || "").trim().split("\n")
-        var bat = null
-        var acOnline = false
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim()
-            if (line.length === 0) continue
-            var f = line.split("|")
-            if (f[0] === "BAT") {
-                bat = { capacity: parseInt(f[1]) || 0, status: (f[2] || "").toLowerCase() }
-            } else if (f[0] === "AC") {
-                if (f[1] === "1") acOnline = true
-            }
-        }
-        root.hasBattery = !!bat
-        root.onAc = acOnline || !root.hasBattery
-        root.percentage = bat ? bat.capacity : 100
-        root.charging = bat ? (bat.status === "charging") : false
-
-        // Desktop (no system battery + on AC): state is static, stop polling.
-        // Laptops (hasBattery) keep polling unchanged.
-        if (!root.hasBattery && root.onAc) {
-            pollTimer.running = false
-        }
     }
 }
