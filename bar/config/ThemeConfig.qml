@@ -234,6 +234,11 @@ Item {
 
         // Instant path (same-inode writes)
         onFileChanged: root.ingestThemeText(themeFile.text())
+        // Covers the timer's ASYNC reload() completions (a synchronous text()
+        // right after reload() returns the stale cache — proven in
+        // CoreEngineService; textChanged fires when a completed read changes
+        // the cache).
+        onTextChanged: root.ingestThemeText(text())
 
         // Startup restore: text() does a blocking read of the existing file.
         Component.onCompleted: root.ingestThemeText(themeFile.text())

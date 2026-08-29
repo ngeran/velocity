@@ -81,6 +81,8 @@ Item {
 
         // Instant path (same-inode writes)
         onFileChanged: root.ingestConfigText(configFile.text())
+        // Covers the timer's ASYNC reload() completions (see ThemeConfig).
+        onTextChanged: root.ingestConfigText(text())
 
         // Startup load: text() does a blocking read of the existing file.
         Component.onCompleted: root.ingestConfigText(configFile.text())
