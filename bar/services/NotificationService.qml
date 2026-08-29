@@ -31,6 +31,37 @@ Item {
     property int unreadCount: 0
     property int nextId: 1
 
+    // -------------------------------------------------------------------------
+    // HISTORY — rows ARCHIVED ON EXPIRY (the reaper), not explicit dismissals
+    // (those are intentional deletions). In-memory, capped; the promise from
+    // the review was "expired → history, not void".
+    // -------------------------------------------------------------------------
+    property ListModel history: ListModel {}
+    readonly property int historyMax: 50
+
+    function clearHistory() { root.history.clear() }
+
+    // Per-app glyphs (nerd-font md icons), matched case-insensitively against
+    // appName; an appIcon payload that is already a nerd glyph wins; the bell
+    // is the fallback.
+    function appGlyph(name, icon) {
+        if (icon && String(icon).length > 0) return icon
+        var n = (name || "").toLowerCase()
+        if (n.indexOf("firefox") !== -1)    return "󰈹"
+        if (n.indexOf("chrom") !== -1)      return "󰊯"
+        if (n.indexOf("z.ai") !== -1)       return "󰚩"
+        if (n.indexOf("discord") !== -1)    return "󰙯"
+        if (n.indexOf("telegram") !== -1)   return "󰍿"
+        if (n.indexOf("terminal") !== -1 || n.indexOf("kitty") !== -1) return "󰄛"
+        if (n.indexOf("mail") !== -1 || n.indexOf("thunderbird") !== -1) return "󰇮"
+        if (n.indexOf("music") !== -1 || n.indexOf("spotify") !== -1 || n.indexOf("mpv") !== -1) return "󰎈"
+        if (n.indexOf("update") !== -1 || n.indexOf("pacman") !== -1) return "󰏖"
+        if (n.indexOf("bluetooth") !== -1)  return "󰂯"
+        if (n.indexOf("network") !== -1 || n.indexOf("wifi") !== -1) return "󰖩"
+        if (n.indexOf("battery") !== -1 || n.indexOf("power") !== -1) return "󰁹"
+        return "󰂚"
+    }
+
     // "now" ticks every 30s so cards can render relative timestamps ("5m ago")
     // without each card owning its own timer.
     property real now: Date.now()
@@ -87,6 +118,7 @@ Item {
                 root.model.insert(0, {
                     id: d.id, clickId: 0,
                     appName: d.appName, appIcon: "",
+                    glyph: root.appGlyph(d.appName, ""),
                     summary: d.summary, body: d.body, urgency: d.urgency,
                     timestamp: d.timestamp, read: d.read === true, readAt: d.readAt || 0
                 })
@@ -138,6 +170,13 @@ Item {
                 if (life === 0) continue                   // critical → keep
                 if ((row.readAt || row.timestamp) + life < nowMs) {
                     if (row.clickId) root.dismissDbus(row.clickId)
+                    // Archive to history before removal (expiry ≠ dismissal).
+                    root.history.insert(0, {
+                        appName: row.appName, summary: row.summary,
+                        ts: row.timestamp, urgency: row.urgency
+                    })
+                    if (root.history.count > root.historyMax)
+                        root.history.remove(root.history.count - 1)
                     root.model.remove(i)
                     removed++
                 }
@@ -159,12 +198,13 @@ Item {
     // PUBLIC API
     // -------------------------------------------------------------------------
     // urgency: 0 = low, 1 = normal, 2 = critical
-    function add(appName, summary, body, urgency, clickId) {
+    function add(appName, summary, body, urgency, clickId, appIcon) {
         root.model.insert(0, {
             id: root.nextId,
             clickId: (clickId === undefined ? 0 : clickId),  // DBus id for ActionInvoked (0 = none)
             appName: appName || "Notification",
-            appIcon: "",
+            appIcon: appIcon || "",
+            glyph: root.appGlyph(appName, appIcon),
             summary: summary || "",
             body: body || "",
             urgency: (urgency === undefined ? 1 : urgency),
@@ -246,7 +286,7 @@ Item {
                 console.warn("[NotificationService] IPC add: bad json:", json)
                 return
             }
-            root.add(d.appName, d.summary, d.body, d.urgency, d.clickId)
+            root.add(d.appName, d.summary, d.body, d.urgency, d.clickId, d.appIcon)
         }
 
         function clear() { root.clearAll() }

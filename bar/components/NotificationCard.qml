@@ -64,7 +64,8 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent
-                text: "󰂚"
+                text: model.glyph !== undefined && model.glyph !== ""
+                      ? model.glyph : "󰂚"
                 font.family: Config.BarConfig.fontNerd
                 font.pixelSize: 13
                 color: card.urgencyColor

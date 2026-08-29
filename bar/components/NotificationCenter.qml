@@ -255,6 +255,71 @@ PanelWindow {
                 }
             }
 
+            // ----- history: rows archived on expiry (in-memory, capped) -----
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: 10
+                spacing: 6
+                visible: Services.NotificationService.history.count > 0
+
+                Rectangle {
+                    Layout.fillWidth: true; height: 1
+                    color: Config.ThemeConfig.colors.border; opacity: 0.6
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        text: "RECENTLY EXPIRED · " + Services.NotificationService.history.count
+                        color: Config.ThemeConfig.colors.textDim
+                        font.pixelSize: 9; font.bold: true
+                        font.letterSpacing: 1.2
+                        font.family: Config.BarConfig.fontFamily
+                        opacity: 0.7
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: "CLEAR"
+                        color: histClearMa.containsMouse ? Config.ThemeConfig.colors.error
+                                                         : Config.ThemeConfig.colors.textDim
+                        font.pixelSize: 9; font.bold: true
+                        font.family: Config.BarConfig.fontFamily
+                        opacity: 0.7
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        MouseArea {
+                            id: histClearMa
+                            anchors.fill: parent; anchors.margins: -6
+                            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.NotificationService.clearHistory()
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: Services.NotificationService.history
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            text: model.appName
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 9; font.bold: true
+                            font.capitalization: Font.AllUppercase
+                            font.family: Config.BarConfig.fontFamily
+                            opacity: 0.6
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: model.summary
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: 10
+                            font.family: Config.BarConfig.fontFamily
+                            elide: Text.ElideRight
+                            opacity: 0.55
+                        }
+                    }
+                }
+            }
+
             // ----- footer summary -----
             Item {
                 Layout.fillWidth: true
