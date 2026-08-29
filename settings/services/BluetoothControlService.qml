@@ -2,18 +2,14 @@
 // BluetoothControlService.qml — bluetoothctl control (power + device mgmt)
 // =============================================================================
 //
-// PROBES (one process each, proven `sh -c` + SplitParser pattern):
-//   showProc  bluetoothctl show                              → powered
-//   devsProc  bluetoothctl devices + per-device info (batched)
+// STATE (Quickshell.Bluetooth, T10 patterns): powered = adapter.enabled
+// (event-driven); devices rebuilt from the Bluetooth.devices model on a
+// dashboard-gated 5s sweep — ZERO forked processes for state (the old code
+// forked `bluetoothctl show` + a per-device info loop every 5s).
 //
-// devsProc runs a single `sh -c` for-loop so we get every device's
-// Connected/Paired/Trusted/Battery in ONE process (avoids spawning N procs):
-//   bluetoothctl devices | while read _ mac rest; do
-//       echo MAC=$mac; echo ALIAS=$rest
-//       bluetoothctl info $mac | grep -E 'Connected:|Paired:|Trusted:|Battery Percentage:'
-//       echo ---
-//   done
-// Blocks are split on "---" and parsed line-by-line.
+// ADAPTER IDENTITY (address/alias/version/class — static per boot) comes from
+// ONE `bluetoothctl show` at construction: the native adapter object exposes
+// no address/version.
 //
 // RSSI is NOT in `bluetoothctl info` — it only streams from a live scan
 // (`[CHG] Device <mac> RSSI: -XX`). scanDevices() captures it into _scanCache
@@ -29,6 +25,7 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell.Bluetooth
 import Quickshell.Io
 import "../config" as Config
 
@@ -36,7 +33,8 @@ Item {
     id: root
     visible: false
 
-    property bool powered: false
+    // Event-driven from BlueZ (T10 pattern).
+    property bool powered: Bluetooth.defaultAdapter !== null && Bluetooth.defaultAdapter.enabled
     property var devices: []
     property bool scanning: false
     property string pairingTo: ""     // mac currently being paired; "" = idle
@@ -54,70 +52,82 @@ Item {
 
     // _scanCache: mac -> { name, rssi(0-100) } discovered during the last scan
     // (in-place mutation is fine; not signal-bound — the view binds `devices`).
-    // _parsedDevs: the bluetoothctl `devices`+`info` parse (paired/connected/
-    // battery/icon). _rebuildDevices() merges both into `devices`, reassigned as
-    // a new array so change signals fire (same nested-var rule as NetworkControl).
+    // _parsedDevs: the native-model snapshot; _rebuildDevices() merges it with
+    // the scan cache into `devices`, reassigned as a new array so change
+    // signals fire (same nested-var rule as NetworkControlService).
     property var _scanCache: ({})
     property var _parsedDevs: []
 
-    // -------------------------------------------------------------------------
-    // POWER STATE
-    // -------------------------------------------------------------------------
+    Component.onCompleted: {
+        identityProc.running = true
+        _collectDevices()
+    }
 
+    // -------------------------------------------------------------------------
+    // ADAPTER IDENTITY — one-shot (static per boot; no native address/version)
+    // -------------------------------------------------------------------------
     Process {
-        id: showProc
+        id: identityProc
         command: ["bluetoothctl", "show"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { showProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { identityProc.buffer += data } }
         onRunningChanged: {
             if (!running) {
-                var b = showProc.buffer
-                root.powered = b.indexOf("Powered: yes") !== -1
+                var b = identityProc.buffer
                 // Controller <addr> (first line) + Alias / Version / Class fields.
                 var mAddr = b.match(/Controller\s+([0-9A-Fa-f:]{17})/)
                 if (mAddr) root.adapterAddress = mAddr[1]
                 root.adapterAlias   = root.matchField(b, "Alias")
                 root.adapterVersion = root.matchField(b, "Version")
                 root.adapterClass   = root.matchField(b, "Class")
-                showProc.buffer = ""
+                identityProc.buffer = ""
+                console.log("[BtControl] native: adapter=" + (root.adapterAddress || "none") +
+                            " powered=" + root.powered + " devices=" + root.devices.length)
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    // DEVICE LIST (batched one-shot)
+    // DEVICE STATE — rebuilt from the native model (zero forks)
     // -------------------------------------------------------------------------
-
-    Process {
-        id: devsProc
-        command: ["sh", "-c", "bluetoothctl devices 2>/dev/null | while read -r _ mac rest; do echo \"MAC=$mac\"; echo \"ALIAS=$rest\"; bluetoothctl info \"$mac\" 2>/dev/null | grep -E 'Connected:|Paired:|Trusted:|Battery Percentage:'; echo '---'; done"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { devsProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                root._parsedDevs = root._parseDevices(devsProc.buffer)
-                devsProc.buffer = ""
-                root._rebuildDevices()
-            }
+    function _collectDevices() {
+        const devs = Bluetooth.devices.values || []
+        const rows = []
+        for (let i = 0; i < devs.length; i++) {
+            const d = devs[i]
+            rows.push({
+                mac: d.address,
+                name: d.name || d.deviceName || d.address,
+                alias: d.name || d.deviceName || d.address,
+                icon: d.icon || "",
+                connected: d.connected,
+                paired: d.paired,
+                trusted: d.trusted,
+                battery: d.batteryAvailable ? Math.round(d.battery * 100) : -1,
+                rssi: 0
+            })
         }
+        root._parsedDevs = rows
+        root._rebuildDevices()
     }
 
-    // -------------------------------------------------------------------------
-    // POLLING
-    // -------------------------------------------------------------------------
+    // Registry enumeration is async — collect again when the model changes.
+    Connections {
+        target: Bluetooth.devices
+        function onValuesChanged() { root._collectDevices() }
+    }
 
+    // 5s sweep while the dashboard is open: catches per-device property flips
+    // (connected/battery) — a rebuild from live native objects, ZERO processes.
     Timer {
         interval: 5000
         running: Config.SharedState.dashboardVisible  // only when the dashboard is open
         repeat: true
         triggeredOnStart: true
-        onTriggered: root.refresh()
+        onTriggered: root._collectDevices()
     }
 
-    function refresh() {
-        if (!showProc.running) showProc.running = true
-        if (!devsProc.running) devsProc.running = true
-    }
+    function refresh() { root._collectDevices() }
 
     // -------------------------------------------------------------------------
     // SCAN
@@ -253,44 +263,6 @@ Item {
     function connect(mac)    { root.connectingTo = mac; root._enqueue("connect", mac) }
     function disconnect(mac) { root._enqueue("disconnect", mac) }
     function remove(mac)     { CommandService.pushLog("[bluetooth] removing " + mac, "output"); root._enqueue("remove", mac) }
-
-    // -------------------------------------------------------------------------
-    // PARSER
-    // -------------------------------------------------------------------------
-
-    function _parseDevices(raw) {
-        var blocks = (raw || "").split("---")
-        var devs = []
-        for (var i = 0; i < blocks.length; i++) {
-            var block = blocks[i].trim()
-            if (block.length === 0) continue
-
-            var lines = block.split("\n")
-            var d = { mac: "", name: "", alias: "", icon: "", connected: false, paired: false, trusted: false, battery: -1, rssi: 0 }
-            for (var j = 0; j < lines.length; j++) {
-                var ln = lines[j].trim()
-                if (ln.indexOf("MAC=") === 0) {
-                    d.mac = ln.substring(4).trim()
-                } else if (ln.indexOf("ALIAS=") === 0) {
-                    d.name = ln.substring(6).trim()
-                    d.alias = d.name
-                } else if (ln.indexOf("Connected:") === 0) {
-                    d.connected = (ln.split(":")[1].trim() === "yes")
-                } else if (ln.indexOf("Paired:") === 0) {
-                    d.paired = (ln.split(":")[1].trim() === "yes")
-                } else if (ln.indexOf("Trusted:") === 0) {
-                    d.trusted = (ln.split(":")[1].trim() === "yes")
-                } else if (ln.indexOf("Icon:") === 0) {
-                    d.icon = ln.substring(5).trim()    // e.g. "input-mouse"
-                } else if (ln.indexOf("Battery Percentage:") === 0) {
-                    var m = ln.match(/\((\d+)\)/)
-                    if (m) d.battery = parseInt(m[1])
-                }
-            }
-            if (d.mac.length > 0) devs.push(d)
-        }
-        return devs
-    }
 
     // -------------------------------------------------------------------------
     // SCAN STREAM PARSER — populate _scanCache from `bluetoothctl scan on` output
