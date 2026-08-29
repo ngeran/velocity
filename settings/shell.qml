@@ -161,6 +161,13 @@ ShellRoot {
             dashboard.openControlTab("system")
         }
 
+        // Deep-link to the Display control section (live mode/HDR/VRR/scale)
+        function openControlDisplay() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("display")
+        }
+
         // Deep-link to the Core tab (defaults to Processors; section keys:
         // processors | gpu | memoryenv | lcd | events)
         function openCore(section: string) {

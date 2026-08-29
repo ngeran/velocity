@@ -19,7 +19,7 @@ SinkRow 1.0 SinkRow.qml
 SinkInputRow 1.0 SinkInputRow.qml
 SourceListView 1.0 SourceListView.qml
 SourceRow 1.0 SourceRow.qml
-BrightnessControlView 1.0 BrightnessControlView.qml
+DisplayControlView 1.0 DisplayControlView.qml
 CalendarWidget 1.0 CalendarWidget.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml
 WallpaperModule 1.0 WallpaperModule.qml

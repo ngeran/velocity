@@ -108,7 +108,7 @@ ShellRoot {
 
             Components.WeatherWidget {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
+                Layout.leftMargin: 12    // +10 keeps the keyboard US label clear of the sun glyph
                 Layout.rightMargin: 44   // breathing room before the wifi icon
             }
 

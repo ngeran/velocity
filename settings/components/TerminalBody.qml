@@ -73,7 +73,7 @@ Rectangle {
                 Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
-            BrightnessControlView {
+            DisplayControlView {
                 visible: body.activeSection === "display"
                 width: content.width
                 opacity: visible ? 1 : 0
