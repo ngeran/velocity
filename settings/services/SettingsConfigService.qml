@@ -97,6 +97,7 @@ Item {
 
     function saveSettings() {
         var config = {
+            schemaVersion: 1,   // bump + branch in applyLoadedSettings on shape changes
             animationSpeed: root.animationSpeed,
             cornerRadius: root.cornerRadius,
             barHeight: root.barHeight,
@@ -171,6 +172,7 @@ Item {
     function saveBarConfig() {
         // Write bar-specific config for bar process to read
         var barConfig = {
+            schemaVersion: 1,   // bar's ingestConfigText ignores unknown keys; bump on shape changes
             barHeight: root.barHeight,
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
