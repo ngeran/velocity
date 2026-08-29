@@ -15,19 +15,22 @@
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import "../config" as Config
 
 Item {
     id: calRoot
 
     // -------------------------------------------------------------------------
-    // "Now" (refreshed once a minute so the today-highlight rolls over at midnight)
+    // "Now" — hour precision is exactly right for a today-highlight (the day
+    // only changes at midnight), fires on the boundary, and costs one wakeup
+    // per hour ungated (replaces a dashboard-gated 60 s Timer that drifted).
     // -------------------------------------------------------------------------
-    property var _now: new Date()
-    Timer {
-        interval: 60000; running: Config.SharedState.dashboardVisible; repeat: true
-        onTriggered: calRoot._now = new Date()
+    SystemClock {
+        id: clk
+        precision: SystemClock.Hours
     }
+    property var _now: clk.date
 
     readonly property int _todayDay:   calRoot._now.getDate()
     readonly property int _todayMonth: calRoot._now.getMonth()

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import "../config" as Config
 
@@ -11,12 +12,18 @@ Item {
     width: Math.max(clockText.implicitWidth, dateText.implicitWidth) + 16
     height: clockText.implicitHeight + dateText.implicitHeight + 2
 
+    // Fires exactly on minute boundaries (the old 60 s Timer drifted: created
+    // mid-minute, it could show a stale minute for most of a minute).
+    SystemClock {
+        id: clk
+        precision: SystemClock.Minutes
+    }
+
     readonly property var _days:   ["SUN","MON","TUE","WED","THU","FRI","SAT"]
     readonly property var _months: ["JAN","FEB","MAR","APR","MAY","JUN",
                                     "JUL","AUG","SEP","OCT","NOV","DEC"]
 
-    function _formattedTime() {
-        var d = new Date()
+    function _formattedTime(d) {
         // Apply timezone offset if configured
         if (Config.BarConfig.clockOffset !== 0) {
             var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
@@ -28,8 +35,7 @@ Item {
     }
 
     // e.g.  "MON · 29 JUN"
-    function _formattedDate() {
-        var d = new Date()
+    function _formattedDate(d) {
         // Apply timezone offset if configured
         if (Config.BarConfig.clockOffset !== 0) {
             var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
@@ -54,7 +60,7 @@ Item {
         Text {
             id: clockText
             anchors.horizontalCenter: parent.horizontalCenter
-            text: root._formattedTime()
+            text: root._formattedTime(clk.date)
             color: clkMa.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorText
             font.pixelSize: Config.BarConfig.fontSizeClock
             font.family: Config.BarConfig.fontFamily
@@ -64,7 +70,7 @@ Item {
         Text {
             id: dateText
             anchors.horizontalCenter: parent.horizontalCenter
-            text: root._formattedDate()
+            text: root._formattedDate(clk.date)
             color: clkMa.containsMouse
                    ? Qt.rgba(0, 0.863, 0.898, 0.65)   // teal @ 65 % on hover
                    : Qt.rgba(1, 1, 1, 0.30)             // #ffffff @ 30 % at rest
@@ -73,17 +79,6 @@ Item {
             font.weight: Font.Bold
             font.letterSpacing: 2.5
             Behavior on color { ColorAnimation { duration: 120 } }
-        }
-    }
-
-    Timer {
-        interval: 60000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            clockText.text = root._formattedTime()
-            dateText.text  = root._formattedDate()
         }
     }
 
