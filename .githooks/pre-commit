@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Pre-commit: qmldir <-> file consistency (T17). Fails the commit when a
+# component is deleted/unregistered without its counterpart.
+repo=$(git rev-parse --show-toplevel)
+"$repo/tools/check-qmldir"
