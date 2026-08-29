@@ -99,7 +99,7 @@ Item {
 
         onSaved: function(success) {
             if (success) {
-                console.log("[WallpaperService] Config saved successfully")
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Config saved successfully")
             } else {
                 console.log("[WallpaperService] Failed to save config")
             }
@@ -188,7 +188,7 @@ Item {
                     console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
                     console.warn("[WallpaperService] Check that the directory exists and contains image files")
                 } else {
-                    console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
+                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
                 }
 
                 // First run: apply an initial wallpaper (cycleTimer auto-starts
@@ -212,7 +212,7 @@ Item {
     /// Kick off a directory scan; silently skips if one is already running.
     function startScan() {
         if (root.scanInProgress) {
-            console.log("[WallpaperService] Scan already in progress, skipping")
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Scan already in progress, skipping")
             return
         }
         if (root.wallpaperDir.length === 0) {
@@ -255,7 +255,7 @@ Item {
     /// Returns a random path from wallpaperList, avoiding immediate repeats.
     function selectRandomWallpaper(): string {
         if (root.wallpaperList.length === 0) {
-            console.log("[WallpaperService] List empty — triggering re-scan")
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] List empty — triggering re-scan")
             startScan()
             return ""
         }
@@ -271,7 +271,7 @@ Item {
 
         root.lastIndex = newIndex
         var path = root.wallpaperList[newIndex]
-        console.log("[WallpaperService] Selected [" + newIndex + "]:", path)
+        if (Config.DebugConfig.debugService) console.log("[WallpaperService] Selected [" + newIndex + "]:", path)
         return path
     }
 
@@ -288,7 +288,7 @@ Item {
                 console.warn("[WallpaperService] Wallpaper apply failed with exit code:", exitCode)
                 console.warn("[WallpaperService] Make sure awww is installed and the path is valid")
             } else {
-                console.log("[WallpaperService] Wallpaper applied OK")
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Wallpaper applied OK")
             }
         }
     }
@@ -322,7 +322,7 @@ Item {
         // Auto-theme from the new wallpaper via matugen (instant, no rebuild)
         // when the matugenOnWallpaperChange toggle is on.
         if (Services.SettingsConfigService.matugenOnWallpaperChange) {
-            console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
             Services.ThemeService.applyDynamicTheme(path)
         }
     }
@@ -341,7 +341,7 @@ Item {
 
     /// Apply a wallpaper by absolute path.
     function setWallpaperByPath(path: string) {
-        console.log("[WallpaperService] setWallpaperByPath", path)
+        if (Config.DebugConfig.debugService) console.log("[WallpaperService] setWallpaperByPath", path)
         applyWallpaper(path)
     }
 
@@ -412,7 +412,7 @@ Item {
 
         onTriggered: {
             if (!root.cyclingEnabled) return
-            console.log("[WallpaperService] Auto-cycle triggered")
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-cycle triggered")
             applyWallpaper(selectRandomWallpaper())
         }
     }
@@ -426,7 +426,7 @@ Item {
 
         /// Immediately cycle to a random wallpaper
         function cycleNow() {
-            console.log("[WallpaperService] FUNCTION CALL: cycleNow")
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] FUNCTION CALL: cycleNow")
             applyWallpaper(selectRandomWallpaper())
         }
 
@@ -457,7 +457,7 @@ Item {
 
         /// Apply wallpaper by 0-based index
         function setWallpaperByIndex(index: int) {
-            console.log("[WallpaperService] FUNCTION CALL: setWallpaperByIndex", index)
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] FUNCTION CALL: setWallpaperByIndex", index)
             if (index >= 0 && index < root.wallpaperList.length)
                 applyWallpaper(root.wallpaperList[index])
         }

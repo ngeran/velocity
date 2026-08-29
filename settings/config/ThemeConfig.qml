@@ -200,9 +200,9 @@ Item {
 
     function applyTheme(data, isUserInitiated) {
         if (Config.DebugConfig.debugTheme) {
-            console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
-            console.log("[applyTheme] Input data:", JSON.stringify(data))
-            console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
+            if (Config.DebugConfig.debugTheme) console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Input data:", JSON.stringify(data))
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
         }
 
         // Set flag if this is a user-initiated change
@@ -246,7 +246,7 @@ Item {
         if (data.metadata) {
             var m = data.metadata
             if (Config.DebugConfig.debugTheme) {
-                console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
+                if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
                 console.log("[applyTheme] Current root.metadata.oledClamp:", root.metadata.oledClamp)
             }
 
