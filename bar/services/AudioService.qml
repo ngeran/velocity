@@ -1,122 +1,67 @@
-/** Version: 8.0 - Replaced Quickshell.exec() with Process objects (exec doesn't exist) **/
+// =============================================================================
+// AudioService.qml — default-sink volume/mute (native PipeWire, event-driven)
+// =============================================================================
+// Quickshell.Services.Pipewire over the session's PipeWire: zero processes,
+// zero timers (replaced the 2.5 s wpctl poll + set/mute one-shot forks).
+// Volume/mute arrive as PipeWire events, so the old syncLock optimistic-update
+// dance is gone — writes are confirmed by the very event they trigger, and
+// external changes (media keys, pactl) update the bar instantly.
+//
+// PROPERTIES (names unchanged — VolumeIcon/TrayCard untouched)
+//   volume  : int   0-100 (audio.volume is a 0..1 float average; >1 boost is
+//                   clamped for display, matching the old `wpctl -l 1.0` cap)
+//   muted   : bool
+//   hasAudio: bool  a default sink exists (false → icons hide, as before)
+// METHODS: setVolume(int), toggleMute(), volumeUp(), volumeDown()
+// =============================================================================
+
 pragma Singleton
 import QtQuick
 import Quickshell
-import Quickshell.Io
+import Quickshell.Services.Pipewire
+import "../config" as Config
 
 Scope {
     id: root
-    property int volume: 0
-    property bool muted: false
-    property bool syncLock: false
 
-    // wpctl presence — when absent we stop polling instead of forking a failing
-    // process forever and showing a misleading "0%" volume state.
-    property bool hasAudio: true
+    // The default sink, followed automatically when the user switches output.
+    readonly property var sink: Pipewire.defaultAudioSink
 
-    // One-shot presence probe; gates the poll timer on exit.
-    Process {
-        id: detectProc
-        command: ["sh", "-c", "command -v wpctl >/dev/null && wpctl get-volume @DEFAULT_SINK@ >/dev/null 2>&1"]
-        onExited: function(code) {
-            root.hasAudio = (code === 0)
-            audioPollTimer.running = root.hasAudio
-        }
+    // PipeWire only populates node properties for tracked objects.
+    PwObjectTracker {
+        objects: root.sink ? [root.sink] : []
     }
 
-    // -------------------------------------------------------------------------
-    // STATUS PROBE — polls wpctl for volume + mute state
-    // Output: "Volume: 0.40" (+ " [MUTED]" when muted)
-    // -------------------------------------------------------------------------
-    Process {
-        id: statusProc
-        command: ["wpctl", "get-volume", "@DEFAULT_SINK@"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: data => {
-                if (root.syncLock) return
-                statusProc.buffer += data
-            }
-        }
-        onRunningChanged: {
-            if (!running) {
-                // wpctl prints "Volume: 0.40" (decimal 0-1); [MUTED] if muted
-                const volMatch = statusProc.buffer.match(/Volume:\s*([\d.]+)/)
-                if (volMatch) root.volume = Math.round(parseFloat(volMatch[1]) * 100)
-                root.muted = statusProc.buffer.indexOf("[MUTED]") !== -1
-                statusProc.buffer = ""
-            }
-        }
-    }
+    property bool hasAudio: root.sink != null
+    property int volume: root.sink
+        ? Math.round(Math.min(root.sink.audio.volume, 1.0) * 100) : 0
+    property bool muted: root.sink ? root.sink.audio.muted : false
 
-    // Poll every 2.5 s; skip if locked or already running
-    Timer {
-        id: audioPollTimer
-        interval: 2500; running: true; repeat: true
-        onTriggered: {
-            if (!root.syncLock && !statusProc.running)
-                statusProc.running = true
-        }
-    }
+    // Fires when the registry delivers the default sink (startup) and on every
+    // output switch — the journal is the only window into this timing.
+    onSinkChanged: console.log("[AudioService] default sink: " +
+                               (sink ? sink.description : "none") +
+                               (sink ? " vol=" + Math.round(Math.min(sink.audio.volume, 1.0) * 100) : ""))
 
-    // Lock expires after 1.5 s — enough for wpctl to settle
-    Timer {
-        id: lockTimeout
-        interval: 1500
-        onTriggered: {
-            root.syncLock = false
-            if (!statusProc.running) statusProc.running = true
-        }
-    }
+    onVolumeChanged: if (Config.DebugConfig.debugService)
+        console.log("[AudioService] volume " + volume)
+    onMutedChanged: if (Config.DebugConfig.debugService)
+        console.log("[AudioService] muted " + muted)
 
-    // -------------------------------------------------------------------------
-    // VOLUME PROCESS — wpctl set-volume (command set dynamically before running)
-    // -------------------------------------------------------------------------
-    Process {
-        id: volumeProc
-        property string buffer: ""
-        stderr: SplitParser { onRead: data => { volumeProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) volumeProc.buffer = ""
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // MUTE PROCESS — wpctl set-mute toggle
-    // -------------------------------------------------------------------------
-    Process {
-        id: muteProc
-        command: ["wpctl", "set-mute", "@DEFAULT_SINK@", "toggle"]
-        property string buffer: ""
-        stderr: SplitParser { onRead: data => { muteProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) muteProc.buffer = ""
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // PUBLIC API
-    // -------------------------------------------------------------------------
     function setVolume(val) {
-        if (volumeProc.running) return   // don't stack calls mid-drag
-        root.syncLock = true
-        lockTimeout.restart()
-        root.volume = Math.max(0, Math.min(100, Math.round(val)))
-        // wpctl takes a decimal fraction (0.00-1.00); -l 1.0 caps at 100%
-        volumeProc.command = ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_SINK@", (root.volume / 100).toFixed(2)]
-        volumeProc.running = true
+        if (!root.sink) return
+        root.sink.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
     }
 
     function toggleMute() {
-        if (muteProc.running) return
-        root.syncLock = true
-        lockTimeout.restart()
-        root.muted = !root.muted
-        muteProc.running = true
+        if (!root.sink) return
+        root.sink.audio.muted = !root.sink.audio.muted
     }
 
-    function volumeUp()   { setVolume(Math.min(root.volume + 5, 100)) }
-    function volumeDown() { setVolume(Math.max(root.volume - 5, 0))   }
+    function volumeUp()   { setVolume(root.volume + 5) }
+    function volumeDown() { setVolume(root.volume - 5) }
 
-    Component.onCompleted: detectProc.running = true
+    Component.onCompleted: console.log("[AudioService] native PipeWire: sink=" +
+        (root.sink ? root.sink.description : "none") +
+        " vol=" + volume + " muted=" + muted)
 }
