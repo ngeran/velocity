@@ -281,17 +281,20 @@ Item {
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            memProc.running = true
-            cpuProc.running = true
-            gpuProc.running = true
-            diskProc.running = true
+            // Skip-while-running guards: a hung proc must not silently stop
+            // its feed forever (guards skip every refresh while a Process
+            // reports running — the reaper idiom used across the services).
+            if (!memProc.running)  memProc.running = true
+            if (!cpuProc.running)  cpuProc.running = true
+            if (!gpuProc.running)  gpuProc.running = true
+            if (!diskProc.running) diskProc.running = true
         }
     }
 
     function refreshLive() {
-        memProc.running = true
-        cpuProc.running = true
-        gpuProc.running = true
-        diskProc.running = true
+        if (!memProc.running) memProc.running = true
+        if (!cpuProc.running) cpuProc.running = true
+        if (!gpuProc.running) gpuProc.running = true
+        if (!diskProc.running) diskProc.running = true
     }
 }

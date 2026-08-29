@@ -298,6 +298,12 @@ Item {
                 themeService._matugenFallback(path, "matugen failed (exit " + code + ")");
             }
             matugenProc.buffer = "";
+            // Re-arm: run the newest wallpaper requested mid-run, if any.
+            if (themeService._pendingMatugenPath !== "") {
+                var next = themeService._pendingMatugenPath
+                themeService._pendingMatugenPath = ""
+                themeService.applyDynamicTheme(next)
+            }
         }
     }
 
@@ -362,15 +368,20 @@ Item {
     function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
         if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme (matugen) CALLED ===", wallpaperPath)
 
-        if (themeService.isRegenerating) {
-            if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] already regenerating, skipping")
-            return;
-        }
-
         var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
         if (!actualPath || actualPath === "") {
             themeService.regenError = "No wallpaper selected — set a wallpaper in the Wallpaper tab first"
             themeService.regenFailed = true
+            return;
+        }
+
+        if (themeService.isRegenerating) {
+            // COALESCE (latest-wins): a matugen run takes ~1-2 s; clicking
+            // through wallpapers faster than that used to DROP the final
+            // choice (the old skip). Keep only the newest path and run it
+            // from matugenProc.onExited when the current run lands.
+            if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] regenerating — deferring", actualPath)
+            themeService._pendingMatugenPath = actualPath
             return;
         }
 
@@ -385,6 +396,10 @@ Item {
         matugenProc.command = ["matugen", "image", cleanPath, "--json", "hex", "--prefer", "darkness", "-m", "dark"];
         matugenProc.running = true;
     }
+
+    // Latest wallpaper requested while a matugen run was in flight (see the
+    // coalesce note above); emptied by matugenProc.onExited's re-arm.
+    property string _pendingMatugenPath: ""
 
     // =========================================================================
     // REBUILD FALLBACK — the old Stylix-rebuild path (kept for when matugen is

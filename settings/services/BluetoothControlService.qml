@@ -195,6 +195,9 @@ Item {
     }
 
     function togglePower() {
+        // Coalesce: a rapid double-toggle reassigning command mid-run races
+        // the first write; the exit handler refreshes real state anyway.
+        if (powerProc.running) return
         powerProc.command = ["bluetoothctl", "power", root.powered ? "off" : "on"]
         powerProc.buffer = ""
         powerProc.running = true
