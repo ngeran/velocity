@@ -33,7 +33,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls.Basic as Controls   // TextField only — LoginScreen precedent
+import QtQuick.Controls.Basic as Controls   // TextField only (pattern from the deleted login prototype)
 import "../config" as Config
 import "../services" as Services
 
