@@ -114,15 +114,14 @@ ShellRoot {
             }
             root.shown = !root.shown
             panelWindow.visible = true
-            // Reset to the Dashboard tab each time the panel is opened.
-            if (root.shown) dashboard.currentTab = 0
+            // No tab reset: ModernDashboard persists across open/close, so the
+            // panel reopens on the tab you left (matches coreActiveSection).
         }
 
         function show() {
             root.shown = true
             panelWindow.visible = true
-            // Reset to the Dashboard tab each time the panel is opened.
-            dashboard.currentTab = 0
+            // No tab reset — see toggle().
         }
 
         function hide() {
