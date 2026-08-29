@@ -1,176 +1,87 @@
-/** Version: 11 - structured device objects, per-device battery, disconnect action **/
+/** Version: 12 — native Quickshell.Bluetooth (BlueZ over DBus):
+ ** zero forks, zero timers, zero optimistic-update dances. **/
 pragma Singleton
 import QtQuick
-import Quickshell.Io
+import Quickshell.Bluetooth
 
 Item {
     id: root
     visible: false
 
-    property bool powered: false
-    property int deviceCount: 0
+    // =========================================================================
+    // NATIVE STATE — event-driven BlueZ client
+    // =========================================================================
+    // Replaces the 6 s `bluetoothctl show` poll (the bar icon's only always-on
+    // need), the popup-gated device-list + battery sweeps, and the action
+    // runners: power toggle and per-device disconnect are single property
+    // writes, confirmed by the BlueZ events they trigger.
 
-    // Structured rows — primitives-only objects ({address, name}); never
-    // QObjects (dangling C++ refs in delegates are a documented segfault
-    // class). Replaces the old comma-joined name string.
-    property var devices: []                  // [{address, name}] of CONNECTED devices
+    readonly property var adapter: Bluetooth.defaultAdapter   // null = no BT
 
-    // Battery percentage per MAC (from `bluetoothctl info`), e.g.
-    // {"AA:BB:...": 80}. Popup-gated — probes are slow-ish and rarely change.
-    property var deviceBatteries: ({})
-
-    // bluetoothctl presence — when absent we stop polling instead of forking a
-    // failing process forever and showing a misleading "OFF" state.
-    property bool hasBluetooth: true
-
-    // ── Popup gating ─────────────────────────────────────────────────────────
-    // The bar icon only needs `powered` (btShowProc). The connected-device
-    // list + battery sweep exist solely for the TrayCard popup, so they are
-    // fetched on open and polled only while open. Set by TrayCard.
-    property bool popupOpen: false
-
-    onPopupOpenChanged: {
-        if (!popupOpen) return
-        if (!btDevProc.running)     btDevProc.running = true
-        if (!btBatteryProc.running) btBatteryProc.running = true
-    }
-
-    // One-shot presence probe; gates the poll timer on exit.
-    Process {
-        id: detectProc
-        command: ["sh", "-c", "command -v bluetoothctl >/dev/null && bluetoothctl show >/dev/null 2>&1"]
-        onExited: function(code) {
-            root.hasBluetooth = (code === 0)
-            btPollTimer.running = root.hasBluetooth
-        }
-    }
-
-    Process {
-        id: btShowProc
-        command: ["bluetoothctl", "show"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { btShowProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                root.powered = btShowProc.buffer.indexOf("Powered: yes") !== -1
-                btShowProc.buffer = ""
-            }
-        }
-    }
-
-    // Full "Device AA:BB:CC:DD:EE:FF Name" lines — parsed into {address, name}.
-    Process {
-        id: btDevProc
-        command: ["sh", "-c", "bluetoothctl devices Connected"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { btDevProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                const rows = []
-                const lines = btDevProc.buffer.trim().split("\n")
-                for (let i = 0; i < lines.length; i++) {
-                    const m = lines[i].match(/^Device\s+([0-9A-Fa-f:]{17})\s+(.*)$/)
-                    if (m) rows.push({ address: m[1], name: m[2].trim() })
-                }
-                root.devices = rows                      // reassign whole array → bindings re-evaluate
-                root.deviceCount = rows.length
-                btDevProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Per-device battery sweep (popup-only): one shell loop instead of one
-    // Process per device. Emits "<mac> <percent>" lines; devices without a
-    // battery report simply don't appear (map keeps last-known for others).
-    Process {
-        id: btBatteryProc
-        command: ["sh", "-c",
-            "bluetoothctl devices Connected 2>/dev/null | while read -r _ mac _; do " +
-            "pct=$(bluetoothctl info \"$mac\" 2>/dev/null | awk '/Battery Percentage/ {gsub(/[()]/, \"\", $4); print $4; exit}'); " +
-            "[ -n \"$pct\" ] && echo \"$mac $pct\"; done"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { btBatteryProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                const map = {}
-                const lines = btBatteryProc.buffer.trim().split("\n")
-                for (let i = 0; i < lines.length; i++) {
-                    const f = lines[i].trim().split(/\s+/)
-                    if (f.length === 2) {
-                        const pct = parseInt(f[1], 10)
-                        if (!isNaN(pct)) map[f[0]] = pct
-                    }
-                }
-                root.deviceBatteries = map               // reassign whole object
-                btBatteryProc.buffer = ""
-            }
-        }
-    }
-
-    // Battery changes slowly — 30s while the popup is open is plenty.
-    Timer {
-        id: btBatteryTimer
-        interval: 30000
-        repeat: true
-        running: root.hasBluetooth && root.popupOpen
-        onTriggered: if (!btBatteryProc.running) btBatteryProc.running = true
-    }
-
-    // Always-on state poll: ONLY btShowProc (powers the bar icon). The device
-    // list rides along at the same cadence but only while the popup is open.
-    Timer {
-        id: btPollTimer
-        interval: 6000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: {
-            if (!btShowProc.running) btShowProc.running = true
-            if (root.popupOpen && !btDevProc.running) btDevProc.running = true
-        }
-    }
-
-    // Hung-process reaper (Omarchy tailscale pattern): bluetoothctl can hang
-    // when BlueZ is wedged; a stuck Process would otherwise silently stop all
-    // refreshing forever because every poll skips while it reports running.
-    Timer {
-        id: btWatchdog
-        interval: 15000
-        repeat: true
-        running: true
-        onTriggered: {
-            if (btShowProc.running)    btShowProc.running = false
-            if (btDevProc.running)     btDevProc.running = false
-            if (btBatteryProc.running) btBatteryProc.running = false
-        }
-    }
-
-    // Re-poll 1 s after a toggle/action so UI reflects the real state quickly
-    Timer {
-        id: refreshTimer
-        interval: 1000; repeat: false
-        onTriggered: {
-            if (!btShowProc.running) btShowProc.running = true
-            if (!btDevProc.running)  btDevProc.running  = true
-            if (root.popupOpen && !btBatteryProc.running) btBatteryProc.running = true
-        }
-    }
-
-    // Per-device action runner. (Quickshell.exec() does NOT exist in this build.)
-    Process { id: actionProc }
-
-    function disconnectDevice(address) {
-        actionProc.command = ["bluetoothctl", "disconnect", address]
-        actionProc.running = true
-        refreshTimer.restart()   // device list re-syncs ~1s later
-    }
-
-    // Quickshell.exec() does NOT exist in this build — run the command via Process.
-    Process { id: powerProc }
+    property bool hasBluetooth: adapter !== null
+    property bool powered: adapter !== null && adapter.enabled
 
     function togglePower() {
-        powerProc.command = ["bluetoothctl", "power", root.powered ? "off" : "on"]
-        powerProc.running = true
-        root.powered = !root.powered   // optimistic update
-        refreshTimer.restart()
+        if (adapter) adapter.enabled = !adapter.enabled
     }
 
-    Component.onCompleted: detectProc.running = true
+    // Connected devices as PRIMITIVE rows ({address, name}) — never QObjects
+    // (dangling C++ refs in delegates are a documented segfault class; v11
+    // rule kept). BlueZ's device model is paired/known devices — no discovery
+    // lease needed for a connected-only list.
+    readonly property var devices: {
+        const devs = Bluetooth.devices.values || []
+        const rows = []
+        for (let i = 0; i < devs.length; i++) {
+            const d = devs[i]
+            if (d.connected) rows.push({ address: d.address, name: d.name })
+        }
+        return rows
+    }
+
+    property int deviceCount: devices.length
+
+    // Battery percentage per MAC, straight from the device objects (the old
+    // per-device `bluetoothctl info` sweep is gone).
+    readonly property var deviceBatteries: {
+        const devs = Bluetooth.devices.values || []
+        const map = {}
+        for (let i = 0; i < devs.length; i++) {
+            const d = devs[i]
+            if (d.connected && d.batteryAvailable)
+                map[d.address] = Math.round(d.battery * 100)   // 0..1 → percent
+        }
+        return map
+    }
+
+    function disconnectDevice(address) {
+        const devs = Bluetooth.devices.values || []
+        for (let i = 0; i < devs.length; i++) {
+            if (devs[i].address === address) {
+                devs[i].connected = false   // writable prop → BlueZ disconnect
+                return
+            }
+        }
+    }
+
+    // Kept for API compatibility: TrayCard still sets it, but state is
+    // event-driven now — there is nothing to poll-gate anymore.
+    property bool popupOpen: false
+
+    // Registry enumeration is async — settle/hotplug visibility in the journal.
+    onAdapterChanged: console.log("[BluetoothService] adapter now: " +
+        (adapter ? adapter.name + " enabled=" + adapter.enabled : "none"))
+    Connections {
+        target: Bluetooth.devices
+        function onValuesChanged() {
+            console.log("[BluetoothService] devices now " +
+                        (Bluetooth.devices.values || []).length +
+                        " connected=" + deviceCount +
+                        " batteries=" + JSON.stringify(deviceBatteries))
+        }
+    }
+
+    Component.onCompleted: console.log("[BluetoothService] native BlueZ: adapter=" +
+        (adapter ? adapter.name : "none") + " powered=" + powered +
+        " devices=" + deviceCount)
 }
