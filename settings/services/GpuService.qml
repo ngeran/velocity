@@ -146,24 +146,26 @@ Item {
         // else: future amd/intel branch
     }
 
-    // Hung-process reaper: this feed is ALWAYS-ON (CoreEngine publishes it to
-    // the deepcool LCD) and nvidia-smi can hang on driver hiccups — a stuck
-    // Process would silently kill the LCD feed forever because the guards
-    // above skip every refresh while it reports running. Anything still alive
-    // at this sweep (normal reads finish in well under a second) is stuck.
+    // Hung-process reaper: nvidia-smi can hang on driver hiccups — a stuck
+    // Process would silently kill the feed forever because the guards above
+    // skip every refresh while it reports running. Anything still alive at
+    // this sweep (normal reads finish in well under a second) is stuck.
     Timer {
         interval: 15000
         repeat: true
-        running: true
+        running: CoreEngineService.telemetryWanted
         onTriggered: {
             if (gpuProc.running)  gpuProc.running = false
             if (appsProc.running) appsProc.running = false
         }
     }
 
+    // Runs only while a consumer wants telemetry (Core tab open or the
+    // deepcool LCD daemon alive — CoreEngineService owns the gate; it is
+    // NOT always-on anymore).
     Timer {
         interval: 2000
-        running: true
+        running: CoreEngineService.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh()

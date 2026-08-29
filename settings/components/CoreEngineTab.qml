@@ -18,6 +18,14 @@ Item {
 
     property string active: "processors"
 
+    // Telemetry session (Shibumi consumer-refcount, single-consumer case):
+    // this tab's Loader instantiation IS the CoreEngine/Gpu/Thermal gate.
+    // While it lives, the 1s engine + feeders tick; torn down (panel close),
+    // they stop dead. The Core tab binds properties directly — it never
+    // reads metrics.json, so publish() stays LCD-gated inside CoreEngine.
+    Component.onCompleted: Services.CoreEngineService.coreVisible = true
+    Component.onDestruction: Services.CoreEngineService.coreVisible = false
+
     readonly property var navItems: [
         { key: "processors",    label: "PROCESSORS" },
         { key: "gpu",           label: "GPU" },

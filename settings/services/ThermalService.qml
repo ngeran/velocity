@@ -94,12 +94,12 @@ Item {
         if (!coolantProc.running)  coolantProc.running = true
     }
 
-    // Hung-process reaper: always-on LCD feed — a stuck hwmon read would
-    // silently stop it forever (guards skip while a Process reports running).
+    // Hung-process reaper — a stuck hwmon read would silently stop the feed
+    // forever (guards skip while a Process reports running).
     Timer {
         interval: 15000
         repeat: true
-        running: true
+        running: CoreEngineService.telemetryWanted
         onTriggered: {
             if (cpuTempProc.running)  cpuTempProc.running = false
             if (nvmeProc.running)     nvmeProc.running = false
@@ -107,10 +107,12 @@ Item {
         }
     }
 
-    // Temps move slowly; 5s is enough and keeps the hwmon scan cheap.
+    // Temps move slowly; 5s is enough and keeps the hwmon scan cheap. Runs
+    // only while a consumer wants telemetry (CoreEngineService owns the gate
+    // — Core tab open or the deepcool LCD daemon alive; NOT always-on).
     Timer {
         interval: 5000
-        running: true
+        running: CoreEngineService.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh()

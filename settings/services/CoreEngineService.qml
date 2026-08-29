@@ -64,19 +64,42 @@ Item {
     property string metricsPath: StandardPaths.writableLocation(StandardPaths.GenericCacheLocation)
                                        .toString().replace("file://", "") + "/deepcool/metrics.json"
 
-    property Process publisher: Process {
-        command: []; running: false
-        // Rate-limited failure log: publish() fires every ~1s; if the metrics.json
-        // write keeps failing (e.g. perms), surface it via CommandService at most
-        // once per 10s instead of spamming the log every tick.
-        property real _lastFailLogMs: 0
-        onExited: function(code) {
-            if (code !== 0 && Date.now() - publisher._lastFailLogMs > 10000) {
-                publisher._lastFailLogMs = Date.now()
-                CommandService.pushLog("[CoreEngine] publish failed exit=" + code, "error")
-            }
-        }
+    // ── Consumer gating (Shibumi refcount, two bools) ──────────────────────
+    // The 1s engine exists for exactly two consumers: the deepcool LCD (an
+    // external daemon reading metrics.json — probed every 60s; it is NOT
+    // running on this box today) and the dashboard's Core tab (Loader-
+    // instantiated; sets coreVisible from its Completed/Destruction). With
+    // neither present the engine ticks ZERO times — previously it forked a
+    // printf every second and dragged Gpu/Thermal polls along, feeding a
+    // file nothing read (~130 forks/min while the panel was hidden).
+    property bool coreVisible: false                     // Core tab session
+    property bool lcdPresent: false                      // deepcool reader probe
+    readonly property bool telemetryWanted: coreVisible || lcdPresent
+
+    Process {
+        id: lcdProbe
+        // [d]eepcool regex self-match guard: pgrep -f scans full command
+        // lines, and anything probing THIS file's path (~/.cache/deepcool/…)
+        // would otherwise read as the LCD daemon and light the feed up.
+        command: ["sh", "-c", "pgrep -f '[d]eepcool' >/dev/null 2>&1"]
+        onExited: function(code) { root.lcdPresent = (code === 0) }
     }
+    Timer {
+        interval: 60000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+        onTriggered: if (!lcdProbe.running) lcdProbe.running = true
+    }
+
+    // metrics.json via FileView's WRITE path (setText) — same truncate+write
+    // semantics as the old `printf >`, minus the per-second sh fork.
+    FileView {
+        id: metricsFile
+        path: root.metricsPath
+        printErrors: false
+    }
+
     // One-shot: ensures the deepcool cache dir exists at startup so publish()
     // doesn't need a per-tick `mkdir -p` fork (mkdir is a separate binary).
     property Process initProc: Process { command: []; running: false }
@@ -89,11 +112,16 @@ Item {
     }
 
     // ── CPU aggregate + per-core from /proc/stat (FileView, no fork) ────────
+    // FRESHNESS CONTRACT: reload() is ASYNC — a synchronous text() right after
+    // returns the stale cache, and onLoaded does not re-fire per reload (both
+    // proven live; the old onLoaded pattern froze values at the first tick).
+    // Parsing instead on textChanged — which fires whenever a completed read
+    // actually changed the cache — makes every reload land.
     FileView {
         id: statFile
         path: "/proc/stat"
         watchChanges: false
-        onLoaded: root.parseStat(text())
+        onTextChanged: root.parseStat(text())
     }
 
     function parseStat(raw) {
@@ -145,7 +173,7 @@ Item {
         id: cpuinfoFile
         path: "/proc/cpuinfo"
         watchChanges: false
-        onLoaded: root.parseCpuinfo(text())
+        onTextChanged: root.parseCpuinfo(text())
     }
 
     function parseCpuinfo(raw) {
@@ -167,7 +195,7 @@ Item {
         id: memFile
         path: "/proc/meminfo"
         watchChanges: false
-        onLoaded: root.parseMeminfo(text())
+        onTextChanged: root.parseMeminfo(text())
     }
 
     function parseMeminfo(raw) {
@@ -283,34 +311,36 @@ Item {
             swap_pct: root.swapPct
         }
         var json = JSON.stringify(m)
-        // printf to the path; single-quote-escape the JSON the same way
-        // SettingsConfigService.qml does. The parent dir (~/.cache/deepcool) is
-        // ensured once at startup by initProc, so no per-tick `mkdir` fork.
-        root.publisher.command = ["sh", "-c",
-            "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > '" + root.metricsPath + "'"]
-        root.publisher.running = true
+        // Zero-fork write: FileView's setText goes through its write adapter
+        // (same truncate+write semantics the old `printf >` had). The parent
+        // dir (~/.cache/deepcool) is ensured once at startup by initProc.
+        metricsFile.setText(json)
     }
 
-    // ── 1s refresh + publish. FileView reads are near-instant; publish()
-    //    emits the previous tick's values (≤1s stale) — fine for an LCD.
-    //    Disk is on its own slower timer below. ──────────────────────────────
+    // ── 1s refresh + publish, ONLY while a consumer wants telemetry. publish()
+    //    additionally requires the LCD (the Core tab binds properties directly,
+    //    it doesn't read metrics.json). FileView reads are near-instant;
+    //    publish() emits the previous tick's values (≤1s stale) — fine for an
+    //    LCD. Disk is on its own slower timer below. ─────────────────────────
     Timer {
         interval: 1000
-        running: true
+        running: root.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: {
+            // ASYNC re-reads; parsing happens in each view's onTextChanged
+            // when the fresh content lands (see FRESHNESS CONTRACT above).
             statFile.reload()
             cpuinfoFile.reload()
             memFile.reload()
-            root.publish()
+            if (root.lcdPresent) root.publish()   // emits ≤1 tick stale — fine for an LCD
         }
     }
 
     // Disk capacity changes slowly — refresh every 30s, not every tick.
     Timer {
         interval: 30000
-        running: true
+        running: root.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!diskProc.running) diskProc.running = true }
