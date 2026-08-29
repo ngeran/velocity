@@ -7,8 +7,9 @@
 // all properties automatically update, triggering reactive updates across
 // all QuickShell components.
 //
-// Reads ~/.cache/theme/colors.json via FileView.onFileChanged (event-driven,
-// instant updates when settings or external tools write the file).
+// Reads ~/.cache/theme/colors.json via FileView with watchChanges + a 2s
+// forced reload() (instant on inotify-visible writes, bounded staleness on
+// tmp+mv inode swaps — both zero-fork; see EXTERNAL INTAKE below).
 //
 // =============================================================================
 // SYNC WITH: settings/config/ThemeConfig.qml — the 16 color-token defaults,
@@ -17,9 +18,11 @@
 // INTENTIONAL (don't "fix" them): no isUserInitiated (the bar is READ-ONLY — it
 // only reads colors.json that settings wrote), an inline OLED clamp as defense
 // (equivalent to ThemeService.clampOLED: 4 bg tokens → #000, luminance <0.18
-// text / <0.12 textDim → #e0e0e0 / #808080), and a POLL intake (FileView.onFileChanged
-// didn't fire reliably cross-process — see git history). The intake mechanism is
-// process-specific by design.
+// text / <0.12 textDim → #e0e0e0 / #808080), and a zero-fork hybrid intake:
+// FileView.watchChanges (instant on same-inode writes) plus a 2s forced
+// reload() Timer. Plain watchChanges alone missed tmp+mv inode swaps
+// cross-process (see git history); reload() re-reads by path in C++, so it
+// is immune. The intake mechanism is process-specific by design.
 // =============================================================================
 
 pragma Singleton
@@ -196,112 +199,56 @@ Item {
     }
 
     // =========================================================================
-    // EXTERNAL INTAKE — FileView.onFileChanged watching colors.json
+    // EXTERNAL INTAKE — FileView + forced 2s reload() (zero forks)
     // -------------------------------------------------------------------------
-    // Event-driven sync (replaces 1s poll). Reacts instantly to writes from
-    // settings (ThemeService) and external tools (theme-switcher CLI).
+    // Hybrid: watchChanges catches same-inode writes instantly via inotify;
+    // the Timer's reload() covers the tmp+mv inode swap — writers (ThemeService,
+    // theme-switcher) atomically rename, which cross-process file watches have
+    // historically missed here (see git history). reload()+text() re-read by
+    // path in C++, replacing the old `sh -c stat` gate (~60 spawns/min).
     // FileView.text is a METHOD in this Quickshell build, not a property.
     // =========================================================================
 
     property string lastCachedTimestamp: ""
-    property string lastFileMtime: ""   // stat-mtime gate (distinct from lastCachedTimestamp, which holds the JSON 'applied' field)
 
-    // Polling timer for theme sync (FileView.onFileChanged doesn't fire reliably).
-    // Now a stat-mtime gate: cheap stat every 2s; cat+parse (themePoller) only
-    // runs when the mtime actually changes (was a 1s cat+parse ~60x/min).
+    // Single ingest path for startup restore, inotify hits, and timer reloads.
+    function ingestThemeText(raw) {
+        var newData = (raw || "").trim()
+        if (newData.length === 0 || newData === root.lastCachedData) return
+        try {
+            var dataObj = JSON.parse(newData)
+            root.lastCachedData = newData
+            if (dataObj.metadata && dataObj.metadata.applied) root.lastCachedTimestamp = dataObj.metadata.applied
+            root.applyTheme(dataObj)
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
+        } catch (e) {
+            // Silent retry on parse error (file might be mid-write)
+        }
+    }
+
+    FileView {
+        id: themeFile
+        path: root.themeFilePath
+        watchChanges: true
+        printErrors: false
+
+        // Instant path (same-inode writes)
+        onFileChanged: root.ingestThemeText(themeFile.text())
+
+        // Startup restore: text() does a blocking read of the existing file.
+        Component.onCompleted: root.ingestThemeText(themeFile.text())
+    }
+
+    // Safety poll for tmp+mv inode swaps — reload() re-reads by path in C++,
+    // so it survives writers that replace the file. Zero forks.
     Timer {
         id: cachePoller
-        interval: 2000  // Stat every 2 seconds (was 1s cat+parse)
+        interval: 2000
         running: true
         repeat: true
-        onTriggered: { if (!statProc.running) statProc.running = true }
-    }
-
-    // Stat-mtime gate: emits colors.json's mtime. Only forks the cat+parse
-    // themePoller when the mtime differs from the last-seen value.
-    Process {
-        id: statProc
-        command: ["sh", "-c", "printf '%s' \"$(stat -c %Y '" + root.themeFilePath + "' 2>/dev/null)\""]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { statProc.buffer += data }
-        }
-        onRunningChanged: {
-            if (!running) {
-                var mtime = statProc.buffer.trim()
-                statProc.buffer = ""
-                if (mtime.length > 0 && mtime !== root.lastFileMtime) {
-                    root.lastFileMtime = mtime
-                    if (!themePoller.running) themePoller.running = true
-                }
-            }
-        }
-    }
-
-    // Poller process for checking theme file changes
-    Process {
-        id: themePoller
-        command: ["cat", root.themeFilePath]
-        property string pollBuffer: ""
-        stdout: SplitParser {
-            onRead: function(data) {
-                themePoller.pollBuffer += data
-            }
-        }
-        onExited: function(code) {
-            if (!themePoller.pollBuffer || themePoller.pollBuffer.trim() === "") return
-            try {
-                var newData = themePoller.pollBuffer.trim()
-                // Check if data actually changed
-                if (newData === root.lastCachedData) {
-                    themePoller.pollBuffer = ""
-                    return
-                }
-
-                var dataObj = JSON.parse(newData)
-                var newTimestamp = (dataObj.metadata && dataObj.metadata.applied) ? dataObj.metadata.applied : ""
-                if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
-                    themePoller.pollBuffer = ""
-                    return  // No actual change
-                }
-
-                if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
-
-                root.lastCachedTimestamp = newTimestamp
-                root.lastCachedData = newData
-                root.applyTheme(dataObj)
-            } catch (e) {
-                // Silent retry on parse error (file might be mid-write)
-            }
-            themePoller.pollBuffer = ""
-        }
-    }
-
-    // Startup restore: FileView doesn't fire for an already-existing file at
-    // launch, so explicitly read colors.json once on completion to restore the
-    // last-applied theme from the previous session.
-    Component.onCompleted: startupReader.running = true
-
-    Process {
-        id: startupReader
-        command: ["sh", "-c", "cat " + root.themeFilePath]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data } }
-        onRunningChanged: {
-            if (!running && startupReader.buffer.trim().length > 0) {
-                try {
-                    var raw = startupReader.buffer.trim()
-                    var data = JSON.parse(raw)
-                    root.lastCachedData = raw
-                    if (data.metadata && data.metadata.applied) root.lastCachedTimestamp = data.metadata.applied
-                    root.applyTheme(data)
-                    if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Startup theme restored")
-                } catch (e) {
-                    // No/invalid cache yet — keep defaults
-                    if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] No cache file, using defaults")
-                }
-                startupReader.buffer = ""
-            }
+        onTriggered: {
+            themeFile.reload()
+            root.ingestThemeText(themeFile.text())
         }
     }
 }
