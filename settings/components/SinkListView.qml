@@ -64,18 +64,8 @@ Column {
     // =========================================================================
     // 1. HEADER
     // =========================================================================
-    RowLayout {
-        width: parent.width
-        spacing: 8
-
-        Rectangle { width: 3; height: 16; color: Config.ControlConfig.accent; Layout.alignment: Qt.AlignVCenter }
-
-        Text {
-            text: "AUDIO"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true
-            color: Config.ThemeConfig.colors.text
-            Layout.alignment: Qt.AlignVCenter
-        }
+    SectionHeader {
+        title: "AUDIO"
 
         // Engine-state pill — PIPEWIRE when a default sink exists, else NO_OUTPUT
         Rectangle {

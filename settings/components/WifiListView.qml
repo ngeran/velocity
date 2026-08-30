@@ -71,18 +71,8 @@ Column {
     // =========================================================================
     // 1. HEADER
     // =========================================================================
-    RowLayout {
-        width: parent.width
-        spacing: 8
-
-        Rectangle { width: 3; height: 16; color: Config.ControlConfig.accent; Layout.alignment: Qt.AlignVCenter }
-
-        Text {
-            text: "NETWORK"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true
-            color: Config.ThemeConfig.colors.text
-            Layout.alignment: Qt.AlignVCenter
-        }
+    SectionHeader {
+        title: "NETWORK"
 
         // Link-state pill
         Rectangle {

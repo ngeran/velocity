@@ -131,18 +131,8 @@ Column {
     // =========================================================================
     // 1. HEADER — DPMS pill is now a toggle
     // =========================================================================
-    RowLayout {
-        width: parent.width
-        spacing: 8
-
-        Rectangle { width: 3; height: 16; color: Config.ControlConfig.accent; Layout.alignment: Qt.AlignVCenter }
-
-        Text {
-            text: "DISPLAY"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true
-            color: Config.ThemeConfig.colors.text
-            Layout.alignment: Qt.AlignVCenter
-        }
+    SectionHeader {
+        title: "DISPLAY"
 
         Rectangle {
             Layout.alignment: Qt.AlignVCenter

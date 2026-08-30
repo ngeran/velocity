@@ -6,7 +6,7 @@
 // Stack (scrolls with the parent Flickable, ~440px wide):
 //   1. Header         — title + power-state pill + count/scan countdown + RESCAN
 //   2. Status card    — HudCard: adapter alias + STATE/ADAPTER/VERSION/DEVICES
-//                       grid + (offline) POWER ON + (connected) battery bar
+//                       grid + power pill toggle + (connected) battery bar
 //   3. PAIRED_NODES   — HudCard: NAME | SIGNAL | STATE | ACTION + rows
 //   4. AVAIL_BEACONS  — HudCard: same geometry, scan-discovered beacons
 //
@@ -65,18 +65,8 @@ Column {
     // =========================================================================
     // 1. HEADER
     // =========================================================================
-    RowLayout {
-        width: parent.width
-        spacing: 8
-
-        Rectangle { width: 3; height: 16; color: Config.ControlConfig.accent; Layout.alignment: Qt.AlignVCenter }
-
-        Text {
-            text: "BLUETOOTH"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true
-            color: Config.ThemeConfig.colors.text
-            Layout.alignment: Qt.AlignVCenter
-        }
+    SectionHeader {
+        title: "BLUETOOTH"
 
         // Power-state pill
         Rectangle {
@@ -164,21 +154,11 @@ Column {
                     color: Config.ThemeConfig.colors.textDim
                 }
                 Item { Layout.fillWidth: true }
-                // Power chip
-                Rectangle {
+                // Power pill
+                PowerPill {
                     Layout.alignment: Qt.AlignVCenter
-                    width: pwrChipLbl.implicitWidth + 12; height: 14
-                    color: Services.BluetoothControlService.powered
-                           ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
-                           : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.10)
-                    border.color: Services.BluetoothControlService.powered ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-                    border.width: 1
-                    Text {
-                        id: pwrChipLbl; anchors.centerIn: parent
-                        text: Services.BluetoothControlService.powered ? "ON" : "OFF"
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                        color: Services.BluetoothControlService.powered ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-                    }
+                    on: Services.BluetoothControlService.powered
+                    onClicked: Services.BluetoothControlService.togglePower()
                 }
             }
 
@@ -208,25 +188,6 @@ Column {
                 Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "ADAPTER"; value: Services.BluetoothControlService.adapterAddress || "—" }
                 Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "VERSION"; value: Services.BluetoothControlService.adapterVersion || "—" }
                 Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "DEVICES"; value: Services.BluetoothControlService.devices.length }
-            }
-
-            // POWER ON button (only when the adapter is off)
-            Rectangle {
-                Layout.alignment: Qt.AlignLeft
-                width: pwrOnLbl.implicitWidth + 16; height: 20
-                visible: !Services.BluetoothControlService.powered
-                color: pwrOnMA.containsMouse ? Config.ControlConfig.accent : "transparent"
-                border.color: Config.ControlConfig.accent; border.width: 1
-                Text {
-                    id: pwrOnLbl; anchors.centerIn: parent
-                    text: "POWER ON"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                    color: pwrOnMA.containsMouse ? Config.ThemeConfig.colors.background : Config.ControlConfig.accent
-                }
-                MouseArea {
-                    id: pwrOnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: Services.BluetoothControlService.togglePower()
-                }
             }
 
             // Connected-device battery bar (first connected dev with a battery)
