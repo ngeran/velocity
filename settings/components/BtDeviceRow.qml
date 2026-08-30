@@ -7,10 +7,10 @@
 //   • beacon === true  → unpaired scanned device (AVAIL_BEACONS card)
 //   • beacon === false → paired device (PAIRED_NODES card)
 // Behaviour:
-//   • connected row → left accent bar + CONNECTED chip + TERMINATE button
-//   • busy (pairing/connecting) → spinner + amber tint + PAIRING/CONNECTING chip
-//   • paired/disconnected → PAIRED chip + INITIATE button
-//   • unpaired beacon → NEW chip + PAIR button
+//   • connected row → left accent bar + CONNECTED chip + Disconnect button
+//   • busy (pairing/connecting) → Pairing.../Connecting... label + amber tint
+//   • paired/disconnected → PAIRED chip + Connect button
+//   • unpaired beacon → NEW chip + Confirm button
 //   • paired row + hover → [×] forget (BluetoothControlService.remove)
 //
 // NOTE on click handling: the row MouseArea covers the whole row, so the
@@ -88,10 +88,10 @@ Item {
                                          : Config.ThemeConfig.colors.textDim
     readonly property bool stateColored: dev.connected || row.busy || dev.paired
 
-    // ── Action button label/border (TERMINATE / INITIATE / PAIR) ───────────────
-    readonly property string actionText: dev.connected ? "TERMINATE"
-                                         : dev.paired  ? "INITIATE"
-                                         : "PAIR"
+    // ── Action button label/border (Disconnect / Connect / Confirm) ───────────────
+    readonly property string actionText: dev.connected ? "Disconnect"
+                                         : dev.paired  ? "Connect"
+                                         : "Confirm"
     readonly property color actionBorderColor: dev.connected ? Config.ThemeConfig.colors.error
                                                 : Config.ControlConfig.accent
 
@@ -286,17 +286,14 @@ Item {
                     }
                 }
             }
-            // Busy spinner — replaces the action button while pairing/connecting.
+            // Busy state label — replaces the action button while pairing/connecting.
             Text {
                 visible: row.busy
                 anchors.left: parent.left; anchors.leftMargin: 2
                 anchors.verticalCenter: parent.verticalCenter
-                text: "◌"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 12
+                text: row.pairing ? "Pairing..." : "Connecting..."
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
                 color: Config.ThemeConfig.colors.warning
-                RotationAnimator on rotation {
-                    running: row.busy; from: 0; to: 360; duration: 900; loops: Animation.Infinite
-                }
             }
         }
 
