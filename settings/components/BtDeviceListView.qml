@@ -310,7 +310,7 @@ Column {
         Text {
             Layout.fillWidth: true
             visible: view.pairedDevs.length === 0 && !Services.BluetoothControlService.scanning
-            text: "// no paired devices — press RESCAN"
+            text: "// no paired devices — press RESCAN to scan"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6
@@ -379,7 +379,7 @@ Column {
         Text {
             Layout.fillWidth: true
             visible: view.beaconDevs.length === 0 && !Services.BluetoothControlService.scanning
-            text: "// no beacons — press RESCAN to discover"
+            text: "// no devices found — press RESCAN to scan nearby devices"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6

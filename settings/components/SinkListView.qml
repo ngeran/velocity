@@ -265,7 +265,7 @@ Column {
         Text {
             Layout.fillWidth: true
             visible: Services.AudioControlService.sinks.length === 0
-            text: "// no output devices"
+            text: "// no audio output devices detected"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6
@@ -321,7 +321,7 @@ Column {
         Text {
             Layout.fillWidth: true
             visible: Services.AudioControlService.sinkInputs.length === 0
-            text: "// no active streams"
+            text: "// no active audio streams"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             Layout.topMargin: 8; Layout.bottomMargin: 6
