@@ -90,6 +90,15 @@ ShellRoot {
         PanelWindow {
             id: panelWindow
 
+            // Variants REQUIRE the delegate to declare the model item slot:
+            // without `modelData` (plain property — a `required property`
+            // breaks on JS-array models), delegate recreation fails initial-
+            // property assignment and the window NEVER re-attaches to an
+            // output. Symptom: after lock/DPMS off-on the bar is gone for
+            // good ("PanelWindow does not have a property called modelData").
+            property var modelData: null
+            screen: modelData
+
             property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
 
             // Placeholder/zero-sized screens (connector hotplug churn) must
