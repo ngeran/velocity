@@ -62,28 +62,7 @@ Column {
     }
 
     // Segmented control pill; `active` highlights, `when` gates visibility.
-    component Seg: Rectangle {
-        property string text: ""
-        property bool active: false
-        signal chosen()
-        height: 20
-        width: segLbl.implicitWidth + 14
-        color: active ? Config.ThemeConfig.tint(segColor, 0.18) : Qt.rgba(1, 1, 1, 0.03)
-        property color segColor: Config.ThemeConfig.colors.secondary
-        border.color: active ? segColor : Config.ThemeConfig.colors.border
-        border.width: 1
-        Text {
-            id: segLbl; anchors.centerIn: parent
-            text: parent.text
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-            color: parent.active ? parent.segColor : Config.ThemeConfig.colors.textDim
-        }
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: if (!parent.active) parent.chosen()
-        }
-    }
+    component Seg: ControlSeg {}
 
     // Slim HUD slider (no QtQuick.Controls — Basic import is broken in this
     // build). Drag or click; emits `moved` continuously (rules are queued).

@@ -62,27 +62,10 @@ Column {
     }
 
     // Segmented MIN SIGNAL button (ALL / ≥50% / ≥70%) — sets minSignal.
-    component FilterSeg: Rectangle {
-        property string label: ""
-        property bool active: false
+    component FilterSeg: ControlSeg {
         property int value: 0
-        height: 18
-        width: segLbl.implicitWidth + 14
-        color: active ? Config.ControlConfig.accent
-                      : (segMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent")
-        border.color: active ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
-        border.width: 1
-        Behavior on color { ColorAnimation { duration: 100 } }
-        Text {
-            id: segLbl; anchors.centerIn: parent
-            text: parent.label
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-            color: parent.active ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
-        }
-        MouseArea {
-            id: segMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-            onClicked: view.minSignal = value
-        }
+        onTarget: view
+        targetProperty: "minSignal"
     }
 
     // =========================================================================
@@ -384,9 +367,9 @@ Column {
                 color: Config.ThemeConfig.colors.textDim
                 Layout.alignment: Qt.AlignVCenter
             }
-            FilterSeg { label: "ALL";  value: 0;  active: view.minSignal === 0 }
-            FilterSeg { label: "≥50%"; value: 50; active: view.minSignal === 50 }
-            FilterSeg { label: "≥70%"; value: 70; active: view.minSignal === 70 }
+            FilterSeg { text: "ALL";  value: 0;  active: view.minSignal === 0 }
+            FilterSeg { text: "≥50%"; value: 50; active: view.minSignal === 50 }
+            FilterSeg { text: "≥70%"; value: 70; active: view.minSignal === 70 }
             Item { Layout.fillWidth: true }
             Text {
                 visible: view.minSignal > 0
