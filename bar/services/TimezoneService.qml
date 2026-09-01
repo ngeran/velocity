@@ -38,16 +38,29 @@ QtObject {
     function refresh() { root.now = new Date() }
 
     // ── Derived labels (reactive on `now`) ───────────────────────────────────
-    // Hover pill: the LOCAL zone's time only ("ATHENS 20:04") — the tray card
-    // holds the full world list. Derived from the system timezone, so travel
-    // relabels it automatically.
-    readonly property string compactLabel: {
-        var t = timeIn("")
-        if (!t) return ""
-        var city = ""
-        var zn = localZoneName
-        if (zn && zn.indexOf("/") !== -1) city = zn.split("/").pop().replace(/_/g, " ")
-        return city !== "" ? city.toUpperCase() + " " + t : t
+    // Hover pill: Athens time ONLY ("ATHENS 01:07"), computed manually from
+    // UTC — this system's tz database is broken (every zone renders +0000:
+    // `TZ=Europe/Athens date` returns plain UTC), so Intl/tzdata conversions
+    // cannot be trusted. Athens follows the EU DST rule: EEST (UTC+3) from the
+    // last Sunday of March to the last Sunday of October, EET (UTC+2) after.
+    readonly property string compactLabel: "ATHENS " + athensTime()
+
+    // ── Athens (manual, tzdata-free) ─────────────────────────────────────────
+    function lastSundayUtc(year, month) {          // month 0-based
+        var d = new Date(Date.UTC(year, month + 1, 0))   // last day of month
+        d.setUTCDate(d.getUTCDate() - d.getUTCDay())     // back to Sunday
+        d.setUTCHours(1, 0, 0, 0)                        // 01:00 UTC
+        return d.getTime()
+    }
+    function athensOffsetMinutes(d) {
+        var start = lastSundayUtc(d.getUTCFullYear(), 2)   // March
+        var end   = lastSundayUtc(d.getUTCFullYear(), 9)   // October
+        return (d.getTime() >= start && d.getTime() < end) ? 180 : 120
+    }
+    function pad2(n) { return (n < 10 ? "0" : "") + n }
+    function athensTime() {
+        var d = new Date(root.now.getTime() + athensOffsetMinutes(root.now) * 60000)
+        return pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes())
     }
 
     // System timezone IANA name ("Europe/Athens") for the popup's date line.
