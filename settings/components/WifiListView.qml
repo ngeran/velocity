@@ -1,15 +1,15 @@
 // =============================================================================
-// WifiListView.qml — NETWORK section view (tactical HUD)
+// WifiListView.qml — NETWORK section view (viewport-fit, NO SCROLLING)
 // =============================================================================
-// Stack (scrolls with the parent Flickable, ~440px wide):
-//   1. Header            — title + link-state pill + count/scan-dots + RESCAN
-//   2. Connected-status  — HudCard: active SSID + signal meter + IP/IFACE/TYPE
-//                          (or NO_ACTIVE_LINK when offline)
-//   3. Password dialog   — inline form (WifiListRow.requestPassword opens it)
-//   4. SSID scan table   — HudCard: SSID | SIGNAL | SECURITY | CHAN + rows
+// Fixed composition per SKILL.md §6.1:
+//   header row (badge · counts · RESCAN)
+//   body = left summary column (ACTIVE LINK + filters) | right list card
+//          whose rows clamp to the visible capacity (priority order:
+//          in-use first, then signal desc; footer shows visible-of-total).
 //
 // Backed by Services.NetworkControlService (nmcli). All colours are live
-// ThemeConfig tokens (no hardcoded rgba).
+// ThemeConfig tokens. Filtering, scanning, inline-password and freeze logic
+// are unchanged from the scrolling version.
 // =============================================================================
 
 import QtQuick
@@ -17,10 +17,9 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-Column {
+ColumnLayout {
     id: view
-    width: parent ? parent.width : 400
-    spacing: Config.ControlConfig.space4
+    spacing: Config.ControlConfig.space3
 
     readonly property var cs: Services.NetworkControlService.connectionStatus
     readonly property bool linkUp: view.cs.connected === true
@@ -28,10 +27,10 @@ Column {
     readonly property int linkBars: view.cs.signal >= 75 ? 4 : view.cs.signal >= 50 ? 3 : view.cs.signal >= 25 ? 2 : view.cs.signal > 0 ? 1 : 0
 
     // Minimum signal a scan-row needs to be shown (0 = ALL). Default 50 hides
-    // weak/noisy APs. The active link is force-included even below threshold so
-    // the network you're on never vanishes from its own table.
+    // weak/noisy APs. The active link is force-included even below threshold.
     property int minSignal: 50
     property bool anyRowEditing: false  // Tracks if any row is in password-edit mode
+
     readonly property var filteredNets: {
         var all = Services.NetworkControlService.wifiNetworks
         if (view.minSignal <= 0) return all
@@ -42,6 +41,21 @@ Column {
         }
         return out
     }
+
+    // Priority order for the visible capacity: in-use first, then signal desc.
+    // Presentation-only — the service's array is never mutated.
+    readonly property var sortedNets: {
+        var arr = view.filteredNets.slice(0)
+        arr.sort(function(a, b) {
+            if (a.inUse !== b.inUse) return a.inUse ? -1 : 1
+            return b.signal - a.signal
+        })
+        return arr
+    }
+    // Rows are 40px (66 while one expands for the inline password field —
+    // reserve one slot so the editor is never clipped by the viewport).
+    readonly property int listCapacity: Math.max(3, Math.floor(listViewport.height / 40) - (view.anyRowEditing ? 1 : 0))
+    readonly property var visibleNets: view.sortedNets.slice(0, view.listCapacity)
 
     // Label/value stat pair (used by the connected card).
     component Stat: RowLayout {
@@ -70,12 +84,12 @@ Column {
     }
 
     // =========================================================================
-    // 1. HEADER
+    // 1. HEADER ROW
     // =========================================================================
     SectionHeader {
+        Layout.fillWidth: true
         title: "NETWORK"
 
-        // Link-state badge
         StatusBadge {
             Layout.alignment: Qt.AlignVCenter
             label: view.linkUp ? "STABLE" : "OFFLINE"
@@ -84,7 +98,6 @@ Column {
 
         Item { Layout.fillWidth: true }
 
-        // Network count (idle)
         Text {
             visible: !Services.NetworkControlService.scanning
             Layout.alignment: Qt.AlignVCenter
@@ -93,7 +106,6 @@ Column {
             color: Config.ThemeConfig.colors.textDim
         }
 
-        // Animated scan dots
         Text {
             visible: Services.NetworkControlService.scanning
             Layout.alignment: Qt.AlignVCenter
@@ -109,7 +121,6 @@ Column {
             }
         }
 
-        // RESCAN button
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
             width: rescanLbl.implicitWidth + 20; height: 24
@@ -134,208 +145,241 @@ Column {
         }
     }
 
-    // Hero-row status caption
-    Text {
-        Layout.fillWidth: true
-        Layout.topMargin: -6
-        text: "WIFI · " + (view.cs.iface || "—").toUpperCase() + " · " + (view.linkUp ? "IP · " + view.cs.signal + "% SIGNAL" : "OFFLINE")
-        font.family: Config.ControlConfig.fontSans
-        font.pixelSize: 10
-        font.letterSpacing: 0.3
-        color: Config.ThemeConfig.colors.textDim
-        opacity: 0.75
-    }
-
     // Error surface
     Text {
         Layout.fillWidth: true
         visible: Services.NetworkControlService.lastConnectError !== ""
         text: "⚠ " + Services.NetworkControlService.lastConnectError
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 9
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
         color: Config.ThemeConfig.colors.error
-        wrapMode: Text.Wrap
-        Layout.topMargin: 4
+        wrapMode: Text.NoWrap
+        elide: Text.ElideMiddle
     }
 
     // =========================================================================
-    // 2. CONNECTED-STATUS CARD
+    // 2. BODY — summary column | list card (both fit the pane, no scrolling)
     // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.secondary
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: Config.ControlConfig.space3
 
+        // ── Left: summary column ──────────────────────────────────────────────
         ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Config.ControlConfig.space2
+            Layout.preferredWidth: 300
+            Layout.maximumWidth: 340
+            Layout.fillHeight: true
+            spacing: Config.ControlConfig.space3
 
-            RowLayout {
+            SettingsCard {
                 Layout.fillWidth: true
-                Text {
-                    text: "ACTIVE LINK"
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
-                    color: Config.ThemeConfig.colors.textDim
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    visible: view.linkUp
-                    text: view.cs.signal + "%"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
-                    color: Config.ControlConfig.accent
-                }
-            }
+                accent: Config.ThemeConfig.colors.secondary
 
-            // SSID (big) when connected, else offline message. Uses the theme
-            // primary (teal) instead of near-white — lower luminance, easier on
-            // a QD-OLED, still clearly readable as the hero headline.
-            Text {
-                Layout.fillWidth: true
-                text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO ACTIVE LINK"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
-                color: view.linkUp ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-                elide: Text.ElideRight
-            }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.ControlConfig.space2
 
-            // 4-segment signal meter (connected + wifi)
-            Row {
-                Layout.fillWidth: true
-                visible: view.linkUp && view.cs.signal > 0
-                spacing: 3
-                Repeater {
-                    model: 4
-                    Rectangle {
-                        width: (view.width - 32) / 4 - 3    // fill the card width (~) minus gaps
-                        height: 4
-                        color: index < view.linkBars ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "ACTIVE LINK"
+                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                            color: Config.ThemeConfig.colors.textDim
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            visible: view.linkUp
+                            text: view.cs.signal + "%"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
+                            color: Config.ControlConfig.accent
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO ACTIVE LINK"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
+                        color: view.linkUp ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
+                    }
+
+                    Row {
+                        Layout.fillWidth: true
+                        visible: view.linkUp && view.cs.signal > 0
+                        spacing: 3
+                        Repeater {
+                            model: 4
+                            Rectangle {
+                                width: (view.cs.iface ? 268 : 268) / 4 - 3
+                                height: 4; radius: 2
+                                color: index < view.linkBars ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Stat { label: "IP";    value: view.cs.ip    || "—" }
+                        Stat { label: "IFACE"; value: view.cs.iface || "—" }
+                        Item { Layout.fillWidth: true }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Stat { label: "TYPE";  value: (view.cs.type || "—").toUpperCase() }
+                        Item { Layout.fillWidth: true }
                     }
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-            // Stat row: IP · IFACE · TYPE
-            RowLayout {
+            SettingsCard {
                 Layout.fillWidth: true
-                spacing: 12
-                Stat { label: "IP";    value: view.cs.ip    || "—" }
-                Stat { label: "IFACE"; value: view.cs.iface || "—" }
-                Stat { label: "TYPE";  value: (view.cs.type || "—").toUpperCase() }
-                Item { Layout.fillWidth: true }
+                accent: Config.ThemeConfig.colors.primary
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text {
+                        text: "MIN SIGNAL"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
+                        color: Config.ThemeConfig.colors.textDim
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    FilterSeg { text: "ALL";  value: 0;  active: view.minSignal === 0 }
+                    FilterSeg { text: "≥50%"; value: 50; active: view.minSignal === 50 }
+                    FilterSeg { text: "≥70%"; value: 70; active: view.minSignal === 70 }
+                    Item { Layout.fillWidth: true }
+                }
             }
+
+            Item { Layout.fillHeight: true }
         }
-    }
 
-    // =========================================================================
-    // 3. SSID SCAN TABLE
-    // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.primary
-        contentSpacing: 0
-
-        // Signal-strength filter — hides weak APs below the selected threshold.
-        RowLayout {
+        // ── Right: networks table (viewport-fit) ─────────────────────────────
+        SettingsCard {
             Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6
-            spacing: 6
-            Text {
-                text: "MIN SIGNAL"
-                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
-                color: Config.ThemeConfig.colors.textDim
-                Layout.alignment: Qt.AlignVCenter
-            }
-            FilterSeg { text: "ALL";  value: 0;  active: view.minSignal === 0 }
-            FilterSeg { text: "≥50%"; value: 50; active: view.minSignal === 50 }
-            FilterSeg { text: "≥70%"; value: 70; active: view.minSignal === 70 }
-            Item { Layout.fillWidth: true }
-            Text {
-                visible: view.minSignal > 0
-                Layout.alignment: Qt.AlignVCenter
-                text: view.filteredNets.length + "/" + Services.NetworkControlService.wifiNetworks.length
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                color: Config.ThemeConfig.colors.textDim
-            }
-        }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+            Layout.fillHeight: true
+            accent: Config.ThemeConfig.colors.primary
+            contentSpacing: 0
 
-        // Column header — mirrors the row's column geometry (left margin, glyph
-        // spacer, SSID fill, SIGNAL = bars+gap+%, SECURITY chip slot, CHAN, ×)
-        // so every column lines up between the header and the rows beneath it.
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6        // == row
-            spacing: 8                                          // == row
-            Item { Layout.preferredWidth: 14 }                 // == row glyph
-            Text { text: "SSID"; Layout.fillWidth: true; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 76; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SECURITY"; Layout.preferredWidth: 72; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "CHAN"; Layout.preferredWidth: 26; horizontalAlignment: Text.AlignRight; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Item { Layout.preferredWidth: 16 }                 // == row × slot
-        }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 0
 
-        // Network rows
-        Repeater {
-            model: view.filteredNets
-            delegate: WifiListRow {
-                width: parent.width
-                net: modelData
-                listFrozen: view.anyRowEditing
-                onEditingChanged: {
-                    view.anyRowEditing = editing
+                // Card header + visible-of-total count
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
+                    spacing: 6
+                    Text {
+                        text: "NETWORKS"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                        color: Config.ThemeConfig.colors.text
+                    }
+                    Text {
+                        text: view.visibleNets.length + " / " + view.filteredNets.length
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                        color: view.visibleNets.length < view.filteredNets.length
+                               ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
+                }
+
+                // Column header — mirrors the row geometry
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 10; Layout.rightMargin: 6
+                    spacing: 8
+                    Item { Layout.preferredWidth: 14 }
+                    Text { text: "SSID"; Layout.fillWidth: true; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                    Text { text: "SIGNAL"; Layout.preferredWidth: 76; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                    Text { text: "SECURITY"; Layout.preferredWidth: 72; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                    Text { text: "CHAN"; Layout.preferredWidth: 28; horizontalAlignment: Text.AlignRight; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                    Item { Layout.preferredWidth: 16 }
+                }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                // Row viewport — rows clamp to what fits (no scrollbar)
+                Item {
+                    id: listViewport
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        Repeater {
+                            model: view.visibleNets
+                            delegate: WifiListRow {
+                                width: parent.width
+                                net: modelData
+                                listFrozen: view.anyRowEditing
+                                onEditingChanged: {
+                                    view.anyRowEditing = editing
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty state — nothing found at all
+                    Text {
+                        anchors.centerIn: parent
+                        visible: Services.NetworkControlService.wifiNetworks.length === 0
+                                 && !Services.NetworkControlService.scanning
+                        text: "// no networks visible — press RESCAN to search"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.textDim
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    // Empty state — networks exist but all fall below the filter
+                    Text {
+                        anchors.centerIn: parent
+                        visible: Services.NetworkControlService.wifiNetworks.length > 0
+                                 && view.filteredNets.length === 0
+                                 && !Services.NetworkControlService.scanning
+                        text: "// " + Services.NetworkControlService.wifiNetworks.length
+                              + " weak network" + (Services.NetworkControlService.wifiNetworks.length !== 1 ? "s" : "")
+                              + " hidden — lower MIN SIGNAL to show"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.textDim
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+
+                // Footer — honest count of clamped-away rows
+                Text {
+                    Layout.fillWidth: true
+                    visible: view.visibleNets.length < view.filteredNets.length
+                    Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
+                    text: "+ " + (view.filteredNets.length - view.visibleNets.length)
+                          + " more hidden — raise MIN SIGNAL to narrow"
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                    color: Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
                 }
             }
         }
-
-        // Empty state — nothing found at all
-        Text {
-            Layout.fillWidth: true
-            visible: Services.NetworkControlService.wifiNetworks.length === 0
-                     && !Services.NetworkControlService.scanning
-            text: "// no networks visible — press RESCAN to search"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        // Empty state — networks exist but all fall below the filter threshold
-        Text {
-            Layout.fillWidth: true
-            visible: Services.NetworkControlService.wifiNetworks.length > 0
-                     && view.filteredNets.length === 0
-                     && !Services.NetworkControlService.scanning
-            text: "// " + Services.NetworkControlService.wifiNetworks.length
-                  + " weak network" + (Services.NetworkControlService.wifiNetworks.length !== 1 ? "s" : "")
-                  + " hidden — lower MIN SIGNAL to show"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
-        }
     }
 
-    // Wrong-password reprompt (Omarchy pattern): when a connect attempt fails
-    // classification says the password was wrong, reopen the passphrase prompt
-    // for that SSID with the reason shown — retype instead of re-navigating.
+    // Wrong-password reprompt (Omarchy pattern) — unchanged.
     Connections {
         target: Services.NetworkControlService
         function onConnectFailed(ssid, reasonKey, reasonLabel) {
             if (reasonKey === "wrong-password" && ssid && ssid.length > 0) {
-                // Find the row with this SSID and open inline password with error
                 for (var i = 0; i < view.filteredNets.length; i++) {
                     if (view.filteredNets[i].ssid === ssid) {
-                        // Row will need to show error - handled by error surface
-                        // Could also open the row's password field automatically
                         break
                     }
                 }
             }
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Inline label/value stat (used by the connected card)
-    // -------------------------------------------------------------------------
 }

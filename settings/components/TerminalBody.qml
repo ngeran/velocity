@@ -1,14 +1,15 @@
 // =============================================================================
-// TerminalBody.qml — scrollable content canvas
+// TerminalBody.qml — fixed-composition content pane (NO SCROLLING)
 // =============================================================================
-// Renders the active section's SettingsHeaderCard + section view (network →
-// WifiListView, bluetooth → BtDeviceListView, audio → Sink/SourceListView,
-// display → DisplayControlView) followed by the live console log from
-// CommandService. Header strings are read-only bindings — all state stays in
-// the services.
+// Per ui-refresh SKILL.md §1.7/§6.1 the pane is a fixed composition:
+// header card → active section view (fills the remaining height, viewport-fit
+// pattern) → ACTIVITY strip clamped to the last 3 console lines. The console
+// Repeater clamps with .slice(-3) — a scrolling console inside the pane is
+// not allowed. Header strings are read-only bindings; state stays in services.
 // =============================================================================
 
 import QtQuick
+import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
@@ -20,81 +21,70 @@ Rectangle {
     radius: Config.ControlConfig.radiusCard
     clip: true
 
-    Flickable {
-        id: flick
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: Config.ControlConfig.space4
-        contentWidth: width
-        contentHeight: content.implicitHeight
-        flickableDirection: Flickable.VerticalFlick
-        boundsBehavior: Flickable.StopAtBounds
-        clip: true
+        spacing: Config.ControlConfig.space3
 
-        Column {
-            id: content
-            width: flick.width
-            spacing: Config.ControlConfig.space4
-
-            // --- Section header card ---
-            SettingsHeaderCard {
-                width: content.width
-                eyebrow: "CONTROLS"
-                title: body.activeSection === "network"   ? "Network"
-                     : body.activeSection === "bluetooth" ? "Bluetooth"
-                     : body.activeSection === "audio"     ? "Audio"
-                     : body.activeSection === "display"   ? "Display"
-                     : "Control"
-                subtitle: body.activeSection === "network"
-                          ? (Services.NetworkControlService.connectionStatus.connected
-                             ? (Services.NetworkControlService.connectionStatus.ssid || "Connected")
-                               + " · " + (Services.NetworkControlService.connectionStatus.ip || "no IP")
-                             : "Not connected — scan below")
-                          : ""
-                StatusBadge {
-                    visible: body.activeSection === "network"
-                    label: Services.NetworkControlService.connectionStatus.connected ? "STABLE" : "OFFLINE"
-                    kind: Services.NetworkControlService.connectionStatus.connected ? "ok" : "err"
-                }
-            }
-
-            // --- Section views (each fades in when its section becomes active) ---
-            WifiListView {
+        // --- Section header card ---
+        SettingsHeaderCard {
+            Layout.fillWidth: true
+            eyebrow: "CONTROLS"
+            title: body.activeSection === "network"   ? "Network"
+                 : body.activeSection === "bluetooth" ? "Bluetooth"
+                 : body.activeSection === "audio"     ? "Audio"
+                 : body.activeSection === "display"   ? "Display"
+                 : "Control"
+            subtitle: body.activeSection === "network"
+                      ? (Services.NetworkControlService.connectionStatus.connected
+                         ? (Services.NetworkControlService.connectionStatus.ssid || "Connected")
+                           + " · " + (Services.NetworkControlService.connectionStatus.ip || "no IP")
+                         : "Not connected — scan below")
+                      : ""
+            StatusBadge {
                 visible: body.activeSection === "network"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                label: Services.NetworkControlService.connectionStatus.connected ? "STABLE" : "OFFLINE"
+                kind: Services.NetworkControlService.connectionStatus.connected ? "ok" : "err"
             }
+        }
 
-            BtDeviceListView {
-                visible: body.activeSection === "bluetooth"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            }
+        // --- Section views (exactly one visible; it fills the pane) ---
+        WifiListView {
+            visible: body.activeSection === "network"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
 
-            SinkListView {
-                visible: body.activeSection === "audio"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            }
+        BtDeviceListView {
+            visible: body.activeSection === "bluetooth"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
 
-            SourceListView {
-                visible: body.activeSection === "audio"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            }
+        SinkListView {
+            visible: body.activeSection === "audio"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
 
-            DisplayControlView {
-                visible: body.activeSection === "display"
-                width: content.width
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            }
+        DisplayControlView {
+            visible: body.activeSection === "display"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
 
-            // --- Console log ---
-            Item { width: 1; height: 6 }
+        // --- ACTIVITY strip — clamped to the last 3 lines, never scrolls ---
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 2
 
             Text {
                 text: "ACTIVITY"
@@ -106,12 +96,9 @@ Rectangle {
             }
 
             Repeater {
-                model: Services.CommandService.logLines
-                onCountChanged: Qt.callLater(function() {
-                    flick.contentY = Math.max(0, flick.contentHeight - flick.height)
-                })
+                model: Services.CommandService.logLines.slice(-3)
                 delegate: TerminalLogLine {
-                    width: content.width
+                    Layout.fillWidth: true
                     text: model.text
                     kind: model.kind
                 }
