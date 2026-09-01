@@ -1,10 +1,9 @@
 // =============================================================================
 // SectionHeader.qml — Unified section header component
 // =============================================================================
-// Replaces 4 header copies across the control views. Provides:
-//   • 3×16 accent bar
-//   • Title text (mono, 13px, bold)
-//   • Optional right-side content slot (status pills, counts, etc.)
+// Shibumi eyebrow idiom: small accent tick + uppercase tracked sans label.
+// Keeps the original API (title + default children slot for status pills,
+// counts, buttons) so existing call sites are unchanged.
 // =============================================================================
 
 import QtQuick
@@ -17,26 +16,28 @@ RowLayout {
     property string title: "SECTION"
 
     width: parent ? parent.width : 400
-    spacing: 8
+    spacing: Config.ControlConfig.space2
 
-    // Accent bar (3×16)
+    // Accent tick
     Rectangle {
         width: 3
-        height: 16
+        height: 14
+        radius: 1.5
         color: Config.ControlConfig.accent
         Layout.alignment: Qt.AlignVCenter
     }
 
-    // Title
+    // Eyebrow label
     Text {
         text: root.title
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 13
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
         font.bold: true
-        color: Config.ThemeConfig.colors.text
+        font.letterSpacing: 1.2
+        font.capitalization: Font.AllUppercase
+        color: Config.ThemeConfig.colors.textDim
         Layout.alignment: Qt.AlignVCenter
     }
 
-    // Right-side content slot (status pills, counts, etc.)
-    // Child components can add their own elements here
+    // Right-side content slot (status pills, counts, buttons)
 }

@@ -27,6 +27,10 @@ QtObject {
 
     // --- Typography ---
     readonly property string fontMono: "JetBrains Mono"
+    // Nerd Font family for icon glyphs (icon-only slots — not body text).
+    readonly property string fontNerd: "JetBrainsMono Nerd Font"
+    // Proportional stack for titles/labels (matches SettingsConfig.fontFamily).
+    readonly property string fontSans: SettingsConfig.fontFamily
     readonly property int fontHeadline: 14
     readonly property int fontBody: 12
     readonly property int fontLabel: 11
@@ -41,6 +45,17 @@ QtObject {
     readonly property int statusCardWidth: 190
     readonly property int padding: 16
     readonly property int radius: 0
+
+    // --- Radii + spacing (Shibumi refresh) — legacy `radius` above stays 0
+    //     because non-Controls sections still read it. ---
+    readonly property int radiusCard: 10
+    readonly property int radiusPill: 8
+    readonly property int radiusSmall: 6
+    readonly property int space1: 4
+    readonly property int space2: 8
+    readonly property int space3: 12
+    readonly property int space4: 16
+    readonly property int space5: 24
 
     // --- Sections (side-nav model) ---
     // Nerd Font glyphs verified to render elsewhere in this config.

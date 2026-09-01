@@ -5,3 +5,4 @@ singleton ThemePresets 1.0 ThemePresets.qml
 singleton SharedState 1.0 SharedState.qml
 singleton ControlConfig 1.0 ControlConfig.qml
 singleton DebugConfig 1.0 DebugConfig.qml
+singleton UIScale 1.0 UIScale.qml

@@ -39,6 +39,11 @@ ShellRoot {
         // as dead code) forces the lazy singleton to instantiate so its 1s
         // publish Timer runs for the process lifetime.
         Services.CoreEngineService.metricsPath
+        // Shibumi UI-scale — feed the singleton our live logical width (a
+        // binding, so output changes propagate). Singletons can't use the
+        // Screen attached property (not part of a scene), so the window
+        // injects it instead.
+        Config.UIScale.sourceWidth = Qt.binding(function() { return root.availableWidth })
     }
 
     // Screen-adaptive sizing — scale based on available window dimensions.

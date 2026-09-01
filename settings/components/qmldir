@@ -46,3 +46,6 @@ PowerPill 1.0 PowerPill.qml
 AudioDeviceRow 1.0 AudioDeviceRow.qml
 PanelDropdown 1.0 PanelDropdown.qml
 PanelSectionHeader 1.0 PanelSectionHeader.qml
+SettingsCard 1.0 SettingsCard.qml
+StatusBadge 1.0 StatusBadge.qml
+SettingsHeaderCard 1.0 SettingsHeaderCard.qml

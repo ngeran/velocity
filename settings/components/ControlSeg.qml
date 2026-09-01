@@ -1,5 +1,5 @@
 // =============================================================================
-// ControlSeg.qml — Unified segmented control button (Shibumi pattern)
+// ControlSeg.qml — Unified segmented control button (Shibumi pill pattern)
 // =============================================================================
 // Replaces Seg + FilterSeg. Provides two usage patterns:
 //   • Signal mode: set chosen() callback, emits on click when not active
@@ -7,10 +7,10 @@
 //                 assignment (e.g. onTarget: view, targetProperty: "minSignal")
 //
 // Styling (Shibumi pattern):
-//   • Selected: tint(accent, 0.18) bg + bold + accent border
-//   • Hover: tint(accent, 0.08) bg + accent border
-//   • Idle: transparent bg + border border
-//   • All transitions: 100ms ColorAnimation
+//   • Selected: tint(accent, 0.16) bg + accent text + accent border
+//   • Hover: tint(text, 0.06) bg + outlineVariant border
+//   • Idle: tint(surface, 0.4) bg + outlineVariant border
+//   • Pill radius 8, 26px tall, 100ms transitions
 // =============================================================================
 
 import QtQuick
@@ -40,17 +40,20 @@ Rectangle {
     // -------------------------------------------------------------------------
     // DIMENSIONS
     // -------------------------------------------------------------------------
-    height: 18
-    width: segLbl.implicitWidth + 14
+    height: 26
+    width: segLbl.implicitWidth + 20
 
     // -------------------------------------------------------------------------
-    // APPEARANCE (Shibumi pattern)
+    // APPEARANCE (Shibumi pill pattern)
     // -------------------------------------------------------------------------
+    radius: Config.ControlConfig.radiusPill
+
     color: root.active
-           ? Config.ThemeConfig.tint(root.accent, 0.18)
-           : (segMA.containsMouse ? Config.ThemeConfig.tint(root.accent, 0.08) : "transparent")
+           ? Config.ThemeConfig.tint(root.accent, 0.16)
+           : (segMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.06)
+                                  : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4))
 
-    border.color: root.active || segMA.containsMouse ? root.accent : Config.ThemeConfig.colors.border
+    border.color: root.active ? root.accent : Config.ThemeConfig.colors.outlineVariant
     border.width: 1
 
     Behavior on color { ColorAnimation { duration: 100 } }
@@ -64,9 +67,10 @@ Rectangle {
         anchors.centerIn: parent
         text: root.text
         font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 8
+        font.pixelSize: 10
         font.bold: root.active
-        color: root.active ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
+        font.letterSpacing: 0.4
+        color: root.active ? root.accent : Config.ThemeConfig.colors.text
     }
 
     // -------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 // =============================================================================
-// PanelDropdown.qml — Dropdown control (omarchy pattern, our theme)
+// PanelDropdown.qml — Dropdown control (Shibumi pill pattern, our theme)
 // =============================================================================
-// Provides keyboard-accessible dropdown with hover states and auto-positioning.
-// Replaces inline Seg controls for cleaner UI.
+// Keyboard-accessible dropdown with hover states and auto-positioning.
 //
 // Interface:
 //   property string label: ""           // Label text (optional)
@@ -13,11 +12,9 @@
 // Signals:
 //   signal changed(string value)       // Emitted when selection changes
 //
-// Theme mapping (from omarchy Color.* to Config.ThemeConfig.*):
-//   Color.foreground        → Config.ThemeConfig.colors.text
-//   Color.accent           → Config.ControlConfig.accent
-//   Color.popups.background → Config.ThemeConfig.colors.surface
-//   Color.popups.border     → Config.ThemeConfig.colors.border
+// All colors resolve through ThemeConfig (surface / surfaceContainer /
+// outlineVariant / accent) — no hardcoded rgb anywhere, so the control
+// repaints correctly on theme switches.
 // =============================================================================
 
 import QtQuick
@@ -28,7 +25,7 @@ import "../config" as Config
 Item {
     id: root
     width: parent ? parent.width : 140
-    implicitHeight: showLabel && label !== "" ? 24 + 4 : 24
+    implicitHeight: showLabel && label !== "" ? 26 + Config.ControlConfig.space1 : 26
 
     property string label: ""
     property string value: ""
@@ -52,7 +49,7 @@ Item {
         return value
     }
     function menuPosition() {
-        var popupHeight = options.length * 26 + 8
+        var popupHeight = options.length * 30 + 8
         var belowY = trigger.height + 4
         if (belowY + popupHeight <= parent.height) return Qt.point(0, belowY)
         return Qt.point(0, -popupHeight - 4)
@@ -60,50 +57,57 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: 4
+        spacing: Config.ControlConfig.space1
 
-        // Label (optional)
+        // Label (optional) — eyebrow style
         Text {
             visible: root.showLabel && root.label !== ""
             text: root.label
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 8
+            font.family: Config.ControlConfig.fontSans
+            font.pixelSize: 10
             font.bold: true
+            font.letterSpacing: 1.0
+            font.capitalization: Font.AllUppercase
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight
         }
 
-        // Trigger button
+        // Trigger button — themed surface pill
         Rectangle {
             id: trigger
             width: parent.width
-            height: 24
-            color: mouseArea.containsMouse ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(0, 0, 0, 0.05)
-            border.color: mouseArea.containsMouse ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+            height: 26
+            radius: Config.ControlConfig.radiusPill
+            color: mouseArea.containsMouse || menu.opened
+                   ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.14)
+                   : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.55)
+            border.color: mouseArea.containsMouse || menu.opened
+                          ? Config.ControlConfig.accent
+                          : Config.ThemeConfig.colors.outlineVariant
             border.width: 1
-            radius: 4
             Behavior on color { ColorAnimation { duration: 100 } }
             Behavior on border.color { ColorAnimation { duration: 100 } }
 
             Text {
-                anchors.left: parent.left; anchors.leftMargin: 8
+                anchors.left: parent.left; anchors.leftMargin: 10
                 anchors.right: chevron.left; anchors.rightMargin: 4
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.currentLabel()
                 font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 9
+                font.pixelSize: 10
                 color: Config.ThemeConfig.colors.text
                 elide: Text.ElideRight
             }
 
             Text {
                 id: chevron
-                anchors.right: parent.right; anchors.rightMargin: 6
+                anchors.right: parent.right; anchors.rightMargin: 8
                 anchors.verticalCenter: parent.verticalCenter
                 text: menu.opened ? "󰅃" : "󰅀"
-                font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 8
-                color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontNerd
+                font.pixelSize: 9
+                color: mouseArea.containsMouse ? Config.ControlConfig.accent
+                                               : Config.ThemeConfig.colors.textDim
             }
 
             MouseArea {
@@ -116,56 +120,59 @@ Item {
         }
     }
 
-    // Popup menu
+    // Popup menu — opaque themed surface
     Popup {
         id: menu
         parent: root
         x: 0
         y: root.menuPosition().y
         width: trigger.width
+        padding: 4
 
-        Rectangle {
-            width: parent.width
-            height: parent.height
-            color: Qt.rgba(0, 0, 0, 0.95)
-            border.color: Config.ThemeConfig.colors.border
+        background: Rectangle {
+            radius: Config.ControlConfig.radiusCard
+            color: Config.ThemeConfig.colors.surfaceContainer
+            border.color: Config.ThemeConfig.colors.outlineVariant
             border.width: 1
-            radius: 4
+        }
 
-            Column {
-                anchors.fill: parent
-                spacing: 0
+        contentItem: Column {
+            spacing: 0
 
-                Repeater {
-                    model: root.options
-                    Rectangle {
-                        width: parent.width
-                        height: 28
-                        color: optionMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.2) : Qt.rgba(1, 1, 1, 0.05)
-                        Behavior on color { ColorAnimation { duration: 80 } }
+            Repeater {
+                model: root.options
+                Rectangle {
+                    width: trigger.width - 8
+                    height: 30
+                    radius: Config.ControlConfig.radiusSmall
+                    color: optionMA.containsMouse
+                           ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.12)
+                           : "transparent"
+                    Behavior on color { ColorAnimation { duration: 80 } }
 
-                        Text {
-                            anchors.left: parent.left; anchors.leftMargin: 8
-                            anchors.right: parent.right; anchors.rightMargin: 6
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: optionLabel(modelData)
-                            font.family: Config.ControlConfig.fontMono
-                            font.pixelSize: 9
-                            color: optionValue(modelData) === root.value ? Config.ControlConfig.accent : Config.ThemeConfig.colors.text
-                            font.bold: optionValue(modelData) === root.value
-                            elide: Text.ElideRight
-                        }
+                    Text {
+                        anchors.left: parent.left; anchors.leftMargin: 10
+                        anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: optionLabel(modelData)
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 10
+                        color: optionValue(modelData) === root.value
+                               ? Config.ControlConfig.accent
+                               : Config.ThemeConfig.colors.text
+                        font.bold: optionValue(modelData) === root.value
+                        elide: Text.ElideRight
+                    }
 
-                        MouseArea {
-                            id: optionMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.value = optionValue(modelData)
-                                root.changed(root.value)
-                                menu.close()
-                            }
+                    MouseArea {
+                        id: optionMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.value = optionValue(modelData)
+                            root.changed(root.value)
+                            menu.close()
                         }
                     }
                 }
