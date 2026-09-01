@@ -385,44 +385,41 @@ Column {
                 }
             }
 
-            // Colour preset pills
-            Flow {
-                Layout.fillWidth: true; spacing: 6
+            // Colour preset dropdown
+            PanelDropdown {
+                Layout.fillWidth: true
                 visible: view.hdrOn
-                Repeater {
-                    model: [
-                        { label: "EDID", value: "edid" },
-                        { label: "P3", value: "dcip3" },
-                        { label: "WIDE", value: "wide" },
-                        { label: "HDR-EDID", value: "hdredid" },
-                        { label: "HDR-WIDE", value: "hdr" }
-                    ]
-                    delegate: Seg {
-                        required property var modelData
-                        text: modelData.label
-                        active: view.mon && view.mon.colorPreset === modelData.value
-                        segColor: Config.ThemeConfig.colors.warning
-                        onChosen: Services.MonitorService.applyRule({ cm: modelData.value })
-                    }
+                showLabel: false
+                value: view.mon ? view.mon.colorPreset.toUpperCase() : "EDID"
+                options: [
+                    { label: "EDID", value: "edid" },
+                    { label: "P3", value: "dcip3" },
+                    { label: "WIDE", value: "wide" },
+                    { label: "HDR-EDID", value: "hdredid" },
+                    { label: "HDR-WIDE", value: "hdr" }
+                ]
+                onChanged: function(newValue) {
+                    Services.MonitorService.applyRule({ cm: newValue })
                 }
             }
 
             // Bit depth + live scanout truth
-            RowLayout {
-                Layout.fillWidth: true; spacing: 6
-                Text { text: "BIT DEPTH"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                    color: Config.ThemeConfig.colors.textDim }
-                Item { Layout.fillWidth: true }
-                Text { text: "scanout " + (view.mon ? view.mon.format : "—")
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                    color: Config.ThemeConfig.colors.textDim }
-                Seg { text: "8"; segColor: Config.ThemeConfig.colors.warning
-                    active: Services.MonitorService.liveBitdepth() === 8
-                    onChosen: Services.MonitorService.applyRule({ bitdepth: 8 }) }
-                Seg { text: "10"; segColor: Config.ThemeConfig.colors.warning
-                    active: Services.MonitorService.liveBitdepth() === 10
-                    onChosen: Services.MonitorService.applyRule({ bitdepth: 10 }) }
+            PanelSectionHeader {
+                Layout.fillWidth: true
+                label: "BIT DEPTH"
+                value: "scanout " + (view.mon ? view.mon.format : "—")
+            }
+            PanelDropdown {
+                Layout.fillWidth: true
+                showLabel: false
+                value: Services.MonitorService.liveBitdepth() + " BIT"
+                options: [
+                    { label: "8 BIT", value: 8 },
+                    { label: "10 BIT", value: 10 }
+                ]
+                onChanged: function(newValue) {
+                    Services.MonitorService.applyRule({ bitdepth: newValue })
+                }
             }
 
             // Tune sliders (live preview on drag, committed on release)
