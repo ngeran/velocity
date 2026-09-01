@@ -65,7 +65,7 @@ Column {
     component Seg: ControlSeg {}
 
     // Slim HUD slider (no QtQuick.Controls — Basic import is broken in this
-    // build). Drag or click; emits `moved` continuously (rules are queued).
+    // build). Drag or click; emits `previewed` continuously, `committed` on release.
     component HudSlider: ColumnLayout {
         id: slider
         property string label: ""
@@ -73,7 +73,8 @@ Column {
         property real to: 1
         property real step: 0.05
         property real value: 0
-        signal moved(real val)
+        signal previewed(real val)  // Live preview during drag
+        signal committed(real val)  // Apply on mouse release
         spacing: 4
 
         function quant(v) {
@@ -117,13 +118,24 @@ Column {
             MouseArea {
                 anchors.fill: parent
                 hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                property real dragStartValue: slider.value
+
                 function apply(x) {
                     var f = Math.max(0, Math.min(1, x / track.width))
                     slider.value = slider.quant(slider.from + f * (slider.to - slider.from))
-                    slider.moved(slider.value)
+                    slider.previewer(slider.value)  // Live preview during drag
+                }
+                onPressed: mouse => {
+                    dragStartValue = slider.value
+                    apply(mouse.x)
+                }
+                onReleased: {
+                    slider.committed(slider.value)  // Apply on release
                 }
                 onClicked: function(mouse) { apply(mouse.x) }
-                onPositionChanged: function(mouse) { if (pressed) apply(mouse.x) }
+                onPositionChanged: function(mouse) {
+                    if (pressed) apply(mouse.x)
+                }
             }
         }
     }
@@ -163,6 +175,30 @@ Column {
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight
         }
+    }
+
+    // Hero-row status caption
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: -4
+        text: "DISPLAY · " + (view.mon && view.mon.dpms ? "ACTIVE" : "STANDBY") + (view.mon ? " · " + view.mon.make + " " + view.mon.model : "")
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 7
+        font.letterSpacing: 0.5
+        color: Config.ThemeConfig.colors.textDim
+        opacity: 0.56
+    }
+
+    // Error surface (display/monitor errors)
+    Text {
+        Layout.fillWidth: true
+        visible: false  // TODO: Bind to service error property when available
+        text: "⚠ Display operation failed"
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 9
+        color: Config.ThemeConfig.colors.error
+        wrapMode: Text.Wrap
+        Layout.topMargin: 4
     }
 
     // =========================================================================
@@ -235,33 +271,29 @@ Column {
             Layout.fillWidth: true
             spacing: 8
 
-            RowLayout {
+            PanelSectionHeader {
                 Layout.fillWidth: true
-                Text { text: "MODE"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                    color: Config.ThemeConfig.colors.textDim }
-                Item { Layout.fillWidth: true }
-                Text { text: view.mon ? (view.mon.w + "×" + view.mon.h + " · " + Math.round(view.mon.refreshHz) + "Hz") : "—"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                    color: Config.ThemeConfig.colors.primary }
+                label: "MODE"
+                value: view.mon ? (view.mon.w + "×" + view.mon.h + " · " + Math.round(view.mon.refreshHz) + "Hz") : "—"
             }
 
             // Refresh options for the CURRENT resolution.
-            Flow {
-                Layout.fillWidth: true; spacing: 6
-                visible: view.mon !== null
-                Repeater {
-                    // modes[] is sorted pixels-desc hz-desc; keep this res only.
-                    model: view.mon ? view.mon.modes.filter(function(m) { return m.w === view.mon.w && m.h === view.mon.h }) : []
-                    delegate: Seg {
-                        required property var modelData
-                        text: parseFloat(modelData.hz.toFixed(2)) + " Hz"
-                        active: Math.abs(view.mon.refreshHz - modelData.hz) < 0.05
-                        segColor: Config.ThemeConfig.colors.primary
-                        onChosen: Services.MonitorService.applyWithRevert(
-                            "MODE " + modelData.w + "x" + modelData.h + "@" + modelData.hz,
-                            { mode: modelData.w + "x" + modelData.h + "@" + parseFloat(modelData.hz.toFixed(2)) })
-                    }
+            PanelDropdown {
+                Layout.fillWidth: true
+                visible: view.mon !== null && view.mon.modes.length > 1
+                showLabel: false
+                value: Math.round(view.mon.refreshHz) + " Hz"
+
+                property var filteredModes: view.mon ? view.mon.modes.filter(function(m) { return m.w === view.mon.w && m.h === view.mon.h }) : []
+
+                options: filteredModes.map(function(m) {
+                    return { label: parseFloat(m.h.toFixed(2)) + " Hz", value: parseFloat(m.h.toFixed(2)) }
+                })
+
+                onChanged: function(newValue) {
+                    Services.MonitorService.applyWithRevert(
+                        "MODE " + view.mon.w + "x" + view.mon.h + "@" + newValue,
+                        { mode: view.mon.w + "x" + view.mon.h + "@" + parseFloat(newValue) })
                 }
             }
 
@@ -319,33 +351,38 @@ Column {
             Layout.fillWidth: true
             spacing: 8
 
-            RowLayout {
+            PanelSectionHeader {
                 Layout.fillWidth: true
-                Text { text: "COLOR · HDR"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                    color: Config.ThemeConfig.colors.textDim }
-                Item { Layout.fillWidth: true }
-                Text { text: view.hdrOn ? "HDR " + (view.mon ? view.mon.colorPreset.toUpperCase() : "") : "SDR"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                    color: view.hdrOn ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim }
+                label: "HDR"
+                value: view.hdrOn ? "HDR " + (view.mon ? view.mon.colorPreset.toUpperCase() : "") : "SDR"
+                color: view.hdrOn ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim
             }
 
             // HDR mode: OFF (SDR) / AUTO (fullscreen) / ALWAYS (per-output PQ)
-            RowLayout {
-                spacing: 6
-                Seg { text: "OFF"; active: !view.hdrOn && Services.MonitorService.cmAutoHdr === 0
-                    segColor: Config.ThemeConfig.colors.warning
-                    onChosen: { Services.MonitorService.cmAutoHdr = 0
-                                Services.MonitorService.applyGlobalConfig("hl.config({ render = { cm_auto_hdr = 0 } })")
-                                Services.MonitorService.applyRule({ cm: "srgb" }) } }
-                Seg { text: "AUTO"; active: Services.MonitorService.cmAutoHdr === 1
-                    segColor: Config.ThemeConfig.colors.warning
-                    onChosen: { Services.MonitorService.cmAutoHdr = 1
-                                Services.MonitorService.applyGlobalConfig("hl.config({ render = { cm_auto_hdr = 1 } })")
-                                Services.MonitorService.applyRule({ cm: "srgb" }) } }
-                Seg { text: "ALWAYS"; active: view.hdrOn
-                    segColor: Config.ThemeConfig.colors.warning
-                    onChosen: Services.MonitorService.applyRule({ cm: "hdredid" }) }
+            PanelDropdown {
+                Layout.fillWidth: true
+                showLabel: false
+                label: "HDR MODE"
+                value: !view.hdrOn && Services.MonitorService.cmAutoHdr === 0 ? "OFF"
+                      : (Services.MonitorService.cmAutoHdr === 1 ? "AUTO" : "ALWAYS")
+                options: [
+                    { label: "OFF", value: "OFF" },
+                    { label: "AUTO", value: "AUTO" },
+                    { label: "ALWAYS", value: "ALWAYS" }
+                ]
+                onChanged: function(newValue) {
+                    if (newValue === "OFF") {
+                        Services.MonitorService.cmAutoHdr = 0
+                        Services.MonitorService.applyGlobalConfig("hl.config({ render = { cm_auto_hdr = 0 } })")
+                        Services.MonitorService.applyRule({ cm: "srgb" })
+                    } else if (newValue === "AUTO") {
+                        Services.MonitorService.cmAutoHdr = 1
+                        Services.MonitorService.applyGlobalConfig("hl.config({ render = { cm_auto_hdr = 1 } })")
+                        Services.MonitorService.applyRule({ cm: "srgb" })
+                    } else if (newValue === "ALWAYS") {
+                        Services.MonitorService.applyRule({ cm: "hdredid" })
+                    }
+                }
             }
 
             // Colour preset pills
@@ -388,34 +425,38 @@ Column {
                     onChosen: Services.MonitorService.applyRule({ bitdepth: 10 }) }
             }
 
-            // Tune sliders (live, queued single-flight in the service)
+            // Tune sliders (live preview on drag, committed on release)
             HudSlider {
                 Layout.fillWidth: true
                 visible: view.hdrOn
                 label: "SDR BRIGHTNESS"; from: 0.8; to: 2.0; step: 0.05
                 value: view.mon ? view.mon.sdrBrightness : 1
-                onMoved: function(val) { Services.MonitorService.applyRule({ sdrbrightness: val }) }
+                onPreviewed: function(val) { /* Preview only, no service call */ }
+                onCommitted: function(val) { Services.MonitorService.applyRule({ sdrbrightness: val }) }
             }
             HudSlider {
                 Layout.fillWidth: true
                 visible: view.hdrOn
                 label: "SDR SATURATION"; from: 0.5; to: 2.0; step: 0.05
                 value: view.mon ? view.mon.sdrSaturation : 1
-                onMoved: function(val) { Services.MonitorService.applyRule({ sdrsaturation: val }) }
+                onPreviewed: function(val) { /* Preview only */ }
+                onCommitted: function(val) { Services.MonitorService.applyRule({ sdrsaturation: val }) }
             }
             HudSlider {
                 Layout.fillWidth: true
                 visible: view.hdrOn
                 label: "BLACK FLOOR (NITS)"; from: 0; to: 0.2; step: 0.005
                 value: view.mon ? view.mon.sdrMinLuminance : 0.2
-                onMoved: function(val) { Services.MonitorService.applyRule({ sdr_min_luminance: val }) }
+                onPreviewed: function(val) { /* Preview only */ }
+                onCommitted: function(val) { Services.MonitorService.applyRule({ sdr_min_luminance: val }) }
             }
             HudSlider {
                 Layout.fillWidth: true
                 visible: view.hdrOn
                 label: "SDR PEAK (NITS)"; from: 80; to: 400; step: 10
                 value: view.mon ? view.mon.sdrMaxLuminance : 80
-                onMoved: function(val) { Services.MonitorService.applyRule({ sdr_max_luminance: val }) }
+                onPreviewed: function(val) { /* Preview only */ }
+                onCommitted: function(val) { Services.MonitorService.applyRule({ sdr_max_luminance: val }) }
             }
 
             Text {
@@ -438,30 +479,32 @@ Column {
         ColumnLayout {
             Layout.fillWidth: true; spacing: 6
 
-            RowLayout {
+            PanelSectionHeader {
                 Layout.fillWidth: true
-                Text { text: "VRR"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                    color: Config.ThemeConfig.colors.textDim }
-                Item { Layout.fillWidth: true }
-                // monitors -j's vrr bool reads false on the desktop while
-                // vrr=2 (fullscreen) is configured — label it as such.
-                Text { text: view.mon && view.mon.vrr ? "ACTIVE" : "IDLE (DESKTOP)"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                    color: view.mon && view.mon.vrr ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim }
+                label: "VRR"
+                value: view.mon && view.mon.vrr ? "ACTIVE" : "IDLE (DESKTOP)"
+                color: view.mon && view.mon.vrr ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim
             }
             RowLayout {
                 spacing: 6
-                Repeater {
-                    model: [ { label: "OFF", v: 0 }, { label: "ALWAYS", v: 1 },
-                             { label: "FULLSCREEN", v: 2 }, { label: "GAMES", v: 3 } ]
-                    delegate: Seg {
-                        required property var modelData
-                        text: modelData.label
-                        segColor: Config.ThemeConfig.colors.success
-                        active: Services.MonitorService.vrrMode === modelData.v
-                        onChosen: { Services.MonitorService.vrrMode = modelData.v
-                                    Services.MonitorService.applyRule({ vrr: modelData.v }) }
+                PanelDropdown {
+                    Layout.fillWidth: true
+                    showLabel: false
+                    value: Services.MonitorService.vrrMode === 0 ? "OFF"
+                          : (Services.MonitorService.vrrMode === 1 ? "ALWAYS"
+                          : (Services.MonitorService.vrrMode === 2 ? "FULLSCREEN" : "GAMES"))
+                    options: [
+                        { label: "OFF", value: "OFF" },
+                        { label: "ALWAYS", value: "ALWAYS" },
+                        { label: "FULLSCREEN", value: "FULLSCREEN" },
+                        { label: "GAMES", value: "GAMES" }
+                    ]
+                    onChanged: function(newValue) {
+                        if (newValue === "OFF") Services.MonitorService.vrrMode = 0
+                        else if (newValue === "ALWAYS") Services.MonitorService.vrrMode = 1
+                        else if (newValue === "FULLSCREEN") Services.MonitorService.vrrMode = 2
+                        else if (newValue === "GAMES") Services.MonitorService.vrrMode = 3
+                        Services.MonitorService.applyRule({ vrr: Services.MonitorService.vrrMode })
                     }
                 }
             }
