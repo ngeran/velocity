@@ -14,8 +14,18 @@ import "../config" as Config
 
 Item {
     id: root
-    width: tzRow.implicitWidth + 12
+    // Grow through implicitWidth (NOT width) — RowLayout sizes children from
+    // their implicit/preferred size; an explicit width binding is overridden,
+    // so the hover pill used to overflow the fixed box and paint over the
+    // neighbouring icons. The row is LEFT-anchored: the glyph stays under the
+    // cursor and the label extends rightward only (omarchy pill idiom).
+    implicitWidth: tzRow.implicitWidth + 12
     height: Config.BarConfig.barHeight
+    // Hard guarantee: even mid-animation the pill can never paint over
+    // adjacent widgets.
+    clip: true
+
+    Behavior on implicitWidth { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
     property bool isActive: false
     signal trayRequested()
@@ -25,7 +35,9 @@ Item {
 
     Row {
         id: tzRow
-        anchors.centerIn: parent
+        anchors.left: parent.left
+        anchors.leftMargin: 2
+        anchors.verticalCenter: parent.verticalCenter
         spacing: root.expanded ? 8 : 0
 
         Text {
@@ -45,7 +57,6 @@ Item {
             font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
             color: Config.ThemeConfig.colors.text
-            elide: Text.ElideRight
             anchors.verticalCenter: parent.verticalCenter
         }
     }
