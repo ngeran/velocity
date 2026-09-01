@@ -20,7 +20,7 @@ import "../services" as Services
 
 Item {
     id: root
-    width: iconRow.width + Config.BarConfig.iconSpacing
+    width: Math.max(Config.BarConfig.iconSize, iconRow.implicitWidth + Config.BarConfig.iconSpacing)
     height: Config.BarConfig.iconSize
 
     property bool expanded: mouseArea.containsMouse && compactLabel !== ""
@@ -89,7 +89,7 @@ Item {
             text: "󱉊"
             font.family: "JetBrainsMono Nerd Font"
             font.pixelSize: Config.BarConfig.iconSize
-            color: Config.BarConfig.colorText
+            color: "white"
             opacity: mouseArea.containsMouse ? 1.0 : 0.7
             Behavior on opacity { NumberAnimation { duration: 100 } }
         }
@@ -100,7 +100,7 @@ Item {
             text: root.compactLabel
             font.family: "JetBrains Mono"
             font.pixelSize: 11
-            color: Config.BarConfig.colorText
+            color: "white"
             elide: Text.ElideRight
         }
     }
