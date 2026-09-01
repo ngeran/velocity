@@ -1,17 +1,14 @@
 // =============================================================================
-// BtDeviceListView.qml — BLUETOOTH section view (tactical HUD)
+// BtDeviceListView.qml — BLUETOOTH section view (viewport-fit, NO SCROLLING)
 // =============================================================================
-// Mirrors WifiListView.qml's structure (Column shell, HUD header, HudCard
-// sections, column-header geometry pinned to the row, empty states).
-// Stack (scrolls with the parent Flickable, ~440px wide):
-//   1. Header         — title + power-state pill + count/scan countdown + RESCAN
-//   2. Status card    — HudCard: adapter alias + STATE/ADAPTER/VERSION/DEVICES
-//                       grid + power pill toggle + (connected) battery bar
-//   3. PAIRED_NODES   — HudCard: NAME | SIGNAL | STATE | ACTION + rows
-//   4. AVAIL_BEACONS  — HudCard: same geometry, scan-discovered beacons
+// Fixed composition per SKILL.md §6.1:
+//   header row (badge · counts · RESCAN)
+//   body = left summary column (ADAPTER card) | right column:
+//          PAIRED DEVICES (fixed, clamped) over AVAILABLE DEVICES (fills,
+//          clamped). Rows show visible-of-total; priority = connected first.
 //
-// Backed by Services.BluetoothControlService (bluetoothctl). All colours are
-// live ThemeConfig tokens (no hardcoded rgba).
+// Backed by Services.BluetoothControlService (native BlueZ). All colours are
+// live ThemeConfig tokens. Scan/pair/connect/disconnect logic unchanged.
 // =============================================================================
 
 import QtQuick
@@ -19,18 +16,29 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-Column {
+ColumnLayout {
     id: view
-    width: parent ? parent.width : 400
-    spacing: Config.ControlConfig.space4
+    spacing: Config.ControlConfig.space3
 
-    // -------------------------------------------------------------------------
-    // DERIVED ARRAYS — re-evaluate when `devices` changes (the service reassigns
-    // a fresh array, so the binding re-runs). Paired nodes feed section 3;
-    // everything else (scan beacons) feeds section 4.
-    // -------------------------------------------------------------------------
+    // Paired nodes feed the right-top card; everything else (scan beacons)
+    // feeds the right-bottom card. Re-evaluate when `devices` changes.
     readonly property var pairedDevs: Services.BluetoothControlService.devices.filter(function(d){ return d.paired })
     readonly property var beaconDevs: Services.BluetoothControlService.devices.filter(function(d){ return !d.paired })
+
+    // Priority order for the visible capacity: connected first, then rssi desc.
+    readonly property var sortedPaired: {
+        var arr = view.pairedDevs.slice(0)
+        arr.sort(function(a, b) {
+            if (a.connected !== b.connected) return a.connected ? -1 : 1
+            return (b.rssi || 0) - (a.rssi || 0)
+        })
+        return arr
+    }
+    readonly property var sortedBeacons: {
+        var arr = view.beaconDevs.slice(0)
+        arr.sort(function(a, b) { return (b.rssi || 0) - (a.rssi || 0) })
+        return arr
+    }
 
     // First connected device that reports a battery (drives the status card bar).
     readonly property var connBatDev: {
@@ -41,9 +49,7 @@ Column {
         return null
     }
 
-    // Label/value stat cell — used by the 4-cell info grid. Declared at the TOP
-    // of the Column (before first use — QML requires inline components to be
-    // declared before they're referenced), same pattern as WifiListView.Stat.
+    // Label/value stat cell — used by the adapter info grid.
     component Stat: ColumnLayout {
         property string label: ""
         property string value: "—"
@@ -63,12 +69,12 @@ Column {
     }
 
     // =========================================================================
-    // 1. HEADER
+    // 1. HEADER ROW
     // =========================================================================
     SectionHeader {
+        Layout.fillWidth: true
         title: "BLUETOOTH"
 
-        // Power-state badge
         StatusBadge {
             Layout.alignment: Qt.AlignVCenter
             label: Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE"
@@ -77,7 +83,6 @@ Column {
 
         Item { Layout.fillWidth: true }
 
-        // Paired/beacon count (idle)
         Text {
             visible: !Services.BluetoothControlService.scanning
             Layout.alignment: Qt.AlignVCenter
@@ -86,7 +91,6 @@ Column {
             color: Config.ThemeConfig.colors.textDim
         }
 
-        // Scan countdown (accent)
         Text {
             visible: Services.BluetoothControlService.scanning
             Layout.alignment: Qt.AlignVCenter
@@ -95,8 +99,6 @@ Column {
             color: Config.ControlConfig.accent
         }
 
-        // RESCAN button — disabled+dimmed when adapter is off or scan is running
-        // (mirrors WifiListView's RESCAN pill).
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
             width: rescanLbl.implicitWidth + 20; height: 24
@@ -124,245 +126,292 @@ Column {
         }
     }
 
-    // Hero-row status caption
-    Text {
-        Layout.fillWidth: true
-        Layout.topMargin: -6
-        text: "BLUETOOTH · " + (Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE") + " · " + view.pairedDevs.length + " PAIRED · " + view.beaconDevs.length + " BEACONS"
-        font.family: Config.ControlConfig.fontSans
-        font.pixelSize: 10
-        font.letterSpacing: 0.3
-        color: Config.ThemeConfig.colors.textDim
-        opacity: 0.75
-    }
-
-    // Error surface (pairing/scan failures)
-    Text {
-        Layout.fillWidth: true
-        visible: false  // TODO: Bind to service error property when available
-        text: "⚠ Bluetooth operation failed"
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 9
-        color: Config.ThemeConfig.colors.error
-        wrapMode: Text.Wrap
-        Layout.topMargin: 4
-    }
-
     // =========================================================================
-    // 2. STATUS CARD
+    // 2. BODY — summary column | paired/available lists (viewport-fit)
     // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.primary
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: Config.ControlConfig.space3
 
+        // ── Left: adapter summary ─────────────────────────────────────────────
+        ColumnLayout {
+            Layout.preferredWidth: 300
+            Layout.maximumWidth: 340
+            Layout.fillHeight: true
+            spacing: Config.ControlConfig.space3
+
+            SettingsCard {
+                Layout.fillWidth: true
+                accent: Config.ThemeConfig.colors.primary
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.ControlConfig.space2
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "ADAPTER"
+                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                            color: Config.ThemeConfig.colors.textDim
+                        }
+                        Item { Layout.fillWidth: true }
+                        PowerPill {
+                            Layout.alignment: Qt.AlignVCenter
+                            on: Services.BluetoothControlService.powered
+                            onClicked: Services.BluetoothControlService.togglePower()
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: Services.BluetoothControlService.powered
+                              ? (Services.BluetoothControlService.adapterAlias
+                                 || Services.BluetoothControlService.adapterAddress
+                                 || "READY")
+                              : "NO ACTIVE ADAPTER"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
+                        color: Services.BluetoothControlService.powered
+                               ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                    // 4-cell info grid: STATE · ADAPTER · VERSION · DEVICES
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "STATE";   value: Services.BluetoothControlService.powered ? "POWERED" : "DOWN" }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "VERSION"; value: Services.BluetoothControlService.adapterVersion || "—" }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "ADAPTER"; value: Services.BluetoothControlService.adapterAddress || "—" }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "DEVICES";  value: Services.BluetoothControlService.devices.length }
+                    }
+
+                    // Connected-device battery bar (first connected dev with a battery)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: view.connBatDev !== null
+                        spacing: 8
+                        Text {
+                            text: "BAT"
+                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
+                            color: Config.ThemeConfig.colors.textDim
+                        }
+                        Text {
+                            text: view.connBatDev ? (view.connBatDev.battery + "%") : ""
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                            color: view.connBatDev && view.connBatDev.battery < 20
+                                   ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.text
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; height: 4; radius: 2
+                            color: Config.ThemeConfig.colors.border
+                            Rectangle {
+                                height: 4; radius: 2
+                                width: parent.width * (view.connBatDev ? view.connBatDev.battery : 0) / 100
+                                color: (view.connBatDev && view.connBatDev.battery < 20)
+                                       ? Config.ThemeConfig.colors.error : Config.ControlConfig.accent
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item { Layout.fillHeight: true }
+        }
+
+        // ── Right: paired (fixed, clamped) + available (fills, clamped) ──────
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: Config.ControlConfig.space2
+            Layout.fillHeight: true
+            spacing: Config.ControlConfig.space3
 
-            // Top row: ADAPTER label + power chip
-            RowLayout {
+            // PAIRED DEVICES — up to 4 rows, then a hidden-count footer
+            SettingsCard {
                 Layout.fillWidth: true
-                Text {
-                    text: "ADAPTER"
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
-                    color: Config.ThemeConfig.colors.textDim
-                }
-                Item { Layout.fillWidth: true }
-                // Power pill
-                PowerPill {
-                    Layout.alignment: Qt.AlignVCenter
-                    on: Services.BluetoothControlService.powered
-                    onClicked: Services.BluetoothControlService.togglePower()
+                accent: Config.ThemeConfig.colors.primary
+                contentSpacing: 0
+
+                readonly property int cap: Math.max(1, Math.floor(pairedViewport.height / 40))
+                readonly property var shown: view.sortedPaired.slice(0, cap)
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
+                        spacing: 6
+                        Text {
+                            text: "PAIRED DEVICES"
+                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                            color: Config.ThemeConfig.colors.text
+                        }
+                        Text {
+                            text: view.pairedDevs.length > 0
+                                  ? (shown.length + " / " + view.pairedDevs.length) : "0"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                            color: shown.length < view.pairedDevs.length
+                                   ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
+                        }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 6
+                        spacing: 8
+                        Item { Layout.preferredWidth: 26 }
+                        Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Item { Layout.preferredWidth: 16 }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                    Item {
+                        id: pairedViewport
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(view.sortedPaired.length, 4) * 40
+                        clip: true
+
+                        Column {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            Repeater {
+                                model: shown
+                                delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: false }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: view.pairedDevs.length === 0 && !Services.BluetoothControlService.scanning
+                            text: "// no paired devices — pair from AVAILABLE below"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                            color: Config.ThemeConfig.colors.textDim
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: shown.length < view.pairedDevs.length
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
+                        text: "+ " + (view.pairedDevs.length - shown.length) + " more paired hidden"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
+                    }
                 }
             }
 
-            // Big line: adapter alias (or address, or "READY"); NO ACTIVE ADAPTER when off.
-            Text {
+            // AVAILABLE DEVICES — fills the remaining height, rows clamped
+            SettingsCard {
                 Layout.fillWidth: true
-                text: Services.BluetoothControlService.powered
-                      ? (Services.BluetoothControlService.adapterAlias
-                         || Services.BluetoothControlService.adapterAddress
-                         || "READY")
-                      : "NO ACTIVE ADAPTER"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
-                color: Services.BluetoothControlService.powered
-                       ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-                elide: Text.ElideRight
-            }
+                Layout.fillHeight: true
+                accent: Config.ThemeConfig.colors.secondary
+                contentSpacing: 0
 
-            // Separator before the info grid
-            Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+                readonly property int cap: Math.max(1, Math.floor(beaconViewport.height / 40))
+                readonly property var shown: view.sortedBeacons.slice(0, cap)
 
-            // 4-cell info grid: STATE · ADAPTER · VERSION · DEVICES
-            // (preferredWidth:0 + fillWidth spreads the four cells equally)
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "STATE";   value: Services.BluetoothControlService.powered ? "POWERED" : "DOWN" }
-                Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "ADAPTER"; value: Services.BluetoothControlService.adapterAddress || "—" }
-                Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "VERSION"; value: Services.BluetoothControlService.adapterVersion || "—" }
-                Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "DEVICES"; value: Services.BluetoothControlService.devices.length }
-            }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 0
 
-            // Connected-device battery bar (first connected dev with a battery)
-            RowLayout {
-                Layout.fillWidth: true
-                visible: view.connBatDev !== null
-                spacing: 8
-                Text {
-                    text: "BAT"
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
-                    color: Config.ThemeConfig.colors.textDim
-                }
-                Text {
-                    text: view.connBatDev ? (view.connBatDev.battery + "%") : ""
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                    color: view.connBatDev && view.connBatDev.battery < 20
-                           ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.text
-                }
-                Rectangle {
-                    Layout.fillWidth: true; height: 4; radius: 2
-                    color: Config.ThemeConfig.colors.border
-                    Rectangle {
-                        height: 4; radius: 2
-                        width: parent.width * (view.connBatDev ? view.connBatDev.battery : 0) / 100
-                        color: (view.connBatDev && view.connBatDev.battery < 20)
-                               ? Config.ThemeConfig.colors.error : Config.ControlConfig.accent
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
+                        spacing: 6
+                        Text {
+                            text: "AVAILABLE DEVICES"
+                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                            color: Config.ThemeConfig.colors.text
+                        }
+                        Text {
+                            text: view.beaconDevs.length > 0
+                                  ? (shown.length + " / " + view.beaconDevs.length) : "0"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                            color: shown.length < view.beaconDevs.length
+                                   ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.secondary
+                        }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
+                        Text {
+                            visible: Services.BluetoothControlService.scanning
+                            text: "●"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                            color: Config.ControlConfig.accent
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 6
+                        spacing: 8
+                        Item { Layout.preferredWidth: 26 }
+                        Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+                        Item { Layout.preferredWidth: 16 }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                    Item {
+                        id: beaconViewport
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+
+                        Column {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            Repeater {
+                                model: shown
+                                delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: true }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: view.beaconDevs.length === 0 && Services.BluetoothControlService.scanning
+                            text: "// scanning for nearby devices…"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                            color: Config.ControlConfig.accent
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: view.beaconDevs.length === 0 && !Services.BluetoothControlService.scanning
+                            text: "// no devices found — press RESCAN to scan nearby devices"
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                            color: Config.ThemeConfig.colors.textDim
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: shown.length < view.beaconDevs.length
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
+                        text: "+ " + (view.beaconDevs.length - shown.length) + " more nearby hidden"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
                     }
                 }
             }
         }
     }
-
-    // =========================================================================
-    // 3. PAIRED_NODES
-    // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.primary
-        contentSpacing: 0
-
-        // Header label row: title + [ count ] + thin accent line on the right
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            Text {
-                text: "PAIRED DEVICES"
-                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
-                color: Config.ThemeConfig.colors.text
-            }
-            Text {
-                text: "[ " + view.pairedDevs.length + " ]"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: Config.ThemeConfig.colors.primary
-            }
-            Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
-        }
-
-        // Column header — mirrors BtDeviceRow geometry (margins, spacing, icon
-        // slot, NAME fill, SIGNAL 60, STATE 70, ACTION 80, × 16) so every
-        // column lines up between the header and the rows beneath it.
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 10; Layout.rightMargin: 6
-            spacing: 8
-            Item { Layout.preferredWidth: 26 }
-            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Item { Layout.preferredWidth: 16 }
-        }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-        // Paired device rows
-        Repeater {
-            model: view.pairedDevs
-            delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: false }
-        }
-
-        // Empty state
-        Text {
-            Layout.fillWidth: true
-            visible: view.pairedDevs.length === 0 && !Services.BluetoothControlService.scanning
-            text: "// no paired devices — press RESCAN to scan"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
-        }
-    }
-
-    // =========================================================================
-    // 4. AVAIL_BEACONS
-    // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.secondary
-        contentSpacing: 0
-
-        // Header: title + accent scan dot (while scanning)
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            Text {
-                text: "AVAILABLE DEVICES"
-                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
-                color: Config.ThemeConfig.colors.text
-            }
-            Text {
-                visible: Services.BluetoothControlService.scanning
-                text: "●"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: Config.ControlConfig.accent
-            }
-            Item { Layout.fillWidth: true }
-        }
-
-        // Column header — SAME pinned geometry as the paired card.
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 10; Layout.rightMargin: 6
-            spacing: 8
-            Item { Layout.preferredWidth: 26 }
-            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
-            Item { Layout.preferredWidth: 16 }
-        }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-        // Beacon rows (scan-discovered, unpaired)
-        Repeater {
-            model: view.beaconDevs
-            delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: true }
-        }
-
-        // Empty state — scanning
-        Text {
-            Layout.fillWidth: true
-            visible: view.beaconDevs.length === 0 && Services.BluetoothControlService.scanning
-            text: "// scanning for nearby devices…"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ControlConfig.accent
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        // Empty state — idle, no beacons
-        Text {
-            Layout.fillWidth: true
-            visible: view.beaconDevs.length === 0 && !Services.BluetoothControlService.scanning
-            text: "// no devices found — press RESCAN to scan nearby devices"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Inline label/value stat cell (used by the status card info grid)
-    // -------------------------------------------------------------------------
 }

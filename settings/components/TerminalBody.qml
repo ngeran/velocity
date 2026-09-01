@@ -96,8 +96,13 @@ Rectangle {
             }
 
             Repeater {
-                model: Services.CommandService.logLines.slice(-3)
+                id: logRepeater
+                model: Services.CommandService.logLines
                 delegate: TerminalLogLine {
+                    // Clamp to the last 3 lines — logLines is a QQmlListModel
+                    // (no .slice), so hide-by-index instead. ColumnLayout skips
+                    // invisible children, so only the tail renders.
+                    visible: index >= logRepeater.count - 3
                     Layout.fillWidth: true
                     text: model.text
                     kind: model.kind

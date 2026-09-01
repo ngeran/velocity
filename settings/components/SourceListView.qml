@@ -1,13 +1,10 @@
 // =============================================================================
-// SourceListView.qml — AUDIO input section view (tactical HUD)
+// SourceListView.qml — AUDIO input card (viewport-fit, NO SCROLLING)
 // =============================================================================
-// Mirrors SinkListView.qml / BtDeviceListView.qml structure. A single
-// INPUT_NODES HudCard — no top-level header (the card header replaces the old
-// "[ INPUT_SOURCES ]" text label that used to sit above this list).
-//   - INPUT_NODES HudCard: NAME | LEVEL | MUTE + source rows + empty state
-//
-// Backed by Services.AudioControlService (WirePlumber via wpctl). All colours
-// are live ThemeConfig tokens (no hardcoded rgba).
+// The INPUT DEVICES card. Instantiated by SinkListView inside the audio
+// body's left column — sizes itself to the space it is given (fills the
+// column remainder) and clamps rows to the visible capacity.
+// Rows show visible-of-total; default source is priority.
 // =============================================================================
 
 import QtQuick
@@ -15,22 +12,32 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-Column {
+SettingsCard {
     id: view
-    width: parent ? parent.width : 400
-    spacing: 10
+    accent: Config.ThemeConfig.colors.secondary
+    contentSpacing: 0
 
-    // =========================================================================
-    // INPUT_NODES — source (microphone) list
-    // =========================================================================
-    SettingsCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.secondary
-        contentSpacing: 0
+    // Priority order for the visible capacity: default first.
+    readonly property var sortedSources: {
+        var arr = Services.AudioControlService.sources.slice(0)
+        arr.sort(function(a, b) {
+            if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
+            return (b.volume || 0) - (a.volume || 0)
+        })
+        return arr
+    }
+    readonly property int cap: Math.max(1, Math.floor(srcViewport.height / 36))
+    readonly property var shown: sortedSources.slice(0, cap)
 
-        // Header label row: title + [ count ] + thin accent line (secondary)
+    ColumnLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: 0
+
+        // Header label row: title + visible-of-total + thin accent line
         RowLayout {
             Layout.fillWidth: true
+            Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
             spacing: 6
             Text {
                 text: "INPUT DEVICES"
@@ -38,16 +45,16 @@ Column {
                 color: Config.ThemeConfig.colors.text
             }
             Text {
-                text: "[ " + Services.AudioControlService.sources.length + " ]"
+                text: Services.AudioControlService.sources.length > 0
+                      ? (view.shown.length + " / " + Services.AudioControlService.sources.length) : "0"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: Config.ThemeConfig.colors.secondary
+                color: view.shown.length < Services.AudioControlService.sources.length
+                       ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.secondary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
         }
 
-        // Column header — mirrors AudioDeviceRow geometry (margins 10/6,
-        // spacing 8, glyph 20, radio 12, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
-        // column lines up between the header and the rows beneath it.
+        // Column header — mirrors AudioDeviceRow geometry
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 10; Layout.rightMargin: 6
@@ -61,21 +68,40 @@ Column {
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
-        // Source rows
-        Repeater {
-            model: Services.AudioControlService.sources
-            delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "source" }
+        // Row viewport — clamped, no scrollbar
+        Item {
+            id: srcViewport
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+
+            Column {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                Repeater {
+                    model: view.shown
+                    delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "source" }
+                }
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: Services.AudioControlService.sources.length === 0
+                text: "// no input sources"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                color: Config.ThemeConfig.colors.textDim
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
 
-        // Empty state
         Text {
             Layout.fillWidth: true
-            visible: Services.AudioControlService.sources.length === 0
-            text: "// no input sources"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+            visible: view.shown.length < Services.AudioControlService.sources.length
+            Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
+            text: "+ " + (Services.AudioControlService.sources.length - view.shown.length) + " more inputs hidden"
+            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
-            Layout.topMargin: 8; Layout.bottomMargin: 6
-            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
         }
     }
 }
