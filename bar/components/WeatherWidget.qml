@@ -24,15 +24,15 @@ Item {
             text: Services.WeatherService.glyph
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
-            // Theme tokens (Lunar: success #E0AF68 / textDim #73A6CB) — picked
-            // from the active palette but token-bound so they follow theme swaps.
             color: Config.ThemeConfig.colors.success
+            anchors.verticalCenter: parent.verticalCenter
         }
         Text {
             text: Services.WeatherService.temp
             font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
             color: Config.ThemeConfig.colors.textDim
+            anchors.verticalCenter: parent.verticalCenter
         }
     }
 

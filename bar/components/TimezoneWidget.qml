@@ -68,6 +68,7 @@ Item {
             font.pixelSize: Config.BarConfig.fontSizeIcon
             color: Config.ThemeConfig.colors.textDim
             opacity: mouseArea.containsMouse ? 1.0 : 0.7
+            anchors.verticalCenter: parent.verticalCenter
             Behavior on opacity { NumberAnimation { duration: 100 } }
         }
 
@@ -78,6 +79,7 @@ Item {
             font.pixelSize: 11
             color: Config.ThemeConfig.colors.text
             elide: Text.ElideRight
+            anchors.verticalCenter: parent.verticalCenter
         }
     }
 

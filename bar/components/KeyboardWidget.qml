@@ -17,16 +17,13 @@ Item {
     Row {
         id: layoutRow
         anchors.centerIn: parent
-        // ADJUSTMENT: Move the entire row down by 2px to vertically center
-        // the keyboard icon with the text glyph. The Nerd Font icon sits
-        // slightly high in its bounding box; this offset compensates for it.
-        anchors.verticalCenterOffset: 0
         spacing: 5
         Text {
             text: "󰌌"   // nf-md-keyboard
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
             color: Config.ThemeConfig.colors.textDim
+            anchors.verticalCenter: parent.verticalCenter
         }
         Text {
             text: Services.KeyboardService.activeLabel
@@ -36,6 +33,7 @@ Item {
             color: mouseArea.containsMouse
                 ? Config.BarConfig.colorAccent
                 : Config.ThemeConfig.colors.textDim
+            anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 120 } }
         }
     }
