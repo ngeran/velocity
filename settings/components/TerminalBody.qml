@@ -1,10 +1,11 @@
 // =============================================================================
-// TerminalBody.qml — scrollable terminal canvas
+// TerminalBody.qml — scrollable content canvas
 // =============================================================================
-//
-// Renders the active section's header + section view (phases 3-5 swap the
-// placeholder for WifiListView / BtDeviceListView / SinkListView) followed by
-// the live console log from CommandService.
+// Renders the active section's SettingsHeaderCard + section view (network →
+// WifiListView, bluetooth → BtDeviceListView, audio → Sink/SourceListView,
+// display → DisplayControlView) followed by the live console log from
+// CommandService. Header strings are read-only bindings — all state stays in
+// the services.
 // =============================================================================
 
 import QtQuick
@@ -16,13 +17,13 @@ Rectangle {
     property string activeSection: "network"
 
     color: Config.ThemeConfig.colors.background
-    radius: Config.ControlConfig.radius
+    radius: Config.ControlConfig.radiusCard
     clip: true
 
     Flickable {
         id: flick
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.margins: Config.ControlConfig.space4
         contentWidth: width
         contentHeight: content.implicitHeight
         flickableDirection: Flickable.VerticalFlick
@@ -32,19 +33,31 @@ Rectangle {
         Column {
             id: content
             width: flick.width
-            spacing: 10
+            spacing: Config.ControlConfig.space4
 
-            // --- Section header ---
-            Text {
-                text: "[ " + body.activeSection.toUpperCase() + "_DATA ]"
-                font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 11
-                font.bold: true
-                color: Config.ControlConfig.accent
+            // --- Section header card ---
+            SettingsHeaderCard {
+                width: content.width
+                eyebrow: "CONTROLS"
+                title: body.activeSection === "network"   ? "Network"
+                     : body.activeSection === "bluetooth" ? "Bluetooth"
+                     : body.activeSection === "audio"     ? "Audio"
+                     : body.activeSection === "display"   ? "Display"
+                     : "Control"
+                subtitle: body.activeSection === "network"
+                          ? (Services.NetworkControlService.connectionStatus.connected
+                             ? (Services.NetworkControlService.connectionStatus.ssid || "Connected")
+                               + " · " + (Services.NetworkControlService.connectionStatus.ip || "no IP")
+                             : "Not connected — scan below")
+                          : ""
+                StatusBadge {
+                    visible: body.activeSection === "network"
+                    label: Services.NetworkControlService.connectionStatus.connected ? "STABLE" : "OFFLINE"
+                    kind: Services.NetworkControlService.connectionStatus.connected ? "ok" : "err"
+                }
             }
 
-            // --- Section views (populated per phase) ---
-            // Each fades in when its section becomes active (smooth swap).
+            // --- Section views (each fades in when its section becomes active) ---
             WifiListView {
                 visible: body.activeSection === "network"
                 width: content.width
@@ -84,11 +97,12 @@ Rectangle {
             Item { width: 1; height: 6 }
 
             Text {
-                text: "[ CONSOLE ]"
-                font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 11
+                text: "ACTIVITY"
+                font.family: Config.ControlConfig.fontSans
+                font.pixelSize: 10
                 font.bold: true
-                color: Config.ControlConfig.accent
+                font.letterSpacing: 1.2
+                color: Config.ThemeConfig.colors.textDim
             }
 
             Repeater {

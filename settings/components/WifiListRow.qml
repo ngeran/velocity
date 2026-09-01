@@ -27,7 +27,7 @@ import "../services" as Services
 Item {
     id: row
     width: parent ? parent.width : 400
-    height: editing ? 56 : 30
+    height: editing ? 66 : 40
 
     property var net: ({ ssid: "", signal: 0, security: "", inUse: false, chan: "--", bssid: "" })
     property bool editing: false
@@ -50,6 +50,7 @@ Item {
     // ── Background tint by state ──────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
+        radius: Config.ControlConfig.radiusSmall
         color: net.inUse    ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10)
                : connecting ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
                : row.editing ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.06)
@@ -58,11 +59,14 @@ Item {
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
-    // ── Left accent bar (active / connecting / editing) ───────────────────────
+    // ── Left accent bar (active / connecting / editing) — inset rounded tick ──
     Rectangle {
         visible: net.inUse || connecting || row.editing
-        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-        width: 2
+        anchors.left: parent.left; anchors.leftMargin: 3
+        anchors.top: parent.top; anchors.topMargin: 8
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 8
+        width: 3
+        radius: 1.5
         color: connecting ? Config.ThemeConfig.colors.warning : Config.ControlConfig.accent
     }
 
@@ -107,7 +111,7 @@ Item {
                     Layout.fillWidth: true
                     visible: net.bssid && net.bssid.length > 0 && !row.editing
                     text: net.bssid
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim
                     elide: Text.ElideRight
                 }
@@ -131,9 +135,9 @@ Item {
 
             // Signal %
             Text {
-                Layout.preferredWidth: 28; Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 32; Layout.alignment: Qt.AlignVCenter
                 text: net.signal + "%"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 horizontalAlignment: Text.AlignRight
             }
@@ -141,18 +145,19 @@ Item {
             // Security chip — fixed 72-wide slot so the CHAN column lines up across
             // rows regardless of label length (the chip itself stays content-sized).
             Item {
-                Layout.preferredWidth: 72; Layout.preferredHeight: 16; Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 72; Layout.preferredHeight: 18; Layout.alignment: Qt.AlignVCenter
                 Rectangle {
                     anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(72, secLabel.implicitWidth + 12); height: 16
+                    width: Math.min(72, secLabel.implicitWidth + 14); height: 18
+                    radius: Config.ControlConfig.radiusSmall
                     color: row.secured ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent"
-                    border.color: row.secured ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+                    border.color: row.secured ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Text {
                         id: secLabel
                         anchors.centerIn: parent; width: parent.width - 8
                         text: row.secured ? (net.security || "").toUpperCase() : "OPEN"
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                         color: row.secured ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
                     }
@@ -161,9 +166,9 @@ Item {
 
             // Channel
             Text {
-                Layout.preferredWidth: 26; Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 28; Layout.alignment: Qt.AlignVCenter
                 text: net.chan || "--"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 horizontalAlignment: Text.AlignRight
             }
@@ -196,15 +201,16 @@ Item {
             Layout.leftMargin: 8; Layout.rightMargin: 6
 
             Rectangle {
-                Layout.fillWidth: true; height: 22
+                Layout.fillWidth: true; height: 26
+                radius: Config.ControlConfig.radiusSmall
                 color: Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.12)
-                border.color: passField.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+                border.color: passField.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
                 border.width: 1
                 Behavior on border.color { ColorAnimation { duration: 100 } }
 
                 TextInput {
                     id: passField
-                    anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6
+                    anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 6
                     verticalAlignment: TextInput.AlignVCenter
                     echoMode: TextInput.Password
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
@@ -234,13 +240,15 @@ Item {
 
             // CONNECT button
             Rectangle {
-                width: 60; height: 22
-                color: connectMA.containsMouse ? Config.ControlConfig.accent : "transparent"
+                width: 66; height: 26
+                radius: Config.ControlConfig.radiusPill
+                color: connectMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16) : "transparent"
                 border.color: Config.ControlConfig.accent; border.width: 1
+                Behavior on color { ColorAnimation { duration: 100 } }
                 Text {
                     anchors.centerIn: parent; text: "CONNECT"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                    color: connectMA.containsMouse ? Config.ThemeConfig.colors.background : Config.ControlConfig.accent
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                    color: Config.ControlConfig.accent
                 }
                 MouseArea {
                     id: connectMA
@@ -256,12 +264,13 @@ Item {
 
             // CANCEL button
             Rectangle {
-                width: 50; height: 22
+                width: 58; height: 26
+                radius: Config.ControlConfig.radiusPill
                 color: cancelMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.border, 0.6) : "transparent"
-                border.color: Config.ThemeConfig.colors.border; border.width: 1
+                border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: "CANCEL"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: Config.ThemeConfig.colors.textDim
                 }
                 MouseArea {

@@ -20,7 +20,7 @@ import "../services" as Services
 Column {
     id: view
     width: parent ? parent.width : 400
-    spacing: 10
+    spacing: Config.ControlConfig.space4
 
     readonly property var cs: Services.NetworkControlService.connectionStatus
     readonly property bool linkUp: view.cs.connected === true
@@ -47,18 +47,18 @@ Column {
     component Stat: RowLayout {
         property string label: ""
         property string value: "—"
-        spacing: 4
+        spacing: 6
         Text {
             text: parent.label
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
             color: Config.ThemeConfig.colors.textDim
         }
         Text {
             text: parent.value
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
             color: Config.ThemeConfig.colors.text
             elide: Text.ElideRight
-            Layout.maximumWidth: 120
+            Layout.maximumWidth: 140
         }
     }
 
@@ -75,21 +75,11 @@ Column {
     SectionHeader {
         title: "NETWORK"
 
-        // Link-state pill
-        Rectangle {
+        // Link-state badge
+        StatusBadge {
             Layout.alignment: Qt.AlignVCenter
-            width: stateLbl.implicitWidth + 14; height: 16
-            color: view.linkUp
-                   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
-                   : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.10)
-            border.color: view.linkUp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            border.width: 1
-            Text {
-                id: stateLbl; anchors.centerIn: parent
-                text: view.linkUp ? "● STABLE" : "○ OFFLINE"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                color: view.linkUp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            }
+            label: view.linkUp ? "STABLE" : "OFFLINE"
+            kind: view.linkUp ? "ok" : "err"
         }
 
         Item { Layout.fillWidth: true }
@@ -99,7 +89,7 @@ Column {
             visible: !Services.NetworkControlService.scanning
             Layout.alignment: Qt.AlignVCenter
             text: Services.NetworkControlService.wifiNetworks.length + " nets"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
         }
 
@@ -108,7 +98,7 @@ Column {
             visible: Services.NetworkControlService.scanning
             Layout.alignment: Qt.AlignVCenter
             text: { var d = ["·", "··", "···", "····"]; return "scan" + d[Math.floor(dotTimer.tick % 4)] }
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ControlConfig.accent
             Timer {
                 id: dotTimer; property int tick: 0
@@ -122,18 +112,19 @@ Column {
         // RESCAN button
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
-            width: rescanLbl.implicitWidth + 16; height: 20
+            width: rescanLbl.implicitWidth + 20; height: 24
+            radius: Config.ControlConfig.radiusPill
             color: rescanMA.containsMouse && !Services.NetworkControlService.scanning
-                   ? Config.ControlConfig.accent : "transparent"
-            border.color: Services.NetworkControlService.scanning ? Config.ThemeConfig.colors.border : Config.ControlConfig.accent
+                   ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16) : "transparent"
+            border.color: Services.NetworkControlService.scanning ? Config.ThemeConfig.colors.outlineVariant : Config.ControlConfig.accent
             border.width: 1
             opacity: Services.NetworkControlService.scanning ? 0.5 : 1.0
+            Behavior on color { ColorAnimation { duration: 100 } }
             Text {
                 id: rescanLbl; anchors.centerIn: parent
                 text: "RESCAN"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                color: rescanMA.containsMouse && !Services.NetworkControlService.scanning
-                       ? Config.ThemeConfig.colors.background : Config.ControlConfig.accent
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                color: Config.ControlConfig.accent
             }
             MouseArea {
                 id: rescanMA; anchors.fill: parent; hoverEnabled: true
@@ -146,13 +137,13 @@ Column {
     // Hero-row status caption
     Text {
         Layout.fillWidth: true
-        Layout.topMargin: -4
+        Layout.topMargin: -6
         text: "WIFI · " + (view.cs.iface || "—").toUpperCase() + " · " + (view.linkUp ? "IP · " + view.cs.signal + "% SIGNAL" : "OFFLINE")
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 7
-        font.letterSpacing: 0.5
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
+        font.letterSpacing: 0.3
         color: Config.ThemeConfig.colors.textDim
-        opacity: 0.56
+        opacity: 0.75
     }
 
     // Error surface
@@ -170,26 +161,26 @@ Column {
     // =========================================================================
     // 2. CONNECTED-STATUS CARD
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.secondary
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Config.ControlConfig.space2
 
             RowLayout {
                 Layout.fillWidth: true
                 Text {
-                    text: "ACTIVE_LINK"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                    text: "ACTIVE LINK"
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                     color: Config.ThemeConfig.colors.textDim
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     visible: view.linkUp
                     text: view.cs.signal + "%"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
                     color: Config.ControlConfig.accent
                 }
             }
@@ -199,8 +190,8 @@ Column {
             // a QD-OLED, still clearly readable as the hero headline.
             Text {
                 Layout.fillWidth: true
-                text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO_ACTIVE_LINK"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 16; font.bold: true
+                text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO ACTIVE LINK"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
                 color: view.linkUp ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight
             }
@@ -238,7 +229,7 @@ Column {
     // =========================================================================
     // 3. SSID SCAN TABLE
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.primary
         contentSpacing: 0
@@ -250,7 +241,7 @@ Column {
             spacing: 6
             Text {
                 text: "MIN SIGNAL"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
                 color: Config.ThemeConfig.colors.textDim
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -262,7 +253,7 @@ Column {
                 visible: view.minSignal > 0
                 Layout.alignment: Qt.AlignVCenter
                 text: view.filteredNets.length + "/" + Services.NetworkControlService.wifiNetworks.length
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
             }
         }
@@ -276,10 +267,10 @@ Column {
             Layout.leftMargin: 8; Layout.rightMargin: 6        // == row
             spacing: 8                                          // == row
             Item { Layout.preferredWidth: 14 }                 // == row glyph
-            Text { text: "SSID"; Layout.fillWidth: true; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 76; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SECURITY"; Layout.preferredWidth: 72; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "CHAN"; Layout.preferredWidth: 26; horizontalAlignment: Text.AlignRight; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "SSID"; Layout.fillWidth: true; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "SIGNAL"; Layout.preferredWidth: 76; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "SECURITY"; Layout.preferredWidth: 72; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "CHAN"; Layout.preferredWidth: 26; horizontalAlignment: Text.AlignRight; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 16 }                 // == row × slot
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }

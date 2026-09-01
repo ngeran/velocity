@@ -2,7 +2,7 @@
 // ControlDashboard.qml — top-level layout of the terminal command dashboard
 // =============================================================================
 //
-// Owns `activeSection` (network | bluetooth | audio | system). Anchor-based
+// Owns `activeSection` (network | bluetooth | audio | display). Anchor-based
 // frame: AppBar (top), CommandInputBar (bottom), SideNav (left), content area
 // = StatusCardRow + TerminalBody. ScanlineOverlay sits above everything.
 //
@@ -44,7 +44,8 @@ Item {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        width: Config.ControlConfig.sidenavWidth
+        // Compact breakpoint (<1440 logical) collapses the rail to icon-only.
+        width: Config.UIScale.compact ? 56 : Config.ControlConfig.sidenavWidth
         activeSection: root.activeSection
         onSectionSelected: function(key) { root.activeSection = key }
     }

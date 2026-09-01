@@ -1,5 +1,8 @@
 // =============================================================================
-// SideNav.qml — vertical section switcher (network / bluetooth / audio / system)
+// SideNav.qml — vertical section switcher (network / bluetooth / audio / display)
+// =============================================================================
+// NavRailItem pattern: icon chip + label, active tint + dot. Collapses to
+// icon-only (56px) when UIScale reports the compact breakpoint (<1440 logical).
 // =============================================================================
 
 import QtQuick
@@ -24,25 +27,26 @@ Rectangle {
     Column {
         id: navList
         anchors.top: parent.top
-        anchors.topMargin: 18
+        anchors.topMargin: Config.ControlConfig.space4
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 4
+        spacing: Config.ControlConfig.space1
 
         Repeater {
             model: Config.ControlConfig.sections
             delegate: Item {
                 id: del
-                width: nav.width - 16
-                height: 38
-                x: 8
+                width: nav.width - Config.ControlConfig.space2
+                height: 40
+                x: Config.ControlConfig.space1
                 property bool active: (modelData.key === nav.activeSection)
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Config.ControlConfig.radius
-                    color: del.active ? Config.ControlConfig.accentSoft : (navMa.containsMouse ? Config.ControlConfig.accentSoft : "transparent")
-                    opacity: del.active ? 1.0 : (navMa.containsMouse ? 0.5 : 1.0)
+                    radius: Config.ControlConfig.radiusPill
+                    color: del.active ? Config.ControlConfig.accentSoft
+                           : (navMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.05) : "transparent")
+                    opacity: del.active ? 1.0 : (navMa.containsMouse ? 0.6 : 1.0)
                     border.color: del.active ? Config.ControlConfig.accent : "transparent"
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 120 } }
@@ -53,24 +57,49 @@ Rectangle {
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
-                    anchors.leftMargin: 10
-                    spacing: 10
+                    anchors.leftMargin: Config.ControlConfig.space2
+                    spacing: Config.ControlConfig.space2
+
+                    // Icon chip
+                    Rectangle {
+                        width: 26; height: 26
+                        radius: Config.ControlConfig.radiusPill
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: (del.active || navMa.containsMouse)
+                               ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+                               : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surfaceContainer, 0.5)
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.icon
+                            font.family: Config.ControlConfig.fontNerd
+                            font.pixelSize: 13
+                            color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent
+                                                                       : Config.ThemeConfig.colors.textDim
+                        }
+                    }
 
                     Text {
-                        text: modelData.icon
-                        font.family: "JetBrainsMono Nerd Font"
-                        font.pixelSize: 14
-                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Text {
+                        visible: !Config.UIScale.compact
                         text: modelData.label
-                        font.family: Config.ControlConfig.fontMono
+                        font.family: Config.ControlConfig.fontSans
                         font.pixelSize: 11
-                        font.letterSpacing: 1
-                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        font.bold: del.active
+                        font.letterSpacing: 0.6
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent
+                                                                   : Config.ThemeConfig.colors.textDim
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
+                }
+
+                // Active dot (right edge) — visible in both rail widths
+                Rectangle {
+                    visible: del.active
+                    anchors.right: parent.right
+                    anchors.rightMargin: Config.ControlConfig.space2
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 5; height: 5; radius: 2.5
+                    color: Config.ControlConfig.accent
                 }
 
                 MouseArea {
