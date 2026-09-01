@@ -9,7 +9,6 @@ ControlModule 1.0 ControlModule.qml
 ControlDashboard 1.0 ControlDashboard.qml
 SideNav 1.0 SideNav.qml
 TerminalBody 1.0 TerminalBody.qml
-TerminalLogLine 1.0 TerminalLogLine.qml
 WifiListView 1.0 WifiListView.qml
 WifiListRow 1.0 WifiListRow.qml
 BtDeviceListView 1.0 BtDeviceListView.qml

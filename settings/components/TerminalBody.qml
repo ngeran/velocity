@@ -3,9 +3,10 @@
 // =============================================================================
 // Per ui-refresh SKILL.md §1.7/§6.1 the pane is a fixed composition:
 // header card → active section view (fills the remaining height, viewport-fit
-// pattern) → ACTIVITY strip clamped to the last 3 console lines. The console
-// Repeater clamps with .slice(-3) — a scrolling console inside the pane is
-// not allowed. Header strings are read-only bindings; state stays in services.
+// pattern). The old ACTIVITY console strip (CommandService tail) was removed:
+// every logged action already has inline feedback (scan spinner, badges,
+// state chips) and the strip cost each section ~60px of pane height.
+// Header strings are read-only bindings; state stays in the services.
 // =============================================================================
 
 import QtQuick
@@ -79,35 +80,6 @@ Rectangle {
             Layout.fillHeight: true
             opacity: visible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-        }
-
-        // --- ACTIVITY strip — clamped to the last 3 lines, never scrolls ---
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 2
-
-            Text {
-                text: "ACTIVITY"
-                font.family: Config.ControlConfig.fontSans
-                font.pixelSize: 10
-                font.bold: true
-                font.letterSpacing: 1.2
-                color: Config.ThemeConfig.colors.textDim
-            }
-
-            Repeater {
-                id: logRepeater
-                model: Services.CommandService.logLines
-                delegate: TerminalLogLine {
-                    // Clamp to the last 3 lines — logLines is a QQmlListModel
-                    // (no .slice), so hide-by-index instead. ColumnLayout skips
-                    // invisible children, so only the tail renders.
-                    visible: index >= logRepeater.count - 3
-                    Layout.fillWidth: true
-                    text: model.text
-                    kind: model.kind
-                }
-            }
         }
     }
 }
