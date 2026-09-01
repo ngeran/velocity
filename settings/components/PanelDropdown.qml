@@ -78,7 +78,7 @@ Item {
             id: trigger
             width: parent.width
             height: 24
-            color: mouseArea.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.15) : Config.ThemeConfig.colors.surface
+            color: mouseArea.containsMouse ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(0, 0, 0, 0.05)
             border.color: mouseArea.containsMouse ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
             border.width: 1
             radius: 4
@@ -127,7 +127,7 @@ Item {
         Rectangle {
             width: parent.width
             height: parent.height
-            color: Config.ThemeConfig.colors.surface
+            color: Qt.rgba(0, 0, 0, 0.95)
             border.color: Config.ThemeConfig.colors.border
             border.width: 1
             radius: 4
@@ -141,7 +141,7 @@ Item {
                     Rectangle {
                         width: parent.width
                         height: 28
-                        color: optionMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.15) : "transparent"
+                        color: optionMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.2) : Qt.rgba(1, 1, 1, 0.05)
                         Behavior on color { ColorAnimation { duration: 80 } }
 
                         Text {
