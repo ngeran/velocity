@@ -24,6 +24,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import "../config" as Config
 import "../services" as Services
 
@@ -261,41 +262,50 @@ Column {
     }
 
     // =========================================================================
-    // 3. MODE_CARD — refresh segments (current res) + other resolutions
+    // MODERN GRID LAYOUT — 2-column compact arrangement
     // =========================================================================
-    HudCard {
+    GridLayout {
         width: parent.width
-        accent: Config.ThemeConfig.colors.primary
+        columns: 2
+        columnSpacing: 12
+        rowSpacing: 12
 
-        ColumnLayout {
+        // =========================================================================
+        // MODE_CARD — resolution + refresh rate
+        // =========================================================================
+        HudCard {
+            Layout.column: 0; Layout.row: 0
             Layout.fillWidth: true
-            spacing: 8
+            accent: Config.ThemeConfig.colors.primary
 
-            PanelSectionHeader {
+            ColumnLayout {
                 Layout.fillWidth: true
-                label: "MODE"
-                value: view.mon ? (view.mon.w + "×" + view.mon.h + " · " + Math.round(view.mon.refreshHz) + "Hz") : "—"
-            }
+                spacing: 8
 
-            // Refresh options for the CURRENT resolution.
-            PanelDropdown {
-                Layout.fillWidth: true
-                visible: view.mon !== null && view.mon.modes.length > 1
-                showLabel: false
-                value: Math.round(view.mon.refreshHz) + " Hz"
-
-                property var filteredModes: view.mon ? view.mon.modes.filter(function(m) { return m.w === view.mon.w && m.h === view.mon.h }) : []
-
-                options: filteredModes.map(function(m) {
-                    return { label: parseFloat(m.h.toFixed(2)) + " Hz", value: parseFloat(m.h.toFixed(2)) }
-                })
-
-                onChanged: function(newValue) {
-                    Services.MonitorService.applyWithRevert(
-                        "MODE " + view.mon.w + "x" + view.mon.h + "@" + newValue,
-                        { mode: view.mon.w + "x" + view.mon.h + "@" + parseFloat(newValue) })
+                PanelSectionHeader {
+                    Layout.fillWidth: true
+                    label: "MODE"
+                    value: view.mon ? (view.mon.w + "×" + view.mon.h) : "—"
                 }
-            }
+
+                PanelDropdown {
+                    Layout.fillWidth: true
+                    visible: view.mon !== null && view.mon.modes.length > 1
+                    showLabel: false
+                    value: Math.round(view.mon.refreshHz) + " Hz"
+
+                    property var filteredModes: view.mon ? view.mon.modes.filter(function(m) { return m.w === view.mon.w && m.h === view.mon.h }) : []
+
+                    options: filteredModes.map(function(m) {
+                        return { label: parseFloat(m.h.toFixed(2)) + " Hz", value: parseFloat(m.h.toFixed(2)) }
+                    })
+
+                    onChanged: function(newValue) {
+                        Services.MonitorService.applyWithRevert(
+                            "MODE " + view.mon.w + "x" + view.mon.h + "@" + newValue,
+                            { mode: view.mon.w + "x" + view.mon.h + "@" + parseFloat(newValue) })
+                    }
+                }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
@@ -337,13 +347,13 @@ Column {
                 }
             }
         }
-    }
 
-    // =========================================================================
-    // 4. COLOR_CARD — HDR mode, cm preset, bit depth, Tune
-    // =========================================================================
-    HudCard {
-        width: parent.width
+        // =========================================================================
+        // COLOR_CARD — HDR mode, color preset
+        // =========================================================================
+        HudCard {
+            Layout.column: 1; Layout.row: 0
+            Layout.fillWidth: true
         accent: Config.ThemeConfig.colors.warning
         visible: Services.MonitorService.hdrCapable
 
@@ -385,7 +395,6 @@ Column {
                 }
             }
 
-            // Colour preset dropdown
             PanelDropdown {
                 Layout.fillWidth: true
                 visible: view.hdrOn
@@ -402,88 +411,29 @@ Column {
                     Services.MonitorService.applyRule({ cm: newValue })
                 }
             }
-
-            // Bit depth + live scanout truth
-            PanelSectionHeader {
-                Layout.fillWidth: true
-                label: "BIT DEPTH"
-                value: "scanout " + (view.mon ? view.mon.format : "—")
-            }
-            PanelDropdown {
-                Layout.fillWidth: true
-                showLabel: false
-                value: Services.MonitorService.liveBitdepth() + " BIT"
-                options: [
-                    { label: "8 BIT", value: 8 },
-                    { label: "10 BIT", value: 10 }
-                ]
-                onChanged: function(newValue) {
-                    Services.MonitorService.applyRule({ bitdepth: newValue })
-                }
-            }
-
-            // Tune sliders (live preview on drag, committed on release)
-            HudSlider {
-                Layout.fillWidth: true
-                visible: view.hdrOn
-                label: "SDR BRIGHTNESS"; from: 0.8; to: 2.0; step: 0.05
-                value: view.mon ? view.mon.sdrBrightness : 1
-                onPreviewed: function(val) { /* Preview only, no service call */ }
-                onCommitted: function(val) { Services.MonitorService.applyRule({ sdrbrightness: val }) }
-            }
-            HudSlider {
-                Layout.fillWidth: true
-                visible: view.hdrOn
-                label: "SDR SATURATION"; from: 0.5; to: 2.0; step: 0.05
-                value: view.mon ? view.mon.sdrSaturation : 1
-                onPreviewed: function(val) { /* Preview only */ }
-                onCommitted: function(val) { Services.MonitorService.applyRule({ sdrsaturation: val }) }
-            }
-            HudSlider {
-                Layout.fillWidth: true
-                visible: view.hdrOn
-                label: "BLACK FLOOR (NITS)"; from: 0; to: 0.2; step: 0.005
-                value: view.mon ? view.mon.sdrMinLuminance : 0.2
-                onPreviewed: function(val) { /* Preview only */ }
-                onCommitted: function(val) { Services.MonitorService.applyRule({ sdr_min_luminance: val }) }
-            }
-            HudSlider {
-                Layout.fillWidth: true
-                visible: view.hdrOn
-                label: "SDR PEAK (NITS)"; from: 80; to: 400; step: 10
-                value: view.mon ? view.mon.sdrMaxLuminance : 80
-                onPreviewed: function(val) { /* Preview only */ }
-                onCommitted: function(val) { Services.MonitorService.applyRule({ sdr_max_luminance: val }) }
-            }
-
-            Text {
-                Layout.fillWidth: true; visible: !view.hdrOn
-                text: "ALWAYS switches the output to HDR (PQ) — Tune sliders unlock."
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                color: Config.ThemeConfig.colors.textDim; wrapMode: Text.WordWrap
-            }
         }
     }
 
-    // =========================================================================
-    // 5. VRR_CARD
-    // =========================================================================
-    HudCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.success
-        visible: Services.MonitorService.vrrCapable
+        // =========================================================================
+        // VRR_CARD
+        // =========================================================================
+        HudCard {
+            Layout.column: 0; Layout.row: 1
+            Layout.fillWidth: true
+            accent: Config.ThemeConfig.colors.success
+            visible: Services.MonitorService.vrrCapable
 
-        ColumnLayout {
-            Layout.fillWidth: true; spacing: 6
-
-            PanelSectionHeader {
+            ColumnLayout {
                 Layout.fillWidth: true
-                label: "VRR"
-                value: view.mon && view.mon.vrr ? "ACTIVE" : "IDLE (DESKTOP)"
-                color: view.mon && view.mon.vrr ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim
-            }
-            RowLayout {
-                spacing: 6
+                spacing: 8
+
+                PanelSectionHeader {
+                    Layout.fillWidth: true
+                    label: "VRR"
+                    value: view.mon && view.mon.vrr ? "ACTIVE" : "IDLE (DESKTOP)"
+                    color: view.mon && view.mon.vrr ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim
+                }
+
                 PanelDropdown {
                     Layout.fillWidth: true
                     showLabel: false
@@ -506,53 +456,94 @@ Column {
                 }
             }
         }
-    }
 
-    // =========================================================================
-    // 6. SCALE_CARD — stepper + sharp indicator
-    // =========================================================================
-    HudCard {
-        width: parent.width
-        accent: Config.ThemeConfig.colors.info
+        // =========================================================================
+        // SCALE_CARD — scale stepper
+        // =========================================================================
+        HudCard {
+            Layout.column: 1; Layout.row: 1
+            Layout.fillWidth: true
+            accent: Config.ThemeConfig.colors.info
 
-        ColumnLayout {
-            Layout.fillWidth: true; spacing: 6
-
-            RowLayout {
-                Layout.fillWidth: true; spacing: 8
-                Text { text: "SCALE"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                    color: Config.ThemeConfig.colors.textDim }
-                Item { Layout.fillWidth: true }
-                Text { text: view.mon ? view.mon.scale.toFixed(3) : "—"
-                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 16; font.bold: true
-                    color: Config.ThemeConfig.colors.info }
-                Rectangle { width: sMinus.implicitWidth + 12; height: 22
-                    color: Qt.rgba(1, 1, 1, 0.03); border.color: Config.ThemeConfig.colors.border; border.width: 1
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: view.stepScale(-0.125) }
-                    Text { id: sMinus; anchors.centerIn: parent; text: "−"
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true
-                        color: Config.ThemeConfig.colors.text } }
-                Rectangle { width: sPlus.implicitWidth + 12; height: 22
-                    color: Qt.rgba(1, 1, 1, 0.03); border.color: Config.ThemeConfig.colors.border; border.width: 1
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: view.stepScale(0.125) }
-                    Text { id: sPlus; anchors.centerIn: parent; text: "+"
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true
-                        color: Config.ThemeConfig.colors.text } }
-            }
-            Text {
+            ColumnLayout {
                 Layout.fillWidth: true
-                // Sharp = logical pixels land on integers (plugin's 0.051 rule).
-                text: view.mon && view.scaleIsSharp
-                      ? "SHARP — logical " + Math.round(view.mon.w / view.mon.scale) + "×" + Math.round(view.mon.h / view.mon.scale)
-                      : "SOFT — logical pixels are fractional (slight blur)"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                color: view.mon && view.scaleIsSharp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
+                spacing: 8
+
+                PanelSectionHeader {
+                    Layout.fillWidth: true
+                    label: "SCALE"
+                    value: view.mon ? view.mon.scale.toFixed(2) : "—"
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Rectangle {
+                        width: 32; height: 24
+                        color: Qt.rgba(1, 1, 1, 0.03)
+                        border.color: Config.ThemeConfig.colors.border
+                        border.width: 1
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: view.stepScale(-0.125)
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "−"
+                            font.family: Config.ControlConfig.fontMono
+                            font.pixelSize: 11; font.bold: true
+                            color: Config.ThemeConfig.colors.text
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: view.mon ? (view.mon.scale * 100).toFixed(0) + "%" : "—"
+                        font.family: Config.SettingsConfig.fontFamily
+                        font.pixelSize: 14; font.bold: true
+                        color: Config.ThemeConfig.colors.info
+                    }
+
+                    Rectangle {
+                        width: 32; height: 24
+                        color: Qt.rgba(1, 1, 1, 0.03)
+                        border.color: Config.ThemeConfig.colors.border
+                        border.width: 1
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: view.stepScale(0.125)
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "+"
+                            font.family: Config.ControlConfig.fontMono
+                            font.pixelSize: 11; font.bold: true
+                            color: Config.ThemeConfig.colors.text
+                        }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: view.mon && view.scaleIsSharp
+                          ? "SHARP"
+                          : "SOFT"
+                    font.family: Config.ControlConfig.fontMono
+                    font.pixelSize: 8
+                    horizontalAlignment: Text.AlignHCenter
+                    color: view.mon && view.scaleIsSharp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
+                }
             }
         }
     }
+
+    // =========================================================================
+    // Remaining cards (full-width below grid)
+    // =========================================================================
 
     readonly property bool scaleIsSharp: {
         if (!mon || mon.scale <= 0) return false
@@ -642,4 +633,5 @@ Column {
             }
         }
     }
+}
 }
