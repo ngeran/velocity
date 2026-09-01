@@ -180,6 +180,11 @@ ShellRoot {
                 Layout.leftMargin: Config.BarConfig.iconSpacing
             }
 
+            Components.TimezoneWidget {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: Config.BarConfig.iconSpacing
+            }
+
             Components.WeatherWidget {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 12    // +10 keeps the keyboard US label clear of the sun glyph
