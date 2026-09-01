@@ -234,12 +234,15 @@ ColumnLayout {
 
             // PAIRED DEVICES — up to 4 rows, then a hidden-count footer
             SettingsCard {
+                id: pairedCard
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.primary
                 contentSpacing: 0
 
                 readonly property int cap: Math.max(1, Math.floor(pairedViewport.height / 40))
-                readonly property var shown: view.sortedPaired.slice(0, cap)
+                // Count only — rows clamp by visibility, never model slicing
+                // (fresh arrays destroy delegates mid-interaction; see WifiListView).
+                readonly property int visibleCount: Math.min(view.sortedPaired.length, cap)
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -256,9 +259,9 @@ ColumnLayout {
                         }
                         Text {
                             text: view.pairedDevs.length > 0
-                                  ? (shown.length + " / " + view.pairedDevs.length) : "0"
+                                  ? (pairedCard.visibleCount + " / " + view.pairedDevs.length) : "0"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                            color: shown.length < view.pairedDevs.length
+                            color: pairedCard.visibleCount < view.pairedDevs.length
                                    ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
@@ -287,8 +290,12 @@ ColumnLayout {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             Repeater {
-                                model: shown
-                                delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: false }
+                                model: view.sortedPaired
+                                delegate: BtDeviceRow {
+                                    width: parent.width
+                                    visible: index < pairedCard.cap
+                                    dev: modelData; beacon: false
+                                }
                             }
                         }
 
@@ -304,9 +311,9 @@ ColumnLayout {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: shown.length < view.pairedDevs.length
+                        visible: pairedCard.visibleCount < view.pairedDevs.length
                         Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-                        text: "+ " + (view.pairedDevs.length - shown.length) + " more paired hidden"
+                        text: "+ " + (view.pairedDevs.length - pairedCard.visibleCount) + " more paired hidden"
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                         color: Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight
@@ -316,13 +323,15 @@ ColumnLayout {
 
             // AVAILABLE DEVICES — fills the remaining height, rows clamped
             SettingsCard {
+                id: beaconCard
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ThemeConfig.colors.secondary
                 contentSpacing: 0
 
                 readonly property int cap: Math.max(1, Math.floor(beaconViewport.height / 40))
-                readonly property var shown: view.sortedBeacons.slice(0, cap)
+                // Count only — rows clamp by visibility, never model slicing.
+                readonly property int visibleCount: Math.min(view.sortedBeacons.length, cap)
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -340,9 +349,9 @@ ColumnLayout {
                         }
                         Text {
                             text: view.beaconDevs.length > 0
-                                  ? (shown.length + " / " + view.beaconDevs.length) : "0"
+                                  ? (beaconCard.visibleCount + " / " + view.beaconDevs.length) : "0"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                            color: shown.length < view.beaconDevs.length
+                            color: beaconCard.visibleCount < view.beaconDevs.length
                                    ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.secondary
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
@@ -377,8 +386,12 @@ ColumnLayout {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             Repeater {
-                                model: shown
-                                delegate: BtDeviceRow { width: parent.width; dev: modelData; beacon: true }
+                                model: view.sortedBeacons
+                                delegate: BtDeviceRow {
+                                    width: parent.width
+                                    visible: index < beaconCard.cap
+                                    dev: modelData; beacon: true
+                                }
                             }
                         }
 
@@ -403,9 +416,9 @@ ColumnLayout {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: shown.length < view.beaconDevs.length
+                        visible: beaconCard.visibleCount < view.beaconDevs.length
                         Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-                        text: "+ " + (view.beaconDevs.length - shown.length) + " more nearby hidden"
+                        text: "+ " + (view.beaconDevs.length - beaconCard.visibleCount) + " more nearby hidden"
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                         color: Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight

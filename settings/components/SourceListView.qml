@@ -27,7 +27,9 @@ SettingsCard {
         return arr
     }
     readonly property int cap: Math.max(1, Math.floor(srcViewport.height / 36))
-    readonly property var shown: sortedSources.slice(0, cap)
+    // Count only — rows clamp by visibility, never model slicing (fresh
+    // arrays destroy delegates mid-interaction; see WifiListView).
+    readonly property int visibleCount: Math.min(sortedSources.length, cap)
 
     ColumnLayout {
         Layout.fillWidth: true
@@ -46,9 +48,9 @@ SettingsCard {
             }
             Text {
                 text: Services.AudioControlService.sources.length > 0
-                      ? (view.shown.length + " / " + Services.AudioControlService.sources.length) : "0"
+                      ? (view.visibleCount + " / " + Services.AudioControlService.sources.length) : "0"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: view.shown.length < Services.AudioControlService.sources.length
+                color: view.visibleCount < Services.AudioControlService.sources.length
                        ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.secondary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
@@ -79,8 +81,12 @@ SettingsCard {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 Repeater {
-                    model: view.shown
-                    delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "source" }
+                    model: view.sortedSources
+                    delegate: AudioDeviceRow {
+                        width: parent.width
+                        visible: index < view.cap
+                        device: modelData; deviceType: "source"
+                    }
                 }
             }
 
@@ -96,9 +102,9 @@ SettingsCard {
 
         Text {
             Layout.fillWidth: true
-            visible: view.shown.length < Services.AudioControlService.sources.length
+            visible: view.visibleCount < Services.AudioControlService.sources.length
             Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-            text: "+ " + (Services.AudioControlService.sources.length - view.shown.length) + " more inputs hidden"
+            text: "+ " + (Services.AudioControlService.sources.length - view.visibleCount) + " more inputs hidden"
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight

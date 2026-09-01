@@ -50,7 +50,9 @@ ColumnLayout {
         return out
     }
     readonly property int modeCapacity: Math.max(0, Math.floor(modeViewport.height / 34))
-    readonly property var visibleModes: view.otherModes.slice(0, view.modeCapacity)
+    // Count only — rows clamp by visibility, never model slicing (fresh
+    // arrays destroy delegates mid-interaction; see WifiListView).
+    readonly property int visibleModeCount: Math.min(view.otherModes.length, view.modeCapacity)
 
     // ── shared bits ────────────────────────────────────────────────────────
     component Chip: Rectangle {
@@ -230,10 +232,12 @@ ColumnLayout {
                         anchors.right: parent.right
                         spacing: 4
                         Repeater {
-                            model: view.visibleModes
+                            model: view.otherModes
                             delegate: Rectangle {
                                 required property var modelData
+                                required property int index   // required-delegates don't get the legacy context `index`
                                 width: parent.width
+                                visible: index < view.modeCapacity
                                 height: 30
                                 radius: Config.ControlConfig.radiusSmall
                                 color: modeMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.10)
@@ -265,8 +269,8 @@ ColumnLayout {
 
                 Text {
                     Layout.fillWidth: true
-                    visible: view.visibleModes.length < view.otherModes.length
-                    text: "+ " + (view.otherModes.length - view.visibleModes.length) + " more modes hidden"
+                    visible: view.visibleModeCount < view.otherModes.length
+                    text: "+ " + (view.otherModes.length - view.visibleModeCount) + " more modes hidden"
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim
                     elide: Text.ElideRight

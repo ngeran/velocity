@@ -62,7 +62,9 @@ ColumnLayout {
         return arr
     }
     readonly property int sinkCapacity: Math.max(2, Math.floor(sinkViewport.height / 36))
-    readonly property var visibleSinks: view.sortedSinks.slice(0, view.sinkCapacity)
+    // Count only — rows clamp by visibility, never model slicing (fresh
+    // arrays destroy delegates mid-interaction; see WifiListView).
+    readonly property int visibleSinkCount: Math.min(view.sortedSinks.length, view.sinkCapacity)
 
     // =========================================================================
     // 1. HEADER ROW
@@ -238,9 +240,9 @@ ColumnLayout {
                         }
                         Text {
                             text: Services.AudioControlService.sinks.length > 0
-                                  ? (view.visibleSinks.length + " / " + Services.AudioControlService.sinks.length) : "0"
+                                  ? (view.visibleSinkCount + " / " + Services.AudioControlService.sinks.length) : "0"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                            color: view.visibleSinks.length < Services.AudioControlService.sinks.length
+                            color: view.visibleSinkCount < Services.AudioControlService.sinks.length
                                    ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
@@ -269,8 +271,12 @@ ColumnLayout {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             Repeater {
-                                model: view.visibleSinks
-                                delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "sink" }
+                                model: view.sortedSinks
+                                delegate: AudioDeviceRow {
+                                    width: parent.width
+                                    visible: index < view.sinkCapacity
+                                    device: modelData; deviceType: "sink"
+                                }
                             }
                         }
 
@@ -286,9 +292,9 @@ ColumnLayout {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: view.visibleSinks.length < Services.AudioControlService.sinks.length
+                        visible: view.visibleSinkCount < Services.AudioControlService.sinks.length
                         Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-                        text: "+ " + (Services.AudioControlService.sinks.length - view.visibleSinks.length) + " more outputs hidden"
+                        text: "+ " + (Services.AudioControlService.sinks.length - view.visibleSinkCount) + " more outputs hidden"
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                         color: Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight
@@ -297,12 +303,14 @@ ColumnLayout {
             }
 
             SettingsCard {
+                id: streamsCard
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.secondary
                 contentSpacing: 0
 
                 readonly property int cap: Math.max(1, Math.floor(streamViewport.height / 36))
-                readonly property var shown: Services.AudioControlService.sinkInputs.slice(0, cap)
+                // Count only — rows clamp by visibility, never model slicing.
+                readonly property int visibleCount: Math.min(Services.AudioControlService.sinkInputs.length, cap)
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -348,8 +356,12 @@ ColumnLayout {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             Repeater {
-                                model: shown
-                                delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "stream" }
+                                model: Services.AudioControlService.sinkInputs
+                                delegate: AudioDeviceRow {
+                                    width: parent.width
+                                    visible: index < streamsCard.cap
+                                    device: modelData; deviceType: "stream"
+                                }
                             }
                         }
 

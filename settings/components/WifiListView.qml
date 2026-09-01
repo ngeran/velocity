@@ -55,7 +55,14 @@ ColumnLayout {
     // Rows are 40px (66 while one expands for the inline password field —
     // reserve one slot so the editor is never clipped by the viewport).
     readonly property int listCapacity: Math.max(3, Math.floor(listViewport.height / 40) - (view.anyRowEditing ? 1 : 0))
-    readonly property var visibleNets: view.sortedNets.slice(0, view.listCapacity)
+    // Count only. Rows are clamped by VISIBILITY (index < listCapacity), never
+    // by slicing the model: a sliced model is a fresh array on every capacity
+    // change (height churn while the card slides up, the editing reserve),
+    // which destroys + recreates the row delegates mid-interaction. A delegate
+    // dying while editing=true strands `anyRowEditing` forever — every row
+    // stays frozen/disabled ("cannot switch networks"). Visibility clamping
+    // keeps delegates alive so click/password state survives.
+    readonly property int visibleCount: Math.min(view.sortedNets.length, view.listCapacity)
 
     // Label/value stat pair (used by the connected card).
     component Stat: RowLayout {
@@ -283,9 +290,9 @@ ColumnLayout {
                         color: Config.ThemeConfig.colors.text
                     }
                     Text {
-                        text: view.visibleNets.length + " / " + view.filteredNets.length
+                        text: view.visibleCount + " / " + view.filteredNets.length
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                        color: view.visibleNets.length < view.filteredNets.length
+                        color: view.visibleCount < view.filteredNets.length
                                ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
@@ -316,9 +323,10 @@ ColumnLayout {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         Repeater {
-                            model: view.visibleNets
+                            model: view.sortedNets
                             delegate: WifiListRow {
                                 width: parent.width
+                                visible: index < view.listCapacity
                                 net: modelData
                                 listFrozen: view.anyRowEditing
                                 onEditingChanged: {
@@ -357,9 +365,9 @@ ColumnLayout {
                 // Footer — honest count of clamped-away rows
                 Text {
                     Layout.fillWidth: true
-                    visible: view.visibleNets.length < view.filteredNets.length
+                    visible: view.visibleCount < view.filteredNets.length
                     Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-                    text: "+ " + (view.filteredNets.length - view.visibleNets.length)
+                    text: "+ " + (view.filteredNets.length - view.visibleCount)
                           + " more hidden — raise MIN SIGNAL to narrow"
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim
