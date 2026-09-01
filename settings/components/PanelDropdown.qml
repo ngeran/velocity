@@ -28,7 +28,7 @@ import "../config" as Config
 Item {
     id: root
     width: parent ? parent.width : 140
-    implicitHeight: showLabel && label !== "" ? 20 + 4 : 20
+    implicitHeight: showLabel && label !== "" ? 24 + 4 : 24
 
     property string label: ""
     property string value: ""
@@ -77,11 +77,13 @@ Item {
         Rectangle {
             id: trigger
             width: parent.width
-            height: 20
-            color: mouseArea.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent"
-            border.color: Config.ControlConfig.accent
+            height: 24
+            color: mouseArea.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.15) : Config.ThemeConfig.colors.surface
+            border.color: mouseArea.containsMouse ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
             border.width: 1
+            radius: 4
             Behavior on color { ColorAnimation { duration: 100 } }
+            Behavior on border.color { ColorAnimation { duration: 100 } }
 
             Text {
                 anchors.left: parent.left; anchors.leftMargin: 8
@@ -138,8 +140,8 @@ Item {
                     model: root.options
                     Rectangle {
                         width: parent.width
-                        height: 26
-                        color: optionMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent"
+                        height: 28
+                        color: optionMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.15) : "transparent"
                         Behavior on color { ColorAnimation { duration: 80 } }
 
                         Text {
