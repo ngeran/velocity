@@ -1,80 +1,47 @@
 // =============================================================================
-// TimezoneWidget.qml — World clock for the bar (omarchy-inspired)
+// TimezoneWidget.qml — world-clock pill for the bar (omarchy-inspired)
+// =============================================================================
+// Globe/clock glyph that expands on hover to the client zones' times
+// ("NY 07:12 · CA 04:12"); left click opens the shared TrayCard's timezone
+// body (same tray contract as Network/Bluetooth/Volume/Battery icons).
+// Data lives in Services.TimezoneService (system tzdata via Intl — offline,
+// DST-correct). Middle click refreshes; right click opens worldtimebuddy.
 // =============================================================================
 
 import QtQuick
-import QtQuick.Layouts
-import "../config" as Config
 import "../services" as Services
+import "../config" as Config
 
 Item {
     id: root
-    width: timezoneRow.implicitWidth + 12
+    width: tzRow.implicitWidth + 12
     height: Config.BarConfig.barHeight
 
-    property bool expanded: mouseArea.containsMouse && compactLabel !== ""
-    property string compactLabel: ""
+    property bool isActive: false
+    signal trayRequested()
 
-    // Timezone configuration
-    property var zones: [
-        { label: "Local", shortLabel: "LOCAL", zone: "", home: true },
-        { label: "New York", shortLabel: "NY", zone: "America/New_York" },
-        { label: "California", shortLabel: "CA", zone: "America/Los_Angeles" },
-        { label: "UTC", shortLabel: "UTC", zone: "UTC" }
-    ]
-
-    Timer {
-        interval: 60000
-        running: true
-        repeat: true
-        onTriggered: updateTimes()
-    }
-
-    Component.onCompleted: updateTimes()
-
-    function updateTimes() {
-        var now = new Date()
-        var parts = []
-        for (var i = 0; i < zones.length; i++) {
-            var z = zones[i]
-            if (z.home || !z.zone) continue
-            var time = getTimezoneTime(z.zone, now)
-            if (time) parts.push(z.shortLabel + " " + time)
-        }
-        root.compactLabel = parts.join(" · ")
-    }
-
-    function getTimezoneTime(zone, date) {
-        var options = { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }
-        try {
-            var formatter = new Intl.DateTimeFormat('en-US', options)
-            var parts = formatter.formatToParts(date)
-            var hour = parts.find(p => p.type === 'hour').value
-            var minute = parts.find(p => p.type === 'minute').value
-            return hour + ":" + minute
-        } catch (e) {
-            return null
-        }
-    }
+    readonly property bool expanded: tzMA.containsMouse
+                                     && Services.TimezoneService.compactLabel !== ""
 
     Row {
-        id: timezoneRow
+        id: tzRow
         anchors.centerIn: parent
         spacing: root.expanded ? 8 : 0
 
         Text {
-            text: "🌐"
+            text: "󰅐"
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
-            color: Config.ThemeConfig.colors.textDim
-            opacity: mouseArea.containsMouse ? 1.0 : 0.7
+            color: (root.isActive || tzMA.containsMouse)
+                   ? Config.BarConfig.colorAccent
+                   : Config.ThemeConfig.colors.textDim
             anchors.verticalCenter: parent.verticalCenter
-            Behavior on opacity { NumberAnimation { duration: 100 } }
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
 
         Text {
             visible: root.expanded
-            text: root.compactLabel
+            text: Services.TimezoneService.compactLabel
             font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
             color: Config.ThemeConfig.colors.text
@@ -84,20 +51,14 @@ Item {
     }
 
     MouseArea {
-        id: mouseArea
+        id: tzMA
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: function(mouse) {
-            if (mouse.button === Qt.LeftButton) {
-                print("Opening timezone panel")
-            } else if (mouse.button === Qt.MiddleButton) {
-                updateTimes()
-            } else if (mouse.button === Qt.RightButton) {
-                Qt.openUrlExternally("https://www.worldtimebuddy.com/")
-            }
+            if (mouse.button === Qt.MiddleButton)      Services.TimezoneService.refresh()
+            else if (mouse.button === Qt.RightButton)  Qt.openUrlExternally("https://www.worldtimebuddy.com/")
+            else                                       root.trayRequested()
         }
     }
-
-    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 }

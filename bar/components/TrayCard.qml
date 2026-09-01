@@ -63,6 +63,7 @@ PanelWindow {
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
         if (lastTray === "power")     return Services.BatteryService.glyph
+        if (lastTray === "timezone")  return "󰅐"
         return ""
     }
     readonly property string headerTitle: {
@@ -70,6 +71,7 @@ PanelWindow {
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
         if (lastTray === "power")     return "POWER"
+        if (lastTray === "timezone")  return "TIME ZONES"
         return ""
     }
 
@@ -100,6 +102,7 @@ PanelWindow {
         height: card.lastTray === "network" ? (networkBody.implicitHeight + 55)
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
+              : card.lastTray === "timezone" ? (tzBody.implicitHeight + 55)
               : 220
         color: Config.BarConfig.colorBackground
         radius: 0   // sharp corners
@@ -196,6 +199,7 @@ PanelWindow {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
                 if (card.lastTray === "power")     return 3
+                if (card.lastTray === "timezone")  return 4
                 return 0
             }
 
@@ -649,6 +653,68 @@ PanelWindow {
                     Text { text: Services.BatteryService.onAc ? "AC / Wall" : "Battery"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
                 }
                 Item { Layout.fillHeight: true }
+            }
+
+            // ── Timezones ──
+            ColumnLayout {
+                id: tzBody
+                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+
+                // One row per configured zone: chip + place + offset + time.
+                // The home row tracks the system timezone and reads accent.
+                Repeater {
+                    model: Services.TimezoneService.zones
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+
+                        Rectangle {
+                            width: tzShort.implicitWidth + 12; height: 18
+                            radius: 0
+                            color: modelData.home ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
+                            border.color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
+                            border.width: 1
+                            Text { id: tzShort; anchors.centerIn: parent; text: modelData.shortLabel
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
+                                color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
+                        }
+
+                        Text {
+                            text: modelData.home
+                                  ? (Services.TimezoneService.localZoneName || modelData.label)
+                                  : modelData.label
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                            color: Config.BarConfig.colorText
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            visible: text !== ""
+                            text: Services.TimezoneService.offsetLabel(modelData.zone)
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                            color: Config.BarConfig.colorTextDim
+                        }
+
+                        Text {
+                            text: Services.TimezoneService.timeIn(modelData.zone)
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
+                            color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorText
+                        }
+                    }
+                }
+
+                Item { height: 10 }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Item { height: 8 }
+
+                // Local date + system zone, for orientation at a glance.
+                Text {
+                    Layout.fillWidth: true
+                    text: Services.TimezoneService.dateIn("")
+                          + " · " + (Services.TimezoneService.localZoneName || "local time")
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                    color: Config.BarConfig.colorTextDim
+                }
             }
         }
     }

@@ -183,6 +183,8 @@ ShellRoot {
             Components.TimezoneWidget {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Config.BarConfig.iconSpacing
+                isActive: panelWindow.activeTray === "timezone"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "timezone" ? "" : "timezone"
             }
 
             Components.WeatherWidget {
@@ -392,6 +394,17 @@ ShellRoot {
 
         function next() {
             Services.KeyboardService.switchNext()
+        }
+    }
+
+    // Timezone tray card toggle (IPC-verifiable; bindable to a key if wanted)
+    IpcHandler {
+        id: timezoneIpc
+        target: "timezone"
+
+        function toggle() {
+            if (shellRoot.trayOwner)
+                shellRoot.trayOwner.activeTray = shellRoot.trayOwner.activeTray === "timezone" ? "" : "timezone"
         }
     }
 

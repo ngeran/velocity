@@ -14,3 +14,4 @@ singleton WeatherService 1.0 WeatherService.qml
 singleton LogService 1.0 LogService.qml
 singleton EventService 1.0 EventService.qml
 singleton KeyboardService 1.0 KeyboardService.qml
+singleton TimezoneService 1.0 TimezoneService.qml
