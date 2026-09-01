@@ -38,16 +38,16 @@ QtObject {
     function refresh() { root.now = new Date() }
 
     // ── Derived labels (reactive on `now`) ───────────────────────────────────
-    // "NY 07:12 · CA 04:12" — home zone excluded (the bar clock already shows it)
+    // Hover pill: the LOCAL zone's time only ("ATHENS 20:04") — the tray card
+    // holds the full world list. Derived from the system timezone, so travel
+    // relabels it automatically.
     readonly property string compactLabel: {
-        var parts = []
-        for (var i = 0; i < zones.length; i++) {
-            var z = zones[i]
-            if (z.home || !z.zone) continue
-            var t = timeIn(z.zone)
-            if (t) parts.push(z.shortLabel + " " + t)
-        }
-        return parts.join(" · ")
+        var t = timeIn("")
+        if (!t) return ""
+        var city = ""
+        var zn = localZoneName
+        if (zn && zn.indexOf("/") !== -1) city = zn.split("/").pop().replace(/_/g, " ")
+        return city !== "" ? city.toUpperCase() + " " + t : t
     }
 
     // System timezone IANA name ("Europe/Athens") for the popup's date line.
