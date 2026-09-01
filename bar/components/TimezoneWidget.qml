@@ -41,7 +41,7 @@ Item {
             var time = getTimezoneTime(z.zone, now)
             if (time) parts.push(z.shortLabel + " " + time)
         }
-        compactLabel = parts.join(" · ")
+        root.compactLabel = parts.join(" · ")
     }
 
     function getTimezoneTime(zone, date) {
@@ -63,7 +63,7 @@ Item {
         spacing: root.expanded ? 8 : 0
 
         Text {
-            text: "󱉊"
+            text: "🌐"
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
             color: Config.ThemeConfig.colors.textDim
@@ -87,9 +87,13 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: function(mouse) {
-            if (mouse.button === Qt.LeftButton) print("Open timezone panel")
-            else if (mouse.button === Qt.MiddleButton) updateTimes()
-            else if (mouse.button === Qt.RightButton) Qt.openUrlExternally("https://www.worldtimebuddy.com/")
+            if (mouse.button === Qt.LeftButton) {
+                print("Opening timezone panel")
+            } else if (mouse.button === Qt.MiddleButton) {
+                updateTimes()
+            } else if (mouse.button === Qt.RightButton) {
+                Qt.openUrlExternally("https://www.worldtimebuddy.com/")
+            }
         }
     }
 
