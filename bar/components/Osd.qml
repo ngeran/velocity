@@ -71,17 +71,18 @@ PanelWindow {
             spacing: Services.OsdService.hasProgress ? osdWindow.gap : osdWindow.messageGap
 
             Item {
-                width: osdWindow.iconWidth
+                width: Math.max(osdWindow.iconWidth, Math.round(osdWindow.iconPixelSize * 0.9))
                 height: parent.height
-                // Sit the glyph's INK flush in the column and centered on the
-                // row — both axes compensate by tightBoundingRect (cell-based
-                // centering leaves high-bearing glyphs like the keyboard riding
-                // visibly above the text baseline).
+                // Cell-based centering. The previous ink-metric centering
+                // (tightBoundingRect offsets) proved unreliable for these Nerd
+                // Font PUA glyphs — the volume glyph rendered visibly LOW
+                // against the bar (metrics don't match the drawn ink).
+                // anchors.centerIn centers the glyph's cell; the -1px optical
+                // lift compensates for nerd glyphs riding slightly low in
+                // their cells (per-glyph hinting quirk).
                 Text {
-                    x: Math.round((osdWindow.iconWidth - osdWindow.iconInkWidth) / 2
-                                  - iconMetrics.tightBoundingRect.x)
-                    y: Math.round((parent.height - osdWindow.iconInkHeight) / 2
-                                  - iconMetrics.tightBoundingRect.y)
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: -1
                     text: Services.OsdService.icon
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: osdWindow.iconPixelSize
