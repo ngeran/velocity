@@ -22,7 +22,7 @@ import "../services" as Services
 Column {
     id: view
     width: parent ? parent.width : 400
-    spacing: 10
+    spacing: Config.ControlConfig.space4
 
     // -------------------------------------------------------------------------
     // DERIVED ARRAYS — re-evaluate when `devices` changes (the service reassigns
@@ -50,13 +50,13 @@ Column {
         spacing: 2
         Text {
             text: parent.label
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
             color: Config.ThemeConfig.colors.textDim
         }
         Text {
             Layout.fillWidth: true
             text: parent.value
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
             color: Config.ThemeConfig.colors.text
             elide: Text.ElideRight
         }
@@ -68,21 +68,11 @@ Column {
     SectionHeader {
         title: "BLUETOOTH"
 
-        // Power-state pill
-        Rectangle {
+        // Power-state badge
+        StatusBadge {
             Layout.alignment: Qt.AlignVCenter
-            width: stateLbl.implicitWidth + 14; height: 16
-            color: Services.BluetoothControlService.powered
-                   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
-                   : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.10)
-            border.color: Services.BluetoothControlService.powered ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            border.width: 1
-            Text {
-                id: stateLbl; anchors.centerIn: parent
-                text: Services.BluetoothControlService.powered ? "● POWERED" : "○ OFFLINE"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                color: Services.BluetoothControlService.powered ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            }
+            label: Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE"
+            kind: Services.BluetoothControlService.powered ? "ok" : "err"
         }
 
         Item { Layout.fillWidth: true }
@@ -92,7 +82,7 @@ Column {
             visible: !Services.BluetoothControlService.scanning
             Layout.alignment: Qt.AlignVCenter
             text: view.pairedDevs.length + " paired · " + view.beaconDevs.length + " beacons"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
         }
 
@@ -101,28 +91,28 @@ Column {
             visible: Services.BluetoothControlService.scanning
             Layout.alignment: Qt.AlignVCenter
             text: "scan " + Services.BluetoothControlService.scanSecondsLeft + "s"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
             color: Config.ControlConfig.accent
         }
 
-        // RESCAN button — disabled+dimmed when adapter is off or scan is running.
-        // Border = accent, hover fill = accent, label inverts to background on
-        // hover, opacity 0.5 while disabled (mirrors WifiListView's RESCAN).
+        // RESCAN button — disabled+dimmed when adapter is off or scan is running
+        // (mirrors WifiListView's RESCAN pill).
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
-            width: rescanLbl.implicitWidth + 16; height: 20
+            width: rescanLbl.implicitWidth + 20; height: 24
+            radius: Config.ControlConfig.radiusPill
             color: rescanMA.containsMouse && Services.BluetoothControlService.powered && !Services.BluetoothControlService.scanning
-                   ? Config.ControlConfig.accent : "transparent"
+                   ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16) : "transparent"
             border.color: (!Services.BluetoothControlService.powered || Services.BluetoothControlService.scanning)
-                          ? Config.ThemeConfig.colors.border : Config.ControlConfig.accent
+                          ? Config.ThemeConfig.colors.outlineVariant : Config.ControlConfig.accent
             border.width: 1
             opacity: (!Services.BluetoothControlService.powered || Services.BluetoothControlService.scanning) ? 0.5 : 1.0
+            Behavior on color { ColorAnimation { duration: 100 } }
             Text {
                 id: rescanLbl; anchors.centerIn: parent
                 text: "RESCAN"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                color: rescanMA.containsMouse && Services.BluetoothControlService.powered && !Services.BluetoothControlService.scanning
-                       ? Config.ThemeConfig.colors.background : Config.ControlConfig.accent
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                color: Config.ControlConfig.accent
             }
             MouseArea {
                 id: rescanMA; anchors.fill: parent; hoverEnabled: true
@@ -137,13 +127,13 @@ Column {
     // Hero-row status caption
     Text {
         Layout.fillWidth: true
-        Layout.topMargin: -4
+        Layout.topMargin: -6
         text: "BLUETOOTH · " + (Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE") + " · " + view.pairedDevs.length + " PAIRED · " + view.beaconDevs.length + " BEACONS"
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 7
-        font.letterSpacing: 0.5
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
+        font.letterSpacing: 0.3
         color: Config.ThemeConfig.colors.textDim
-        opacity: 0.56
+        opacity: 0.75
     }
 
     // Error surface (pairing/scan failures)
@@ -161,20 +151,20 @@ Column {
     // =========================================================================
     // 2. STATUS CARD
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.primary
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Config.ControlConfig.space2
 
             // Top row: ADAPTER label + power chip
             RowLayout {
                 Layout.fillWidth: true
                 Text {
                     text: "ADAPTER"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                     color: Config.ThemeConfig.colors.textDim
                 }
                 Item { Layout.fillWidth: true }
@@ -186,15 +176,15 @@ Column {
                 }
             }
 
-            // Big line: adapter alias (or address, or "READY"); NO_ACTIVE_ADAPTER when off.
+            // Big line: adapter alias (or address, or "READY"); NO ACTIVE ADAPTER when off.
             Text {
                 Layout.fillWidth: true
                 text: Services.BluetoothControlService.powered
                       ? (Services.BluetoothControlService.adapterAlias
                          || Services.BluetoothControlService.adapterAddress
                          || "READY")
-                      : "NO_ACTIVE_ADAPTER"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 16; font.bold: true
+                      : "NO ACTIVE ADAPTER"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
                 color: Services.BluetoothControlService.powered
                        ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight
@@ -218,23 +208,23 @@ Column {
             RowLayout {
                 Layout.fillWidth: true
                 visible: view.connBatDev !== null
-                spacing: 6
+                spacing: 8
                 Text {
                     text: "BAT"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
                     color: Config.ThemeConfig.colors.textDim
                 }
                 Text {
                     text: view.connBatDev ? (view.connBatDev.battery + "%") : ""
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: view.connBatDev && view.connBatDev.battery < 20
                            ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.text
                 }
                 Rectangle {
-                    Layout.fillWidth: true; height: 3
+                    Layout.fillWidth: true; height: 4; radius: 2
                     color: Config.ThemeConfig.colors.border
                     Rectangle {
-                        height: 3
+                        height: 4; radius: 2
                         width: parent.width * (view.connBatDev ? view.connBatDev.battery : 0) / 100
                         color: (view.connBatDev && view.connBatDev.battery < 20)
                                ? Config.ThemeConfig.colors.error : Config.ControlConfig.accent
@@ -247,7 +237,7 @@ Column {
     // =========================================================================
     // 3. PAIRED_NODES
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.primary
         contentSpacing: 0
@@ -257,30 +247,30 @@ Column {
             Layout.fillWidth: true
             spacing: 6
             Text {
-                text: "PAIRED_NODES"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                text: "PAIRED DEVICES"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                 color: Config.ThemeConfig.colors.text
             }
             Text {
                 text: "[ " + view.pairedDevs.length + " ]"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                 color: Config.ThemeConfig.colors.primary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
         }
 
-        // Column header — mirrors BtDeviceRow geometry EXACTLY (margins 8/6,
-        // spacing 8, icon 22, NAME fill, SIGNAL 60, STATE 70, ACTION 80, × 16)
-        // so every column lines up between the header and the rows beneath it.
+        // Column header — mirrors BtDeviceRow geometry (margins, spacing, icon
+        // slot, NAME fill, SIGNAL 60, STATE 70, ACTION 80, × 16) so every
+        // column lines up between the header and the rows beneath it.
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6
+            Layout.leftMargin: 10; Layout.rightMargin: 6
             spacing: 8
-            Item { Layout.preferredWidth: 22 }
-            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 60; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Item { Layout.preferredWidth: 26 }
+            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 16 }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
@@ -306,7 +296,7 @@ Column {
     // =========================================================================
     // 4. AVAIL_BEACONS
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.secondary
         contentSpacing: 0
@@ -316,8 +306,8 @@ Column {
             Layout.fillWidth: true
             spacing: 6
             Text {
-                text: "AVAIL_BEACONS"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                text: "AVAILABLE DEVICES"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                 color: Config.ThemeConfig.colors.text
             }
             Text {
@@ -329,16 +319,16 @@ Column {
             Item { Layout.fillWidth: true }
         }
 
-        // Column header — SAME pinned geometry as section 3.
+        // Column header — SAME pinned geometry as the paired card.
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6
+            Layout.leftMargin: 10; Layout.rightMargin: 6
             spacing: 8
-            Item { Layout.preferredWidth: 22 }
-            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "SIGNAL"; Layout.preferredWidth: 60; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Item { Layout.preferredWidth: 26 }
+            Text { text: "NAME";   Layout.fillWidth: true;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "SIGNAL"; Layout.preferredWidth: 66; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "STATE";  Layout.preferredWidth: 70; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "ACTION"; Layout.preferredWidth: 80; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 16 }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }

@@ -28,7 +28,7 @@ import "../services" as Services
 Item {
     id: row
     width: parent ? parent.width : 400
-    height: 30
+    height: 40
 
     // ── INTERFACE (instantiated by the list view) ──────────────────────────────
     property var dev: ({ mac: "", name: "", alias: "", icon: "",
@@ -98,6 +98,7 @@ Item {
     // ── Background tint by state ──────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
+        radius: Config.ControlConfig.radiusSmall
         color: dev.connected ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10)
                : row.busy   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
                : ma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6)
@@ -105,32 +106,34 @@ Item {
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
-    // ── Left accent bar (connected) ───────────────────────────────────────────
+    // ── Left accent bar (connected) — inset rounded tick ──────────────────────
     Rectangle {
         visible: dev.connected
-        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-        width: 2
+        anchors.left: parent.left; anchors.leftMargin: 3
+        anchors.top: parent.top; anchors.topMargin: 8
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 8
+        width: 3
+        radius: 1.5
         color: Config.ControlConfig.accent
     }
 
     // ── Content ─────────────────────────────────────────────────────────────────
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8; anchors.rightMargin: 6
+        anchors.leftMargin: 10; anchors.rightMargin: 6
         spacing: 8
 
-        // (1) Icon box — bordered square, Nerd Font glyph from dev.icon.
+        // (1) Icon chip — rounded square, Nerd Font glyph from dev.icon.
         Rectangle {
-            Layout.preferredWidth: 22; Layout.preferredHeight: 18
+            Layout.preferredWidth: 26; Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignVCenter
-            color: "transparent"
-            border.color: dev.connected ? Config.ControlConfig.accent
-                                        : Config.ThemeConfig.colors.border
-            border.width: 1
+            radius: Config.ControlConfig.radiusPill
+            color: dev.connected ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+                                 : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surfaceContainer, 0.5)
             Text {
                 anchors.centerIn: parent
                 text: row.iconGlyph
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
+                font.family: Config.ControlConfig.fontNerd; font.pixelSize: 13
                 color: dev.connected ? Config.ControlConfig.accent
                                       : Config.ThemeConfig.colors.textDim
             }
@@ -155,7 +158,7 @@ Item {
                 Layout.fillWidth: true
                 visible: dev.connected && dev.battery >= 0
                 text: "Connected · " + dev.battery + "%"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight
             }
@@ -164,18 +167,18 @@ Item {
                 Layout.fillWidth: true
                 visible: (dev.mac || "").length > 0 && (!dev.connected || dev.battery < 0)
                 text: dev.mac
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight
             }
         }
 
-        // (3) Signal meter — two render modes sharing the 44-wide slot:
+        // (3) Signal meter — two render modes sharing the 66-wide slot:
         //     • beacon: 4 compact horizontal segments + "−NN dBm" label
         //     • paired: 4 rising vertical bars + "BAT NN%" label
         //     (clip:true guards the right edge if the label runs long.)
         Item {
-            Layout.preferredWidth: 60; Layout.preferredHeight: row.height
+            Layout.preferredWidth: 66; Layout.preferredHeight: row.height
             Layout.alignment: Qt.AlignVCenter
             clip: true
 
@@ -190,7 +193,7 @@ Item {
                     Repeater {
                         model: 4
                         Rectangle {
-                            width: 3; height: 2
+                            width: 3; height: 3; radius: 1
                             color: index < row.litBeaconBars ? Config.ControlConfig.accent
                                                              : Config.ThemeConfig.colors.border
                             Behavior on color { ColorAnimation { duration: 120 } }
@@ -202,7 +205,7 @@ Item {
                     // dBm = round(rssi/2) − 100; rssi 0-100 → -100..-50, so always
                     // negative — show the real minus sign (U+2212) for readability.
                     text: "−" + Math.abs(Math.round(dev.rssi / 2) - 100) + " dBm"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim
                     elide: Text.ElideRight
                 }
@@ -222,6 +225,7 @@ Item {
                             Layout.preferredWidth: 3
                             Layout.preferredHeight: 4 + index * 2      // 4,6,8,10 — rising bars
                             Layout.alignment: Qt.AlignBottom           // shared baseline
+                            radius: 1
                             color: index < row.litPairedBars ? row.barColor
                                                             : Config.ThemeConfig.colors.border
                             Behavior on color { ColorAnimation { duration: 120 } }
@@ -231,7 +235,7 @@ Item {
                 Text {
                     visible: dev.battery >= 0
                     text: "BAT " + dev.battery + "%"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                     color: dev.battery < 20 ? Config.ThemeConfig.colors.error
                                             : Config.ThemeConfig.colors.textDim
                     elide: Text.ElideRight
@@ -239,49 +243,50 @@ Item {
             }
         }
 
-        // (4) State chip — content-sized (min(70, label+12)), left-aligned in
+        // (4) State chip — content-sized (min(70, label+14)), left-aligned in
         //     the 70-wide slot so the ACTION column lines up across rows.
         Item {
-            Layout.preferredWidth: 70; Layout.preferredHeight: 16
+            Layout.preferredWidth: 70; Layout.preferredHeight: 18
             Layout.alignment: Qt.AlignVCenter
             Rectangle {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(70, stateLabel.implicitWidth + 12); height: 16
+                width: Math.min(70, stateLabel.implicitWidth + 14); height: 18
+                radius: Config.ControlConfig.radiusSmall
                 color: row.stateColored ? Config.ThemeConfig.tint(row.stateColor, 0.10)
                                         : "transparent"
                 border.color: row.stateColored ? row.stateColor
-                                               : Config.ThemeConfig.colors.border
+                                               : Config.ThemeConfig.colors.outlineVariant
                 border.width: 1
                 Text {
                     id: stateLabel
                     anchors.centerIn: parent; width: parent.width - 8
                     text: row.stateText
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: row.stateColor
                     elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
                 }
             }
         }
 
-        // (5) Action button — content-sized (label+16), left-aligned in the
-        //     80-wide slot. Hidden while busy; the spinner below takes over.
+        // (5) Action button — content-sized (label+18), left-aligned in the
+        //     80-wide slot. Hidden while busy; the busy label takes over.
         Item {
-            Layout.preferredWidth: 80; Layout.preferredHeight: 18
+            Layout.preferredWidth: 80; Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignVCenter
             Rectangle {
                 visible: !row.busy
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                width: actionLabel.implicitWidth + 16; height: 18
-                color: actionMA.containsMouse ? row.actionBorderColor : "transparent"
+                width: actionLabel.implicitWidth + 18; height: 24
+                radius: Config.ControlConfig.radiusPill
+                color: actionMA.containsMouse ? Config.ThemeConfig.tint(row.actionBorderColor, 0.16) : "transparent"
                 border.color: row.actionBorderColor; border.width: 1
                 Behavior on color { ColorAnimation { duration: 120 } }
                 Text {
                     id: actionLabel
                     anchors.centerIn: parent
                     text: row.actionText
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                    color: actionMA.containsMouse ? Config.ThemeConfig.colors.background
-                                                  : row.actionBorderColor
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                    color: row.actionBorderColor
                 }
                 MouseArea {
                     id: actionMA
@@ -302,7 +307,7 @@ Item {
                 anchors.left: parent.left; anchors.leftMargin: 2
                 anchors.verticalCenter: parent.verticalCenter
                 text: row.pairing ? "Pairing..." : "Connecting..."
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true
                 color: Config.ThemeConfig.colors.warning
             }
         }
