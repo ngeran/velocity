@@ -21,7 +21,7 @@ import "../services" as Services
 Item {
     id: row
     width: parent ? parent.width : 400
-    height: 28
+    height: 36
 
     property var device: ({})
     property string deviceType: "sink"
@@ -36,29 +36,33 @@ Item {
     // ── Background tint by state ──────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
+        radius: Config.ControlConfig.radiusSmall
         color: ma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6) : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
-    // ── Left accent bar (default sink/source only) ────────────────────────────────
+    // ── Left accent bar (default sink/source only) — inset rounded tick ─────────
     Rectangle {
         visible: row.isDefault
-        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-        width: 2
+        anchors.left: parent.left; anchors.leftMargin: 3
+        anchors.top: parent.top; anchors.topMargin: 8
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 8
+        width: 3
+        radius: 1.5
         color: Config.ControlConfig.accent
     }
 
     // ── Content ─────────────────────────────────────────────────────────────────
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8; anchors.rightMargin: 6
+        anchors.leftMargin: 10; anchors.rightMargin: 6
         spacing: 8
 
         // (1) Glyph — accent when default, else dim.
         Text {
             Layout.preferredWidth: 20; Layout.alignment: Qt.AlignVCenter
             text: row.glyph
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 12
+            font.family: Config.ControlConfig.fontNerd; font.pixelSize: 13
             horizontalAlignment: Text.AlignHCenter
             color: row.isDefault ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
         }
@@ -111,10 +115,12 @@ Item {
             id: lvl
             Layout.preferredWidth: 120; Layout.preferredHeight: 6
             Layout.alignment: Qt.AlignVCenter
+            radius: 3
             color: Config.ThemeConfig.colors.border
             Rectangle {
                 width: parent.width * Math.max(0, Math.min(1, row.device.volume / 100))
                 height: parent.height
+                radius: 3
                 color: row.device.mute ? Config.ThemeConfig.colors.textDim : Config.ControlConfig.accent
                 Behavior on color { ColorAnimation { duration: 120 } }
             }
@@ -140,18 +146,19 @@ Item {
             horizontalAlignment: Text.AlignRight
         }
 
-        // (6) Mute toggle — bordered square; border + glyph go error-red when muted.
+        // (6) Mute toggle — bordered pill; border + glyph go error-red when muted.
         Rectangle {
-            Layout.preferredWidth: 30; Layout.preferredHeight: 22
+            Layout.preferredWidth: 30; Layout.preferredHeight: 24
             Layout.alignment: Qt.AlignVCenter
+            radius: Config.ControlConfig.radiusSmall
             color: muteMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.border, 0.6) : "transparent"
-            border.color: row.device.mute ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.border
+            border.color: row.device.mute ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.outlineVariant
             border.width: 1
             Behavior on color { ColorAnimation { duration: 120 } }
             Text {
                 anchors.centerIn: parent
                 text: row.muteGlyph
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
+                font.family: Config.ControlConfig.fontNerd; font.pixelSize: 12
                 color: row.device.mute ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
             }
             MouseArea {

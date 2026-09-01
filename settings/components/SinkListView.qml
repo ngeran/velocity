@@ -23,7 +23,7 @@ import "../services" as Services
 Column {
     id: view
     width: parent ? parent.width : 400
-    spacing: 10
+    spacing: Config.ControlConfig.space4
 
     // -------------------------------------------------------------------------
     // DERIVED STATE — master volume / mute = the default sink's, else 0/false.
@@ -67,21 +67,11 @@ Column {
     SectionHeader {
         title: "AUDIO"
 
-        // Engine-state pill — PIPEWIRE when a default sink exists, else NO_OUTPUT
-        Rectangle {
+        // Engine-state badge — PIPEWIRE when a default sink exists, else NO OUTPUT
+        StatusBadge {
             Layout.alignment: Qt.AlignVCenter
-            width: stateLbl.implicitWidth + 14; height: 16
-            color: view.hasOutput
-                   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
-                   : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.10)
-            border.color: view.hasOutput ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            border.width: 1
-            Text {
-                id: stateLbl; anchors.centerIn: parent
-                text: view.hasOutput ? "● PIPEWIRE" : "○ NO_OUTPUT"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                color: view.hasOutput ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            }
+            label: view.hasOutput ? "PIPEWIRE" : "NO OUTPUT"
+            kind: view.hasOutput ? "ok" : "err"
         }
 
         Item { Layout.fillWidth: true }
@@ -91,7 +81,7 @@ Column {
             Layout.alignment: Qt.AlignVCenter
             text: Services.AudioControlService.sinks.length + " outs · "
                   + Services.AudioControlService.sinkInputs.length + " streams"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
         }
     }
@@ -99,13 +89,13 @@ Column {
     // Hero-row status caption
     Text {
         Layout.fillWidth: true
-        Layout.topMargin: -4
-        text: "AUDIO · " + (view.hasOutput ? "PIPEWIRE" : "NO_OUTPUT") + " · " + Services.AudioControlService.sinks.length + " OUTS · " + Services.AudioControlService.sinkInputs.length + " STREAMS"
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 7
-        font.letterSpacing: 0.5
+        Layout.topMargin: -6
+        text: "AUDIO · " + (view.hasOutput ? "PIPEWIRE" : "NO OUTPUT") + " · " + Services.AudioControlService.sinks.length + " OUTS · " + Services.AudioControlService.sinkInputs.length + " STREAMS"
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
+        font.letterSpacing: 0.3
         color: Config.ThemeConfig.colors.textDim
-        opacity: 0.56
+        opacity: 0.75
     }
 
     // Error surface (audio device errors)
@@ -123,40 +113,40 @@ Column {
     // =========================================================================
     // 2. STATUS CARD — master volume + mute for the default sink
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.primary
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Config.ControlConfig.space2
 
             // Top row: ENGINE label + master mute toggle
             RowLayout {
                 Layout.fillWidth: true
                 Text {
                     text: "ENGINE"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                     color: Config.ThemeConfig.colors.textDim
                 }
                 Item { Layout.fillWidth: true }
 
                 // Master mute toggle — toggles the default sink (toggleMute()).
                 // Dimmed when no default sink exists (the service no-ops anyway).
-                // Nerd Font glyph needs its patched family to render.
                 Rectangle {
                     Layout.alignment: Qt.AlignVCenter
-                    width: muteLbl.implicitWidth + 12; height: 18
+                    width: muteLbl.implicitWidth + 14; height: 24
+                    radius: Config.ControlConfig.radiusSmall
                     opacity: view.hasOutput ? 1.0 : 0.5
                     color: muteMA.containsMouse && view.hasOutput
                            ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6)
                            : "transparent"
-                    border.color: Config.ThemeConfig.colors.border
+                    border.color: Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Text {
                         id: muteLbl; anchors.centerIn: parent
                         text: view.masterMuted ? "󰝟" : "󰕾"
-                        font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11
+                        font.family: Config.ControlConfig.fontNerd; font.pixelSize: 12
                         color: view.masterMuted ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.text
                     }
                     MouseArea {
@@ -167,11 +157,11 @@ Column {
                 }
             }
 
-            // Big line: default sink desc (or NO_OUTPUT_DEVICE when none)
+            // Big line: default sink desc (or NO OUTPUT DEVICE when none)
             Text {
                 Layout.fillWidth: true
-                text: view.defaultDesc.length > 0 ? view.defaultDesc : "NO_OUTPUT_DEVICE"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 16; font.bold: true
+                text: view.defaultDesc.length > 0 ? view.defaultDesc : "NO OUTPUT DEVICE"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
                 color: view.hasOutput ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight
             }
@@ -221,7 +211,7 @@ Column {
                 // Master volume % readout
                 Text {
                     text: view.masterVol + "%"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
                     color: Config.ControlConfig.accent
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -232,7 +222,7 @@ Column {
     // =========================================================================
     // 3. OUTPUT_NODES — sink list
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.primary
         contentSpacing: 0
@@ -242,31 +232,31 @@ Column {
             Layout.fillWidth: true
             spacing: 6
             Text {
-                text: "OUTPUT_NODES"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                text: "OUTPUT DEVICES"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                 color: Config.ThemeConfig.colors.text
             }
             Text {
                 text: "[ " + Services.AudioControlService.sinks.length + " ]"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                 color: Config.ThemeConfig.colors.primary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
         }
 
-        // Column header — mirrors AudioDeviceRow geometry EXACTLY (margins 8/6,
+        // Column header — mirrors AudioDeviceRow geometry (margins 10/6,
         // spacing 8, glyph 20, radio 12, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
         // column lines up between the header and the rows beneath it.
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6
+            Layout.leftMargin: 10; Layout.rightMargin: 6
             spacing: 8
             Item { Layout.preferredWidth: 20 }
             Item { Layout.preferredWidth: 12 }
-            Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 32 }
-            Text { text: "MUTE";  Layout.preferredWidth: 30;  font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "MUTE";  Layout.preferredWidth: 30;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
@@ -291,7 +281,7 @@ Column {
     // =========================================================================
     // 4. ACTIVE_STREAMS — sink-input (per-app) list
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.secondary
         contentSpacing: 0
@@ -301,29 +291,29 @@ Column {
             Layout.fillWidth: true
             spacing: 6
             Text {
-                text: "ACTIVE_STREAMS"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                text: "ACTIVE STREAMS"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                 color: Config.ThemeConfig.colors.text
             }
             Text {
                 text: "[ " + Services.AudioControlService.sinkInputs.length + " ]"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                 color: Config.ThemeConfig.colors.secondary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
         }
 
-        // Column header — SAME pinned geometry as section 3 (no radio for streams).
+        // Column header — SAME pinned geometry as the outputs card (no radio for streams).
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 8; Layout.rightMargin: 6
+            Layout.leftMargin: 10; Layout.rightMargin: 6
             spacing: 8
             Item { Layout.preferredWidth: 20 }
             Item { Layout.preferredWidth: 0 }
-            Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
-            Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 32 }
-            Text { text: "MUTE";  Layout.preferredWidth: 30;  font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
+            Text { text: "MUTE";  Layout.preferredWidth: 30;  font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; color: Config.ThemeConfig.colors.textDim }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
