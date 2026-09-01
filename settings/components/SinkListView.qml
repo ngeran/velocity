@@ -96,6 +96,30 @@ Column {
         }
     }
 
+    // Hero-row status caption
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: -4
+        text: "AUDIO · " + (view.hasOutput ? "PIPEWIRE" : "NO_OUTPUT") + " · " + Services.AudioControlService.sinks.length + " OUTS · " + Services.AudioControlService.sinkInputs.length + " STREAMS"
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 7
+        font.letterSpacing: 0.5
+        color: Config.ThemeConfig.colors.textDim
+        opacity: 0.56
+    }
+
+    // Error surface (audio device errors)
+    Text {
+        Layout.fillWidth: true
+        visible: false  // TODO: Bind to service error property when available
+        text: "⚠ Audio device error"
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 9
+        color: Config.ThemeConfig.colors.error
+        wrapMode: Text.Wrap
+        Layout.topMargin: 4
+    }
+
     // =========================================================================
     // 2. STATUS CARD — master volume + mute for the default sink
     // =========================================================================
@@ -230,14 +254,15 @@ Column {
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
         }
 
-        // Column header — mirrors SinkRow geometry EXACTLY (margins 8/6,
-        // spacing 8, glyph 20, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
+        // Column header — mirrors AudioDeviceRow geometry EXACTLY (margins 8/6,
+        // spacing 8, glyph 20, radio 12, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
         // column lines up between the header and the rows beneath it.
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 8; Layout.rightMargin: 6
             spacing: 8
             Item { Layout.preferredWidth: 20 }
+            Item { Layout.preferredWidth: 12 }
             Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 32 }
@@ -248,7 +273,7 @@ Column {
         // Sink rows
         Repeater {
             model: Services.AudioControlService.sinks
-            delegate: SinkRow { width: parent.width; sink: modelData }
+            delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "sink" }
         }
 
         // Empty state
@@ -288,12 +313,13 @@ Column {
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
         }
 
-        // Column header — SAME pinned geometry as section 3.
+        // Column header — SAME pinned geometry as section 3 (no radio for streams).
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 8; Layout.rightMargin: 6
             spacing: 8
             Item { Layout.preferredWidth: 20 }
+            Item { Layout.preferredWidth: 0 }
             Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 32 }
@@ -304,7 +330,7 @@ Column {
         // Sink-input rows
         Repeater {
             model: Services.AudioControlService.sinkInputs
-            delegate: SinkInputRow { width: parent.width; stream: modelData }
+            delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "stream" }
         }
 
         // Empty state

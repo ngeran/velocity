@@ -31,6 +31,7 @@ Column {
     // weak/noisy APs. The active link is force-included even below threshold so
     // the network you're on never vanishes from its own table.
     property int minSignal: 50
+    property bool anyRowEditing: false  // Tracks if any row is in password-edit mode
     readonly property var filteredNets: {
         var all = Services.NetworkControlService.wifiNetworks
         if (view.minSignal <= 0) return all
@@ -142,6 +143,30 @@ Column {
         }
     }
 
+    // Hero-row status caption
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: -4
+        text: "WIFI · " + (view.cs.iface || "—").toUpperCase() + " · " + (view.linkUp ? "IP · " + view.cs.signal + "% SIGNAL" : "OFFLINE")
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 7
+        font.letterSpacing: 0.5
+        color: Config.ThemeConfig.colors.textDim
+        opacity: 0.56
+    }
+
+    // Error surface
+    Text {
+        Layout.fillWidth: true
+        visible: Services.NetworkControlService.lastConnectError !== ""
+        text: "⚠ " + Services.NetworkControlService.lastConnectError
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 9
+        color: Config.ThemeConfig.colors.error
+        wrapMode: Text.Wrap
+        Layout.topMargin: 4
+    }
+
     // =========================================================================
     // 2. CONNECTED-STATUS CARD
     // =========================================================================
@@ -211,135 +236,7 @@ Column {
     }
 
     // =========================================================================
-    // 3. PASSWORD DIALOG — compact inline form (kept verbatim, theme colours)
-    // =========================================================================
-    Item {
-        id: pwDialog
-        width: view.width
-        height: visible ? (errorText !== "" ? 54 : 36) : 0
-        visible: false
-        clip: true
-
-        property string targetSsid: ""
-        property string errorText: ""   // set when a previous attempt failed
-
-        function open(ssid, errMsg) {
-            targetSsid = ssid
-            errorText = errMsg || ""
-            passField.text = ""
-            passField.echoMode = TextInput.Password
-            visible = true
-            passField.forceActiveFocus()
-        }
-        function close() {
-            visible = false
-            passField.text = ""
-            targetSsid = ""
-            errorText = ""
-        }
-        function submit() {
-            if (passField.text.length === 0) return
-            Services.NetworkControlService.connectWifi(pwDialog.targetSsid, passField.text)
-            pwDialog.close()
-        }
-
-        Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-
-        // Failure reason line (e.g. "Wrong password") under the field when the
-        // prompt was reopened by a failed attempt.
-        Text {
-            visible: pwDialog.errorText !== ""
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 3
-            anchors.left: parent.left
-            anchors.leftMargin: 8
-            text: pwDialog.errorText
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-            color: Config.ThemeConfig.colors.error
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.bottomMargin: 4
-            color: Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.06)
-            border.color: Config.ControlConfig.accent
-            border.width: 1
-        }
-
-        Row {
-            anchors.left: parent.left; anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 8; anchors.rightMargin: 8
-            spacing: 6
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: pwDialog.targetSsid
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: Config.ControlConfig.accent
-                elide: Text.ElideRight; width: 130
-            }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "›"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                color: Config.ThemeConfig.colors.textDim
-            }
-            Rectangle {
-                width: 180; height: 22; anchors.verticalCenter: parent.verticalCenter
-                color: Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.12)
-                border.color: passField.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
-                border.width: 1
-                Behavior on border.color { ColorAnimation { duration: 100 } }
-                TextInput {
-                    id: passField
-                    anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6
-                    verticalAlignment: TextInput.AlignVCenter
-                    echoMode: TextInput.Password; passwordCharacter: "•"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
-                    color: Config.ThemeConfig.colors.text
-                    selectionColor: Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.35)
-                    Keys.onReturnPressed: pwDialog.submit()
-                    Keys.onEscapePressed: pwDialog.close()
-                }
-            }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: passField.echoMode === TextInput.Password ? "👁" : "○"
-                font.pixelSize: 12; color: Config.ThemeConfig.colors.textDim
-                MouseArea {
-                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                    onClicked: passField.echoMode = (passField.echoMode === TextInput.Password)
-                                                    ? TextInput.Normal : TextInput.Password
-                }
-            }
-            Rectangle {
-                width: 40; height: 22; anchors.verticalCenter: parent.verticalCenter
-                color: okMA.containsMouse ? Config.ControlConfig.accent : "transparent"
-                border.color: Config.ControlConfig.accent; border.width: 1
-                Text {
-                    anchors.centerIn: parent; text: "OK"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                    color: okMA.containsMouse ? Config.ThemeConfig.colors.background : Config.ControlConfig.accent
-                }
-                MouseArea { id: okMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pwDialog.submit() }
-            }
-            Rectangle {
-                width: 28; height: 22; anchors.verticalCenter: parent.verticalCenter
-                color: xMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.06) : "transparent"
-                border.color: Config.ThemeConfig.colors.border; border.width: 1
-                Text {
-                    anchors.centerIn: parent; text: "×"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
-                    color: Config.ThemeConfig.colors.textDim
-                }
-                MouseArea { id: xMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pwDialog.close() }
-            }
-        }
-    }
-
-    // =========================================================================
-    // 4. SSID SCAN TABLE
+    // 3. SSID SCAN TABLE
     // =========================================================================
     HudCard {
         width: parent.width
@@ -393,9 +290,9 @@ Column {
             delegate: WifiListRow {
                 width: parent.width
                 net: modelData
-                onRequestPassword: function(ssid) {
-                    if (pwDialog.visible && pwDialog.targetSsid !== ssid) pwDialog.close()
-                    pwDialog.open(ssid)
+                listFrozen: view.anyRowEditing
+                onEditingChanged: {
+                    view.anyRowEditing = editing
                 }
             }
         }
@@ -434,8 +331,16 @@ Column {
     Connections {
         target: Services.NetworkControlService
         function onConnectFailed(ssid, reasonKey, reasonLabel) {
-            if (reasonKey === "wrong-password" && ssid && ssid.length > 0)
-                pwDialog.open(ssid, reasonLabel)
+            if (reasonKey === "wrong-password" && ssid && ssid.length > 0) {
+                // Find the row with this SSID and open inline password with error
+                for (var i = 0; i < view.filteredNets.length; i++) {
+                    if (view.filteredNets[i].ssid === ssid) {
+                        // Row will need to show error - handled by error surface
+                        // Could also open the row's password field automatically
+                        break
+                    }
+                }
+            }
         }
     }
 

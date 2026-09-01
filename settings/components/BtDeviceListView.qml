@@ -134,6 +134,30 @@ Column {
         }
     }
 
+    // Hero-row status caption
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: -4
+        text: "BLUETOOTH · " + (Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE") + " · " + view.pairedDevs.length + " PAIRED · " + view.beaconDevs.length + " BEACONS"
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 7
+        font.letterSpacing: 0.5
+        color: Config.ThemeConfig.colors.textDim
+        opacity: 0.56
+    }
+
+    // Error surface (pairing/scan failures)
+    Text {
+        Layout.fillWidth: true
+        visible: false  // TODO: Bind to service error property when available
+        text: "⚠ Bluetooth operation failed"
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 9
+        color: Config.ThemeConfig.colors.error
+        wrapMode: Text.Wrap
+        Layout.topMargin: 4
+    }
+
     // =========================================================================
     // 2. STATUS CARD
     // =========================================================================

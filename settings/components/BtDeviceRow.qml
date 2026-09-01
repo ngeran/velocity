@@ -136,7 +136,7 @@ Item {
             }
         }
 
-        // (2) Name (elided) + MAC beneath (dim mono).
+        // (2) Name (bold when connected) + caption/MAC beneath.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
@@ -144,15 +144,25 @@ Item {
                 Layout.fillWidth: true
                 text: dev.name || dev.alias || dev.mac
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
-                font.bold: dev.connected || row.busy
+                font.bold: dev.connected
                 color: row.busy        ? Config.ThemeConfig.colors.warning
                        : dev.connected ? Config.ControlConfig.accent
                        : Config.ThemeConfig.colors.text
                 elide: Text.ElideRight
             }
+            // Connected caption (visible only when connected)
             Text {
                 Layout.fillWidth: true
-                visible: (dev.mac || "").length > 0
+                visible: dev.connected && dev.battery >= 0
+                text: "Connected · " + dev.battery + "%"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                color: Config.ThemeConfig.colors.textDim
+                elide: Text.ElideRight
+            }
+            // MAC address (visible when not connected or no battery)
+            Text {
+                Layout.fillWidth: true
+                visible: (dev.mac || "").length > 0 && (!dev.connected || dev.battery < 0)
                 text: dev.mac
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
                 color: Config.ThemeConfig.colors.textDim

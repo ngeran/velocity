@@ -45,14 +45,15 @@ Column {
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
         }
 
-        // Column header — mirrors SourceRow geometry EXACTLY (margins 8/6,
-        // spacing 8, glyph 20, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
+        // Column header — mirrors AudioDeviceRow geometry EXACTLY (margins 8/6,
+        // spacing 8, glyph 20, radio 12, NAME fill, LEVEL 120, vol% 32, MUTE 30) so every
         // column lines up between the header and the rows beneath it.
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 8; Layout.rightMargin: 6
             spacing: 8
             Item { Layout.preferredWidth: 20 }
+            Item { Layout.preferredWidth: 12 }
             Text { text: "NAME";  Layout.fillWidth: true;    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Text { text: "LEVEL"; Layout.preferredWidth: 120; font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1; color: Config.ThemeConfig.colors.textDim }
             Item { Layout.preferredWidth: 32 }
@@ -63,7 +64,7 @@ Column {
         // Source rows
         Repeater {
             model: Services.AudioControlService.sources
-            delegate: SourceRow { width: parent.width; source: modelData }
+            delegate: AudioDeviceRow { width: parent.width; device: modelData; deviceType: "source" }
         }
 
         // Empty state
