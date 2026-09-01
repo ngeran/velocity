@@ -75,14 +75,14 @@ PanelWindow {
                 height: parent.height
                 // Cell-based centering. The previous ink-metric centering
                 // (tightBoundingRect offsets) proved unreliable for these Nerd
-                // Font PUA glyphs — the volume glyph rendered visibly LOW
-                // against the bar (metrics don't match the drawn ink).
-                // anchors.centerIn centers the glyph's cell; the -1px optical
-                // lift compensates for nerd glyphs riding slightly low in
-                // their cells (per-glyph hinting quirk).
+                // Font PUA glyphs — the metrics don't match the drawn ink.
+                // anchors.centerIn centers the glyph's LINE BOX, whose ink
+                // hugs the baseline, leaving the glyph riding ~4px low against
+                // the bar; the optical lift corrects that (measured on the
+                // 4K@150% output via zoomed crops).
                 Text {
                     anchors.centerIn: parent
-                    anchors.verticalCenterOffset: -1
+                    anchors.verticalCenterOffset: -4
                     text: Services.OsdService.icon
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: osdWindow.iconPixelSize
