@@ -31,7 +31,7 @@ import "../services" as Services
 Column {
     id: view
     width: parent ? parent.width : 400
-    spacing: 10
+    spacing: Config.ControlConfig.space4
 
     readonly property var mon: Services.MonitorService.primary
     readonly property bool hdrOn: mon && mon.colorPreset !== "" && mon.colorPreset !== "srgb"
@@ -49,15 +49,16 @@ Column {
     component Chip: Rectangle {
         property string text: ""
         property color chipColor: Config.ThemeConfig.colors.textDim
-        height: 16
-        width: chipLbl.implicitWidth + 12
+        height: 18
+        width: chipLbl.implicitWidth + 14
+        radius: Config.ControlConfig.radiusSmall
         color: Config.ThemeConfig.tint(chipColor, 0.10)
         border.color: chipColor
         border.width: 1
         Text {
             id: chipLbl; anchors.centerIn: parent
             text: parent.text
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
             color: chipColor
         }
     }
@@ -86,26 +87,26 @@ Column {
 
         RowLayout {
             Layout.fillWidth: true
-            Text { text: slider.label; font.family: Config.ControlConfig.fontMono
-                font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+            Text { text: slider.label; font.family: Config.ControlConfig.fontSans
+                font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
                 color: Config.ThemeConfig.colors.textDim }
             Item { Layout.fillWidth: true }
             Text { text: (+slider.value).toFixed(slider.step < 0.01 ? 3 : 2)
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                 color: Config.ThemeConfig.colors.text }
         }
         Rectangle {
             id: track
             Layout.fillWidth: true
             height: 8
-            radius: 2
-            color: Qt.rgba(0, 0, 0, 0.4)
-            border.color: Config.ThemeConfig.colors.border; border.width: 1
+            radius: 4
+            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+            border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
             Rectangle {
                 width: Math.round(parent.width * slider.frac); height: parent.height - 2
                 anchors.verticalCenter: parent.verticalCenter
                 y: 1; x: 1
-                radius: 1
+                radius: 3
                 color: Config.ThemeConfig.colors.secondary
             }
             Rectangle {
@@ -147,23 +148,18 @@ Column {
     SectionHeader {
         title: "DISPLAY"
 
-        Rectangle {
+        // Clickable DPMS badge (wrap StatusBadge for the click surface)
+        Item {
             Layout.alignment: Qt.AlignVCenter
-            width: stateLbl.implicitWidth + 14; height: 16
-            color: view.mon && view.mon.dpms
-                   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
-                   : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.10)
-            border.color: view.mon && view.mon.dpms ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
-            border.width: 1
+            width: dpmsBadge.implicitWidth; height: dpmsBadge.implicitHeight
+            StatusBadge {
+                id: dpmsBadge
+                label: view.mon && view.mon.dpms ? "ACTIVE ⇄" : "STANDBY ⇄"
+                kind: view.mon && view.mon.dpms ? "ok" : "err"
+            }
             MouseArea {
                 anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                 onClicked: Services.MonitorService.setDpms(!(view.mon && view.mon.dpms))
-            }
-            Text {
-                id: stateLbl; anchors.centerIn: parent
-                text: view.mon && view.mon.dpms ? "● ACTIVE ⇄" : "○ STANDBY ⇄"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
-                color: view.mon && view.mon.dpms ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error
             }
         }
 
@@ -172,7 +168,7 @@ Column {
         Text {
             Layout.alignment: Qt.AlignVCenter
             text: view.mon ? ((view.mon.make + " " + view.mon.model).trim() || view.mon.name) : "—"
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight
         }
@@ -181,13 +177,13 @@ Column {
     // Hero-row status caption
     Text {
         Layout.fillWidth: true
-        Layout.topMargin: -4
+        Layout.topMargin: -6
         text: "DISPLAY · " + (view.mon && view.mon.dpms ? "ACTIVE" : "STANDBY") + (view.mon ? " · " + view.mon.make + " " + view.mon.model : "")
-        font.family: Config.ControlConfig.fontMono
-        font.pixelSize: 7
-        font.letterSpacing: 0.5
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
+        font.letterSpacing: 0.3
         color: Config.ThemeConfig.colors.textDim
-        opacity: 0.56
+        opacity: 0.75
     }
 
     // Error surface (display/monitor errors)
@@ -208,17 +204,18 @@ Column {
     Rectangle {
         width: parent.width
         visible: Services.MonitorService.revertPending
-        height: bannerRow.implicitHeight + 14
+        height: bannerRow.implicitHeight + 16
+        radius: Config.ControlConfig.radiusPill
         color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
         border.color: Config.ThemeConfig.colors.warning; border.width: 1
 
         RowLayout {
             id: bannerRow
             anchors.fill: parent
-            anchors.leftMargin: 10; anchors.rightMargin: 10
+            anchors.leftMargin: 12; anchors.rightMargin: 12
             spacing: 8
 
-            Text { text: "󰦜"; font.family: Config.ControlConfig.fontMono; font.pixelSize: 12
+            Text { text: "󰦜"; font.family: Config.ControlConfig.fontNerd; font.pixelSize: 13
                 color: Config.ThemeConfig.colors.warning }
 
             ColumnLayout {
@@ -227,60 +224,63 @@ Column {
                     Layout.fillWidth: true
                     text: Services.MonitorService.pendingRevert
                           ? Services.MonitorService.pendingRevert.label : ""
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: Config.ThemeConfig.colors.warning
                 }
                 Text {
                     Layout.fillWidth: true
                     text: "reverting in " + view.revertSecsLeft + "s unless kept"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim
                 }
             }
 
             Rectangle {
-                width: keepLbl.implicitWidth + 14; height: 20
+                width: keepLbl.implicitWidth + 18; height: 24
+                radius: Config.ControlConfig.radiusPill
                 color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.15)
                 border.color: Config.ThemeConfig.colors.success; border.width: 1
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                     onClicked: Services.MonitorService.confirmKeep() }
                 Text { id: keepLbl; anchors.centerIn: parent; text: "KEEP"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: Config.ThemeConfig.colors.success }
             }
             Rectangle {
-                width: revLbl.implicitWidth + 14; height: 20
-                color: Qt.rgba(1, 1, 1, 0.03)
-                border.color: Config.ThemeConfig.colors.border; border.width: 1
+                width: revLbl.implicitWidth + 18; height: 24
+                radius: Config.ControlConfig.radiusPill
+                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
+                border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                     onClicked: Services.MonitorService.revertNow() }
                 Text { id: revLbl; anchors.centerIn: parent; text: "REVERT"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: Config.ThemeConfig.colors.textDim }
             }
         }
     }
 
     // =========================================================================
-    // MODERN GRID LAYOUT — 2-column compact arrangement
+    // RESPONSIVE CARD GRID — 2 columns at the 4K pane, 1 column when narrow.
+    // Children auto-flow (no pinned row/column) so capability-hidden cards
+    // (HDR/VRR) never leave grid holes.
     // =========================================================================
     GridLayout {
         width: parent.width
-        columns: 2
-        columnSpacing: 12
-        rowSpacing: 12
+        columns: Math.max(1, Math.floor(width / 360))
+        columnSpacing: Config.ControlConfig.space3
+        rowSpacing: Config.ControlConfig.space3
 
         // =========================================================================
         // MODE_CARD — resolution + refresh rate
         // =========================================================================
-        HudCard {
-            Layout.column: 0; Layout.row: 0
+        SettingsCard {
             Layout.fillWidth: true
             accent: Config.ThemeConfig.colors.primary
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Config.ControlConfig.space2
 
                 PanelSectionHeader {
                     Layout.fillWidth: true
@@ -292,7 +292,7 @@ Column {
                     Layout.fillWidth: true
                     visible: view.mon !== null && view.mon.modes.length > 1
                     showLabel: false
-                    value: Math.round(view.mon.refreshHz) + " Hz"
+                    value: view.mon ? Math.round(view.mon.refreshHz) + " Hz" : "—"
 
                     property var filteredModes: view.mon ? view.mon.modes.filter(function(m) { return m.w === view.mon.w && m.h === view.mon.h }) : []
 
@@ -307,42 +307,48 @@ Column {
                     }
                 }
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
-            // Other resolutions as compact rows (label + best refresh).
-            Repeater {
-                model: {
-                    if (!view.mon) return []
-                    var seen = {}, out = []
-                    var ms = view.mon.modes
-                    for (var i = 0; i < ms.length; i++) {
-                        if (ms[i].w === view.mon.w && ms[i].h === view.mon.h) continue
-                        var k = ms[i].w + "x" + ms[i].h
-                        if (!seen[k]) { seen[k] = true; out.push(ms[i]) }
+                // Other resolutions as compact rows (label + best refresh).
+                Repeater {
+                    model: {
+                        if (!view.mon) return []
+                        var seen = {}, out = []
+                        var ms = view.mon.modes
+                        for (var i = 0; i < ms.length; i++) {
+                            if (ms[i].w === view.mon.w && ms[i].h === view.mon.h) continue
+                            var k = ms[i].w + "x" + ms[i].h
+                            if (!seen[k]) { seen[k] = true; out.push(ms[i]) }
+                        }
+                        return out.slice(0, 5)   // keep the card compact; full list on request
                     }
-                    return out.slice(0, 5)   // keep the card compact; full list on request
-                }
-                delegate: Rectangle {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    height: 26
-                    color: modeMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.08) : "transparent"
-                    border.color: Config.ThemeConfig.colors.border; border.width: 1
-                    MouseArea {
-                        id: modeMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.MonitorService.applyWithRevert(
-                            "MODE " + modelData.w + "x" + modelData.h + "@" + modelData.hz,
-                            { mode: modelData.w + "x" + modelData.h + "@" + parseFloat(modelData.hz.toFixed(2)) })
-                    }
-                    RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        Text { text: modelData.w + " × " + modelData.h
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-                            color: Config.ThemeConfig.colors.text }
-                        Item { Layout.fillWidth: true }
-                        Text { text: "@" + parseFloat(modelData.hz.toFixed(2)) + " Hz"
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                            color: Config.ThemeConfig.colors.textDim }
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        height: 34
+                        radius: Config.ControlConfig.radiusSmall
+                        color: modeMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.10)
+                               : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.35)
+                        border.color: modeMa.containsMouse ? Config.ThemeConfig.colors.primary
+                                                           : Config.ThemeConfig.colors.outlineVariant
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
+                        MouseArea {
+                            id: modeMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.MonitorService.applyWithRevert(
+                                "MODE " + modelData.w + "x" + modelData.h + "@" + modelData.hz,
+                                { mode: modelData.w + "x" + modelData.h + "@" + parseFloat(modelData.hz.toFixed(2)) })
+                        }
+                        RowLayout {
+                            anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                            Text { text: modelData.w + " × " + modelData.h
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                                color: Config.ThemeConfig.colors.text }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "@" + parseFloat(modelData.hz.toFixed(2)) + " Hz"
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                                color: Config.ThemeConfig.colors.textDim }
+                        }
                     }
                 }
             }
@@ -351,15 +357,14 @@ Column {
         // =========================================================================
         // COLOR_CARD — HDR mode, color preset
         // =========================================================================
-        HudCard {
-            Layout.column: 1; Layout.row: 0
+        SettingsCard {
             Layout.fillWidth: true
-        accent: Config.ThemeConfig.colors.warning
-        visible: Services.MonitorService.hdrCapable
+            accent: Config.ThemeConfig.colors.warning
+            visible: Services.MonitorService.hdrCapable
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 8
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Config.ControlConfig.space2
 
             PanelSectionHeader {
                 Layout.fillWidth: true
@@ -417,15 +422,14 @@ Column {
         // =========================================================================
         // VRR_CARD
         // =========================================================================
-        HudCard {
-            Layout.column: 0; Layout.row: 1
+        SettingsCard {
             Layout.fillWidth: true
             accent: Config.ThemeConfig.colors.success
             visible: Services.MonitorService.vrrCapable
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Config.ControlConfig.space2
 
                 PanelSectionHeader {
                     Layout.fillWidth: true
@@ -460,14 +464,13 @@ Column {
         // =========================================================================
         // SCALE_CARD — scale stepper
         // =========================================================================
-        HudCard {
-            Layout.column: 1; Layout.row: 1
+        SettingsCard {
             Layout.fillWidth: true
             accent: Config.ThemeConfig.colors.info
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Config.ControlConfig.space2
 
                 PanelSectionHeader {
                     Layout.fillWidth: true
@@ -480,12 +483,17 @@ Column {
                     spacing: 8
 
                     Rectangle {
-                        width: 32; height: 24
-                        color: Qt.rgba(1, 1, 1, 0.03)
-                        border.color: Config.ThemeConfig.colors.border
+                        width: 34; height: 26
+                        radius: Config.ControlConfig.radiusSmall
+                        color: scaleDownMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+                               : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
+                        border.color: Config.ThemeConfig.colors.outlineVariant
                         border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
                         MouseArea {
+                            id: scaleDownMA
                             anchors.fill: parent
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: view.stepScale(-0.125)
                         }
@@ -493,7 +501,7 @@ Column {
                             anchors.centerIn: parent
                             text: "−"
                             font.family: Config.ControlConfig.fontMono
-                            font.pixelSize: 11; font.bold: true
+                            font.pixelSize: 12; font.bold: true
                             color: Config.ThemeConfig.colors.text
                         }
                     }
@@ -503,17 +511,22 @@ Column {
                         horizontalAlignment: Text.AlignHCenter
                         text: view.mon ? (view.mon.scale * 100).toFixed(0) + "%" : "—"
                         font.family: Config.SettingsConfig.fontFamily
-                        font.pixelSize: 14; font.bold: true
+                        font.pixelSize: 16; font.bold: true
                         color: Config.ThemeConfig.colors.info
                     }
 
                     Rectangle {
-                        width: 32; height: 24
-                        color: Qt.rgba(1, 1, 1, 0.03)
-                        border.color: Config.ThemeConfig.colors.border
+                        width: 34; height: 26
+                        radius: Config.ControlConfig.radiusSmall
+                        color: scaleUpMA.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+                               : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
+                        border.color: Config.ThemeConfig.colors.outlineVariant
                         border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
                         MouseArea {
+                            id: scaleUpMA
                             anchors.fill: parent
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: view.stepScale(0.125)
                         }
@@ -521,7 +534,7 @@ Column {
                             anchors.centerIn: parent
                             text: "+"
                             font.family: Config.ControlConfig.fontMono
-                            font.pixelSize: 11; font.bold: true
+                            font.pixelSize: 12; font.bold: true
                             color: Config.ThemeConfig.colors.text
                         }
                     }
@@ -532,8 +545,10 @@ Column {
                     text: view.mon && view.scaleIsSharp
                           ? "SHARP"
                           : "SOFT"
-                    font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontSans
+                    font.pixelSize: 10
+                    font.bold: true
+                    font.letterSpacing: 0.6
                     horizontalAlignment: Text.AlignHCenter
                     color: view.mon && view.scaleIsSharp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
                 }
@@ -559,19 +574,19 @@ Column {
     }
 
     // =========================================================================
-    // 7. PERSIST_CARD — stage live settings into the nix source
+    // PERSIST_CARD — stage live settings into the nix source
     // =========================================================================
-    HudCard {
+    SettingsCard {
         width: parent.width
         accent: Config.ThemeConfig.colors.secondary
 
         ColumnLayout {
-            Layout.fillWidth: true; spacing: 6
+            Layout.fillWidth: true; spacing: Config.ControlConfig.space2
 
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "PERSISTENCE"; font.family: Config.ControlConfig.fontMono
-                    font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                Text { text: "PERSISTENCE"; font.family: Config.ControlConfig.fontSans
+                    font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
                     color: Config.ThemeConfig.colors.textDim }
                 Item { Layout.fillWidth: true }
                 Chip {
@@ -586,29 +601,33 @@ Column {
                 text: Services.MonitorService.persistState === "dirty"
                       ? "Live settings differ from monitors.lua — a reload or reboot reverts them. Stage them to survive."
                       : "Live settings match the nix source. Staged changes land on the next omni-apply."
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim; wrapMode: Text.WordWrap
             }
 
             Rectangle {
-                width: stageLbl.implicitWidth + 16; height: 22
-                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.12)
+                width: stageLbl.implicitWidth + 20; height: 26
+                radius: Config.ControlConfig.radiusPill
+                color: stageMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.16)
+                       : Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.10)
                 border.color: Config.ThemeConfig.colors.secondary; border.width: 1
-                MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                Behavior on color { ColorAnimation { duration: 100 } }
+                MouseArea { id: stageMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: Services.MonitorService.stageToNix() }
                 Text { id: stageLbl; anchors.centerIn: parent; text: "STAGE CURRENT SETTINGS"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                     color: Config.ThemeConfig.colors.secondary }
             }
         }
     }
 
     // =========================================================================
-    // 8. BACKLIGHT NOTE — honest "unavailable" (DDC unlock declined for now)
+    // BACKLIGHT NOTE — honest "unavailable" (DDC unlock declined for now)
     // =========================================================================
     Rectangle {
         width: parent.width
         height: blRow.implicitHeight + 16
+        radius: Config.ControlConfig.radiusCard
         color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.06)
         border.color: Config.ThemeConfig.colors.outlineVariant
         border.width: 1
@@ -619,7 +638,7 @@ Column {
             anchors.leftMargin: 12; anchors.rightMargin: 12
             spacing: 8
 
-            Text { text: "󰃜"; font.family: Config.ControlConfig.fontMono; font.pixelSize: 13
+            Text { text: "󰃜"; font.family: Config.ControlConfig.fontNerd; font.pixelSize: 14
                 color: Config.ThemeConfig.colors.error }
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 1
@@ -628,10 +647,9 @@ Column {
                     color: Config.ThemeConfig.colors.error }
                 Text { Layout.fillWidth: true
                     text: "no /sys/class/backlight, no DDC/CI (ddcutil missing) — use the monitor OSD"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                     color: Config.ThemeConfig.colors.textDim; wrapMode: Text.WordWrap }
             }
         }
     }
-}
 }

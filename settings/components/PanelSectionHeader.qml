@@ -1,36 +1,42 @@
 // =============================================================================
-// PanelSectionHeader.qml — Section header with label/value (omarchy pattern)
+// PanelSectionHeader.qml — card-local eyebrow + live value row
 // =============================================================================
-// Displays section labels in "LABEL · value" format (e.g., "MODE · eDP-1").
-// Replaces simple Text labels with richer context.
-//
-// Interface:
-//   property string label: ""           // Section label (e.g., "MODE")
-//   property string value: ""           // Context value (e.g., "eDP-1")
-//   property string text: ""            // Full text (overrides label+value)
-//   property color color: Config.ThemeConfig.colors.textDim
-//
-// Theme mapping (from omarchy to our system):
-//   foreground                → Config.ThemeConfig.colors.textDim
-//   Qt.darker(foreground)     → Config.ThemeConfig.colors.border
+// Shibumi eyebrow idiom: uppercase tracked sans label ("MODE") followed by a
+// live mono value ("3840×2160"). API-compatible with the previous version.
 // =============================================================================
 
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
 
-Text {
+RowLayout {
     id: root
 
     property string label: ""
     property string value: ""
-    property string text: label !== "" && value !== "" ? label + " · " + value : (label || value)
+    property color color: Config.ThemeConfig.colors.textDim
 
-    font.family: Config.ControlConfig.fontMono
-    font.pixelSize: 10
-    font.bold: true
-    color: Config.ThemeConfig.colors.textDim
-    elide: Text.ElideRight
+    spacing: Config.ControlConfig.space2
 
-    Behavior on color { ColorAnimation { duration: 100 } }
+    Text {
+        text: root.label
+        font.family: Config.ControlConfig.fontSans
+        font.pixelSize: 10
+        font.bold: true
+        font.letterSpacing: 1.0
+        font.capitalization: Font.AllUppercase
+        color: Config.ThemeConfig.colors.textDim
+    }
+
+    Text {
+        visible: root.value !== ""
+        text: root.value
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 10
+        font.bold: true
+        color: root.color
+        elide: Text.ElideRight
+        Layout.fillWidth: true
+        horizontalAlignment: Text.AlignRight
+    }
 }
