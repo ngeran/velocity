@@ -96,13 +96,10 @@ Item {
             CoreCpuSection { anchors.fill: parent; anchors.margins: 12 }
         }
 
-        // MEMORY & ENV — combined memory bank + environmental (HudCard aesthetic)
-        Flickable {
+        // MEMORY & ENV — memory + environment + storage (fixed, no scrolling)
+        Item {
             anchors.fill: parent; visible: root.active === "memoryenv"
-            contentWidth: width; contentHeight: memEnvCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: memEnvCol; width: parent.width; spacing: 14
-                CoreMemoryEnvPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
-            }
+            CoreMemoryEnvPane { anchors.fill: parent; anchors.margins: 12 }
         }
 
         // LCD CONTROL — physical AIO LCD preferences
