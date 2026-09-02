@@ -35,7 +35,7 @@ ColumnLayout {
         property color valueColor: Config.ThemeConfig.colors.text
         property real meterValue: -1        // <0 hides the meter
         property color meterColor: Config.ControlConfig.accent
-        Layout.fillWidth: true; Layout.preferredHeight: 56
+        Layout.fillWidth: true; Layout.preferredHeight: 64
         radius: Config.ControlConfig.radiusPill
         color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
         border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
@@ -44,7 +44,7 @@ ColumnLayout {
                 font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
             RowLayout { spacing: 3
                 Text { text: value; color: valueColor
-                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 16; font.bold: true }
+                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 22; font.bold: true }
                 Text { visible: unit !== ""; text: unit; color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                 Item { Layout.fillWidth: true }
@@ -86,7 +86,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Text { text: Services.CoreEngineService.ramTotalGB.toFixed(0) + " GB SYSTEM RAM"
                         color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily
-                        font.pixelSize: 16; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                        font.pixelSize: 22; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                     Text { text: Math.round(Services.CoreEngineService.ramPct) + "% USED"
                         color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono
                         font.pixelSize: 10; font.bold: true }
@@ -219,7 +219,7 @@ ColumnLayout {
                 Repeater {
                     model: Services.CoreEngineService.disks
                     delegate: Rectangle {
-                        Layout.fillWidth: true; Layout.preferredHeight: 88
+                        Layout.fillWidth: true; Layout.preferredHeight: 92
                         radius: Config.ControlConfig.radiusPill
                         color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
                         border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
@@ -231,13 +231,13 @@ ColumnLayout {
                             anchors.topMargin: 8; anchors.bottomMargin: 8; spacing: 4
                             RowLayout { Layout.fillWidth: true
                                 Text { text: root.driveLabel(modelData.mount); color: Config.ThemeConfig.colors.text
-                                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                 Text { text: modelData.device; color: Config.ThemeConfig.colors.textDim
                                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                             }
                             RowLayout { Layout.fillWidth: true; spacing: 4
                                 Text { text: Math.round(modelData.pct) + "%"; color: root.diskTier(modelData.pct)
-                                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 16; font.bold: true }
+                                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 22; font.bold: true }
                                 Text { text: modelData.usedGB.toFixed(1) + "G used"
                                     color: Config.ThemeConfig.colors.text; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                                 Item { Layout.fillWidth: true }
