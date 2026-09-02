@@ -21,6 +21,8 @@ Item {
     property string label: ""
     property string unit: "°"
     property int size: 96
+    property int valuePixelSize: 22   // hero rings pass 30 for instrumentation scale
+    property int arcWidth: 5
 
     width: size; height: size
     readonly property real _frac: Math.max(0, Math.min(1, root.max > 0 ? root.value / root.max : 0))
@@ -38,7 +40,7 @@ Item {
 
             // track ring
             ctx.strokeStyle = Config.ThemeConfig.colors.outlineVariant.toString()
-            ctx.lineWidth = 5
+            ctx.lineWidth = root.arcWidth
             ctx.beginPath()
             ctx.arc(cx, cy, r, 0, Math.PI * 2)
             ctx.stroke()
@@ -47,7 +49,7 @@ Item {
             if (root._frac > 0) {
                 ctx.strokeStyle = root.accent.toString()
                 ctx.lineCap = "round"
-                ctx.lineWidth = 5
+                ctx.lineWidth = root.arcWidth
                 ctx.beginPath()
                 ctx.arc(cx, cy, r, start, start + root._frac * Math.PI * 2)
                 ctx.stroke()
@@ -70,7 +72,7 @@ Item {
             text: Math.round(root.value) + root.unit
             color: root.accent
             font.family: Config.SettingsConfig.fontFamily
-            font.pixelSize: 22; font.bold: true
+            font.pixelSize: root.valuePixelSize; font.bold: true
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
