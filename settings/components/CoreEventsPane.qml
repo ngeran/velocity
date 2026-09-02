@@ -1,15 +1,13 @@
 // =============================================================================
-// CoreEventsPane.qml — system event timeline (Core tab, EVENTS)
+// CoreEventsPane.qml — system event timeline (Core tab; Shibumi viewport-fit)
 // =============================================================================
 // The "what happened, and what changed before it" pane. Reads the log the
 // bar's EventService collector maintains (via EventsReader): GPU Xids, NVRM
-// errors, filesystem errors, boots, and nixos-rebuild switches — the
-// update↔incident correlation axis that the 2026-08-22 GPU freeze turned
-// from journald forensics into a glance.
+// errors, filesystem errors, boots, and nixos-rebuild switches.
 //
-// Layout mirrors the Core-tab siblings (CoreGpuSection): SPEC STRIP →
-// main body → STATUS FOOTER. The body is a severity-colored event list
-// (newest first); crit rows glow error-red, switches/boots stay calm.
+// Fixed composition (§6.1 — no scrolling): spec tiles → event timeline card
+// (rows visibility-clamped with honest counts) → stats footer. Crit rows
+// glow error-red; switches/boots stay calm.
 // =============================================================================
 
 import QtQuick
@@ -19,12 +17,12 @@ import "../services" as Services
 
 ColumnLayout {
     id: root
-    spacing: 12
+    spacing: Config.ControlConfig.space3
 
     function sevColor(sev, type) {
         if (sev === "crit") return Config.ThemeConfig.colors.error
         if (type === "nix-switch") return Config.ThemeConfig.colors.primary
-        return Config.ThemeConfig.colors.secondary
+        return Config.ControlConfig.accent
     }
 
     function typeBadge(type) {
@@ -47,7 +45,7 @@ ColumnLayout {
     // ── 1. SPEC STRIP — the three glanceable answers ────────────────────
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Config.ControlConfig.space2
 
         Repeater {
             model: [
@@ -55,99 +53,115 @@ ColumnLayout {
                   sub: Services.EventsReader.lastXidWhen || "no Xid on record",
                   accent: Services.EventsReader.critCount > 0
                           ? Config.ThemeConfig.colors.error
-                          : Config.ThemeConfig.colors.secondary },
+                          : Config.ControlConfig.accent },
                 { label: "CRITICAL EVENTS", value: "" + Services.EventsReader.critCount,
                   sub: "in tracked history",
                   accent: Services.EventsReader.critCount > 0
                           ? Config.ThemeConfig.colors.warning
-                          : Config.ThemeConfig.colors.secondary },
+                          : Config.ControlConfig.accent },
                 { label: "LAST SWITCH", value: Services.EventsReader.lastSwitchText
                           .replace(/^.*nixos-btw-/, ""),
                   sub: "generation (nixpkgs)",
                   accent: Config.ThemeConfig.colors.primary }
             ]
             delegate: Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 58
-                color: Config.ThemeConfig.colors.background
+                Layout.fillWidth: true; Layout.preferredHeight: 56
+                radius: Config.ControlConfig.radiusPill
+                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
                 border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
                 ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 3
                     Text { text: modelData.label; color: modelData.accent
-                           font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
+                           font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                            font.bold: true; font.letterSpacing: 1.0 }
                     Text { text: modelData.value; color: Config.ThemeConfig.colors.text
-                           font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                           font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
                            elide: Text.ElideRight
                            Layout.fillWidth: true }
                     Text { text: modelData.sub; color: Config.ThemeConfig.colors.textDim
-                           font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
+                           font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
                 }
             }
         }
     }
 
-    // ── 2. EVENT TIMELINE ───────────────────────────────────────────────
+    // ── 2. EVENT TIMELINE (visibility-clamped — no scrolling) ───────────
     Rectangle {
+        id: timelineCard
         Layout.fillWidth: true
-        Layout.preferredHeight: 420
-        color: Config.ThemeConfig.colors.background
+        Layout.fillHeight: true
+        radius: Config.ControlConfig.radiusCard
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
         border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
 
-        ColumnLayout {
-            anchors.fill: parent; anchors.margins: 8; spacing: 6
+        // Rows are 32px; hide beyond capacity (NEVER slice the model — the
+        // §6.1 CRITICAL rule; delegates persist, counts stay honest).
+        readonly property int capacity: Math.max(3, Math.floor(timelineViewport.height / 32))
+        readonly property int visibleCount: Math.min(Services.EventsReader.events.count, capacity)
 
-            Text {
-                text: "EVENT TIMELINE // NEWEST FIRST"
-                color: Config.ThemeConfig.colors.warning
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8
-                font.bold: true; font.letterSpacing: 1.0
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 8; spacing: Config.ControlConfig.space2
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text { text: "EVENT TIMELINE"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                    font.bold: true; font.letterSpacing: 1.0 }
+                Item { Layout.fillWidth: true }
+                Text { text: "NEWEST FIRST"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.letterSpacing: 0.8 }
             }
 
-            ListView {
-                id: listView
-                Layout.fillWidth: true; Layout.fillHeight: true
-                clip: true; boundsBehavior: Flickable.StopAtBounds
-                model: Services.EventsReader.events
+            Item {
+                id: timelineViewport
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
 
-                // no visible ScrollBar — wheel-scroll, like every sibling
-                // pane (and the Basic-style import it needs fails to load
-                // under this Quickshell — not worth the fight for v1)
+                Column {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    Repeater {
+                        model: Services.EventsReader.events
+                        delegate: Rectangle {
+                            width: parent.width
+                            visible: index < timelineCard.capacity
+                            height: 32
+                            radius: Config.ControlConfig.radiusSmall
+                            color: mouse.containsMouse
+                                   ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.08)
+                                   : "transparent"
 
-                delegate: Rectangle {
-                    width: listView.width
-                    height: 34
-                    color: mouse.containsMouse
-                           ? Config.ThemeConfig.colors.secondary : "transparent"
-                    opacity: mouse.containsMouse ? 0.08 : 1.0
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                spacing: 10
 
-                    RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        spacing: 10
+                                Text { text: root.shortTime(model.ts)
+                                       color: Config.ThemeConfig.colors.textDim
+                                       font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
 
-                        Text { text: shortTime(model.ts)
-                               color: Config.ThemeConfig.colors.textDim
-                               font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
+                                Rectangle { Layout.preferredWidth: badgeText.implicitWidth + 10
+                                            Layout.preferredHeight: 16
+                                            radius: Config.ControlConfig.radiusSmall
+                                            color: "transparent"
+                                            border.width: 1
+                                            border.color: root.sevColor(model.sev, model.type)
+                                    Text { id: badgeText; anchors.centerIn: parent
+                                           text: root.typeBadge(model.type)
+                                           color: root.sevColor(model.sev, model.type)
+                                           font.family: Config.ControlConfig.fontMono
+                                           font.pixelSize: 10; font.bold: true } }
 
-                        Rectangle { Layout.preferredWidth: badgeText.implicitWidth + 10
-                                    Layout.preferredHeight: 16
-                                    radius: 2
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: root.sevColor(model.sev, model.type)
-                            Text { id: badgeText; anchors.centerIn: parent
-                                   text: root.typeBadge(model.type)
-                                   color: root.sevColor(model.sev, model.type)
-                                   font.family: Config.ControlConfig.fontMono
-                                   font.pixelSize: 8; font.bold: true } }
-
-                        Text { Layout.fillWidth: true
-                               text: model.data
-                               color: model.sev === "crit"
-                                      ? Config.ThemeConfig.colors.text
-                                      : Config.ThemeConfig.colors.textDim
-                               font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-                               elide: Text.ElideMiddle }
+                                Text { Layout.fillWidth: true
+                                       text: model.data
+                                       color: model.sev === "crit"
+                                              ? Config.ThemeConfig.colors.text
+                                              : Config.ThemeConfig.colors.textDim
+                                       font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                                       elide: Text.ElideMiddle }
+                            }
+                            MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true }
+                        }
                     }
-                    MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true }
                 }
 
                 Text {
@@ -157,29 +171,43 @@ ColumnLayout {
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: Services.EventsReader.loaded && Services.EventsReader.events.count === 0
+                    text: "no events on record"
+                    color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: timelineCard.visibleCount < Services.EventsReader.events.count
+                text: "+ " + (Services.EventsReader.events.count - timelineCard.visibleCount) + " earlier hidden"
+                color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                elide: Text.ElideRight
             }
         }
     }
 
-    // ── 3. STATUS FOOTER — what this is and where it lives ──────────────
-    Rectangle {
-        Layout.fillWidth: true; Layout.preferredHeight: 40
-        color: "transparent"
-        border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-        RowLayout { anchors.fill: parent; anchors.margins: 8; spacing: 16
-            Text { text: "TRACKED: " + (Services.EventsReader.events.count) + " EVENTS"
-                   color: Config.ThemeConfig.colors.textDim
-                   font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
-            Text { text: "BOOTS: " + Services.EventsReader.bootCount
-                   color: Config.ThemeConfig.colors.textDim
-                   font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
-            Text { text: "SWITCHES: " + Services.EventsReader.switchCount
-                   color: Config.ThemeConfig.colors.textDim
-                   font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
-            Item { Layout.fillWidth: true }
-            Text { text: "collector: bar/EventService · log: events.jsonl"
-                   color: Config.ThemeConfig.colors.textDim; opacity: 0.6
-                   font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
-        }
+    // ── 3. STATS FOOTER ─────────────────────────────────────────────────
+    RowLayout {
+        Layout.fillWidth: true; spacing: Config.ControlConfig.space3
+
+        Text { text: "TRACKED " + (Services.EventsReader.events.count)
+               color: Config.ThemeConfig.colors.textDim
+               font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+        Text { text: "BOOTS " + Services.EventsReader.bootCount
+               color: Config.ThemeConfig.colors.textDim
+               font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+        Text { text: "SWITCHES " + Services.EventsReader.switchCount
+               color: Config.ThemeConfig.colors.textDim
+               font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+        Item { Layout.fillWidth: true }
+        Text { text: "collector: bar/EventService · log: events.jsonl"
+               color: Config.ThemeConfig.colors.textDim; opacity: 0.7
+               font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
     }
 }

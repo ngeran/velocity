@@ -111,14 +111,10 @@ Item {
             }
         }
 
-        // EVENTS — system event timeline (Xids, boots, nix switches) from
-        // the bar's EventService collector, read via EventsReader
-        Flickable {
+        // EVENTS — system event timeline (fixed composition, no scrolling)
+        Item {
             anchors.fill: parent; visible: root.active === "events"
-            contentWidth: width; contentHeight: eventsCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: eventsCol; width: parent.width; spacing: 14
-                CoreEventsPane { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
-            }
+            CoreEventsPane { anchors.fill: parent; anchors.margins: 12 }
         }
     }
 }
