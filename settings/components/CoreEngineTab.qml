@@ -93,13 +93,10 @@ Item {
             }
         }
 
-        // PROCESSORS — CPU only
-        Flickable {
+        // PROCESSORS — CPU only (fixed composition, no scrolling §6.1)
+        Item {
             anchors.fill: parent; visible: root.active === "processors"
-            contentWidth: width; contentHeight: procCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: procCol; width: parent.width; spacing: 14
-                CoreCpuSection { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
-            }
+            CoreCpuSection { anchors.fill: parent; anchors.margins: 12 }
         }
 
         // MEMORY & ENV — combined memory bank + environmental (HudCard aesthetic)
