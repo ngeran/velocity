@@ -20,13 +20,14 @@ Item {
 
     readonly property real _frac: Math.max(0, Math.min(100, value)) / 100.0
 
-    Rectangle { anchors.fill: parent; color: root.trackColor }       // track
+    Rectangle { anchors.fill: parent; radius: height / 2; color: root.trackColor }   // track
 
     Rectangle {                                                       // neon glow
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width * root._frac
         height: parent.height + 4
+        radius: (parent.height + 4) / 2
         color: root.barColor
         opacity: root._frac > 0 ? 0.30 : 0
         Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -37,6 +38,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width * root._frac
         height: parent.height
+        radius: parent.height / 2
         color: root.barColor
         Behavior on width { enabled: root.animate; NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
     }

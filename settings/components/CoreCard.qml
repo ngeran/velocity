@@ -1,6 +1,7 @@
-// CoreCard.qml — Command-Center card: rounded, bordered, top-gradient accent
-// line. Content is laid out in an inner ColumnLayout; the card's height follows
-// the content (childrenRect) so it stacks correctly in a scrolling column.
+// CoreCard.qml — Core section card (Shibumi / DESIGN_TOKENS): radius 12,
+// tinted surface, 1px outline, top-gradient accent line. Content is laid out
+// in an inner ColumnLayout; the card sizes to content but a layout may still
+// stretch it (only implicitHeight is exposed for width/height management).
 
 import QtQuick
 import QtQuick.Layouts
@@ -10,25 +11,24 @@ Rectangle {
     id: root
     default property alias content: slot.data
     property color accent: Config.ThemeConfig.colors.primary
-    property int contentSpacing: 14
-    radius: 4
-    color: "transparent"
+    property int contentSpacing: Config.ControlConfig.space3
+    radius: 12
+    color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.55)
     border.color: Config.ThemeConfig.colors.outlineVariant
     border.width: 1
-    // Size to content (16px top + 16px bottom padding). Layouts read
-    // implicitHeight to size managed children; height mirrors it so the card
-    // also renders correctly when anchored standalone.
-    implicitHeight: slot.implicitHeight + 32
-    height: slot.implicitHeight + 32
+    // Size to content (12px padding per DESIGN_TOKENS row padding).
+    implicitHeight: slot.implicitHeight + 24
 
     ColumnLayout {
         id: slot
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        anchors.topMargin: 16
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.topMargin: 12
+        anchors.bottomMargin: 12
         spacing: root.contentSpacing
     }
 

@@ -48,3 +48,4 @@ PanelSectionHeader 1.0 PanelSectionHeader.qml
 SettingsCard 1.0 SettingsCard.qml
 StatusBadge 1.0 StatusBadge.qml
 SettingsHeaderCard 1.0 SettingsHeaderCard.qml
+InfoStatRow 1.0 InfoStatRow.qml

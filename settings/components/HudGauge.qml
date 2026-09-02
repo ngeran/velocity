@@ -77,8 +77,8 @@ Item {
             visible: root.label.length > 0
             text: root.label
             color: Config.ThemeConfig.colors.textDim
-            font.family: Config.ControlConfig.fontMono
-            font.pixelSize: 8; font.letterSpacing: 1
+            font.family: Config.ControlConfig.fontSans
+            font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
         }
     }
 }
