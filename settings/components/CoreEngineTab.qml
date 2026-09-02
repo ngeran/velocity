@@ -84,13 +84,10 @@ Item {
         anchors.left: sideNav.right; anchors.top: parent.top; anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.leftMargin: 12
 
-        // GPU — NVIDIA telemetry: util gauge + sparkline + VRAM + top processes
-        Flickable {
+        // GPU — NVIDIA telemetry (fixed composition, no scrolling §6.1)
+        Item {
             anchors.fill: parent; visible: root.active === "gpu"
-            contentWidth: width; contentHeight: gpuCol.implicitHeight + 24; clip: true; boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout { id: gpuCol; width: parent.width; spacing: 14
-                CoreGpuSection { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 12; Layout.bottomMargin: 12 }
-            }
+            CoreGpuSection { anchors.fill: parent; anchors.margins: 12 }
         }
 
         // PROCESSORS — CPU only (fixed composition, no scrolling §6.1)
