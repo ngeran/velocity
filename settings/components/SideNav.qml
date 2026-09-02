@@ -14,6 +14,11 @@ Rectangle {
 
     signal sectionSelected(string key)
     property string activeSection: "network"
+    // Section model ({key,label,icon}) — defaults to the Controls sections;
+    // other tabs (e.g. Core) pass their own.
+    property var items: Config.ControlConfig.sections
+    // Optional footer slot pinned to the rail's bottom (e.g. session info).
+    default property alias footer: footerSlot.data
 
     Rectangle {
         anchors.top: parent.top
@@ -33,7 +38,7 @@ Rectangle {
         spacing: Config.ControlConfig.space1
 
         Repeater {
-            model: Config.ControlConfig.sections
+            model: nav.items
             delegate: Item {
                 id: del
                 width: nav.width - Config.ControlConfig.space2
@@ -111,5 +116,15 @@ Rectangle {
                 }
             }
         }
+    }
+
+    // Footer slot — pinned to the bottom; empty (0-height) unless populated.
+    Column {
+        id: footerSlot
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Config.ControlConfig.space2
+        spacing: 0
     }
 }
