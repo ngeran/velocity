@@ -23,7 +23,6 @@ Item {
 
     readonly property var navItems: [
         { key: "system", label: "SYSTEM",    icon: "󰇅" },
-        { key: "gpu",    label: "GPU",       icon: "󰢮" },
         { key: "lcd",    label: "LCD",       icon: "󰍹" },
         { key: "events", label: "EVENTS",    icon: "󰈔" }
     ]
@@ -71,12 +70,6 @@ Item {
         Item {
             anchors.fill: parent; visible: root.active === "system"
             CoreSystemPane { anchors.fill: parent; anchors.margins: 12 }
-        }
-
-        // GPU — processes detail (no scrolling)
-        Item {
-            anchors.fill: parent; visible: root.active === "gpu"
-            CoreGpuSection { anchors.fill: parent; anchors.margins: 12 }
         }
 
         // LCD — physical AIO LCD preferences (no scrolling)
