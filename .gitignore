@@ -58,4 +58,13 @@ Thumbs.db
 # Event tracker state (seeded by tools/backfill-events.sh, appended by EventService)
 events.jsonl
 notifications.jsonl
+
+# UI refresh verification screenshots (4K PNGs, 3-6MB each — too large for git)
 ui_refresh/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+*.svg
