@@ -75,9 +75,12 @@ Item {
         anchors.fill: parent
         spacing: 4
 
-        // Main row content
+        // Main row content — FIXED height so hover never re-centers it (the
+        // [×] reveal used to inflate the row's implicit height, shifting the
+        // whole row down and over the accent tick).
         RowLayout {
             width: parent.width
+            height: row.editing ? row.height - 30 : row.height
             spacing: 8
 
             // Status glyph: ◌ connecting (spins) · ● in-use · ○ idle
@@ -176,7 +179,7 @@ Item {
             // [×] disconnect — hover only on the active row (click falls through
             // from the row MouseArea via propagateComposedEvents).
             Item {
-                Layout.preferredWidth: 16; Layout.preferredHeight: row.height
+                Layout.preferredWidth: 16; Layout.preferredHeight: 16
                 Layout.alignment: Qt.AlignVCenter
                 visible: net.inUse && ma.containsMouse && !row.editing
                 Text {

@@ -62,7 +62,7 @@ ColumnLayout {
 
         // ── MEMORY ───────────────────────────────────────────────────────────
         CoreCard {
-            accent: Config.ThemeConfig.colors.warning
+            accent: Config.ThemeConfig.colors.success
             Layout.fillWidth: true
             Layout.fillHeight: true
             ColumnLayout {
@@ -74,11 +74,11 @@ ColumnLayout {
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
                     Item { Layout.fillWidth: true }
                     Rectangle { radius: Config.ControlConfig.radiusSmall
-                        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.12)
-                        border.color: Config.ThemeConfig.colors.warning; border.width: 1
+                        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.12)
+                        border.color: Config.ThemeConfig.colors.success; border.width: 1
                         height: 18; width: memBadge.implicitWidth + 12
                         Text { id: memBadge; anchors.centerIn: parent; text: "ECC"
-                            color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true } }
+                            color: Config.ThemeConfig.colors.success; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true } }
                 }
 
                 // capacity readout + utilization bar
@@ -88,10 +88,10 @@ ColumnLayout {
                         color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily
                         font.pixelSize: 22; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                     Text { text: Math.round(Services.CoreEngineService.ramPct) + "% USED"
-                        color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono
+                        color: Config.ThemeConfig.colors.success; font.family: Config.ControlConfig.fontMono
                         font.pixelSize: 10; font.bold: true }
                 }
-                CoreBar { Layout.fillWidth: true; barHeight: 8; value: Services.CoreEngineService.ramPct; barColor: Config.ThemeConfig.colors.warning }
+                CoreBar { Layout.fillWidth: true; barHeight: 8; value: Services.CoreEngineService.ramPct; barColor: Config.ThemeConfig.colors.success }
 
                 // 2-min RAM history — service-owned ring buffer, primary line
                 // so the series reads the same as in the CPU LOAD HISTORY chart.
@@ -105,7 +105,7 @@ ColumnLayout {
                     }
                     CoreSparkline { Layout.fillWidth: true; Layout.preferredHeight: 40
                         points: Services.CoreEngineService.memoryHistory
-                        lineColor: Config.ThemeConfig.colors.primary
+                        lineColor: Config.ThemeConfig.colors.success
                         fixedMaximum: 100 }
                 }
 
@@ -176,7 +176,7 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     Text { text: Services.ThermalService.coolantAvailable ? "COOLANT OPTIMAL" : "NO COOLANT SENSOR"
-                        color: Config.ThemeConfig.colors.warning; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+                        color: Config.ThemeConfig.colors.success; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                     Item { Layout.fillWidth: true }
                     Text { text: Services.ThermalService.nvmeTemp > 0 ? "NVMe GEN4" : "NVMe NOT FOUND"
                         color: Config.ThemeConfig.colors.primary; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }

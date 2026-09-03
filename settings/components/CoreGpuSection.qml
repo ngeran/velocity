@@ -31,33 +31,86 @@ ColumnLayout {
     readonly property int procCapacity: Math.max(1, Math.floor(procViewport.height / 34))
     readonly property int procVisibleCount: Math.min(Services.GpuService.processes.length, procCapacity)
 
-    // ── 1. HERO ROW — three instrumentation rings ───────────────────────
+    // ── 1. HERO ROW — three big-numeral stat blocks (palette-mapped:
+    // GPU=info violet · TEMP=temp tier · VRAM=primary teal) ──────────────
+    component StatBlock: Rectangle {
+        property string label: ""
+        property string value: "—"
+        property string unit: ""
+        property color valueColor: Config.ThemeConfig.colors.text
+        property real meterValue: -1        // <0 hides the meter
+        property color meterColor: Config.ThemeConfig.colors.info
+        Layout.fillWidth: true; Layout.preferredHeight: 92
+        radius: Config.ControlConfig.radiusPill
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+        border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
+        ColumnLayout { anchors.fill: parent; anchors.margins: 12; spacing: 4
+            Text { text: label; color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                font.bold: true; font.letterSpacing: 1.0 }
+            RowLayout { spacing: 4
+                Text { text: value; color: valueColor
+                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 34; font.bold: true }
+                Text { visible: unit !== ""; text: unit; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 12 }
+                Item { Layout.fillWidth: true }
+            }
+            CoreBar { Layout.fillWidth: true; barHeight: 4; visible: meterValue >= 0
+                value: meterValue; barColor: meterColor }
+        }
+    }
+
     RowLayout {
         Layout.fillWidth: true
-        spacing: Config.ControlConfig.space4
+        spacing: Config.ControlConfig.space3
 
-        Item { Layout.fillWidth: true }
-        HudGauge {
-            size: 116; valuePixelSize: 30; arcWidth: 7
-            value: Services.GpuService.util; max: 100; unit: "%"
-            accent: root.loadTier(Services.GpuService.util)
-            label: "GPU"
+        StatBlock { label: "GPU UTILIZATION"
+            value: Math.round(Services.GpuService.util); unit: "%"
+            valueColor: Config.ThemeConfig.colors.info
+            meterValue: Services.GpuService.util
+            meterColor: Config.ThemeConfig.colors.info }
+        StatBlock { label: "GPU TEMP"
+            value: Services.GpuService.temp.toFixed(0); unit: "°C"
+            valueColor: root.tempTier(Services.GpuService.temp)
+            meterValue: Services.GpuService.temp
+            meterColor: root.tempTier(Services.GpuService.temp) }
+        StatBlock { label: "VRAM"
+            value: Math.round(Services.GpuService.vramPct); unit: "%"
+            valueColor: Config.ThemeConfig.colors.primary
+            meterValue: Services.GpuService.vramPct
+            meterColor: Config.ThemeConfig.colors.primary }
+    }
+
+    // ── 1b. UTIL FLOW — compact full-width strip, auto-scaled ───────────
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        radius: Config.ControlConfig.radiusPill
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+        border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
+
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 8; spacing: 4
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 8
+                Text { text: "UTIL FLOW"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
+                Item { Layout.fillWidth: true }
+                Text { text: Math.round(Services.GpuService.util) + "% NOW"
+                    color: Config.ThemeConfig.colors.info
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+                Text { text: "2 MIN"; color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.letterSpacing: 0.8 }
+            }
+
+            Item {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                CoreSparkline { anchors.fill: parent
+                    points: Services.GpuService.gpuHistory
+                    lineColor: Config.ThemeConfig.colors.info }
+            }
         }
-        Item { Layout.fillWidth: true }
-        HudGauge {
-            size: 116; valuePixelSize: 30; arcWidth: 7
-            value: Services.GpuService.temp; max: 100; unit: "°"
-            accent: root.tempTier(Services.GpuService.temp)
-            label: "TEMP"
-        }
-        Item { Layout.fillWidth: true }
-        HudGauge {
-            size: 116; valuePixelSize: 30; arcWidth: 7
-            value: Services.GpuService.vramPct; max: 100; unit: "%"
-            accent: root.vramTier(Services.GpuService.vramPct)
-            label: "VRAM"
-        }
-        Item { Layout.fillWidth: true }
     }
 
     // ── 2. BODY — processes (left) | util flow + spec (right) ───────────
@@ -145,46 +198,17 @@ ColumnLayout {
             }
         }
 
-        // RIGHT — utilization history + spec rows
+        // RIGHT — spec rows (util flow lives in the compact strip above)
         ColumnLayout {
             Layout.preferredWidth: 300
             Layout.fillHeight: true
             spacing: Config.ControlConfig.space3
 
-            // utilization history — service-owned 2-min ring buffer
-            // (GpuService.gpuHistory). Line stays warning-token so it
-            // reads as a distinct series next to CPU (accent)/RAM (primary).
-            CoreCard {
-                accent: Config.ThemeConfig.colors.warning
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 4
-
-                    RowLayout { Layout.fillWidth: true
-                        Text { text: "UTIL FLOW"; color: Config.ThemeConfig.colors.textDim
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                        Item { Layout.fillWidth: true }
-                        Text { text: "2 MIN"; color: Config.ThemeConfig.colors.textDim
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.letterSpacing: 0.8 }
-                    }
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        CoreSparkline { anchors.fill: parent
-                            points: Services.GpuService.gpuHistory
-                            lineColor: Config.ThemeConfig.colors.warning
-                            fixedMaximum: 100 }
-                    }
-                }
-            }
-
-            // SPEC — the numbers the rings don't show
+            // SPEC — the numbers the hero blocks don't show
             CoreCard {
                 accent: Config.ThemeConfig.colors.secondary
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: Config.ControlConfig.space2
                     Text { text: "SPEC"; color: Config.ThemeConfig.colors.textDim
@@ -198,6 +222,7 @@ ColumnLayout {
                     InfoStatRow { label: "Power"; value: Services.GpuService.powerW.toFixed(0) + " W" }
                     InfoStatRow { label: "Fan"; value: Services.GpuService.fanPct.toFixed(0) + "%" }
                     InfoStatRow { label: "Vendor"; value: Services.GpuService.vendor.toUpperCase() }
+                    Item { Layout.fillHeight: true }
                 }
             }
         }
