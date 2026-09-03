@@ -95,26 +95,15 @@ Item {
     readonly property color actionBorderColor: dev.connected ? Config.ThemeConfig.colors.error
                                                 : Config.ControlConfig.accent
 
-    // ── Background tint by state ──────────────────────────────────────────────
+    // ── Background tint by state (sage for connected — no accent flood) ───────
     Rectangle {
         anchors.fill: parent
         radius: Config.ControlConfig.radiusSmall
-        color: dev.connected ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10)
+        color: dev.connected ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.06)
                : row.busy   ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
                : ma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6)
                : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
-    }
-
-    // ── Left accent bar (connected) — inset rounded tick ──────────────────────
-    Rectangle {
-        visible: dev.connected
-        anchors.left: parent.left; anchors.leftMargin: 3
-        anchors.top: parent.top; anchors.topMargin: 8
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 8
-        width: 3
-        radius: 1.5
-        color: Config.ControlConfig.accent
     }
 
     // ── Content ─────────────────────────────────────────────────────────────────
@@ -123,23 +112,25 @@ Item {
         anchors.leftMargin: 10; anchors.rightMargin: 6
         spacing: 8
 
-        // (1) Icon chip — rounded square, Nerd Font glyph from dev.icon.
+        // (1) Icon chip — sage when connected (the active marker), neutral
+        //     when idle. Nerd Font glyph from dev.icon.
         Rectangle {
             Layout.preferredWidth: 26; Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignVCenter
             radius: Config.ControlConfig.radiusPill
-            color: dev.connected ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+            color: dev.connected ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.16)
                                  : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surfaceContainer, 0.5)
             Text {
                 anchors.centerIn: parent
                 text: row.iconGlyph
                 font.family: Config.ControlConfig.fontNerd; font.pixelSize: 13
-                color: dev.connected ? Config.ControlConfig.accent
+                color: dev.connected ? Config.ThemeConfig.colors.success
                                       : Config.ThemeConfig.colors.textDim
             }
         }
 
-        // (2) Name (bold when connected) + caption/MAC beneath.
+        // (2) Name (bold when connected — sage icon chip already marks it)
+        //     + caption/MAC beneath.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
@@ -148,9 +139,8 @@ Item {
                 text: dev.name || dev.alias || dev.mac
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
                 font.bold: dev.connected
-                color: row.busy        ? Config.ThemeConfig.colors.warning
-                       : dev.connected ? Config.ControlConfig.accent
-                       : Config.ThemeConfig.colors.text
+                color: row.busy ? Config.ThemeConfig.colors.warning
+                                : Config.ThemeConfig.colors.text
                 elide: Text.ElideRight
             }
             // Connected caption (visible only when connected)
@@ -312,17 +302,15 @@ Item {
             }
         }
 
-        // (6) [×] forget — hover only for paired devices (click falls through
-        //     from the row MouseArea via propagateComposedEvents).
-        //     Two-step inline confirm: the first click arms ("SURE?", 3 s
-        //     auto-disarm window), a second click forgets. Forgetting is the
-        //     one irreversible action here — disconnects stay one-click.
+        // (6) [×] forget — base 16px slot ALWAYS RESERVED so nothing shifts on
+        //     hover; the glyph fades in for paired devices. Expands to 52px
+        //     only when armed ("SURE?" two-step confirm — forgetting is the
+        //     one irreversible action here; disconnects stay one-click).
         Item {
             id: forgetBtn
             Layout.preferredWidth: forgetArmed ? 52 : 16
-            Layout.preferredHeight: row.height
+            Layout.preferredHeight: 16
             Layout.alignment: Qt.AlignVCenter
-            visible: dev.paired && ma.containsMouse && !row.busy
 
             property bool forgetArmed: false
             Behavior on Layout.preferredWidth { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
@@ -331,6 +319,7 @@ Item {
 
             Text {
                 anchors.centerIn: parent
+                visible: dev.paired && ma.containsMouse && !row.busy
                 text: forgetBtn.forgetArmed ? "SURE?" : "×"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: forgetBtn.forgetArmed ? 9 : 14
                 font.bold: true
@@ -338,6 +327,7 @@ Item {
             }
             MouseArea {
                 anchors.fill: parent
+                visible: dev.paired && ma.containsMouse && !row.busy
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     mouse.accepted = true
