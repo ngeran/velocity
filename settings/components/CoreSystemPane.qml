@@ -29,7 +29,7 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 1 — HERO: CPU · GPU · MEMORY (dense blocks, no dead space)
+    // ROW 1 — HERO: CPU · GPU · MEMORY (live sparkline inside each card)
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
@@ -38,28 +38,39 @@ ColumnLayout {
         spacing: 8
 
         component MetricCard: Rectangle {
+            id: mcard
             property string title: ""
+            property string status: ""
+            property color statusColor: Config.ThemeConfig.colors.textDim
             property string bigValue: "—"
             property string bigUnit: ""
             property color bigColor: Config.ThemeConfig.colors.text
-            property var rows: []           // [{label, value, color}]
-            property real meterValue: -1
-            property color meterColor: Config.ThemeConfig.colors.primary
+            property var rows: []
+            property var sparkPoints: []
+            property color sparkColor: Config.ThemeConfig.colors.primary
             Layout.fillWidth: true; Layout.fillHeight: true
             radius: Config.ControlConfig.radiusPill
-            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+            // Subtle metric-color tint — each card is distinct at a glance
+            color: Config.ThemeConfig.tint(mcard.bigColor, 0.04)
             border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
             clip: true
 
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 10
-                spacing: 3
+                spacing: 2
 
-                // Title row
-                Text { text: title; color: Config.ThemeConfig.colors.textDim
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
-                    font.bold: true; font.letterSpacing: 1.2 }
+                // Title + status badge
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: title; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                        font.bold: true; font.letterSpacing: 1.2 }
+                    Item { Layout.fillWidth: true }
+                    Text { text: status; color: statusColor
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 9
+                        font.bold: true; font.letterSpacing: 0.8 }
+                }
 
                 // Big value + unit
                 RowLayout { spacing: 3
@@ -70,13 +81,18 @@ ColumnLayout {
                     Item { Layout.fillWidth: true }
                 }
 
-                // Meter
-                CoreBar { Layout.fillWidth: true; barHeight: 5; visible: meterValue >= 0
-                    value: meterValue; barColor: meterColor }
+                // Live sparkline — the card's own trend graph
+                CoreSparkline {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    points: mcard.sparkPoints
+                    lineColor: mcard.sparkColor
+                    gridLevels: [0.5]
+                }
 
                 // Detail rows
                 Repeater {
-                    model: rows
+                    model: mcard.rows
                     delegate: RowLayout {
                         Layout.fillWidth: true
                         required property var modelData
@@ -89,31 +105,39 @@ ColumnLayout {
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
             }
         }
 
         MetricCard {
             title: "CPU"
+            status: Services.CoreEngineService.cpuUsage > 80 ? "HIGH"
+                   : Services.CoreEngineService.cpuUsage > 40 ? "ACTIVE" : "IDLE"
+            statusColor: Services.CoreEngineService.cpuUsage > 80 ? Config.ThemeConfig.colors.error
+                         : Services.CoreEngineService.cpuUsage > 40 ? Config.ThemeConfig.colors.warning
+                         : Config.ThemeConfig.colors.textDim
             bigValue: Math.round(Services.CoreEngineService.cpuUsage); bigUnit: "%"
             bigColor: Config.ThemeConfig.colors.primary
-            meterValue: Services.CoreEngineService.cpuUsage
-            meterColor: Config.ThemeConfig.colors.primary
+            sparkPoints: Services.CoreEngineService.cpuHistory
+            sparkColor: Config.ThemeConfig.colors.primary
             rows: [
                 { label: "Clock", value: Services.CoreEngineService.cpuGhz.toFixed(2) + " GHz" },
                 { label: "Temp", value: Services.ThermalService.cpuTemp.toFixed(0) + " °C",
                   color: root.tempTier(Services.ThermalService.cpuTemp) },
-                { label: "Threads", value: root.coreCount }
+                { label: "Cores", value: root.coreCount }
             ]
         }
 
         MetricCard {
             title: "GPU"
+            status: Services.GpuService.util > 80 ? "HIGH"
+                   : Services.GpuService.util > 40 ? "ACTIVE" : "IDLE"
+            statusColor: Services.GpuService.util > 80 ? Config.ThemeConfig.colors.error
+                         : Services.GpuService.util > 40 ? Config.ThemeConfig.colors.warning
+                         : Config.ThemeConfig.colors.textDim
             bigValue: Math.round(Services.GpuService.util); bigUnit: "%"
             bigColor: Config.ThemeConfig.colors.info
-            meterValue: Services.GpuService.util
-            meterColor: Config.ThemeConfig.colors.info
+            sparkPoints: Services.GpuService.gpuHistory
+            sparkColor: Config.ThemeConfig.colors.info
             rows: [
                 { label: "VRAM", value: Services.GpuService.vramUsedGB.toFixed(1) + " / " + Services.GpuService.vramTotalGB.toFixed(0) + " GB",
                   color: Config.ThemeConfig.colors.primary },
@@ -125,13 +149,17 @@ ColumnLayout {
 
         MetricCard {
             title: "MEMORY"
+            status: Services.CoreEngineService.ramPct > 85 ? "HIGH"
+                   : Services.CoreEngineService.ramPct > 60 ? "ACTIVE" : "OK"
+            statusColor: Services.CoreEngineService.ramPct > 85 ? Config.ThemeConfig.colors.error
+                         : Services.CoreEngineService.ramPct > 60 ? Config.ThemeConfig.colors.warning
+                         : Config.ThemeConfig.colors.success
             bigValue: Math.round(Services.CoreEngineService.ramPct); bigUnit: "%"
             bigColor: Config.ThemeConfig.colors.success
-            meterValue: Services.CoreEngineService.ramPct
-            meterColor: Config.ThemeConfig.colors.success
+            sparkPoints: Services.CoreEngineService.memoryHistory
+            sparkColor: Config.ThemeConfig.colors.success
             rows: [
-                { label: "Used", value: Services.CoreEngineService.ramUsedGB.toFixed(1) + " GB",
-                  color: Config.ThemeConfig.colors.success },
+                { label: "Used", value: Services.CoreEngineService.ramUsedGB.toFixed(1) + " GB" },
                 { label: "Free", value: (Services.CoreEngineService.ramTotalGB - Services.CoreEngineService.ramUsedGB).toFixed(1) + " GB" },
                 { label: "Swap", value: Services.CoreEngineService.swapUsedGB.toFixed(1) + " GB" }
             ]
