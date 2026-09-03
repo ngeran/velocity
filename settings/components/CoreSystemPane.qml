@@ -240,8 +240,7 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 3 — BODY: LOAD HISTORY | GPU UTIL FLOW | CORE HEAT MAP
-    //         (all three side by side, each fills the remaining height)
+    // ROW 3 — BODY: LOAD HISTORY | GPU UTIL FLOW (side by side, full width)
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
@@ -288,43 +287,6 @@ ColumnLayout {
                 CoreSparkline { anchors.fill: parent
                     points: Services.GpuService.gpuHistory
                     lineColor: Config.ThemeConfig.colors.info }
-            }
-        }
-
-        // CORE ACTIVITY — per-core heat map
-        Rectangle {
-            Layout.fillWidth: true; Layout.fillHeight: true
-            Layout.preferredWidth: 2     // heat map gets more width
-            radius: Config.ControlConfig.radiusPill
-            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-            border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-            ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 4
-                RowLayout { Layout.fillWidth: true
-                    Text { text: "CORE ACTIVITY"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                    Item { Layout.fillWidth: true }
-                    Text { text: root.peakCore.index >= 0 ? ("P" + (root.peakCore.index + 1) + " " + Math.round(root.peakCore.value) + "%") : ""
-                        color: root.peakCore.value >= 50 ? root.loadTier(root.peakCore.value) : Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
-                }
-                GridLayout {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    columns: root.coreCount >= 24 ? 8 : 4
-                    rowSpacing: 4; columnSpacing: 4
-                    Repeater {
-                        model: Services.CoreEngineService.perCoreLoad
-                        delegate: Rectangle {
-                            id: heatBlock
-                            property real load: modelData
-                            Layout.fillWidth: true; Layout.fillHeight: true
-                            radius: 4
-                            color: Config.ThemeConfig.tint(root.loadTier(heatBlock.load),
-                                                           Math.max(0.18, heatBlock.load / 100))
-                            border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-                            Behavior on color { ColorAnimation { duration: 400 } }
-                        }
-                    }
-                }
             }
         }
     }
