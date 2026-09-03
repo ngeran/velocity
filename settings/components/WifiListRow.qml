@@ -42,8 +42,9 @@ Item {
     }
     // Lit segment count + colour, derived from the 0-100 signal quality.
     readonly property int litBars: net.signal >= 75 ? 4 : net.signal >= 50 ? 3 : net.signal >= 25 ? 2 : net.signal > 0 ? 1 : 0
-    readonly property color barColor: (net.inUse || net.signal >= 50) ? Config.ControlConfig.accent
-                                                                : Config.ThemeConfig.colors.warning
+    readonly property color barColor: net.inUse         ? Config.ThemeConfig.colors.success
+                                     : net.signal >= 50 ? Config.ThemeConfig.colors.primary
+                                                        : Config.ThemeConfig.colors.warning
 
     Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
@@ -51,23 +52,12 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Config.ControlConfig.radiusSmall
-        color: net.inUse    ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10)
+        color: net.inUse    ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.06)
                : connecting ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.warning, 0.10)
-               : row.editing ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.06)
+               : row.editing ? Config.ThemeConfig.tint(Config.ControlConfig.colors.info, 0.06)
                : ma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.6)
                : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
-    }
-
-    // ── Left accent bar (active / connecting / editing) — inset rounded tick ──
-    Rectangle {
-        visible: net.inUse || connecting || row.editing
-        anchors.left: parent.left; anchors.leftMargin: 3
-        anchors.top: parent.top; anchors.topMargin: 8
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 8
-        width: 3
-        radius: 1.5
-        color: connecting ? Config.ThemeConfig.colors.warning : Config.ControlConfig.accent
     }
 
     // ── Content (main row + password field below) ─────────────────────────────
@@ -83,19 +73,20 @@ Item {
             height: row.editing ? row.height - 30 : row.height
             spacing: 8
 
-            // Status glyph: ◌ connecting (spins) · ● in-use · ○ idle
+            // Status glyph: ◌ connecting (spins) · ● in-use (sage) · ○ idle
             Text {
                 Layout.preferredWidth: 14; Layout.alignment: Qt.AlignVCenter
                 text: connecting ? "◌" : (net.inUse ? "●" : "○")
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 12
                 horizontalAlignment: Text.AlignHCenter
                 color: connecting ? Config.ThemeConfig.colors.warning
-                       : net.inUse ? Config.ControlConfig.accent
+                       : net.inUse ? Config.ThemeConfig.colors.success
                        : Config.ThemeConfig.colors.border
                 RotationAnimator on rotation { running: connecting; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
             }
 
-            // SSID (elided) + BSSID beneath
+            // SSID (elided) + BSSID beneath — active is just bold text (the
+            // sage dot + subtle bg already mark it; no accent flood)
             ColumnLayout {
                 Layout.fillWidth: true; Layout.preferredWidth: 120
                 spacing: 0
@@ -105,7 +96,6 @@ Item {
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
                     font.bold: net.inUse || connecting || row.editing
                     color: connecting ? Config.ThemeConfig.colors.warning
-                           : net.inUse ? Config.ControlConfig.accent
                            : row.editing ? Config.ControlConfig.accent
                            : Config.ThemeConfig.colors.text
                     elide: Text.ElideRight
@@ -153,15 +143,15 @@ Item {
                     anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                     width: Math.min(72, secLabel.implicitWidth + 14); height: 18
                     radius: Config.ControlConfig.radiusSmall
-                    color: row.secured ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.10) : "transparent"
-                    border.color: row.secured ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
+                    color: row.secured ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.info, 0.10) : "transparent"
+                    border.color: row.secured ? Config.ThemeConfig.colors.info : Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Text {
                         id: secLabel
                         anchors.centerIn: parent; width: parent.width - 8
                         text: row.secured ? (net.security || "").toUpperCase() : "OPEN"
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                        color: row.secured ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                        color: row.secured ? Config.ThemeConfig.colors.info : Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
                     }
                 }
@@ -176,20 +166,22 @@ Item {
                 horizontalAlignment: Text.AlignRight
             }
 
-            // [×] disconnect — hover only on the active row (click falls through
-            // from the row MouseArea via propagateComposedEvents).
+            // [×] disconnect — the 16px slot is ALWAYS RESERVED so nothing
+            // shifts on hover; only the glyph fades in on the active row.
             Item {
                 Layout.preferredWidth: 16; Layout.preferredHeight: 16
                 Layout.alignment: Qt.AlignVCenter
-                visible: net.inUse && ma.containsMouse && !row.editing
                 Text {
                     anchors.centerIn: parent
+                    visible: net.inUse && ma.containsMouse && !row.editing
                     text: "×"
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 14; font.bold: true
                     color: Config.ThemeConfig.colors.error
+                    Behavior on opacity { NumberAnimation { duration: 100 } }
                 }
                 MouseArea {
                     anchors.fill: parent
+                    visible: net.inUse && ma.containsMouse && !row.editing
                     cursorShape: Qt.PointingHandCursor
                     onClicked: Services.NetworkControlService.disconnectWifi()
                 }
