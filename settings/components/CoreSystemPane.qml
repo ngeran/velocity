@@ -141,13 +141,13 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 2 — DRIVES + GPU SPECS + SENSORS
+    // ROW 2 — DRIVES + SYSTEM INFO (merged GPU specs + sensors into one)
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: 0.6
-        Layout.maximumHeight: 100
+        Layout.preferredHeight: 1
+        Layout.maximumHeight: 110
         spacing: Config.ControlConfig.space2
 
         Repeater {
@@ -159,15 +159,16 @@ ColumnLayout {
             }
         }
 
-        // GPU SPECS tile — clock, VRAM, fan, processes, coolant, NVMe
+        // SYSTEM INFO — GPU specs + sensors + swap in ONE card
         Rectangle {
             Layout.fillWidth: true; Layout.fillHeight: true
+            Layout.preferredWidth: 2     // wider than each drive
             radius: Config.ControlConfig.radiusPill
             color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
             border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-            ColumnLayout { anchors.fill: parent; anchors.margins: 10; spacing: 2
+            ColumnLayout { anchors.fill: parent; anchors.margins: 10; spacing: 3
                 RowLayout { Layout.fillWidth: true; spacing: 6
-                    Text { text: "GPU SPECS"; color: Config.ThemeConfig.colors.textDim
+                    Text { text: "SYSTEM INFO"; color: Config.ThemeConfig.colors.textDim
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
                     Item { Layout.fillWidth: true }
                     Text { text: Services.GpuService.present ? Services.GpuService.name : ""
@@ -175,77 +176,36 @@ ColumnLayout {
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                         elide: Text.ElideRight }
                 }
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "CLOCK"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.GpuService.clockMHz > 0 ? (Services.GpuService.clockMHz / 1000).toFixed(1) + "G" : "—"
-                        color: Config.ThemeConfig.colors.info; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                RowLayout { Layout.fillWidth: true; spacing: 12
+                    Text { text: "GPU CLOCK " + (Services.GpuService.clockMHz > 0 ? (Services.GpuService.clockMHz / 1000).toFixed(1) + "G" : "—")
+                        color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                    Text { text: "VRAM " + Services.GpuService.vramUsedGB.toFixed(1) + "/" + Services.GpuService.vramTotalGB.toFixed(0) + "G"
+                        color: Config.ThemeConfig.colors.primary; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                    Text { text: "FAN " + Services.GpuService.fanPct.toFixed(0) + "%"
+                        color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                     Item { Layout.fillWidth: true }
-                    Text { text: "VRAM"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.GpuService.vramUsedGB.toFixed(1) + "/" + Services.GpuService.vramTotalGB.toFixed(0) + "G"
-                        color: Config.ThemeConfig.colors.primary; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
                 }
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "FAN"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.GpuService.fanPct.toFixed(0) + "%"
-                        color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                RowLayout { Layout.fillWidth: true; spacing: 12
+                    Text { text: "COOLANT " + (Services.ThermalService.coolantAvailable ? Services.ThermalService.coolantTemp.toFixed(1) + "°C" : "—")
+                        color: root.tempTier(Services.ThermalService.coolantTemp); font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                    Text { text: "NVMe " + (Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(1) + "°C" : "—")
+                        color: root.tempTier(Services.ThermalService.nvmeTemp); font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                    Text { text: "SWAP " + Math.round(Services.CoreEngineService.swapPct) + "%"
+                        color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                     Item { Layout.fillWidth: true }
-                    Text { text: "PROCS"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.GpuService.processes.length
-                        color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
-                }
-            }
-        }
-
-        // SENSORS tile — coolant, NVMe, swap
-        Rectangle {
-            Layout.fillWidth: true; Layout.fillHeight: true
-            radius: Config.ControlConfig.radiusPill
-            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-            border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-            ColumnLayout { anchors.fill: parent; anchors.margins: 10; spacing: 2
-                RowLayout { Layout.fillWidth: true; spacing: 6
-                    Text { text: "SENSORS"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
-                }
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "COOLANT"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.ThermalService.coolantAvailable ? Services.ThermalService.coolantTemp.toFixed(1) + "°C" : "—"
-                        color: root.tempTier(Services.ThermalService.coolantTemp)
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "NVMe"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(1) + "°C" : "—"
-                        color: root.tempTier(Services.ThermalService.nvmeTemp)
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
-                }
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "SWAP"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Math.round(Services.CoreEngineService.swapPct) + "%"
-                        color: Config.ThemeConfig.colors.textDim; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "UPTIME"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
-                    Text { text: Math.floor(Services.CoreEngineService.cpuGhz) > 0 ? "LIVE" : "—"
-                        color: Config.ThemeConfig.colors.success; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
                 }
             }
         }
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 3 — BODY: LOAD HISTORY | GPU UTIL FLOW (side by side, full width)
+    // ROW 3 — GRAPHS: LOAD HISTORY | GPU UTIL FLOW (capped height)
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: 2.5
+        Layout.preferredHeight: 1.5
+        Layout.maximumHeight: 220
         spacing: Config.ControlConfig.space3
 
         // LOAD HISTORY — CPU (primary) + RAM (success) overlay
