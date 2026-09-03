@@ -160,6 +160,12 @@ Item {
                 var m = line.match(/via\s+(\S+)\s+dev\s+(\S+)/)
                 if (m) { root.gateway = m[1]; root.iface = m[2] }
                 else { root.gateway = ""; root.iface = "" }
+                // gwProc finished — iface is now known (or empty). Kick the
+                // throughput probe only if the popup is open AND we got an
+                // iface. This closes the race where statsProc ran with an
+                // empty iface and read /sys/class/net//statistics (no data).
+                if (root.popupOpen && root.iface !== "" && !statsProc.running)
+                    statsProc.running = true
             }
         }
     }
@@ -210,14 +216,18 @@ Item {
             root._stats = null
             root.rxRate = ""
             root.txRate = ""
+            root.rxTotal = ""
+            root.txTotal = ""
             return
         }
         // Fetch-on-open: no waiting for the next timer tick.
+        // NOTE: statsProc is NOT started here — it needs root.iface from
+        // gwProc's output. gwProc's onRunningChanged kicks statsProc once
+        // iface is known (fixes the empty-iface race that showed no data).
         if (isConnected) getIP()
         if (isConnected && !gwProc.running)   gwProc.running = true
         if (isConnected && !dnsProc.running)  dnsProc.running = true
         if (isConnected && !pingProc.running) pingProc.running = true
-        if (isConnected && !statsProc.running) statsProc.running = true
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────
@@ -250,7 +260,7 @@ Item {
         interval: 2000
         repeat: true
         running: root.hasNetwork && root.popupOpen
-        onTriggered: if (root.isConnected && !statsProc.running) statsProc.running = true
+        onTriggered: if (root.isConnected && root.iface !== "" && !statsProc.running) statsProc.running = true
     }
 
     // Gateway / DNS / latency refresh — slower cadence (these change rarely
