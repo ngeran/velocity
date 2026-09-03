@@ -1,11 +1,11 @@
 // =============================================================================
-// CoreSystemPane.qml — SYSTEM: symmetric bento grid (fills ALL space)
+// CoreSystemPane.qml — SYSTEM: symmetric bento grid, graphs side by side
 // =============================================================================
 // Consolidated CPU + GPU + Memory + Drives in one symmetric layout:
-//   Row 1 (25%):  [CPU primary] [GPU info] [MEMORY success] — big numerals
-//   Row 2 (15%):  [SYSTEM drive] [WD_BLACK drive] [sensors+VRAM tile]
-//   Row 3 (60%):  heat map (fills left) | history strips (stacked right)
-// Every section uses fillHeight — no dead zones, no fixed pixel heights.
+//   Row 1 (25%): [CPU primary] [GPU info] [MEMORY success] — big numerals
+//   Row 2 (15%): [DRIVE sq] [DRIVE sq] [GPU SPECS: clock/VRAM/fan/procs]
+//   Row 3 (60%): [LOAD HISTORY] [GPU UTIL FLOW] [CORE HEAT MAP] — side by side
+// Every section uses fillHeight — no dead zones, fully symmetric.
 // =============================================================================
 
 import QtQuick
@@ -50,7 +50,7 @@ ColumnLayout {
         color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
         border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
         ColumnLayout { anchors.fill: parent; anchors.margins: 12; spacing: 2
-            Item { Layout.fillHeight: true }    // push content down
+            Item { Layout.fillHeight: true }
             RowLayout { Layout.fillWidth: true
                 Text { text: label; color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
@@ -69,7 +69,7 @@ ColumnLayout {
             }
             CoreBar { Layout.fillWidth: true; barHeight: 4; visible: meterValue >= 0
                 value: meterValue; barColor: meterColor }
-            Item { Layout.fillHeight: true }    // balance top spacer
+            Item { Layout.fillHeight: true }
         }
     }
 
@@ -97,13 +97,29 @@ ColumnLayout {
         }
     }
 
+    // ── chart card with header ────────────────────────────────────────────
+    component ChartCard: Rectangle {
+        default property alias chart: chartSlot.data
+        property string title: ""
+        Layout.fillWidth: true; Layout.fillHeight: true
+        radius: Config.ControlConfig.radiusPill
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+        border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
+        ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 4
+            Text { text: title; color: Config.ThemeConfig.colors.textDim
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                font.bold: true; font.letterSpacing: 1.0 }
+            Item { id: chartSlot; Layout.fillWidth: true; Layout.fillHeight: true }
+        }
+    }
+
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 1 — HERO: CPU · GPU · MEMORY (25% of pane height)
+    // ROW 1 — HERO: CPU · GPU · MEMORY
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: 1     // 1 share of the vertical budget
+        Layout.preferredHeight: 1
         Layout.maximumHeight: 140
         spacing: Config.ControlConfig.space3
 
@@ -125,12 +141,12 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 2 — DRIVES + SENSORS (15% of pane height)
+    // ROW 2 — DRIVES + GPU SPECS + SENSORS
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: 0.6   // 0.6 shares (shorter than hero)
+        Layout.preferredHeight: 0.6
         Layout.maximumHeight: 100
         spacing: Config.ControlConfig.space2
 
@@ -143,81 +159,157 @@ ColumnLayout {
             }
         }
 
-        // Sensor + VRAM combo tile (fills the remaining width evenly)
+        // GPU SPECS tile — clock, VRAM, fan, processes, coolant, NVMe
         Rectangle {
             Layout.fillWidth: true; Layout.fillHeight: true
             radius: Config.ControlConfig.radiusPill
             color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
             border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
             ColumnLayout { anchors.fill: parent; anchors.margins: 10; spacing: 2
-                RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "COOLANT"; color: Config.ThemeConfig.colors.textDim
+                RowLayout { Layout.fillWidth: true; spacing: 6
+                    Text { text: "GPU SPECS"; color: Config.ThemeConfig.colors.textDim
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { text: Services.ThermalService.coolantAvailable ? Services.ThermalService.coolantTemp.toFixed(1) + "°C" : "—"
-                        color: root.tempTier(Services.ThermalService.coolantTemp)
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 13; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Text { text: "NVMe"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { text: Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(1) + "°C" : "—"
-                        color: root.tempTier(Services.ThermalService.nvmeTemp)
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 13; font.bold: true }
+                    Text { text: Services.GpuService.present ? Services.GpuService.name : ""
+                        color: Config.ThemeConfig.colors.textDim; opacity: 0.7
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                        elide: Text.ElideRight }
                 }
                 RowLayout { Layout.fillWidth: true; spacing: 8
-                    Text { text: "VRAM"; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { text: Math.round(Services.GpuService.vramPct) + "%"
-                        color: Config.ThemeConfig.colors.primary
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 13; font.bold: true }
+                    Text { text: "CLOCK"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.GpuService.clockMHz > 0 ? (Services.GpuService.clockMHz / 1000).toFixed(1) + "G" : "—"
+                        color: Config.ThemeConfig.colors.info; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Text { text: "SWAP"; color: Config.ThemeConfig.colors.textDim
+                    Text { text: "VRAM"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.GpuService.vramUsedGB.toFixed(1) + "/" + Services.GpuService.vramTotalGB.toFixed(0) + "G"
+                        color: Config.ThemeConfig.colors.primary; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                }
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    Text { text: "FAN"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.GpuService.fanPct.toFixed(0) + "%"
+                        color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "PROCS"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.GpuService.processes.length
+                        color: Config.ThemeConfig.colors.text; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                }
+            }
+        }
+
+        // SENSORS tile — coolant, NVMe, swap
+        Rectangle {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            radius: Config.ControlConfig.radiusPill
+            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+            border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
+            ColumnLayout { anchors.fill: parent; anchors.margins: 10; spacing: 2
+                RowLayout { Layout.fillWidth: true; spacing: 6
+                    Text { text: "SENSORS"; color: Config.ThemeConfig.colors.textDim
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8 }
+                }
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    Text { text: "COOLANT"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.ThermalService.coolantAvailable ? Services.ThermalService.coolantTemp.toFixed(1) + "°C" : "—"
+                        color: root.tempTier(Services.ThermalService.coolantTemp)
+                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "NVMe"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(1) + "°C" : "—"
+                        color: root.tempTier(Services.ThermalService.nvmeTemp)
+                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                }
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    Text { text: "SWAP"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
                     Text { text: Math.round(Services.CoreEngineService.swapPct) + "%"
-                        color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 13; font.bold: true }
+                        color: Config.ThemeConfig.colors.textDim; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "UPTIME"; color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true }
+                    Text { text: Math.floor(Services.CoreEngineService.cpuGhz) > 0 ? "LIVE" : "—"
+                        color: Config.ThemeConfig.colors.success; font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 12; font.bold: true }
                 }
             }
         }
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ROW 3 — BODY: heat map (left, fills) | history strips (right, stacked)
+    // ROW 3 — BODY: LOAD HISTORY | GPU UTIL FLOW | CORE HEAT MAP
+    //         (all three side by side, each fills the remaining height)
     // ═════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: 2.5   // 2.5 shares — the visual centerpiece
+        Layout.preferredHeight: 2.5
         spacing: Config.ControlConfig.space3
 
-        // LEFT — heat map (fills ALL remaining space)
+        // LOAD HISTORY — CPU (primary) + RAM (success) overlay
+        ChartCard {
+            title: "LOAD HISTORY"
+            RowLayout { anchors.fill: parent; spacing: 4
+                Rectangle { width: 5; height: 5; radius: 3; color: Config.ThemeConfig.colors.primary
+                    Layout.alignment: Qt.AlignTop }
+                Text { text: Math.round(Services.CoreEngineService.cpuUsage) + "%"
+                    color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                Item { Layout.fillWidth: true }
+                Rectangle { width: 5; height: 5; radius: 3; color: Config.ThemeConfig.colors.success
+                    Layout.alignment: Qt.AlignTop }
+                Text { text: Math.round(Services.CoreEngineService.ramPct) + "%"
+                    color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+            }
+            Item { anchors.fill: parent
+                CoreSparkline { anchors.fill: parent
+                    points: Services.CoreEngineService.cpuHistory
+                    lineColor: Config.ThemeConfig.colors.primary }
+                CoreSparkline { anchors.fill: parent
+                    points: Services.CoreEngineService.memoryHistory
+                    lineColor: Config.ThemeConfig.colors.success
+                    fillEnabled: false; dashed: true; lineWidth: 1.2 }
+            }
+        }
+
+        // GPU UTIL FLOW — info violet
+        ChartCard {
+            title: "GPU UTIL FLOW"
+            RowLayout { anchors.fill: parent; spacing: 4
+                Rectangle { width: 5; height: 5; radius: 3; color: Config.ThemeConfig.colors.info
+                    Layout.alignment: Qt.AlignTop }
+                Text { text: Math.round(Services.GpuService.util) + "%"
+                    color: Config.ThemeConfig.colors.info; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
+                Item { Layout.fillWidth: true }
+            }
+            Item { anchors.fill: parent
+                CoreSparkline { anchors.fill: parent
+                    points: Services.GpuService.gpuHistory
+                    lineColor: Config.ThemeConfig.colors.info }
+            }
+        }
+
+        // CORE ACTIVITY — per-core heat map
         Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.fillWidth: true; Layout.fillHeight: true
+            Layout.preferredWidth: 2     // heat map gets more width
             radius: Config.ControlConfig.radiusPill
             color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
             border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-
-            ColumnLayout {
-                anchors.fill: parent; anchors.margins: 10; spacing: 6
-
-                RowLayout {
-                    Layout.fillWidth: true
+            ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 4
+                RowLayout { Layout.fillWidth: true
                     Text { text: "CORE ACTIVITY"; color: Config.ThemeConfig.colors.textDim
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
                     Item { Layout.fillWidth: true }
-                    Text { text: root.peakCore.index >= 0
-                            ? ("PEAK C" + (root.peakCore.index + 1) + " " + Math.round(root.peakCore.value)
-                               + "%  ·  AVG " + Math.round(root.peakCore.avg) + "%")
-                            : "—"
-                        color: root.peakCore.value >= 50 ? root.loadTier(root.peakCore.value) : Config.ThemeConfig.colors.text
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true }
+                    Text { text: root.peakCore.index >= 0 ? ("P" + (root.peakCore.index + 1) + " " + Math.round(root.peakCore.value) + "%") : ""
+                        color: root.peakCore.value >= 50 ? root.loadTier(root.peakCore.value) : Config.ThemeConfig.colors.textDim
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                 }
-
-                // Heat blocks — fill ALL remaining height (bigger blocks)
                 GridLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    columns: root.coreCount >= 24 ? 8 : (root.coreCount >= 12 ? 8 : 6)
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    columns: root.coreCount >= 24 ? 8 : 4
                     rowSpacing: 4; columnSpacing: 4
                     Repeater {
                         model: Services.CoreEngineService.perCoreLoad
@@ -232,63 +324,6 @@ ColumnLayout {
                             Behavior on color { ColorAnimation { duration: 400 } }
                         }
                     }
-                }
-            }
-        }
-
-        // RIGHT — history strips (stacked, each fills 50%)
-        ColumnLayout {
-            Layout.preferredWidth: 280
-            Layout.fillHeight: true
-            spacing: Config.ControlConfig.space3
-
-            Rectangle {
-                Layout.fillWidth: true; Layout.fillHeight: true
-                radius: Config.ControlConfig.radiusPill
-                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-                border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-                ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 4
-                    RowLayout { Layout.fillWidth: true; spacing: 6
-                        Text { text: "LOAD HISTORY"; color: Config.ThemeConfig.colors.textDim
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                        Item { Layout.fillWidth: true }
-                        RowLayout { spacing: 4
-                            Rectangle { width: 5; height: 5; radius: 3; color: Config.ThemeConfig.colors.primary }
-                            Text { text: Math.round(Services.CoreEngineService.cpuUsage) + "%"
-                                color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 } }
-                        RowLayout { spacing: 4
-                            Rectangle { width: 5; height: 5; radius: 3; color: Config.ThemeConfig.colors.success }
-                            Text { text: Math.round(Services.CoreEngineService.ramPct) + "%"
-                                color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 } }
-                    }
-                    Item { Layout.fillWidth: true; Layout.fillHeight: true
-                        CoreSparkline { anchors.fill: parent
-                            points: Services.CoreEngineService.cpuHistory
-                            lineColor: Config.ThemeConfig.colors.primary }
-                        CoreSparkline { anchors.fill: parent
-                            points: Services.CoreEngineService.memoryHistory
-                            lineColor: Config.ThemeConfig.colors.success
-                            fillEnabled: false; dashed: true; lineWidth: 1.2 } }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true; Layout.fillHeight: true
-                radius: Config.ControlConfig.radiusPill
-                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-                border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
-                ColumnLayout { anchors.fill: parent; anchors.margins: 8; spacing: 4
-                    RowLayout { Layout.fillWidth: true; spacing: 6
-                        Text { text: "GPU UTIL FLOW"; color: Config.ThemeConfig.colors.textDim
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                        Item { Layout.fillWidth: true }
-                        Text { text: Math.round(Services.GpuService.util) + "%"
-                            color: Config.ThemeConfig.colors.info; font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
-                    }
-                    Item { Layout.fillWidth: true; Layout.fillHeight: true
-                        CoreSparkline { anchors.fill: parent
-                            points: Services.GpuService.gpuHistory
-                            lineColor: Config.ThemeConfig.colors.info } }
                 }
             }
         }
