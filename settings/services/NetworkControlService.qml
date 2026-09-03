@@ -31,6 +31,7 @@ import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config
 import "NetworkControlModel.js" as Model
+import "History.js" as History
 
 Item {
     id: root
@@ -57,6 +58,64 @@ Item {
     // passphrase prompt on "wrong-password" (Omarchy reprompt pattern).
     property string lastConnectError: ""
     signal connectFailed(string ssid, string reasonKey, string reasonLabel)
+
+    // ── TRAFFIC HISTORY — /sys/class/net/<iface>/statistics sampled 1s,
+    // ring-buffered 2-min (History.js, same pattern as CoreEngine).
+    // rxRate/txRate are KB/s deltas, NOT cumulative counters.
+    property var rxHistory: []
+    property var txHistory: []
+    property real rxRate: 0     // KB/s
+    property real txRate: 0     // KB/s
+    property real _lastRxBytes: -1
+    property real _lastTxBytes: -1
+    property real _lastTrafficTick: 0
+
+    Timer {
+        id: trafficTimer
+        interval: 1000
+        running: root.connectionStatus.connected
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root._sampleTraffic()
+    }
+
+    Process {
+        id: trafficProc
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { trafficProc.buffer += d } }
+        onRunningChanged: {
+            if (!running && trafficProc.buffer.length) {
+                var lines = trafficProc.buffer.trim().split("\n")
+                if (lines.length >= 2) {
+                    var rx = parseInt(lines[0]) || 0
+                    var tx = parseInt(lines[1]) || 0
+                    var now = Date.now()
+                    if (root._lastRxBytes >= 0 && root._lastTrafficTick > 0) {
+                        var dt = (now - root._lastTrafficTick) / 1000
+                        if (dt > 0.1) {
+                            root.rxRate = Math.max(0, (rx - root._lastRxBytes) / dt / 1024)
+                            root.txRate = Math.max(0, (tx - root._lastTxBytes) / dt / 1024)
+                        }
+                    }
+                    root._lastRxBytes = rx; root._lastTxBytes = tx; root._lastTrafficTick = now
+                    root.rxHistory = History.appendHistory(root.rxHistory, now, root.rxRate, 120000, 120)
+                    root.txHistory = History.appendHistory(root.txHistory, now, root.txRate, 120000, 120)
+                }
+                trafficProc.buffer = ""
+            }
+        }
+    }
+
+    function _sampleTraffic() {
+        var iface = connectionStatus.iface
+        if (!iface) return
+        if (trafficProc.running) return
+        trafficProc.command = ["sh", "-c",
+            "cat /sys/class/net/" + iface + "/statistics/rx_bytes " +
+            "/sys/class/net/" + iface + "/statistics/tx_bytes"]
+        trafficProc.running = true
+    }
 
     // -------------------------------------------------------------------------
     // NATIVE MODELS — device set + the wifi device + its networks

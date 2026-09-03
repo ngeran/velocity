@@ -165,107 +165,150 @@ ColumnLayout {
     }
 
     // =========================================================================
-    // 2. BODY — summary column | list card (both fit the pane, no scrolling)
+    // 2. BODY — two square info cards side-by-side (ACTIVE LINK | TRAFFIC),
+    // then the full-width networks list below (fits the pane, no scrolling)
     // =========================================================================
+
+    // ── Top row: connectivity + traffic as side-by-side squares ─────────
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Config.ControlConfig.space3
+
+        // ── ACTIVE LINK (square) ────────────────────────────────────────────
+        SettingsCard {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 148
+            accent: Config.ThemeConfig.colors.secondary
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: Config.ControlConfig.space2
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "ACTIVE LINK"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                        color: Config.ThemeConfig.colors.textDim
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        visible: view.linkUp
+                        text: view.cs.signal + "%"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
+                        color: Config.ControlConfig.accent
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO ACTIVE LINK"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
+                    color: view.linkUp ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
+                }
+
+                Row {
+                    Layout.fillWidth: true
+                    visible: view.linkUp && view.cs.signal > 0
+                    spacing: 3
+                    Repeater {
+                        model: 4
+                        Rectangle {
+                            width: (parent.width) / 4 - 3
+                            height: 4; radius: 2
+                            color: index < view.linkBars ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    Stat { label: "IP";    value: view.cs.ip    || "—" }
+                    Stat { label: "IFACE"; value: view.cs.iface || "—" }
+                    Stat { label: "TYPE";  value: (view.cs.type || "—").toUpperCase() }
+                    Item { Layout.fillWidth: true }
+                }
+            }
+        }
+
+        // ── NET TRAFFIC (square) — RX/TX sparklines + current rates ────────
+        SettingsCard {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 148
+            accent: Config.ThemeConfig.colors.info
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: Config.ControlConfig.space2
+
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        text: "NET TRAFFIC"
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
+                        color: Config.ThemeConfig.colors.textDim
+                    }
+                    Item { Layout.fillWidth: true }
+                    RowLayout { spacing: 4
+                        Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.info }
+                        Text { text: Services.NetworkControlService.rxRate < 1024
+                                ? Services.NetworkControlService.rxRate.toFixed(0) + " KB/s ↓"
+                                : (Services.NetworkControlService.rxRate / 1024).toFixed(1) + " MB/s ↓"
+                            color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+                    }
+                    RowLayout { spacing: 4
+                        Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.primary }
+                        Text { text: Services.NetworkControlService.txRate < 1024
+                                ? Services.NetworkControlService.txRate.toFixed(0) + " KB/s ↑"
+                                : (Services.NetworkControlService.txRate / 1024).toFixed(1) + " MB/s ↑"
+                            color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
+                    }
+                }
+
+                // RX (download) sparkline — info violet
+                Item {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    CoreSparkline {
+                        anchors.fill: parent
+                        points: Services.NetworkControlService.rxHistory
+                        lineColor: Config.ThemeConfig.colors.info
+                    }
+                }
+                // TX (upload) sparkline — primary teal (overlaid, dashed)
+                Item {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    CoreSparkline {
+                        anchors.fill: parent
+                        points: Services.NetworkControlService.txHistory
+                        lineColor: Config.ThemeConfig.colors.primary
+                        fillEnabled: false; dashed: true; lineWidth: 1.2
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "2 MIN · auto-scaled"
+                    color: Config.ThemeConfig.colors.textDim; opacity: 0.7
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                }
+            }
+        }
+    }
+
+    // ── Networks list (full width, fills the remaining height) ───────────
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         spacing: Config.ControlConfig.space3
-
-        // ── Left: summary column ──────────────────────────────────────────────
-        ColumnLayout {
-            Layout.preferredWidth: 300
-            Layout.maximumWidth: 340
-            Layout.fillHeight: true
-            spacing: Config.ControlConfig.space3
-
-            SettingsCard {
-                Layout.fillWidth: true
-                accent: Config.ThemeConfig.colors.secondary
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.ControlConfig.space2
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            text: "ACTIVE LINK"
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0
-                            color: Config.ThemeConfig.colors.textDim
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            visible: view.linkUp
-                            text: view.cs.signal + "%"
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 12; font.bold: true
-                            color: Config.ControlConfig.accent
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: view.linkUp ? (view.cs.ssid || view.cs.iface || "CONNECTED") : "NO ACTIVE LINK"
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
-                        color: view.linkUp ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-                        elide: Text.ElideRight
-                    }
-
-                    Row {
-                        Layout.fillWidth: true
-                        visible: view.linkUp && view.cs.signal > 0
-                        spacing: 3
-                        Repeater {
-                            model: 4
-                            Rectangle {
-                                width: (view.cs.iface ? 268 : 268) / 4 - 3
-                                height: 4; radius: 2
-                                color: index < view.linkBars ? Config.ControlConfig.accent : Config.ThemeConfig.colors.border
-                                Behavior on color { ColorAnimation { duration: 150 } }
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        Stat { label: "IP";    value: view.cs.ip    || "—" }
-                        Stat { label: "IFACE"; value: view.cs.iface || "—" }
-                        Item { Layout.fillWidth: true }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-                        Stat { label: "TYPE";  value: (view.cs.type || "—").toUpperCase() }
-                        Item { Layout.fillWidth: true }
-                    }
-                }
-            }
-
-            SettingsCard {
-                Layout.fillWidth: true
-                accent: Config.ThemeConfig.colors.primary
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
-                    Text {
-                        text: "MIN SIGNAL"
-                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8
-                        color: Config.ThemeConfig.colors.textDim
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    FilterSeg { text: "ALL";  value: 0;  active: view.minSignal === 0 }
-                    FilterSeg { text: "≥50%"; value: 50; active: view.minSignal === 50 }
-                    FilterSeg { text: "≥70%"; value: 70; active: view.minSignal === 70 }
-                    Item { Layout.fillWidth: true }
-                }
-            }
-
-            Item { Layout.fillHeight: true }
-        }
 
         // ── Right: networks table (viewport-fit) ─────────────────────────────
         SettingsCard {
@@ -279,7 +322,7 @@ ColumnLayout {
                 Layout.fillHeight: true
                 spacing: 0
 
-                // Card header + visible-of-total count
+                // Card header + visible-of-total count + filter pills
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
@@ -295,6 +338,9 @@ ColumnLayout {
                         color: view.visibleCount < view.filteredNets.length
                                ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
                     }
+                    FilterSeg { text: "ALL";  value: 0;  active: view.minSignal === 0 }
+                    FilterSeg { text: "≥50%"; value: 50; active: view.minSignal === 50 }
+                    FilterSeg { text: "≥70%"; value: 70; active: view.minSignal === 70 }
                     Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
                 }
 
