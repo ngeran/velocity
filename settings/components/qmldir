@@ -50,3 +50,4 @@ StatusBadge 1.0 StatusBadge.qml
 SettingsHeaderCard 1.0 SettingsHeaderCard.qml
 InfoStatRow 1.0 InfoStatRow.qml
 SettingsModule 1.0 SettingsModule.qml
+CoreSystemPane 1.0 CoreSystemPane.qml

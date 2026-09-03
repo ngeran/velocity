@@ -49,13 +49,9 @@ Rectangle {
                 Rectangle {
                     anchors.fill: parent
                     radius: Config.ControlConfig.radiusPill
-                    color: del.active ? Config.ControlConfig.accentSoft
-                           : (navMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.05) : "transparent")
-                    opacity: del.active ? 1.0 : (navMa.containsMouse ? 0.6 : 1.0)
-                    border.color: del.active ? Config.ControlConfig.accent : "transparent"
-                    border.width: 1
+                    color: navMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.05) : "transparent"
+                    opacity: navMa.containsMouse ? 0.6 : 1.0
                     Behavior on color { ColorAnimation { duration: 120 } }
-                    Behavior on border.color { ColorAnimation { duration: 120 } }
                     Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 }
 
@@ -65,21 +61,23 @@ Rectangle {
                     anchors.leftMargin: Config.ControlConfig.space2
                     spacing: Config.ControlConfig.space2
 
-                    // Icon chip
+                    // Icon chip — sage fill marks the active section (no
+                    // background overlay needed on the row itself)
                     Rectangle {
                         width: 26; height: 26
                         radius: Config.ControlConfig.radiusPill
                         anchors.verticalCenter: parent.verticalCenter
-                        color: (del.active || navMa.containsMouse)
-                               ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16)
+                        color: del.active ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.16)
+                               : navMa.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.06)
                                : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surfaceContainer, 0.5)
                         Text {
                             anchors.centerIn: parent
                             text: modelData.icon
                             font.family: Config.ControlConfig.fontNerd
                             font.pixelSize: 13
-                            color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent
-                                                                       : Config.ThemeConfig.colors.textDim
+                            color: del.active ? Config.ThemeConfig.colors.success
+                                   : navMa.containsMouse ? Config.ThemeConfig.colors.text
+                                   : Config.ThemeConfig.colors.textDim
                         }
                     }
 
@@ -91,8 +89,8 @@ Rectangle {
                         font.bold: del.active
                         font.letterSpacing: 0.6
                         anchors.verticalCenter: parent.verticalCenter
-                        color: (del.active || navMa.containsMouse) ? Config.ControlConfig.accent
-                                                                   : Config.ThemeConfig.colors.textDim
+                        color: navMa.containsMouse ? Config.ThemeConfig.colors.text
+                                                   : Config.ThemeConfig.colors.textDim
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                 }
