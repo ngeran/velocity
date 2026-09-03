@@ -72,12 +72,23 @@ ColumnLayout {
                         font.bold: true; font.letterSpacing: 0.8 }
                 }
 
-                // Big value + unit
-                RowLayout { spacing: 3
-                    Text { text: bigValue; color: bigColor
-                        font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 42; font.bold: true }
-                    Text { text: bigUnit; color: Config.ThemeConfig.colors.textDim
-                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 14 }
+                // Big value — centered inside a bordered square chip
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        width: valueChip.implicitWidth + 24; height: 56
+                        radius: Config.ControlConfig.radiusSmall
+                        color: "transparent"
+                        border.color: mcard.bigColor; border.width: 1
+                        opacity: 0.7
+                        RowLayout { id: valueChip; anchors.centerIn: parent; spacing: 2
+                            Text { text: mcard.bigValue; color: mcard.bigColor
+                                font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 42; font.bold: true }
+                            Text { text: mcard.bigUnit; color: Config.ThemeConfig.colors.textDim
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 14 }
+                        }
+                    }
                     Item { Layout.fillWidth: true }
                 }
 
