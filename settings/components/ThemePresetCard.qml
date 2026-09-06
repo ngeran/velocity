@@ -15,12 +15,23 @@ Rectangle {
     // =========================================================================
     property string themeName: ""
     property bool isActive: false
-    // Overridable size — defaults preserve every existing call site's
-    // 160x90 look. Pass these explicitly when the card should flex to
-    // fill a GridLayout cell instead (see ThemeModule's curated grid).
+    // Full 17-token palette override — set for CUSTOM palettes (ThemeModule's
+    // saved-theme grid): the card then previews the user's saved colors
+    // instead of looking the name up in the curated preset table.
+    property var paletteOverride: null
+    // Show the always-visible EDIT / ✕ corner actions (custom palettes only).
+    // When on, the active ✓ is suppressed — the accent border + left bar +
+    // bold name already mark the active card, and the corner is needed for
+    // the actions.
+    property bool showActions: false
+    // Overridable size — 148×56 is the compact curated-grid footprint
+    // (ThemeModule). Pass these explicitly when a card should flex to
+    // fill a GridLayout cell instead.
     property real cardWidth: 148
-    property real cardHeight: 64
+    property real cardHeight: 56
     signal clicked()
+    signal editClicked()
+    signal deleteClicked()
 
     // =========================================================================
     // RECONCILED PRESET COLOR MAP DICTIONARY
@@ -28,8 +39,9 @@ Rectangle {
     readonly property var themeColors: getThemeColors(themeName)
 
     function getThemeColors(name) {
-        // Derive preview colors from ThemePresets (single source of truth)
-        var palette = Config.ThemePresets.getPalette(name);
+        // Derive preview colors from the override if set (custom palettes),
+        // else ThemePresets (single source of truth for curated themes)
+        var palette = root.paletteOverride || Config.ThemePresets.getPalette(name);
         if (!palette) {
             // Fallback to OLED Pure Black if theme not found
             palette = Config.ThemePresets.getPalette("OLED Pure Black");
@@ -71,12 +83,8 @@ Rectangle {
                          // color used to tint every card differently; the
                          // swatch strip is the only place palette color
                          // should show up now.
-    border.color: {
-        if (isActive) return themeColors.accent
-        if (interactiveClickArea.activeFocus) return Config.ThemeConfig.colors.primary
-        return Config.ThemeConfig.colors.border
-    }
-    border.width: (isActive || interactiveClickArea.activeFocus) ? 2 : 1
+    border.color: isActive ? themeColors.accent : Config.ThemeConfig.colors.border
+    border.width: isActive ? 2 : 1
     radius: 0 // Hard enforcement of sharp corners
 
     // Active status accent vertical indicator strip bar (left-aligned)
@@ -93,15 +101,17 @@ Rectangle {
     }
 
     // Active checkmark — top-right flag on the currently-applied preset.
+    // Suppressed on action cards (custom palettes): the corner hosts the
+    // always-visible EDIT / ✕ there.
     Text {
-        visible: root.isActive
+        visible: root.isActive && !root.showActions
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.topMargin: 3
         anchors.rightMargin: 5
         text: "✓"
         font.family: Config.SettingsConfig.fontFamily
-        font.pixelSize: 12
+        font.pixelSize: 10
         font.bold: true
         color: themeColors.accent
     }
@@ -111,10 +121,10 @@ Rectangle {
             fill: parent
             leftMargin:  10
             rightMargin: 10
-            topMargin:   8
-            bottomMargin: 8
+            topMargin:   6
+            bottomMargin: 6
         }
-        spacing: 5
+        spacing: 4
 
         // Theme String Identification Label Node
         Text {
@@ -151,21 +161,15 @@ Rectangle {
     // =========================================================================
     // INTERACTION MOUSE HANDLING NODE LAYER
     // =========================================================================
+    // NOTE: no focus/Keys keyboard handling — every card used to declare
+    // focus:true, so the LAST card created (Dracula) permanently held
+    // activeFocus and rendered a second 2px primary border alongside the
+    // actually-active preset. The shell does no keyboard navigation here.
     MouseArea {
         id: interactiveClickArea
         anchors.fill: parent
         cursorShape:  Qt.PointingHandCursor
         hoverEnabled: true
-
-        // Keyboard navigation support
-        focus: true
-        Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Space) {
-                root.clicked()
-                event.accepted = true
-            }
-        }
-
         onClicked: root.clicked()
     }
 
@@ -178,6 +182,52 @@ Rectangle {
 
         Behavior on opacity {
             NumberAnimation { duration: Config.SettingsConfig.animDurationFast; easing.type: Easing.OutQuad }
+        }
+    }
+
+    // =========================================================================
+    // CORNER ACTIONS — always visible, custom palettes only (showActions).
+    // Declared LAST so these MouseAreas sit above the card-wide click area.
+    // EDIT emits editClicked() (caller loads the palette into the manual
+    // editor); ✕ emits deleteClicked().
+    // =========================================================================
+    Row {
+        visible: root.showActions
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 3
+        anchors.rightMargin: 5
+        spacing: 6
+
+        Text {
+            text: "EDIT"
+            font.family: Config.SettingsConfig.fontFamily
+            font.pixelSize: 8
+            font.bold: true
+            color: cardEditMA.containsMouse ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
+            Behavior on color { ColorAnimation { duration: 120 } }
+            MouseArea {
+                id: cardEditMA
+                anchors.fill: parent
+                anchors.margins: -3   // a little slack around 8px type
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.editClicked()
+            }
+        }
+
+        Text {
+            text: "✕"
+            font.family: Config.SettingsConfig.fontFamily
+            font.pixelSize: 10
+            color: cardDelMA.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
+            Behavior on color { ColorAnimation { duration: 120 } }
+            MouseArea {
+                id: cardDelMA
+                anchors.fill: parent
+                anchors.margins: -3
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.deleteClicked()
+            }
         }
     }
 }

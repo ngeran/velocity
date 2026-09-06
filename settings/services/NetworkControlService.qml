@@ -43,7 +43,15 @@ Item {
         iface: "",
         ssid: "",
         ip: "",
-        signal: 0
+        signal: 0,
+        subnet: "",       // "/24" — from IP4.ADDRESS
+        gateway: "",      // from ip route / IP4.GATEWAY
+        dns: "",          // first IP4.DNS entry
+        mac: "",          // GENERAL.HWADDR
+        linkSpeed: "",    // GENERAL.SPEED, e.g. "144 Mb/s"
+        band: "",         // "2.4 GHz" / "5 GHz" — from enriched AP freq
+        security: "",     // WPA2/WPA3/... of the connected network
+        wifiEnabled: true // nmcli radio wifi state
     })
 
     property var wifiNetworks: []
@@ -66,14 +74,22 @@ Item {
     property var txHistory: []
     property real rxRate: 0     // KB/s
     property real txRate: 0     // KB/s
+    property real rxTotalMB: 0  // cumulative since shell start (for the card footer)
+    property real txTotalMB: 0
     property real _lastRxBytes: -1
     property real _lastTxBytes: -1
     property real _lastTrafficTick: 0
+    property bool _trafficLogged: false
+
+    // Section-scoped (same lease as the scanner): the traffic card only exists
+    // while the network section is on screen.
+    readonly property bool _sectionVisible: Config.SharedState.dashboardVisible
+          && Config.SharedState.controlSection === "network"
 
     Timer {
         id: trafficTimer
         interval: 1000
-        running: root.connectionStatus.connected
+        running: root._sectionVisible && root.connectionStatus.connected
         repeat: true
         triggeredOnStart: true
         onTriggered: root._sampleTraffic()
@@ -83,7 +99,10 @@ Item {
         id: trafficProc
         command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { trafficProc.buffer += d } }
+        // SplitParser emits PER LINE — re-join with '\n' or the two-counter
+        // split below collapses to one line and rates never compute (the old
+        // "net traffic shows no data" bug).
+        stdout: SplitParser { onRead: function(d) { trafficProc.buffer += d + "\n" } }
         onRunningChanged: {
             if (!running && trafficProc.buffer.length) {
                 var lines = trafficProc.buffer.trim().split("\n")
@@ -96,6 +115,12 @@ Item {
                         if (dt > 0.1) {
                             root.rxRate = Math.max(0, (rx - root._lastRxBytes) / dt / 1024)
                             root.txRate = Math.max(0, (tx - root._lastTxBytes) / dt / 1024)
+                            root.rxTotalMB += root.rxRate * dt / 1024
+                            root.txTotalMB += root.txRate * dt / 1024
+                            if (!root._trafficLogged && (root.rxRate > 1 || root.txRate > 1)) {
+                                root._trafficLogged = true
+                                console.log("[NetControl] traffic live: rx " + root.rxRate.toFixed(0) + " KB/s iface " + root.connectionStatus.iface)
+                            }
                         }
                     }
                     root._lastRxBytes = rx; root._lastTxBytes = tx; root._lastTrafficTick = now
@@ -109,12 +134,54 @@ Item {
 
     function _sampleTraffic() {
         var iface = connectionStatus.iface
-        if (!iface) return
+        if (!iface) {
+            if (connectionStatus.connected) console.log("[NetControl] traffic: connected but no iface — skipping sample")
+            return
+        }
         if (trafficProc.running) return
         trafficProc.command = ["sh", "-c",
             "cat /sys/class/net/" + iface + "/statistics/rx_bytes " +
             "/sys/class/net/" + iface + "/statistics/tx_bytes"]
         trafficProc.running = true
+    }
+
+    // ── LINK QUALITY MONITOR — gated 1-of-1 ping (5s) while the section is on
+    // screen and a link is up. Gives the telemetry card latency / jitter (EMA
+    // of |Δ|) / loss (failures in the last 20 probes). -1 latency = unknown.
+    property real latencyMs: -1
+    property real jitterMs: 0
+    property real lossPct: 0
+    property var _pingResults: []   // last 20 booleans
+
+    Timer {
+        id: pingTimer
+        interval: 5000
+        running: root._sectionVisible && root.connectionStatus.connected
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: if (!pingProc.running) pingProc.running = true
+    }
+
+    Process {
+        id: pingProc
+        command: ["ping", "-c", "1", "-W", "1", "1.1.1.1"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { pingProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var m = pingProc.buffer.match(/time=([\d.]+)/)
+            if (m) {
+                var v = parseFloat(m[1])
+                if (root.latencyMs >= 0)
+                    root.jitterMs = root.jitterMs * 0.7 + Math.abs(v - root.latencyMs) * 0.3
+                root.latencyMs = v
+            }
+            root._pingResults = root._pingResults.concat([m !== null]).slice(-20)
+            var fails = 0
+            for (var i = 0; i < root._pingResults.length; i++) if (!root._pingResults[i]) fails++
+            root.lossPct = root._pingResults.length ? fails / root._pingResults.length * 100 : 0
+            pingProc.buffer = ""
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -193,7 +260,8 @@ Item {
             connected: true,
             iface: d.name,
             ssid: (isWifi && n) ? n.name : "",
-            signal: (isWifi && n) ? Math.round(n.signalStrength * 100) : 0
+            signal: (isWifi && n) ? Math.round(n.signalStrength * 100) : 0,
+            security: (isWifi && n) ? _secString(n.security) : ""
         })
     }
 
@@ -216,7 +284,10 @@ Item {
     }
 
     function _collectWifi() {
-        if (!wifiDev) { root.wifiNetworks = []; return }
+        if (!wifiDev) {
+            if (root.wifiNetworks.length > 0) root.wifiNetworks = []
+            return
+        }
         const nets = wifiDev.networks.values || []
         const best = {}
         for (let i = 0; i < nets.length; i++) {
@@ -226,8 +297,10 @@ Item {
             const sig = Math.round((n.signalStrength || 0) * 100)
             const row = {
                 ssid: ssid, signal: sig, security: _secString(n.security),
-                inUse: n.connected, chan: "", bssid: ""
+                inUse: n.connected, chan: "", bssid: "", band: ""
             }
+            const e = root._enrichBySsid[ssid]       // chan/bssid from nmcli fork
+            if (e) { row.chan = e.chan; row.bssid = e.bssid; row.band = e.band; row.freq = e.freq || 0 }
             const existing = best[ssid]
             if (!existing || sig > existing.signal) best[ssid] = row
             else if (row.inUse) best[ssid].inUse = true
@@ -236,24 +309,148 @@ Item {
         for (let s in best)
             if (Object.prototype.hasOwnProperty.call(best, s)) arr.push(best[s])
         arr.sort(function(a, b) { return b.signal - a.signal })
+        // Reassign ONLY on real content change: a new array identity resets the
+        // section list's Repeater (every row delegate destroyed + recreated).
+        // The sweep (3s) and networks.valuesChanged (fires per network while a
+        // scan settles — see the journal bursts) would otherwise churn the rows
+        // constantly, killing clicks mid-press and the inline password editor.
+        if (_sameWifiList(root.wifiNetworks, arr)) return
         root.wifiNetworks = arr
     }
 
+    // Position-wise comparison of two collected lists (both sorted the same
+    // way, so equal content lands in equal slots).
+    function _sameWifiList(a, b) {
+        if (a.length !== b.length) return false
+        for (let i = 0; i < a.length; i++) {
+            const x = a[i], y = b[i]
+            if (x.ssid !== y.ssid || x.signal !== y.signal ||
+                x.security !== y.security || x.inUse !== y.inUse ||
+                x.chan !== y.chan || x.bssid !== y.bssid) return false
+        }
+        return true
+    }
+
     // -------------------------------------------------------------------------
-    // IPv4 PROBE — not exposed natively; gated one-shot
+    // LINK PROBE — one gated fork per sweep for everything the native models
+    // don't expose: route (src + via gateway), device details (HWADDR, SPEED,
+    // IP4 address/subnet, DNS), and the wifi radio state.
     // -------------------------------------------------------------------------
     Process {
-        id: ipProbe
-        command: ["sh", "-c", "ip -4 route get 1 2>/dev/null"]
+        id: linkProbe
+        command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { ipProbe.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { linkProbe.buffer += data + "\n" } }
         onRunningChanged: {
-            if (!running) {
-                var m = ipProbe.buffer.match(/src\s+([\d.]+)/)
-                root._setStatus({ ip: m ? m[1] : "" })
-                ipProbe.buffer = ""
+            if (running) return
+            root._absorbLinkProbe(linkProbe.buffer)
+            linkProbe.buffer = ""
+        }
+    }
+
+    function _sampleLink() {
+        if (linkProbe.running) return
+        var iface = connectionStatus.iface || "any"
+        linkProbe.command = ["sh", "-c",
+            "ip -4 route get 1 2>/dev/null;" +
+            "nmcli device show " + iface + " 2>/dev/null;" +
+            "nmcli radio wifi 2>/dev/null"]
+        linkProbe.running = true
+    }
+
+    function _absorbLinkProbe(out) {
+        var patch = {}
+        var lines = out.split("\n")
+        for (var i = 0; i < lines.length; i++) {
+            var L = lines[i], m
+            if ((m = L.match(/IP4\.ADDRESS\[\d+\]:\s*([\d.]+)\/(\d+)/))) { patch.ip = m[1]; patch.subnet = "/" + m[2] }
+            else if ((m = L.match(/IP4\.GATEWAY:\s*([\d.]+)/))) patch.gateway = m[1]
+            else if ((m = L.match(/IP4\.DNS\[\d+\]:\s*([\d.]+)/)) && !patch.dns) patch.dns = m[1]
+            else if ((m = L.match(/GENERAL\.HWADDR:\s*(\S+)/))) patch.mac = m[1]
+            else if ((m = L.match(/GENERAL\.SPEED:\s*(.+)$/))) patch.linkSpeed = m[1].trim()
+            else if ((m = L.match(/src\s+([\d.]+)/)) && !patch.ip) patch.ip = m[1]
+            else if ((m = L.match(/via\s+([\d.]+)/)) && !patch.gateway) patch.gateway = m[1]
+            else if (L.trim() === "enabled" || L.trim() === "disabled") patch.wifiEnabled = (L.trim() === "enabled")
+        }
+        if (Object.keys(patch).length) _setStatus(patch)
+    }
+
+    // -------------------------------------------------------------------------
+    // AP ENRICHMENT — chan/bssid/band are not on the native networks model.
+    // One bounded `nmcli -t dev wifi list` fork (list only, no forced scan)
+    // after each RESCAN and at most every 20s while the section is visible,
+    // merged into the existing rows by SSID. Terse output escapes ':' inside
+    // values as '\:' — swap for a sentinel BEFORE splitting (see memory note).
+    // -------------------------------------------------------------------------
+    property real _lastEnrich: 0
+
+    Process {
+        id: enrichProc
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { enrichProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            root._absorbEnrich(enrichProc.buffer)
+            enrichProc.buffer = ""
+        }
+    }
+
+    function _sampleEnrich() {
+        if (enrichProc.running) return
+        var now = Date.now()
+        if (now - root._lastEnrich < 20000) return
+        root._lastEnrich = now
+        enrichProc.command = ["sh", "-c",
+            "nmcli -t -f SSID,BSSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list 2>/dev/null"]
+        enrichProc.running = true
+    }
+
+    // Enrichment cache (ssid → {bssid, chan, band}) — merged into every row
+    // _collectWifi builds, so the native resync can never wipe it (that was
+    // producing a wipe/re-add churn every sweep).
+    property var _enrichBySsid: ({})
+
+    function _absorbEnrich(out) {
+        var bySsid = {}
+        var lines = out.split("\n")
+        for (var i = 0; i < lines.length; i++) {
+            var parts = lines[i].split("\\:").join("\u0001").split(":")
+            if (parts.length < 5) continue
+            var ssid = parts[0].split("\u0001").join(":")
+            if (!ssid) continue                      // hidden AP — nothing to merge onto
+            var freq = parseInt(parts[3]) || 0
+            bySsid[ssid] = {
+                bssid: parts[1].split("\u0001").join(":").toLowerCase(),
+                chan: parts[2] || "--",
+                freq: freq,
+                band: freq >= 5000 ? "5 GHz" : (freq > 0 ? "2.4 GHz" : "")
             }
         }
+        root._enrichBySsid = bySsid
+        _collectWifi()                               // single merge path (no-churn)
+        var active = bySsid[connectionStatus.ssid]
+        if (active && connectionStatus.band !== active.band) _setStatus({ band: active.band })
+    }
+
+    // -------------------------------------------------------------------------
+    // WIFI RADIO — nmcli radio wifi on/off (user-triggered, header toggle)
+    // -------------------------------------------------------------------------
+    Process {
+        id: radioProc
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { radioProc.buffer += d } }
+        onExited: {
+            radioProc.buffer = ""
+            root.refreshStatus()
+        }
+    }
+
+    function toggleWifi() {
+        radioProc.command = ["sh", "-c",
+            "nmcli radio wifi " + (connectionStatus.wifiEnabled ? "off" : "on")]
+        radioProc.running = true
+        CommandService.pushLog("[network] wifi radio " + (connectionStatus.wifiEnabled ? "off" : "on"), "output")
     }
 
     // -------------------------------------------------------------------------
@@ -270,7 +467,8 @@ Item {
         onTriggered: {
             root._syncNativeStatus()
             root._collectWifi()
-            if (!ipProbe.running) ipProbe.running = true
+            root._sampleLink()
+            root._sampleEnrich()
         }
     }
 
@@ -299,6 +497,8 @@ Item {
         onTriggered: {
             root.scanning = false
             root._collectWifi()
+            root._lastEnrich = 0        // fresh scan → always re-enrich
+            root._sampleEnrich()
         }
     }
 
@@ -328,7 +528,7 @@ Item {
     function refreshStatus() {
         root._syncNativeStatus()
         root._collectWifi()
-        if (!ipProbe.running) ipProbe.running = true
+        root._sampleLink()
     }
 
     // -------------------------------------------------------------------------

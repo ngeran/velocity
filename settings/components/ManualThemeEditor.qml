@@ -138,6 +138,15 @@ Item {
             Services.ThemeService.applyManualOverride(key, v)
     }
 
+    // Called from ThemeModule's CUSTOM rows (EDIT) after the palette is
+    // applied live — pre-fills the save field so the next SAVE updates this
+    // scheme in place (saveCustomTheme dedupes by name) instead of creating
+    // a duplicate.
+    function prefillSchemeName(name) {
+        schemeNameInput.text = name
+        schemeNameInput.forceActiveFocus()
+    }
+
     // -------------------------------------------------------------------------
     // MAIN LAYOUT
     // -------------------------------------------------------------------------
@@ -381,6 +390,20 @@ Item {
                     selectByMouse: true
                     text: ""
                 }
+
+                // Placeholder — SAVE with an empty name silently does nothing
+                // (saveCustomTheme early-returns); this says why the field
+                // matters instead of leaving a mute box.
+                Text {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    verticalAlignment: Text.AlignVCenter
+                    visible: schemeNameInput.text.length === 0 && !schemeNameInput.activeFocus
+                    text: "name your palette, then SAVE"
+                    font.pixelSize: 9
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.textDim
+                }
             }
 
             Rectangle {
@@ -432,108 +455,6 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
-                }
-            }
-        }
-
-        // ── Saved schemes (max 5) — compact horizontal chips that wrap.
-        // Up to 5 fit on one row (~168px each × 5 = 840px); wraps to a 2nd
-        // row only if the editor narrows. Far more compact than vertical rows.
-        Text {
-            Layout.fillWidth: true
-            visible: Services.ThemeService.customThemes.length > 0
-            text: "SAVED (" + Services.ThemeService.customThemes.length + "/5)"
-            font.pixelSize: 8
-            font.bold: true
-            font.family: Config.SettingsConfig.fontFamily
-            color: Config.ThemeConfig.colors.textDim
-        }
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: 6
-
-            Repeater {
-                model: Services.ThemeService.customThemes
-                delegate: Rectangle {
-                    width: 198
-                    height: 26
-                    color: Config.ThemeConfig.colors.background
-                    border.color: Config.ThemeConfig.colors.border
-                    border.width: 1
-
-                    Row {
-                        anchors.centerIn: parent
-                        spacing: 6
-
-                        // 3-swatch preview
-                        Row {
-                            spacing: 2
-                            Repeater {
-                                model: [modelData.colors.secondary, modelData.colors.primary, modelData.colors.accent]
-                                delegate: Rectangle { width: 10; height: 10; color: modelData; y: 3 }
-                            }
-                        }
-
-                        Text {
-                            text: modelData.name
-                            color: Config.ThemeConfig.colors.text
-                            font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            width: 44
-                            elide: Text.ElideRight
-                        }
-
-                        // EDIT — load this palette into the editor for tweaking.
-                        // Applies the colors live AND pre-fills the name field so
-                        // the next SAVE updates this scheme in place (saveCustomTheme
-                        // dedupes by name) rather than creating a duplicate.
-                        Text {
-                            text: "EDIT"
-                            color: editSchemeArea.containsMouse ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            MouseArea {
-                                id: editSchemeArea
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    Services.ThemeService.applyCustomTheme(modelData.name)
-                                    schemeNameInput.text = modelData.name
-                                    schemeNameInput.forceActiveFocus()
-                                }
-                            }
-                        }
-
-                        Text {
-                            text: "APPLY"
-                            color: applySchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            MouseArea {
-                                id: applySchemeArea
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
-                            }
-                        }
-
-                        Text {
-                            text: "✕"
-                            color: delSchemeArea.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 11
-                            font.family: Config.SettingsConfig.fontFamily
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            MouseArea {
-                                id: delSchemeArea
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
-                            }
-                        }
-                    }
                 }
             }
         }

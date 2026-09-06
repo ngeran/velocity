@@ -43,6 +43,36 @@ Item {
         return ms.length > 0 ? ms[0] : null
     }
 
+    // Selection — which monitor the Display controls target ("" = focused).
+    // The arrangement canvas sets this by clicking a tile.
+    property string selectedName: ""
+    readonly property var target: {
+        var ms = root.monitors
+        if (root.selectedName !== "")
+            for (var i = 0; i < ms.length; i++)
+                if (ms[i].name === root.selectedName) return ms[i]
+        return root.primary
+    }
+
+    // IDENTIFY — flash every monitor's name via a batched hyprctl notify
+    // (omarchy-screens pattern, minus its python driver).
+    Process {
+        id: identifyProc
+        command: []; running: false
+    }
+
+    function identify() {
+        var parts = []
+        var ms = root.monitors
+        for (var i = 0; i < ms.length; i++) {
+            var label = ((ms[i].make + " " + ms[i].model).trim() || ms[i].desc || "Display")
+            parts.push("notify -1 4000 \"rgb(bb9af7)\" " + ms[i].name + " · " + label)
+        }
+        if (parts.length === 0) return
+        identifyProc.command = ["hyprctl", "--batch", parts.join("; ")]
+        identifyProc.running = true
+    }
+
     // ── capability (proven on this box: MPG321UX QD-OLED) ──────────────────
     readonly property bool hdrCapable: true   // cm hdr ⇄ srgb flips live
     readonly property bool vrrCapable: true   // EDID HDMI-Forum VSDB present
@@ -110,7 +140,7 @@ Item {
     // over: { mode, scale, bitdepth, vrr, cm, sdrbrightness, sdrsaturation,
     //         sdr_min_luminance, sdr_max_luminance }  (undefined = keep live)
     function currentModeString() {
-        var p = primary
+        var p = target
         if (!p) return "preferred"
         // Trim trailing zeros: 119.88 stays, 60.00 → 60
         var hz = String(parseFloat(p.refreshHz.toFixed(2)))
@@ -118,14 +148,14 @@ Item {
     }
 
     function liveBitdepth() {
-        var p = primary
+        var p = target
         if (!p) return 10
         // XBGR2101010/ARGB2101010 → 10-bit; XRGB8888/ARGB8888 → 8-bit
         return (p.format.indexOf("2101010") !== -1 || p.format.indexOf("101010") !== -1) ? 10 : 8
     }
 
     function ruleString(over) {
-        var p = primary
+        var p = target
         if (!p) return ""
         var o = over || {}
         var mode = o.mode !== undefined ? o.mode : currentModeString()
@@ -136,6 +166,10 @@ Item {
         var s = "hl.monitor({ output = '" + p.name + "', mode = '" + mode
               + "', position = '" + pos + "', scale = " + scale
               + ", bitdepth = " + bd + ", vrr = " + vrr
+        // transform only when rotated (or explicitly requested) — never emit
+        // a zero transform that could surprise an untested attr path.
+        var tf = o.transform !== undefined ? o.transform : p.transform
+        if (tf !== 0) s += ", transform = " + tf
         // cm + SDR tune attrs only when HDR is live (or explicitly requested) —
         // matches the plugin's emission rules and keeps SDR minimal.
         var cm = o.cm !== undefined ? o.cm : p.colorPreset
@@ -323,7 +357,7 @@ Item {
     }
 
     function stageToNix() {
-        var p = primary
+        var p = target
         if (!p) return
         var text = nixRuleText
         var liveMode = currentModeString()
@@ -392,6 +426,7 @@ Item {
                     physW:       m.physicalWidth || 0,
                     physH:       m.physicalHeight || 0,
                     focused:     !!m.focused,
+                    activeWs:    m.activeWorkspace ? (m.activeWorkspace.id || 0) : 0,
                     modes:       root._parseModes(m.availableModes || "")
                 })
             }

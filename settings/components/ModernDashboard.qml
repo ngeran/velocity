@@ -41,10 +41,10 @@ Item {
     property bool windowShown: false
     onWindowShownChanged: Config.SharedState.dashboardVisible = windowShown
 
-    // Persisted Core-tab sub-section (processors/gpu/memoryenv/lcd). The Core
-    // tab is lazy-loaded (destroyed when the panel hides), so without this its
-    // `active` selection would reset to "processors" on every reopen.
-    property string coreActiveSection: "processors"
+    // Core-tab deep-link: IPC openCore(section) sets these; the Core wrapper
+    // consumes them on its next entry, so a plain Core click lands on SYSTEM.
+    property string coreActiveSection: "system"
+    property bool coreDeepLink: false
 
     // =========================================================================
     // PUBLIC FUNCTIONS
@@ -67,12 +67,19 @@ Item {
             if (navBar.tabModel[i].key === "core") { idx = i; break }
         }
         if (idx >= 0) root.currentTab = idx
-        root.coreActiveSection = section || "processors"
+        root.coreActiveSection = section || "system"
+        root.coreDeepLink = true
     }
 
     function openSettingsTab() {
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "settings") { root.currentTab = i; break }
+        }
+    }
+
+    function openThemeTab() {
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "theme") { root.currentTab = i; break }
         }
     }
 
@@ -312,11 +319,20 @@ Item {
 
             sourceComponent: Component {
                 Components.CoreEngineTab {
+                    id: coreTab
                     anchors.fill: parent
-                    // Restore the persisted sub-section (the tab is recreated on
-                    // each reopen) and keep it in sync as the user navigates.
-                    Component.onCompleted: active = root.coreActiveSection
-                    onActiveChanged: root.coreActiveSection = active
+                    // Entering Core always lands on SYSTEM. An IPC openCore()
+                    // deep-link overrides that entry exactly once (fires on the
+                    // visible transition, so it also works at creation time).
+                    onVisibleChanged: {
+                        if (!visible) return
+                        if (root.coreDeepLink) {
+                            coreTab.active = root.coreActiveSection
+                            root.coreDeepLink = false
+                        } else {
+                            coreTab.active = "system"
+                        }
+                    }
                 }
             }
         }

@@ -24,29 +24,20 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Config.ControlConfig.space4
-        spacing: Config.ControlConfig.space3
+        anchors.margins: Config.ControlConfig.space3
+        spacing: Config.ControlConfig.space2
 
         // --- Section header card ---
+        // NETWORK and DISPLAY render their own full mockup headers (breadcrumb ·
+        // title · badges · actions) inside their views — a generic header here
+        // would duplicate them and eat ~70px of pane height.
         SettingsHeaderCard {
             Layout.fillWidth: true
+            visible: body.activeSection !== "network" && body.activeSection !== "display"
             eyebrow: "CONTROLS"
-            title: body.activeSection === "network"   ? "Network"
-                 : body.activeSection === "bluetooth" ? "Bluetooth"
+            title: body.activeSection === "bluetooth" ? "Bluetooth"
                  : body.activeSection === "audio"     ? "Audio"
-                 : body.activeSection === "display"   ? "Display"
                  : "Control"
-            subtitle: body.activeSection === "network"
-                      ? (Services.NetworkControlService.connectionStatus.connected
-                         ? (Services.NetworkControlService.connectionStatus.ssid || "Connected")
-                           + " · " + (Services.NetworkControlService.connectionStatus.ip || "no IP")
-                         : "Not connected — scan below")
-                      : ""
-            StatusBadge {
-                visible: body.activeSection === "network"
-                label: Services.NetworkControlService.connectionStatus.connected ? "STABLE" : "OFFLINE"
-                kind: Services.NetworkControlService.connectionStatus.connected ? "ok" : "err"
-            }
         }
 
         // --- Section views (exactly one visible; it fills the pane) ---

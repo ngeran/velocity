@@ -179,12 +179,19 @@ ShellRoot {
             dashboard.openSettingsTab()
         }
 
+        // Deep-link to the Theme tab (presets + custom palettes + editor)
+        function openThemeTab() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openThemeTab()
+        }
+
         // Deep-link to the Core tab (defaults to Processors; section keys:
         // processors | gpu | memoryenv | lcd | events)
         function openCore(section: string) {
             root.shown = true
             panelWindow.visible = true
-            dashboard.openCoreTab(section || "processors")
+            dashboard.openCoreTab(section || "system")
         }
     }
 

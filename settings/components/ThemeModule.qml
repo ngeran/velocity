@@ -4,23 +4,34 @@
 // One screen, no scrolling.
 //
 // Layout (canvas ≈ 1052×592 on a 4K display):
-//   ┌─ HEADER: name/source/[OLED] toggle │ spectrum skyline ──────────────┐
+//   ┌─ HEADER: [OLED] toggle │ spectrum skyline (no theme name — the      ┐
+//   │                          active card already marks it ✓)            │
 //   ├──────────────────────────────────────────────────────────────────── ┤ ← thin border
 //   │ CURATED PRESETS (2×3)   ││  MANUAL EDITOR                          │
-//   │  small preset cards     ││  token grid + actions + save/schemes    │
+//   │  small preset cards     ││  token grid + actions + save row        │
+//   │ ────────────────        ││                                          │
+//   │ CUSTOM (n/5) — same    ││                                          │
+//   │  preset cards + EDIT ✕ ││                                          │
 //   └──────────────────────────┴──────────────────────────────────────────┘
 //               ↑ thin vertical border separates the two sections
 //
-// Header is a single pure-black panel (was two separate bordered cards):
-// identity + a bracket-style "[ OLED ● ]" toggle on the left, a static
-// spectrum "skyline" on the right whose bar heights are set by token tier
-// (structural low, semantic mid, accent tall) — no hover state needed.
-// Its height (64px) matches the curated preset cards below it so the whole
-// screen reads on one consistent scale.
+// Header is a slim pure-black strip (32px): the bracket-style "[ OLED ● ]"
+// toggle and a static spectrum "skyline" whose bar heights are set by token
+// tier (structural low, semantic mid, accent tall). The active theme's NAME
+// used to be shown here too — dropped as redundant (the active card in the
+// grid carries ✓ + accent border + bold name). It was a 64px identity card
+// before that.
 //
-// Curated is a narrow 2×3 grid of compact 148×64 pure-black cards, sized to
+// Curated is a narrow 2×3 grid of compact 148×56 pure-black cards, sized to
 // their natural footprint (not stretched) so the MANUAL EDITOR gets the
-// width it needs for its 3-column token grid.
+// width it needs for its 3-column token grid. CUSTOM palettes (user-saved,
+// max 5) live DIRECTLY UNDER the curated grid as the SAME cards (ThemePre-
+// setCard with a paletteOverride) plus always-visible EDIT / ✕ corner
+// actions — they are themes you apply, so they group with the presets, not
+// with the editor that builds them (they used to be chips at the bottom of
+// the editor). All 5 fit a ~520px-tall panel; shorter panels clamp by
+// visibility (wifi-list pattern: delegates stay alive, footer counts the
+// clipped remainder).
 // =============================================================================
 
 import QtQuick
@@ -72,96 +83,73 @@ Item {
         var cols = Config.ThemeConfig.colors
         for (var i = 0; i < root.spectrumTokens.length; i++) {
             var c = cols[root.spectrumTokens[i].key]
-            if (c && !seen[c]) { seen[c] = true; out.push({ key: root.spectrumTokens[i].key, color: c }) }
+            if (c && !seen[c]) { seen[c] = true; out.push({ key: root.spectrumTokens[i].key, color: c, tier: root.spectrumTokens[i].tier }) }
         }
         return out
     }
 
+    // Grid-row capacity of the custom viewport (56px cards + 8px gap, two
+    // per row — 5 saved palettes = 3 rows). Cards are clamped by VISIBILITY,
+    // never by slicing the model — same rationale as the wifi list (fresh
+    // arrays destroy delegates mid-interaction).
+    readonly property int customCapacityRows: Math.max(1, Math.floor((customViewport.height + 8) / 64))
+
     ColumnLayout {
         anchors.fill: parent
-        spacing: 10
+        spacing: 8
 
         // =====================================================================
-        // 1. HEADER — single merged panel: identity + bracket toggle on the
-        //    left, spectrum skyline on the right. One card, one hairline
-        //    divider, no hover states. Height matches the curated preset
-        //    card (64px) so the whole screen reads on one consistent scale.
+        // 1. HEADER — slim strip (32px): [ OLED ● ] toggle + the spectrum
+        //    skyline. The theme NAME used to live here too — redundant: the
+        //    active card in the grid already carries ✓ + accent border +
+        //    bold name. Was a 64px identity card before that.
         // =====================================================================
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            Layout.preferredHeight: 32
             color: "#000000"
             border.color: Config.ThemeConfig.colors.border
             border.width: 1
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 16
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 12
 
-                // ── Identity block ──
-                ColumnLayout {
-                    Layout.preferredWidth: 190
-                    Layout.maximumWidth: 190   // PIN it — preferredWidth alone is just a
-                                               // preference; without a cap the RowLayout
-                                               // floats this column wide and starves the
-                                               // fillWidth spectrum to ~1px.
-                    Layout.fillHeight: true
-                    spacing: 2
+                // Bracket-style OLED clamp toggle — terminal flag, not a
+                // settings row.
+                Row {
+                    spacing: 4
 
                     Text {
-                        Layout.fillWidth: true
-                        text: root.currentTheme
-                        font.pixelSize: 15; font.bold: true
-                        font.family: Config.SettingsConfig.fontFamily
-                        color: Config.ThemeConfig.colors.text
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: "source: " + (Config.ThemeConfig.metadata.source || "—")
-                        font.pixelSize: 8
+                        text: "["
+                        font.pixelSize: 9
                         font.family: Config.SettingsConfig.fontFamily
                         color: Config.ThemeConfig.colors.textDim
-                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: "OLED"
+                        font.pixelSize: 9; font.bold: true
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                    }
+                    Rectangle {
+                        width: 6; height: 6
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                    }
+                    Text {
+                        text: "]"
+                        font.pixelSize: 9
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: Config.ThemeConfig.colors.textDim
                     }
 
-                    Item { Layout.fillHeight: true }
-
-                    // Bracket-style OLED clamp toggle — terminal flag, not a
-                    // settings row.
-                    Row {
-                        spacing: 4
-
-                        Text {
-                            text: "["
-                            font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.textDim
-                        }
-                        Text {
-                            text: "OLED"
-                            font.pixelSize: 9; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
-                        }
-                        Rectangle {
-                            width: 6; height: 6
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: root.oledClampEnabled ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
-                        }
-                        Text {
-                            text: "]"
-                            font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.textDim
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Services.ThemeService.setOledClamp(!root.oledClampEnabled)
-                        }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ThemeService.setOledClamp(!root.oledClampEnabled)
                     }
                 }
 
@@ -170,12 +158,11 @@ Item {
 
                 // ── Spectrum skyline — a PLAIN fillWidth Rectangle (NOT a
                 //    nested RowLayout: a nested layout whose children have no
-                //    intrinsic width collapses to a right-edge sliver — that's
-                //    what was squeezing the palette past the theme name). Plain
-                //    items stretch reliably via fillWidth. The 16 bars are
-                //    positioned explicitly from parent.width/16, so neither the
-                //    container nor the bars rely on per-item Layout.fillWidth.
-                //    Each bar is outlined so the pure-black structural tokens
+                //    intrinsic width collapses to a right-edge sliver). Plain
+                //    items stretch reliably via fillWidth. The bars are
+                //    positioned explicitly, so neither the container nor the
+                //    bars rely on per-item Layout.fillWidth. Each bar is
+                //    outlined so the pure-black structural tokens
                 //    (background/surface/… = #000000 in Lunar) stay visible
                 //    against the pure-black header.
                 Rectangle {
@@ -188,12 +175,15 @@ Item {
                     Repeater {
                         model: root.uniqueSpectrumColors
                         delegate: Rectangle {
-                            // Small even squares (one per unique color),
-                            // distributed across the width, vertically centered.
+                            // Skyline bar — one per unique color, bottom-aligned,
+                            // height by token tier (structural low, semantic mid,
+                            // accent tall) so the strip has real shape.
                             x: index * (parent.width / root.uniqueSpectrumColors.length)
-                            width: 20
-                            height: 20
-                            y: (parent.height - height) / 2
+                            width: Math.max(6, parent.width / root.uniqueSpectrumColors.length - 8)
+                            height: modelData.tier === "accent"   ? parent.height - 2
+                                  : modelData.tier === "semantic" ? parent.height - 6
+                                                                  : parent.height - 10
+                            anchors.bottom: parent.bottom
                             color: modelData.color
                             border.color: Config.ThemeConfig.colors.outline
                             border.width: 1
@@ -222,7 +212,7 @@ Item {
             ColumnLayout {
                 Layout.preferredWidth: 306     // 2 × 148 + 10px gap — real minimum, no slack
                 Layout.fillHeight: true
-                spacing: 8
+                spacing: 6
 
                 Text {
                     text: "CURATED PRESETS"
@@ -234,7 +224,7 @@ Item {
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 2
-                    rowSpacing: 10
+                    rowSpacing: 8
                     columnSpacing: 10
 
                     Repeater {
@@ -247,7 +237,92 @@ Item {
                     }
                 }
 
-                Item { Layout.fillHeight: true }
+                // ── CUSTOM — user-saved palettes (max 5), grouped with the
+                //    presets they sit beside. They used to be chips at the
+                //    bottom of the MANUAL EDITOR (44px name elide!) — wrong
+                //    column: these are themes you APPLY, not editor state. ──
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Text {
+                        text: "CUSTOM"
+                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: Config.ThemeConfig.colors.text
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: (Services.ThemeService.customThemes || []).length + "/5"
+                        font.pixelSize: 8; font.bold: true
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: Config.ThemeConfig.colors.textDim
+                    }
+                }
+
+                // Card-grid viewport — custom palettes render as REAL
+                // ThemePresetCards (same anatomy as curated: name, 12-swatch
+                // strip, accent border + left bar when active) plus the
+                // always-visible EDIT / ✕ corner actions. Clamped by
+                // visibility to the rows that fit; footer counts the rest.
+                Item {
+                    id: customViewport
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+
+                    GridLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        columns: 2
+                        rowSpacing: 8
+                        columnSpacing: 10
+
+                        Repeater {
+                            model: Services.ThemeService.customThemes || []
+                            delegate: Components.ThemePresetCard {
+                                themeName: modelData.name
+                                paletteOverride: modelData.colors
+                                isActive: root.currentTheme === modelData.name
+                                showActions: true
+                                visible: Math.floor(index / 2) < root.customCapacityRows
+                                onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
+                                // EDIT — apply live + pre-fill the save field
+                                // so the next SAVE updates in place.
+                                onEditClicked: {
+                                    Services.ThemeService.applyCustomTheme(modelData.name)
+                                    manualEditor.prefillSchemeName(modelData.name)
+                                }
+                                onDeleteClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
+                            }
+                        }
+                    }
+
+                    // Empty state — nothing saved yet
+                    Text {
+                        anchors.centerIn: parent
+                        visible: (Services.ThemeService.customThemes || []).length === 0
+                        text: "// none saved — tweak tokens in the editor, then SAVE"
+                        font.pixelSize: 8
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: Config.ThemeConfig.colors.textDim
+                    }
+                }
+
+                // Honest clamp footer (wifi-list pattern)
+                Text {
+                    Layout.fillWidth: true
+                    readonly property int hidden: (Services.ThemeService.customThemes || []).length
+                                                 - Math.min((Services.ThemeService.customThemes || []).length,
+                                                            root.customCapacityRows * 2)
+                    visible: hidden > 0
+                    text: "+ " + hidden + " more not shown"
+                    font.pixelSize: 8
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
+                }
             }
 
             // ── Thin vertical border: curated / manual ──
@@ -267,6 +342,7 @@ Item {
                 }
 
                 Components.ManualThemeEditor {
+                    id: manualEditor
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }

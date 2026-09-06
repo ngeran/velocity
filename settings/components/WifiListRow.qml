@@ -27,7 +27,7 @@ import "../services" as Services
 Item {
     id: row
     width: parent ? parent.width : 400
-    height: editing ? 66 : 40
+    height: editing ? 60 : 34
 
     property var net: ({ ssid: "", signal: 0, security: "", inUse: false, chan: "--", bssid: "" })
     property bool editing: false
@@ -45,6 +45,12 @@ Item {
     readonly property color barColor: net.inUse         ? Config.ThemeConfig.colors.success
                                      : net.signal >= 50 ? Config.ThemeConfig.colors.primary
                                                         : Config.ThemeConfig.colors.warning
+    // "Ch 6 · 2.437 GHz" from the enriched chan/freq — either may be absent.
+    readonly property string freqLabel: {
+        var ch = (net.chan && net.chan !== "--") ? "Ch " + net.chan : ""
+        var f = net.freq > 0 ? (net.freq / 1000).toFixed(3) + " GHz" : ""
+        return ch && f ? ch + " · " + f : (ch || f || "--")
+    }
 
     Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
@@ -85,11 +91,9 @@ Item {
                 RotationAnimator on rotation { running: connecting; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
             }
 
-            // SSID (elided) + BSSID beneath — active is just bold text (the
-            // sage dot + subtle bg already mark it; no accent flood)
-            ColumnLayout {
-                Layout.fillWidth: true; Layout.preferredWidth: 120
-                spacing: 0
+            // SSID + ACTIVE chip (mockup) — BSSID moved to its own column
+            RowLayout {
+                Layout.fillWidth: true; spacing: 8
                 Text {
                     Layout.fillWidth: true
                     text: net.ssid
@@ -97,45 +101,48 @@ Item {
                     font.bold: net.inUse || connecting || row.editing
                     color: connecting ? Config.ThemeConfig.colors.warning
                            : row.editing ? Config.ControlConfig.accent
+                           : net.inUse ? Config.ThemeConfig.colors.primary
                            : Config.ThemeConfig.colors.text
                     elide: Text.ElideRight
                 }
-                Text {
-                    Layout.fillWidth: true
-                    visible: net.bssid && net.bssid.length > 0 && !row.editing
-                    text: net.bssid
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                    color: Config.ThemeConfig.colors.textDim
-                    elide: Text.ElideRight
-                }
-            }
-
-            // Multi-segment signal bars — bottom-aligned (shared baseline, cell-style)
-            RowLayout {
-                Layout.preferredWidth: 40; Layout.alignment: Qt.AlignVCenter
-                spacing: 2
-                Repeater {
-                    model: 4
-                    Rectangle {
-                        Layout.preferredWidth: 3
-                        Layout.preferredHeight: 4 + index * 2      // 4,6,8,10 — rising bars
-                        Layout.alignment: Qt.AlignBottom           // shared baseline
-                        color: index < row.litBars ? row.barColor : Config.ThemeConfig.colors.border
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                Rectangle {
+                    visible: net.inUse && !row.editing
+                    width: activeLbl.implicitWidth + 12; height: 16; radius: 3
+                    color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.success, 0.14)
+                    border.color: Config.ThemeConfig.colors.success; border.width: 1
+                    Text {
+                        id: activeLbl; anchors.centerIn: parent; text: "ACTIVE"
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                        color: Config.ThemeConfig.colors.success
                     }
                 }
             }
 
-            // Signal %
-            Text {
-                Layout.preferredWidth: 32; Layout.alignment: Qt.AlignVCenter
-                text: net.signal + "%"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                color: Config.ThemeConfig.colors.textDim
-                horizontalAlignment: Text.AlignRight
+            // SIGNAL — rising bars + % (shared baseline, cell-style)
+            RowLayout {
+                Layout.preferredWidth: 78; Layout.alignment: Qt.AlignVCenter
+                spacing: 6
+                RowLayout {
+                    spacing: 2; Layout.alignment: Qt.AlignVCenter
+                    Repeater {
+                        model: 4
+                        Rectangle {
+                            Layout.preferredWidth: 3
+                            Layout.preferredHeight: 4 + index * 2      // 4,6,8,10 — rising bars
+                            Layout.alignment: Qt.AlignBottom           // shared baseline
+                            color: index < row.litBars ? row.barColor : Config.ThemeConfig.colors.border
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                    }
+                }
+                Text {
+                    text: net.signal + "%"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
+                    color: Config.ThemeConfig.colors.text
+                }
             }
 
-            // Security chip — fixed 72-wide slot so the CHAN column lines up across
+            // Security chip — fixed 72-wide slot so the FREQ column lines up across
             // rows regardless of label length (the chip itself stays content-sized).
             Item {
                 Layout.preferredWidth: 72; Layout.preferredHeight: 18; Layout.alignment: Qt.AlignVCenter
@@ -157,33 +164,58 @@ Item {
                 }
             }
 
-            // Channel
+            // FREQ & CHANNEL — "Ch 6 · 2.437 GHz" from the enriched nmcli fork
             Text {
-                Layout.preferredWidth: 28; Layout.alignment: Qt.AlignVCenter
-                text: net.chan || "--"
+                Layout.preferredWidth: 150; Layout.alignment: Qt.AlignVCenter
+                visible: !row.editing
+                text: row.freqLabel
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
-                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
             }
 
-            // [×] disconnect — the 16px slot is ALWAYS RESERVED so nothing
-            // shifts on hover; only the glyph fades in on the active row.
+            // BSSID (MAC)
+            Text {
+                Layout.preferredWidth: 130; Layout.alignment: Qt.AlignVCenter
+                visible: !row.editing
+                text: net.bssid || "—"
+                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                color: Config.ThemeConfig.colors.textDim
+                elide: Text.ElideMiddle
+            }
+
+            // ACTION — mockup affordance. Active rows read ACTIVE and flip to a
+            // clickable DISCONNECT on hover (the row MouseArea declines active-row
+            // clicks so the hover handler beneath receives them). Other rows read
+            // CONNECT — the row itself handles the click (password or instant).
             Item {
-                Layout.preferredWidth: 16; Layout.preferredHeight: 16
+                Layout.preferredWidth: 88; Layout.preferredHeight: 16
                 Layout.alignment: Qt.AlignVCenter
                 Text {
-                    anchors.centerIn: parent
-                    visible: net.inUse && ma.containsMouse && !row.editing
-                    text: "×"
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 14; font.bold: true
-                    color: Config.ThemeConfig.colors.error
-                    Behavior on opacity { NumberAnimation { duration: 100 } }
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    visible: net.inUse && !ma.containsMouse && !row.editing
+                    text: "ACTIVE"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    color: Config.ThemeConfig.colors.success
                 }
-                MouseArea {
-                    anchors.fill: parent
+                Text {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                     visible: net.inUse && ma.containsMouse && !row.editing
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Services.NetworkControlService.disconnectWifi()
+                    text: "DISCONNECT"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
+                    color: Config.ThemeConfig.colors.error
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.NetworkControlService.disconnectWifi()
+                    }
+                }
+                Text {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    visible: !net.inUse && !row.editing
+                    text: "CONNECT"
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: ma.containsMouse
+                    color: ma.containsMouse ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
                 }
             }
         }
