@@ -64,6 +64,7 @@ PanelWindow {
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
         if (lastTray === "power")     return Services.BatteryService.glyph
         if (lastTray === "timezone")  return "󰅐"
+        if (lastTray === "weather")   return Services.WeatherService.glyph
         return ""
     }
     readonly property string headerTitle: {
@@ -72,6 +73,7 @@ PanelWindow {
         if (lastTray === "volume")    return "VOLUME"
         if (lastTray === "power")     return "POWER"
         if (lastTray === "timezone")  return "TIME ZONES"
+        if (lastTray === "weather")   return "WEATHER"
         return ""
     }
 
@@ -103,6 +105,7 @@ PanelWindow {
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
               : card.lastTray === "timezone" ? (tzBody.implicitHeight + 55)
+              : card.lastTray === "weather" ? (weatherBody.implicitHeight + 55)
               : 220
         color: Config.BarConfig.colorBackground
         radius: 0   // sharp corners
@@ -200,6 +203,7 @@ PanelWindow {
                 if (card.lastTray === "volume")    return 2
                 if (card.lastTray === "power")     return 3
                 if (card.lastTray === "timezone")  return 4
+                if (card.lastTray === "weather")   return 5
                 return 0
             }
 
@@ -714,6 +718,116 @@ PanelWindow {
                           + " · " + (Services.TimezoneService.localZoneName || "local time")
                     font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
                     color: Config.BarConfig.colorTextDim
+                }
+            }
+
+            // ── Weather ──
+            ColumnLayout {
+                id: weatherBody
+                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+
+                // No sample yet (or fetch failed before the first success) —
+                // same named-empty-state idiom as the other bodies.
+                Text {
+                    visible: !Services.WeatherService.hasData
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 60
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: Services.WeatherService.popupOpen ? "fetching weather…" : "—"
+                    font.family: Config.BarConfig.fontFamily
+                    font.pixelSize: Services.WeatherService.popupOpen ? 10 : 28
+                    font.italic: Services.WeatherService.popupOpen
+                    color: Config.BarConfig.colorTextDim
+                }
+
+                ColumnLayout {
+                    visible: Services.WeatherService.hasData
+                    Layout.fillWidth: true; spacing: 0
+
+                    // Hero: condition glyph + big temp (volume-row idiom)
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 10
+                        Text {
+                            text: Services.WeatherService.glyph
+                            font.family: Config.BarConfig.fontNerd; font.pixelSize: 26
+                            color: Config.BarConfig.colorAccent
+                        }
+                        Text {
+                            text: Services.WeatherService.temp
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 28; font.bold: true
+                            color: Config.BarConfig.colorText
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Services.WeatherService.condition.toUpperCase()
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true
+                            font.letterSpacing: 1.5; color: Config.BarConfig.colorAccent
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: Services.WeatherService.location
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        color: Config.BarConfig.colorTextDim
+                        elide: Text.ElideRight
+                    }
+
+                    Item { height: 8 }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                    Item { height: 8 }
+
+                    // Metrics — same label/value idiom as the network body
+                    RowLayout { Layout.fillWidth: true; spacing: 0
+                        Text { text: "FEELS"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                        Text { text: Services.WeatherService.feels || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
+                    }
+                    Item { height: 6 }
+                    RowLayout { Layout.fillWidth: true; spacing: 0
+                        Text { text: "HUMIDITY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                        Text { text: Services.WeatherService.humidity || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
+                    }
+                    Item { height: 6 }
+                    RowLayout { Layout.fillWidth: true; spacing: 0
+                        Text { text: "WIND"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
+                        Text { text: Services.WeatherService.wind || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                    }
+
+                    Item { height: 8 }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                    Item { height: 8 }
+
+                    // 3-day forecast — one column per day, omarchy panel concept
+                    Text { text: "3-DAY FORECAST"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
+                    Item { height: 6 }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Repeater {
+                            model: Services.WeatherService.days
+                            ColumnLayout {
+                                required property var modelData
+                                Layout.fillWidth: true; spacing: 2
+                                Text {
+                                    text: modelData.label.toUpperCase()
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                                    font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim
+                                }
+                                Text {
+                                    text: modelData.glyph
+                                    font.family: Config.BarConfig.fontNerd; font.pixelSize: 16
+                                    color: Config.BarConfig.colorAccent
+                                }
+                                Text {
+                                    text: modelData.max + "° / " + modelData.min + "°"
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                                    color: Config.BarConfig.colorText
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

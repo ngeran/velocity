@@ -191,6 +191,8 @@ ShellRoot {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 12    // +10 keeps the keyboard US label clear of the sun glyph
                 Layout.rightMargin: 44   // breathing room before the wifi icon
+                isActive: panelWindow.activeTray === "weather"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "weather" ? "" : "weather"
             }
 
             Components.NetworkIcon {

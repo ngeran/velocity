@@ -1,9 +1,8 @@
 // WeatherWidget.qml — tray-area condition glyph + temperature.
-// Click toggles the settings dashboard (where the rich WeatherCard lives) —
-// same contract as ClockWidget: the bar shows status, settings holds depth.
-// Entirely hidden until the first valid sample lands (no "—" in the bar).
+// Click toggles the shared TrayCard's weather body (same tray contract as
+// Network/Bluetooth/Volume/Battery/Timezone icons). Entirely hidden until the
+// first valid sample lands (no "—" in the bar).
 import QtQuick
-import Quickshell.Io
 import "../services" as Services
 import "../config" as Config
 
@@ -16,23 +15,33 @@ Item {
     height: Config.BarConfig.barHeight
     visible: Services.WeatherService.hasData
 
+    property bool isActive: false
+    signal trayRequested()
+
     Row {
         id: weatherRow
-        anchors.centerIn: parent
+        anchors.left: parent.left
+        anchors.leftMargin: 2
+        anchors.verticalCenter: parent.verticalCenter
         spacing: 5
         Text {
             text: Services.WeatherService.glyph
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
-            color: Config.ThemeConfig.colors.success
+            color: (root.isActive || mouseArea.containsMouse)
+                   ? Config.BarConfig.colorAccent
+                   : Config.ThemeConfig.colors.success
             anchors.verticalCenter: parent.verticalCenter
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
         Text {
             text: Services.WeatherService.temp
             font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
-            color: Config.ThemeConfig.colors.textDim
+            color: (root.isActive || mouseArea.containsMouse)
+                   ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.textDim
             anchors.verticalCenter: parent.verticalCenter
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
     }
 
@@ -41,11 +50,6 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: settingsProc.running = true
-    }
-
-    Process {
-        id: settingsProc
-        command: ["quickshell", "ipc", "-c", "settings", "call", "SettingsWindow", "toggle"]
+        onClicked: root.trayRequested()
     }
 }
