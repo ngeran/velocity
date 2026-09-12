@@ -1,0 +1,2 @@
+module nikos.weather
+singleton WeatherService 1.0 WeatherService.qml

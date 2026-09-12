@@ -26,6 +26,24 @@ import "services" as Services
 ShellRoot {
     id: shellRoot
 
+    // Loaded plugin bar-widget roots, keyed by manifest id — the plugins IPC
+    // routes summon/hide through the plugin's own open/close/toggle.
+    property var pluginItems: ({})
+
+    // Cross-plugin panel bus: route toggle/refresh requests to the plugin
+    // whose root registered the matching id (e.g. clock sun → weather panel).
+    Connections {
+        target: Services.PluginHostService
+        function onTogglePanelRequested(id) {
+            var it = shellRoot.pluginItems[id]
+            if (it && it.toggle) it.toggle()
+        }
+        function onRefreshPanelRequested(id) {
+            var it = shellRoot.pluginItems[id]
+            if (it && it.refresh) it.refresh()
+        }
+    }
+
     // =========================================================================
     // LAZY OVERLAYS — load-on-first-use, keep-warm afterwards.
     // -------------------------------------------------------------------------
@@ -173,68 +191,26 @@ ShellRoot {
                 Layout.fillHeight: true
             }
 
-            // --- RIGHT SIDE ---
+            // --- RIGHT SIDE — order-driven rail (bar-config.json "rightLayout")
+            // Each slot keeps its exact hand-tuned wiring; the ORDER comes from
+            // config and hot-reloads with the 2s bar-config.json watcher.
+            Repeater {
+                model: Config.BarConfig.rightLayout
 
-            Components.KeyboardWidget {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.iconSpacing
-            }
-
-            Components.TimezoneWidget {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.iconSpacing
-                isActive: panelWindow.activeTray === "timezone"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "timezone" ? "" : "timezone"
-            }
-
-            Components.WeatherWidget {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 12    // +10 keeps the keyboard US label clear of the sun glyph
-                Layout.rightMargin: 44   // breathing room before the wifi icon
-                isActive: panelWindow.activeTray === "weather"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "weather" ? "" : "weather"
-            }
-
-            Components.NetworkIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: -4
-                isActive: panelWindow.activeTray === "network"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
-            }
-
-            Components.BluetoothIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: -6
-                isActive: panelWindow.activeTray === "bluetooth"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
-            }
-
-            Components.VolumeIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: -6
-                isActive: panelWindow.activeTray === "volume"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
-            }
-
-            Components.BatteryIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: -6
-                isActive: panelWindow.activeTray === "power"  // Changed from "battery" to "power"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"  // Changed from "battery" to "power"
-            }
-
-            Components.LogsIcon {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: -6
-                isActive: logsLoader.item ? logsLoader.item.shown : false
-                onTriggered: shellRoot.toggleLogs()
-            }
-
-            Components.NotificationButton {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 2
-                isActive: ncLoader.item ? ncLoader.item.shown : false
-                onCenterRequested: shellRoot.toggleNotificationCenter()
+                Loader {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 0
+                    Layout.rightMargin: Config.BarConfig.slotMargin
+                    sourceComponent: {
+                        if (modelData === "plugins")       return pluginsSlot
+                        if (modelData === "network")       return networkSlot
+                        if (modelData === "bluetooth")     return bluetoothSlot
+                        if (modelData === "volume")        return volumeSlot
+                        if (modelData === "logs")          return logsSlot
+                        if (modelData === "notifications") return notificationsSlot
+                        return null
+                    }
+                }
             }
 
             Item {
@@ -243,14 +219,116 @@ ShellRoot {
             }
         }
 
-        // =========================================================================
-        // PERFECTLY CENTERED CLOCK
-        // =========================================================================
-        // Sitting outside the RowLayout, this anchors directly to the panel window.
-        // It will remain dead-center even if you delete all icons on the right.
+        // ── slot components (order-independent definitions) ──────────────────
+        // keyboard converted → plugins/nikos.keyboard (lives in the plugins
+        // slot); "keyboard" as a rail key is no longer legal.
+        Component {
+            id: pluginsSlot
+            RowLayout {
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 8
+                // --- USER PLUGINS (bar-widget kind) ---
+                // One Loader per enabled, validated plugin. api/theme come from
+                // the host as injected object references (never imports) so
+                // plugins share the process-wide singletons; a plugin that
+                // fails to load reports into PluginHostService and leaves the
+                // bar running.
+                Repeater {
+                    model: Services.PluginHostService.barWidgetPlugins
 
-        Components.ClockWidget {
+                    Loader {
+                        Layout.alignment: Qt.AlignVCenter
+                        source: "file://" + modelData.dir + modelData.entryPoints.barWidget
+                        onLoaded: {
+                            // Our nikos.* roots expose pluginId; omarchy-shaped
+                            // roots (QsBarWidget) carry moduleName instead —
+                            // assigning a non-existent property throws.
+                            if (item.pluginId !== undefined) item.pluginId = modelData.id
+                            if (item.api !== undefined) item.api = Services.PluginHostService.api
+                            // Registry for the plugins IPC (summon/hide route
+                            // through the plugin's own open/close/toggle).
+                            var reg = shellRoot.pluginItems
+                            reg[modelData.id] = item
+                            shellRoot.pluginItems = reg
+                        }
+                        onStatusChanged: {
+                            if (status === Loader.Error)
+                                Services.PluginHostService.reportError(modelData.id, "BarWidget failed to load (see journal)")
+                        }
+                    }
+                }
+            }
+        }
+        Component {
+            id: networkSlot
+            Components.NetworkIcon {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: panelWindow.activeTray === "network"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
+            }
+        }
+        Component {
+            id: bluetoothSlot
+            Components.BluetoothIcon {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: panelWindow.activeTray === "bluetooth"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
+            }
+        }
+        Component {
+            id: volumeSlot
+            Components.VolumeIcon {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: panelWindow.activeTray === "volume"
+                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
+            }
+        }
+        Component {
+            id: logsSlot
+            Components.LogsIcon {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: logsLoader.item ? logsLoader.item.shown : false
+                onTriggered: shellRoot.toggleLogs()
+            }
+        }
+        Component {
+            id: notificationsSlot
+            Components.NotificationButton {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: ncLoader.item ? ncLoader.item.shown : false
+                onCenterRequested: shellRoot.toggleNotificationCenter()
+            }
+        }
+
+        // =========================================================================
+        // PERFECTLY CENTERED — center-slot plugins
+        // =========================================================================
+        // Anchored to the panel window, so it stays dead-center regardless of
+        // the rails. The clock is a plugin (nikos.clock) — the built-in
+        // ClockWidget fallback was removed; disabling every center plugin
+        // leaves the center empty by design.
+
+        Row {
             anchors.centerIn: parent
+            spacing: 14
+            Repeater {
+                model: Services.PluginHostService.centerWidgetPlugins
+
+                Loader {
+                    source: "file://" + modelData.dir + modelData.entryPoints.barWidget
+                    onLoaded: {
+                        if (item.pluginId !== undefined) item.pluginId = modelData.id
+                        if (item.api !== undefined) item.api = Services.PluginHostService.api
+                        var reg = shellRoot.pluginItems
+                        reg[modelData.id] = item
+                        shellRoot.pluginItems = reg
+                    }
+                    onStatusChanged: {
+                        if (status === Loader.Error)
+                            Services.PluginHostService.reportError(modelData.id, "Center plugin failed to load (see journal)")
+                    }
+                }
+            }
         }
     }
     }   // Variants (per-output bars)
@@ -263,6 +341,25 @@ ShellRoot {
         activeTray: shellRoot.trayOwner ? shellRoot.trayOwner.activeTray : ""
         onCloseRequested: if (shellRoot.trayOwner) shellRoot.trayOwner.activeTray = ""
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
+    }
+
+    // ── USER PLUGINS (service kind) — headless: timers/processes only. ──────
+    Item {
+        visible: false
+        Repeater {
+            model: Services.PluginHostService.servicePlugins
+            Loader {
+                source: "file://" + modelData.dir + modelData.entryPoints.service
+                onLoaded: {
+                    item.pluginId = modelData.id
+                    item.api = Services.PluginHostService.api
+                }
+                onStatusChanged: {
+                    if (status === Loader.Error)
+                        Services.PluginHostService.reportError(modelData.id, "Service failed to load (see journal)")
+                }
+            }
+        }
     }
 
     // =========================================================================
@@ -368,6 +465,54 @@ ShellRoot {
     }
 
     // =========================================================================
+    // IPC HANDLER — plugin host: rescan / inspect / enable / disable.
+    // Lives in shell.qml, NOT in the singleton (IpcHandler doesn't resolve in
+    // qmldir-declared singletons on this build — same reason as the osd one).
+    // =========================================================================
+    IpcHandler {
+        target: "plugins"
+        function rescan(): string {
+            Services.PluginHostService.rescan()
+            return "ok"
+        }
+        function list(): string {
+            var out = []
+            var ps = Services.PluginHostService.plugins
+            for (var i = 0; i < ps.length; i++)
+                out.push({ id: ps[i].id, name: ps[i].name, version: ps[i].version,
+                           kinds: ps[i].kinds, enabled: ps[i].enabled,
+                           status: ps[i].status, error: ps[i].error,
+                           commands: ps[i].commands, dir: ps[i].dir })
+            return JSON.stringify(out, null, 1)
+        }
+        function enable(id: string): string {
+            Services.PluginHostService.setEnabled(id, true)
+            return "ok"
+        }
+        function disable(id: string): string {
+            Services.PluginHostService.setEnabled(id, false)
+            return "ok"
+        }
+        function order(json: string): string {
+            try { Services.PluginHostService.setOrder(JSON.parse(json)) } catch (e) { return "bad json" }
+            return "ok"
+        }
+        // Phase 3 lifecycle: route through the plugin's own open/close/toggle.
+        function summon(id: string): string {
+            var it = shellRoot.pluginItems[id]
+            if (!it) return "not loaded"
+            if (it.open) { it.open(); return "ok" }
+            return "no open()"
+        }
+        function hide(id: string): string {
+            var it = shellRoot.pluginItems[id]
+            if (!it) return "not loaded"
+            if (it.close) { it.close(); return "ok" }
+            return "no close()"
+        }
+    }
+
+    // =========================================================================
     // IPC HANDLERS — External Control
     // =========================================================================
 
@@ -395,7 +540,10 @@ ShellRoot {
         target: "keyboard"
 
         function next() {
-            Services.KeyboardService.switchNext()
+            // Layout cycling lives in the nikos.keyboard plugin now.
+            var it = shellRoot.pluginItems["nikos.keyboard"]
+            if (it && it.cycle) it.cycle()
+            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
         }
     }
 

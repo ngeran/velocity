@@ -12,3 +12,4 @@ singleton GpuService 1.0 GpuService.qml
 singleton ThermalService 1.0 ThermalService.qml
 singleton CoreEngineService 1.0 CoreEngineService.qml
 singleton EventsReader 1.0 EventsReader.qml
+singleton PluginManagerService 1.0 PluginManagerService.qml

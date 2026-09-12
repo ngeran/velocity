@@ -62,18 +62,12 @@ PanelWindow {
                 ? (Services.NetworkService.connectionType === "wifi" ? "󰖩" : "󰈀") : "󰖪"
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
-        if (lastTray === "power")     return Services.BatteryService.glyph
-        if (lastTray === "timezone")  return "󰅐"
-        if (lastTray === "weather")   return Services.WeatherService.glyph
         return ""
     }
     readonly property string headerTitle: {
         if (lastTray === "network")   return "NETWORK"
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
-        if (lastTray === "power")     return "POWER"
-        if (lastTray === "timezone")  return "TIME ZONES"
-        if (lastTray === "weather")   return "WEATHER"
         return ""
     }
 
@@ -104,8 +98,6 @@ PanelWindow {
         height: card.lastTray === "network" ? (networkBody.implicitHeight + 55)
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
-              : card.lastTray === "timezone" ? (tzBody.implicitHeight + 55)
-              : card.lastTray === "weather" ? (weatherBody.implicitHeight + 55)
               : 220
         color: Config.BarConfig.colorBackground
         radius: 0   // sharp corners
@@ -201,9 +193,6 @@ PanelWindow {
             currentIndex: {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
-                if (card.lastTray === "power")     return 3
-                if (card.lastTray === "timezone")  return 4
-                if (card.lastTray === "weather")   return 5
                 return 0
             }
 
@@ -612,222 +601,6 @@ PanelWindow {
                         Services.AudioService.toggleMute()
                         Services.OsdService.showMute(Services.AudioService.muted)
                     } }
-                }
-            }
-
-            // ── Power ──
-            ColumnLayout {
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
-                RowLayout { Layout.fillWidth: true; spacing: 6
-                    Rectangle {
-                        width: pwrLbl.implicitWidth + 16; height: 18
-                        radius: 0
-                        color: {
-                            if (!Services.BatteryService.hasBattery)      return Config.ThemeConfig.accentTint
-                            if (Services.BatteryService.charging)          return Config.ThemeConfig.successTint
-                            if (Services.BatteryService.percentage <= 20)  return Config.ThemeConfig.errorTint
-                            return Config.ThemeConfig.fillRest
-                        }
-                        border.color: {
-                            if (!Services.BatteryService.hasBattery)      return Config.BarConfig.colorAccent
-                            if (Services.BatteryService.charging)          return Config.ThemeConfig.colors.success
-                            if (Services.BatteryService.percentage <= 20)  return Config.ThemeConfig.colors.error
-                            return Config.BarConfig.colorBorder
-                        }
-                        border.width: 1
-                        Behavior on color { ColorAnimation { duration: 200 } }
-                        Text { id: pwrLbl; anchors.centerIn: parent; text: Services.BatteryService.stateLabel
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                            color: { if (!Services.BatteryService.hasBattery) return Config.BarConfig.colorAccent; if (Services.BatteryService.charging) return Config.ThemeConfig.colors.success; if (Services.BatteryService.percentage <= 20) return Config.ThemeConfig.colors.error; return Config.BarConfig.colorTextDim }
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Item { height: 14 }
-                RowLayout { visible: Services.BatteryService.hasBattery; Layout.fillWidth: true; spacing: 0
-                    Text { text: "CHARGE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 52 }
-                    Text { text: Services.BatteryService.percentage + "%"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
-                        color: { if (Services.BatteryService.charging) return Config.ThemeConfig.colors.success; if (Services.BatteryService.percentage <= 20) return Config.ThemeConfig.colors.error; if (Services.BatteryService.percentage <= 50) return Config.ThemeConfig.colors.warning; return Config.BarConfig.colorText }
-                        Behavior on color { ColorAnimation { duration: 200 } }
-                    }
-                }
-                Item { height: 8; visible: Services.BatteryService.hasBattery }
-                RowLayout { Layout.fillWidth: true; spacing: 0
-                    Text { text: "SOURCE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 52 }
-                    Text { text: Services.BatteryService.onAc ? "AC / Wall" : "Battery"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
-                }
-                Item { Layout.fillHeight: true }
-            }
-
-            // ── Timezones ──
-            ColumnLayout {
-                id: tzBody
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
-
-                // One row per configured zone: chip + place + offset + time.
-                // The home row tracks the system timezone and reads accent.
-                Repeater {
-                    model: Services.TimezoneService.zones
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 8
-
-                        Rectangle {
-                            width: tzShort.implicitWidth + 12; height: 18
-                            radius: 0
-                            color: modelData.home ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
-                            border.color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
-                            border.width: 1
-                            Text { id: tzShort; anchors.centerIn: parent; text: modelData.shortLabel
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                                color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
-                        }
-
-                        Text {
-                            text: modelData.home
-                                  ? (Services.TimezoneService.localZoneName || modelData.label)
-                                  : modelData.label
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
-                            color: Config.BarConfig.colorText
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Text {
-                            visible: text !== ""
-                            text: Services.TimezoneService.offsetLabel(modelData.zone)
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
-                            color: Config.BarConfig.colorTextDim
-                        }
-
-                        Text {
-                            text: Services.TimezoneService.timeIn(modelData.zone)
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
-                            color: modelData.home ? Config.BarConfig.colorAccent : Config.BarConfig.colorText
-                        }
-                    }
-                }
-
-                Item { height: 10 }
-                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 8 }
-
-                // Local date + system zone, for orientation at a glance.
-                Text {
-                    Layout.fillWidth: true
-                    text: Services.TimezoneService.dateIn("")
-                          + " · " + (Services.TimezoneService.localZoneName || "local time")
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
-                    color: Config.BarConfig.colorTextDim
-                }
-            }
-
-            // ── Weather ──
-            ColumnLayout {
-                id: weatherBody
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
-
-                // No sample yet (or fetch failed before the first success) —
-                // same named-empty-state idiom as the other bodies.
-                Text {
-                    visible: !Services.WeatherService.hasData
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: Services.WeatherService.popupOpen ? "fetching weather…" : "—"
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: Services.WeatherService.popupOpen ? 10 : 28
-                    font.italic: Services.WeatherService.popupOpen
-                    color: Config.BarConfig.colorTextDim
-                }
-
-                ColumnLayout {
-                    visible: Services.WeatherService.hasData
-                    Layout.fillWidth: true; spacing: 0
-
-                    // Hero: condition glyph + big temp (volume-row idiom)
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 10
-                        Text {
-                            text: Services.WeatherService.glyph
-                            font.family: Config.BarConfig.fontNerd; font.pixelSize: 26
-                            color: Config.BarConfig.colorAccent
-                        }
-                        Text {
-                            text: Services.WeatherService.temp
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 28; font.bold: true
-                            color: Config.BarConfig.colorText
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: Services.WeatherService.condition.toUpperCase()
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true
-                            font.letterSpacing: 1.5; color: Config.BarConfig.colorAccent
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: Services.WeatherService.location
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
-                        color: Config.BarConfig.colorTextDim
-                        elide: Text.ElideRight
-                    }
-
-                    Item { height: 8 }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                    Item { height: 8 }
-
-                    // Metrics — same label/value idiom as the network body
-                    RowLayout { Layout.fillWidth: true; spacing: 0
-                        Text { text: "FEELS"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                        Text { text: Services.WeatherService.feels || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
-                    }
-                    Item { height: 6 }
-                    RowLayout { Layout.fillWidth: true; spacing: 0
-                        Text { text: "HUMIDITY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                        Text { text: Services.WeatherService.humidity || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
-                    }
-                    Item { height: 6 }
-                    RowLayout { Layout.fillWidth: true; spacing: 0
-                        Text { text: "WIND"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                        Text { text: Services.WeatherService.wind || "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
-                    }
-
-                    Item { height: 8 }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                    Item { height: 8 }
-
-                    // 3-day forecast — one column per day, omarchy panel concept
-                    Text { text: "3-DAY FORECAST"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
-                        font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
-                    Item { height: 6 }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 8
-                        Repeater {
-                            model: Services.WeatherService.days
-                            ColumnLayout {
-                                required property var modelData
-                                Layout.fillWidth: true; spacing: 2
-                                Text {
-                                    text: modelData.label.toUpperCase()
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
-                                    font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim
-                                }
-                                Text {
-                                    text: modelData.glyph
-                                    font.family: Config.BarConfig.fontNerd; font.pixelSize: 16
-                                    color: Config.BarConfig.colorAccent
-                                }
-                                Text {
-                                    text: modelData.max + "° / " + modelData.min + "°"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
-                                    color: Config.BarConfig.colorText
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }

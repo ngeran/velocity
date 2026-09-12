@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.keyboard",
+  "name": "Keyboard",
+  "version": "1.0.0",
+  "description": "Active XKB layout pill (US/GR) — click or SUPER+SHIFT+SPACE cycles layouts via hyprctl switchxkblayout. Layout list comes from input:kb_layout; events ride the host's HyprlandService socket.",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "slot": "right",
+  "commands": ["hyprctl"]
+}

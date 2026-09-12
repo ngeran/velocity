@@ -50,8 +50,8 @@ Rectangle {
 
     readonly property string localTime: Qt.formatTime(headerRoot._now, "hh:mm:ss")
 
-    // Athens = local + 7h (manual offset, matches ClockWidget's approach —
-    // avoids relying on QML's JS engine timeZone support for toLocaleTimeString).
+    // Athens = local + 7h (manual offset, same approach as the nikos.clock
+    // bar plugin — avoids relying on QML JS timeZone support for toLocaleTimeString).
     readonly property string athensTime: {
         var a = new Date(headerRoot._now.getTime())
         a.setHours(a.getHours() + 7)

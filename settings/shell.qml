@@ -172,6 +172,13 @@ ShellRoot {
             dashboard.openControlTab("display")
         }
 
+        // Deep-link to the plugin manager (Control ▸ Plugins)
+        function openControlPlugins() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("plugins")
+        }
+
         // Deep-link to the Settings tab
         function openSettings() {
             root.shown = true
@@ -192,6 +199,20 @@ ShellRoot {
             root.shown = true
             panelWindow.visible = true
             dashboard.openCoreTab(section || "system")
+        }
+    }
+
+    // =========================================================================
+    // IPC HANDLER — plugin pipeline (install/convert from the CLI and tests)
+    // =========================================================================
+    IpcHandler {
+        target: "PluginManager"
+        function installFromGit(url: string): string {
+            Services.PluginManagerService.installGit(url)
+            return "installing"
+        }
+        function refresh(): string {
+            return JSON.stringify(Services.PluginManagerService.plugins)
         }
     }
 

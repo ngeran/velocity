@@ -33,6 +33,18 @@ Item {
     property int workspaceCount: 5
     property string clockCity: "Local"
     property int clockOffset: 0
+    // Right-rail slot order (bar-config.json "rightLayout"). Plugins ride the
+    // single "plugins" slot; their internal order comes from plugins-state.json.
+    readonly property var defaultRightLayout: ["plugins", "network",
+                                               "bluetooth", "volume",
+                                               "logs", "notifications"]
+    property var rightLayout: defaultRightLayout
+    // Rail spacing that compensates for slot CONTENT: the 32px icon slots
+    // carry ~9px of glyph whitespace per side (visual gap ≈ 19px at margin 0),
+    // while text pills are tight (need margin 10 for the same ≈19px gap).
+    // Equal margins would look uneven — that was the "space does not look
+    // right" bug. Text = plugins slot; everything else is an icon.
+    readonly property int slotMargin: 8
 
     // =========================================================================
     // CONFIG FILE LOADING
@@ -67,6 +79,14 @@ Item {
                 clockCity = data.clockCity
             if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
                 clockOffset = data.clockOffset
+            // Right-rail slot order — keys validated against the known set;
+            // unknown keys are dropped, empty falls back to the default.
+            if (Array.isArray(data.rightLayout)) {
+                var legal = ["plugins", "network", "bluetooth",
+                             "volume", "logs", "notifications"]
+                var cleaned = data.rightLayout.filter(function(k) { return legal.indexOf(k) !== -1 })
+                rightLayout = cleaned.length > 0 ? cleaned : defaultRightLayout
+            }
             console.log("[BarConfig] Hot-reloaded bar-config.json")
         } catch (e) {
             console.log("[BarConfig] Failed to parse config:", e)

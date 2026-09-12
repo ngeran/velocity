@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.weather",
+  "name": "Weather",
+  "version": "1.0.0",
+  "description": "Bar condition pill + weather popup: current conditions, feels-like, humidity, wind and a 3-day forecast via wttr.in j1 (15 min poll, stale-keep).",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "commands": ["curl"]
+}

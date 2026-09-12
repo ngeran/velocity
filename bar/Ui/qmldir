@@ -1,0 +1,7 @@
+module qs.Ui
+Util 1.0 Util.qml
+WidgetButton 1.0 WidgetButton.qml
+QsPanel 1.0 QsPanel.qml
+KeyboardPanel 1.0 KeyboardPanel.qml
+PanelKeyCatcher 1.0 PanelKeyCatcher.qml
+QsBarWidget 1.0 QsBarWidget.qml

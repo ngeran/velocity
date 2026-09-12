@@ -72,5 +72,13 @@ Rectangle {
             opacity: visible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
         }
+
+        PluginsView {
+            visible: body.activeSection === "plugins"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
     }
 }

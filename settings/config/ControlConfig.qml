@@ -63,7 +63,8 @@ QtObject {
         { key: "network",   label: "NETWORK",   icon: "󰖩" },
         { key: "bluetooth", label: "BLUETOOTH", icon: "󰂯" },
         { key: "audio",     label: "AUDIO",     icon: "󰕾" },
-        { key: "display",   label: "DISPLAY",   icon: "󰃜" }
+        { key: "display",   label: "DISPLAY",   icon: "󰃜" },
+        { key: "plugins",   label: "PLUGINS",    icon: "󰏗" }
     ]
 
     // --- Console log colors by kind (theme-aware) ---

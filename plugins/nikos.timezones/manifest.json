@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.timezones",
+  "name": "Timezones",
+  "version": "1.0.0",
+  "description": "World-clock pill + worldtimebuddy working-hours grid. Zones configured in TimezoneService.qml (Athens/London/Tokyo). Manual UTC-offset math — this host's tzdata is untrusted.",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "commands": []
+}

@@ -101,7 +101,6 @@ bar/
 │   └── BarConfig.qml      # Design tokens
 ├── components/
 │   ├── qmldir             # Module definition
-│   ├── ClockWidget.qml    # Time display
 │   ├── WorkspaceWidget.qml # Workspace dots
 │   ├── NetworkIcon.qml    # Network status
 │   ├── BluetoothIcon.qml  # Bluetooth status

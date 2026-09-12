@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.example",
+  "name": "Example",
+  "version": "0.1.0",
+  "description": "Minimal bar-widget plugin demonstrating the nikos plugin contract: an Item sized to the bar, themed through the injected api object, no external commands.",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "commands": []
+}

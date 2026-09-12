@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.wifiqr",
+  "name": "Wi-Fi QR",
+  "version": "1.0.0",
+  "description": "Share the active Wi-Fi network as a scannable QR code. Reads SSID/password from NetworkManager; requires qrencode for matrix generation.",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "slot": "right",
+  "commands": ["nmcli", "qrencode"]
+}

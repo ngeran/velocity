@@ -108,4 +108,57 @@ QtObject {
         var h = Math.floor(abs / 60), m = abs % 60
         return sign + (m === 0 ? h + "h" : h + ":" + (m < 10 ? "0" + m : m))
     }
+
+    // ── Working-hours grid (worldtimebuddy port, omarchy-timezones rules) ────
+    // Columns align on the HOME day; column i = home-midnight + i hours (one
+    // absolute moment), and each cell renders that moment's hour IN ITS ZONE.
+    function homeOffsetMinutes(d) { return -d.getTimezoneOffset() }
+
+    // UTC ms of the home zone's most recent local midnight (column 0).
+    function dayStartUtc(d) {
+        var dayMs = 24 * 3600000
+        var off = homeOffsetMinutes(d)
+        var localMs = d.getTime() + off * 60000
+        return localMs - (((localMs % dayMs) + dayMs) % dayMs) - off * 60000
+    }
+
+    // Fractional "now" column position in [0, 24) for the vertical indicator.
+    function nowColumn(d) { return (d.getTime() - dayStartUtc(d)) / 3600000 }
+
+    // One grid cell: the zone-local hour at home-day column `col`, plus the
+    // omarchy tint bands — work 8–18, day 6–23, night otherwise.
+    function cellAt(col, dayStartUtcMs, offsetMin) {
+        var z = new Date(dayStartUtcMs + col * 3600000 + offsetMin * 60000)
+        var hour = z.getUTCHours()
+        var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        return {
+            hour: hour,
+            isMidnight: hour === 0,
+            dayLabel: days[z.getUTCDay()] + " " + z.getUTCDate(),
+            tint: (hour >= 8 && hour < 18) ? "work" : (hour >= 6 && hour < 23) ? "day" : "night"
+        }
+    }
+
+    // "18:00" wall-clock for an absolute UTC instant in a fixed-offset zone.
+    function timeAtOffset(utcMs, offsetMin) {
+        var d = new Date(utcMs + offsetMin * 60000)
+        return pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes())
+    }
+
+    // "Thu 6 Sep" for the zone's current day.
+    function dateAtOffset(offsetMin) {
+        var d = new Date(root.now.getTime() + offsetMin * 60000)
+        var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return days[d.getUTCDay()] + " " + d.getUTCDate() + " " + months[d.getUTCMonth()]
+    }
+
+    // Abbreviation for the row header — manual, since tzdata is untrustworthy.
+    function abbrFor(zone) {
+        if (zone === "Europe/Athens") return euDSTActive(root.now) ? "EEST" : "EET"
+        if (zone === "Europe/London") return euDSTActive(root.now) ? "BST" : "GMT"
+        if (zone === "Asia/Tokyo")    return "JST"
+        if (zone === "UTC")           return "UTC"
+        return ""
+    }
 }

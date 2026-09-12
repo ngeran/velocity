@@ -53,3 +53,6 @@ SettingsHeaderCard 1.0 SettingsHeaderCard.qml
 InfoStatRow 1.0 InfoStatRow.qml
 SettingsModule 1.0 SettingsModule.qml
 CoreSystemPane 1.0 CoreSystemPane.qml
+PluginsView 1.0 PluginsView.qml
+ToggleSwitch 1.0 ToggleSwitch.qml
+ConfirmDialog 1.0 ConfirmDialog.qml

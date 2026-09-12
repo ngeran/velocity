@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.clock",
+  "name": "Clock",
+  "version": "1.0.0",
+  "description": "Centered clock + date with city/offset labels from bar-config.json. Click toggles the settings dashboard. Occupies the CENTER slot.",
+  "author": "nikos",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "slot": "center",
+  "commands": []
+}

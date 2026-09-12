@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This is a **quickshell-bar** — a minimal top bar for Hyprland on NixOS, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, a clock, and system tray icons (Bluetooth, Network, Volume, Battery).
+This is a **quickshell-bar** — a minimal top bar for Hyprland on NixOS, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, plugin widgets (center clock), and system tray icons (Bluetooth, Network, Volume, Battery).
 
 **Design language:** Pure black background (`#000000`) · Obsidian Teal accent (`#00dce5`) · JetBrains Mono font
 
@@ -44,7 +44,7 @@ exec-once = quickshell -c ~/.config/quickshell/bar
    - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
    - `BatteryService` — Native `Quickshell.Services.UPower` (daemon enabled in omni-nix; peripheral batteries filtered by `powerSupply`)
    - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
-   - `ClockWidget` uses `SystemClock { precision: Minutes }` — zero-poll, boundary-exact
+   - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact) via `api.bar`
 
 3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`.
 
@@ -53,7 +53,6 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ```
 shell.qml (root layout)
 ├── WorkspaceWidget.qml → WorkspaceButton.qml (repeater)
-├── ClockWidget.qml (centered)
 └── System tray icons (right-aligned)
     ├── KeyboardWidget.qml (click → cycle XKB layout US/GR)
     ├── NetworkIcon.qml (click → impala)

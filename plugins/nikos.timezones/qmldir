@@ -1,0 +1,2 @@
+module nikos.timezones
+singleton TimezoneService 1.0 TimezoneService.qml

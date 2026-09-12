@@ -19,12 +19,16 @@ import "../services" as Services
 
 Item {
     id: root
-    width: Config.BarConfig.iconSize
+    implicitWidth: bellIcon.implicitWidth + 8
+                   + (root.expanded ? hoverLabel.implicitWidth + 6 : 0)
     height: Config.BarConfig.barHeight
+    clip: true
+    Behavior on implicitWidth { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
     property bool isActive: false
     signal centerRequested()
 
+    readonly property bool expanded: hoverMa.containsMouse
     readonly property int _count: Services.NotificationService.unreadCount
     readonly property bool _hasUnread: _count > 0
 
@@ -54,23 +58,41 @@ Item {
     }
 
     // ---- bell glyph (the button's core visual) ----
+    // Pinned to the RIGHT edge of the slot: the label grows leftward, so the
+    // bell must not drift as the pill expands.
     Text {
         id: bellIcon
-        anchors.centerIn: parent
+        anchors.right: parent.right
+        anchors.rightMargin: 4
+        anchors.verticalCenter: parent.verticalCenter
         text: root._hasUnread ? "󰂚" : "󰂜"
         font.family: Config.BarConfig.fontNerd
         font.pixelSize: Config.BarConfig.fontSizeIcon
         color: (root.isActive || hoverMa.containsMouse)
-               ? Config.BarConfig.colorAccent
-               : (root._hasUnread ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim)
+               ? Config.ThemeConfig.colors.accent
+               : Config.ThemeConfig.colors.primary
         scale: hoverMa.containsMouse ? 1.08 : 1.0
         Behavior on color { ColorAnimation { duration: 150 } }
         Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
     }
 
+    // ---- hover-reveal label (uniform rail idiom, mirrored) ----
+    // Last icon on the rail: the label grows LEFTWARD so it never clips at
+    // the screen edge. Bell stays pinned at its rest position.
+    Text {
+        id: hoverLabel
+        visible: root.expanded
+        x: bellIcon.x - width - 6
+        anchors.verticalCenter: parent.verticalCenter
+        text: "ALERTS" + (root._count > 0 ? " " + (root._count > 9 ? "9+" : root._count) : "")
+        font.family: Config.BarConfig.fontFamily
+        font.pixelSize: 11
+        color: Config.ThemeConfig.colors.text
+    }
+
     // ---- active-state cue: thin accent underline (replaces the old ring) ----
     Rectangle {
-        anchors.horizontalCenter: parent.horizontalCenter
+        x: bellIcon.x + bellIcon.width / 2 - width / 2
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 2
         width: root.isActive ? 12 : 0
