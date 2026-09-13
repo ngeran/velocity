@@ -65,7 +65,8 @@ Item {
         return out
     }
 
-    // Anchor pill — bordered cluster: "Saturday 15:41" · live weather glyph ·°C
+    // Anchor cluster — borderless: "Saturday 15:41" · live weather glyph ·°C
+    // Hover-only coloring (open popups do NOT recolor the anchor).
     Rectangle {
         anchors.centerIn: parent
         implicitWidth: anchorRow.implicitWidth + 24
@@ -73,10 +74,6 @@ Item {
         radius: 6
         color: anchorMa.containsMouse ? api.theme.withAlpha(api.theme.colors.text, 0.06)
                                       : "transparent"
-        border.color: (calOpen || wxOpen) ? api.theme.colors.primary
-                                          : api.theme.colors.outlineVariant
-        border.width: 1
-        Behavior on border.color { ColorAnimation { duration: 120 } }
 
         Row {
             id: anchorRow
@@ -88,20 +85,10 @@ Item {
                 text: root._formattedDate(clk.date)
                 font.family: api ? api.bar.fontFamily : "monospace"
                 font.pixelSize: 12
-                color: calOpen || timeMa.containsMouse ? api.theme.colors.accent
-                                                       : (api ? api.theme.colors.text : "#ddd")
+                color: timeMa.containsMouse ? api.theme.colors.accent
+                                            : (api ? api.theme.colors.text : "#ddd")
                 anchors.verticalCenter: parent.verticalCenter
                 Behavior on color { ColorAnimation { duration: 120 } }
-
-                // Active-module underline while the calendar is open
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: -2
-                    width: parent.width; height: 2; radius: 1
-                    color: api.theme.colors.accent
-                    visible: calOpen
-                }
 
                 MouseArea {
                     id: timeMa
@@ -115,7 +102,7 @@ Item {
             // Live weather — condition glyph + temperature from the EMBEDDED
             // WeatherSource (self-contained; the nikos.weather plugin was
             // removed). Click forces a refresh. Temp hidden until the first
-            // valid sample lands.
+            // valid sample lands. Glyph matches the temperature's color.
             Item {
                 width: wxRow.implicitWidth
                 height: parent.height
@@ -130,8 +117,8 @@ Item {
                         text: wxSource.glyph
                         font.family: api ? api.bar.fontNerd : "monospace"
                         font.pixelSize: 13
-                        color: wxOpen || wxMa.containsMouse ? api.theme.colors.accent
-                                                            : (api ? api.theme.colors.warning : "#888")
+                        color: wxMa.containsMouse ? api.theme.colors.accent
+                                                  : (api ? api.theme.colors.text : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -140,21 +127,11 @@ Item {
                         text: wxSource.temp
                         font.family: api ? api.bar.fontFamily : "monospace"
                         font.pixelSize: 11
-                        color: wxOpen || wxMa.containsMouse ? api.theme.colors.accent
-                                                            : (api ? api.theme.colors.text : "#ddd")
+                        color: wxMa.containsMouse ? api.theme.colors.accent
+                                                  : (api ? api.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
-                }
-
-                // Active-module underline (mockup idiom)
-                Rectangle {
-                    anchors.horizontalCenter: wxRow.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: -2
-                    width: wxRow.width; height: 2; radius: 1
-                    color: api.theme.colors.warning
-                    visible: wxOpen
                 }
 
                 MouseArea {
@@ -184,8 +161,6 @@ Item {
     }
 
     // Panel-open state for the active underlines
-    readonly property bool wxOpen: api ? api.host.openPanel === "nikos.clock.wx" : false
-    readonly property bool calOpen: api ? api.host.openPanel === "nikos.clock" : false
 
     MouseArea {
         id: anchorMa

@@ -70,7 +70,7 @@ Item {
         font.pixelSize: Config.BarConfig.fontSizeIcon
         color: (root.isActive || hoverMa.containsMouse)
                ? Config.ThemeConfig.colors.accent
-               : Config.ThemeConfig.colors.primary
+               : Config.BarConfig.colorText
         scale: hoverMa.containsMouse ? 1.08 : 1.0
         Behavior on color { ColorAnimation { duration: 150 } }
         Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
@@ -102,19 +102,21 @@ Item {
     }
 
     // ---- unread badge, overlapping the glyph's top-right ----
+    // Kept SMALL and inside the bar slot: the old 14px badge with negative
+    // margins poked above the bar and rendered as a clipped colored box.
     Rectangle {
         id: badge
         visible: root._hasUnread
-        implicitWidth: Math.max(14, badgeLabel.implicitWidth + 6)
-        height: 14
+        implicitWidth: badgeLabel.implicitWidth + 5
+        height: 11
         radius: height / 2
         color: Config.BarConfig.colorAccent
         border.color: Config.ThemeConfig.colors.background
-        border.width: 1.5
+        border.width: 1
         anchors.right: bellIcon.right
         anchors.top: bellIcon.top
-        anchors.rightMargin: -8
-        anchors.topMargin: -6
+        anchors.rightMargin: -3
+        anchors.topMargin: -3
         Behavior on implicitWidth { NumberAnimation { duration: 120 } }
 
         Text {
@@ -122,7 +124,7 @@ Item {
             anchors.centerIn: parent
             text: root._count > 9 ? "9+" : root._count
             color: Config.ThemeConfig.colors.background
-            font.pixelSize: 9
+            font.pixelSize: 8
             font.bold: true
             font.family: Config.BarConfig.fontFamily
         }
