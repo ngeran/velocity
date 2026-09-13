@@ -130,8 +130,8 @@ Item {
                         text: wxSource.glyph
                         font.family: api ? api.bar.fontNerd : "monospace"
                         font.pixelSize: 13
-                        color: wxMa.containsMouse ? "#7DCFFF"
-                                                  : (api ? api.theme.colors.warning : "#888")
+                        color: wxOpen || wxMa.containsMouse ? api.theme.colors.accent
+                                                            : (api ? api.theme.colors.warning : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -140,11 +140,21 @@ Item {
                         text: wxSource.temp
                         font.family: api ? api.bar.fontFamily : "monospace"
                         font.pixelSize: 11
-                        color: wxMa.containsMouse ? api.theme.colors.accent
-                                                  : (api ? api.theme.colors.text : "#ddd")
+                        color: wxOpen || wxMa.containsMouse ? api.theme.colors.accent
+                                                            : (api ? api.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
+                }
+
+                // Active-module underline (mockup idiom)
+                Rectangle {
+                    anchors.horizontalCenter: wxRow.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: -2
+                    width: wxRow.width; height: 2; radius: 1
+                    color: api.theme.colors.warning
+                    visible: wxOpen
                 }
 
                 MouseArea {
@@ -152,15 +162,29 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: wxSource.refresh()
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: function(mouse) {
+                        if (mouse.button === Qt.RightButton)
+                            wxSource.refresh()
+                        else
+                            wxPanel.toggle()
+                    }
                 }
             }
         }
     }
 
-    onApiChanged: if (calPanel.item) calPanel.item.api = api
+    onApiChanged: {
+        if (calPanel.item) calPanel.item.api = api
+        if (wxPanel.item) {
+            wxPanel.item.hostBar = api ? api.bar : null
+            wxPanel.item.hostTheme = api ? api.theme : null
+            wxPanel.item.wx = wxSource
+        }
+    }
 
-    // Panel-open state for the calendar underline
+    // Panel-open state for the active underlines
+    readonly property bool wxOpen: api ? api.host.openPanel === "nikos.clock.wx" : false
     readonly property bool calOpen: api ? api.host.openPanel === "nikos.clock" : false
 
     MouseArea {
@@ -189,6 +213,32 @@ Item {
             active: root.api !== null
             source: Qt.resolvedUrl("CalendarPanel.qml")
             onLoaded: item.api = root.api
+        }
+    }
+
+    // ── WEATHER POPUP — ATMOSPHERE styling, fed by the embedded fetcher ─────
+    // The nikos.weather plugin was removed; its popup lives here now. The
+    // distinct pluginId keeps the host's one-at-a-time tracker working (a
+    // weather open closes the calendar and vice versa).
+    Host.PluginPanel {
+        id: wxPanel
+        pluginId: "nikos.clock.wx"
+        title: "ATMOSPHERE"
+        icon: wxSource.glyph
+        contentWidth: 380
+        anchorX: "center"
+        showHeader: false
+        onOpen: wxSource.refresh()
+
+        Loader {
+            Layout.fillWidth: true
+            active: root.api !== null
+            source: Qt.resolvedUrl("WeatherPanel.qml")
+            onLoaded: {
+                item.hostBar = root.api ? root.api.bar : null
+                item.hostTheme = root.api ? root.api.theme : null
+                item.wx = wxSource
+            }
         }
     }
 }

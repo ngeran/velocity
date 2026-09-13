@@ -1,11 +1,11 @@
 // =============================================================================
-// WeatherSource.qml — embedded weather fetcher for the clock anchor.
+// WeatherSource.qml — embedded weather fetcher for the clock plugin.
 // =============================================================================
 // The nikos.weather plugin was removed, and the anchor previously imported its
 // service singleton — a static cross-plugin import that would have killed the
 // whole clock on restart. This Item is the self-contained replacement: same
-// wttr.in j1 source, 15-min cadence, stale-keep on failure. Exposes exactly
-// what the anchor renders: glyph · temp · hasData.
+// wttr.in j1 source, 15-min cadence, stale-keep on failure. Feeds both the
+// anchor (glyph · temp) and the ATMOSPHERE popup (full field set below).
 // =============================================================================
 import QtQuick
 import Quickshell.Io
@@ -19,6 +19,18 @@ Item {
     property string temp: ""         // "25°C"
     property string condition: ""    // "Sunny"
     property bool fetching: false
+
+    // Popup-only fields (ATMOSPHERE panel)
+    property string location: ""     // "Malvern"
+    property string region: ""       // "Pennsylvania"
+    property string feels: ""        // "27°C"
+    property string humidity: ""     // "54%"
+    property string wind: ""         // "16 km/h S"
+    property string windDesc: ""     // "Moderate Breeze"
+    property string pressure: ""     // "1017 hPa"
+    property string dewPoint: ""     // "16°C"
+    property string uv: ""           // "4 (MOD)"
+    property var days: []            // [{label,min,max,desc,glyph,rain}] × ≤3
 
     function refresh() {
         fetching = true
@@ -37,9 +49,21 @@ Item {
             fetchProc.buffer = ""
             root.fetching = false
             if (!w) return                          // stale-keep
+            root.location = w.location
+            root.region = w.region
             root.temp = w.temp
             root.condition = w.condition
-            root.glyph = w.glyph
+            // The model doesn't return glyph — the old service derived it
+            // from the condition text (same here).
+            root.glyph = W.glyphForCondition(w.condition)
+            root.feels = w.feels
+            root.humidity = w.humidity
+            root.wind = w.wind
+            root.windDesc = w.windDesc
+            root.pressure = w.pressure
+            root.dewPoint = w.dewPoint
+            root.uv = w.uv
+            root.days = w.days
             root.hasData = true
         }
     }
