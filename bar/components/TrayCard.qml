@@ -118,6 +118,7 @@ PanelWindow {
         // height budget.
         height: card.lastTray === "network"
                 ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 55)
+              : card.lastTray === "volume" ? volumeBody.implicitHeight + 55
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
               : 220
@@ -201,6 +202,15 @@ PanelWindow {
                             Services.NetworkService.generateQr()
                         }
                     }
+                }
+                Text {
+                    // volume tray: node id label (mockup "hw:0,0" slot)
+                    visible: card.lastTray === "volume" && Services.AudioService.hasAudio
+                    text: Services.AudioService.hwLabel
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                    color: Config.BarConfig.colorTextDim
+                    elide: Text.ElideMiddle
+                    Layout.maximumWidth: 110
                 }
                 Text {
                     text: "✕"
@@ -576,8 +586,10 @@ PanelWindow {
                 Item { height: 15; visible: Services.BluetoothService.hasBluetooth }
             }
 
-            // ── Volume ──
+            // ── Volume ── mockup port: hero %, dB scale, OUTPUT SINK picker,
+            // INPUT SOURCE mic strip, MUTE footer.
             ColumnLayout {
+                id: volumeBody
                 Layout.fillWidth: true; Layout.margins: 12; spacing: 0
 
                 // wpctl absent — dim dash instead of a misleading "0%"
@@ -593,24 +605,28 @@ PanelWindow {
                     color: Config.BarConfig.colorTextDim
                 }
 
+                // ── HERO — big glyph + huge % ──
                 RowLayout {
                     visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: 10
+                    Layout.fillWidth: true; spacing: 12
+
                     Text {
                         text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 22
-                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent
+                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 30
+                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
                         text: Math.round(Services.AudioService.volume) + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 30; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 52; font.bold: true
                         color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Item { Layout.fillWidth: true }
                 }
-                Item { height: 14; visible: Services.AudioService.hasAudio }
+                Item { height: 6; visible: Services.AudioService.hasAudio }
+
+                // ── master slider ──
                 Slider {
                     id: volSlider
                     visible: Services.AudioService.hasAudio
@@ -632,27 +648,209 @@ PanelWindow {
                             height: parent.height
                             width: volSlider.visualPosition * parent.width
                             radius: 0
-                            color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent
+                            color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
                     handle: Rectangle {
                         x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        width: 18; height: 18; radius: 0
+                        width: 18; height: 20; radius: 4
                         color: Config.BarConfig.colorBackground
-                        border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent
+                        border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
                         border.width: 2
-                        // Grow on hover / press so the grab target reads as interactive.
                         scale: volSlider.pressed ? 1.15 : (volSlider.hovered ? 1.1 : 1.0)
                         Behavior on scale { NumberAnimation { duration: 90 } }
                     }
                 }
+                // ── dB scale labels (mockup) ──
+                RowLayout {
+                    visible: Services.AudioService.hasAudio
+                    Layout.fillWidth: true
+                    Text { text: "0 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "+6 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                }
+                Item { height: 10; visible: Services.AudioService.hasAudio }
+                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Item { height: 10; visible: Services.AudioService.hasAudio }
+
+                // ── OUTPUT SINK (PIPEWIRE) picker ──
+                RowLayout {
+                    visible: Services.AudioService.hasAudio
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        text: "OUTPUT SINK (PIPEWIRE)"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: Services.AudioService.hwLabel
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        color: Config.ThemeConfig.colors.primary
+                        elide: Text.ElideMiddle
+                        Layout.maximumWidth: 130
+                    }
+                }
+                Item { height: 8; visible: Services.AudioService.hasAudio }
+
+                Repeater {
+                    visible: Services.AudioService.hasAudio
+                    model: Services.AudioService.sinks
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property bool isDefault: modelData === Services.AudioService.sink
+                        readonly property real sinkRowWidth: width
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 44
+                        radius: 6
+                        color: sinkMa.containsMouse || isDefault
+                               ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: isDefault ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12; anchors.rightMargin: 10
+                            spacing: 10
+
+                            // selected dot (mockup: ● vs ○)
+                            Rectangle {
+                                width: 7; height: 7; radius: 3.5
+                                color: isDefault ? Config.ThemeConfig.colors.primary : "transparent"
+                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
+                            }
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text {
+                                    text: modelData.description || modelData.nickname || modelData.name
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                    color: isDefault ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: sinkRowWidth - 150
+                                }
+                                Text {
+                                    text: modelData.name
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    color: Config.BarConfig.colorTextDim
+                                    elide: Text.ElideMiddle
+                                    Layout.maximumWidth: sinkRowWidth - 150
+                                }
+                            }
+                            // DEFAULT chip + check, or Select hint
+                            Rectangle {
+                                visible: isDefault
+                                width: defLbl.implicitWidth + 12; height: 17
+                                radius: 3
+                                color: Config.ThemeConfig.accentTint
+                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
+                                Text { id: defLbl; anchors.centerIn: parent
+                                    text: "DEFAULT"
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1
+                                    color: Config.ThemeConfig.colors.primary }
+                            }
+                            Text {
+                                visible: isDefault
+                                text: "✓"
+                                font.pixelSize: 12
+                                color: Config.ThemeConfig.colors.primary
+                            }
+                            Text {
+                                visible: !isDefault
+                                text: "Select"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                                color: sinkMa.containsMouse ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
+                            }
+                        }
+                        MouseArea {
+                            id: sinkMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: isDefault ? Qt.ArrowCursor : Qt.PointingHandCursor
+                            onClicked: if (!isDefault) Services.AudioService.setDefaultSink(modelData)
+                        }
+                    }
+                }
                 Item { height: 12; visible: Services.AudioService.hasAudio }
+                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Item { height: 10; visible: Services.AudioService.hasAudio }
+
+                // ── INPUT SOURCE (microphone) ──
+                ColumnLayout {
+                    visible: Services.AudioService.hasMic
+                    Layout.fillWidth: true; spacing: 6
+
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text { text: "󰍬"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorTextDim }
+                        Text {
+                            text: "INPUT SOURCE"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                            font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Math.round(Services.AudioService.micVolume) + "%"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.bold: true
+                            color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 10
+                        Slider {
+                            id: micSlider
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 22
+                            hoverEnabled: true
+                            from: 0; to: 100
+                            value: Services.AudioService.micVolume
+                            onMoved: Services.AudioService.setMicVolume(value)
+                            background: Rectangle {
+                                x: micSlider.leftPadding
+                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
+                                implicitHeight: 4; width: micSlider.availableWidth; radius: 0
+                                color: Config.ThemeConfig.hairlineSoft
+                                Rectangle {
+                                    height: parent.height
+                                    width: micSlider.visualPosition * parent.width
+                                    color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
+                                }
+                            }
+                            handle: Rectangle {
+                                x: micSlider.leftPadding + micSlider.visualPosition * (micSlider.availableWidth - width)
+                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
+                                width: 14; height: 14; radius: 7
+                                color: Config.BarConfig.colorText
+                            }
+                        }
+                        Rectangle {
+                            width: micLbl.implicitWidth + 16; height: 24
+                            radius: 6
+                            color: micBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                            border.color: Config.BarConfig.colorBorder; border.width: 1
+                            Text { id: micLbl; anchors.centerIn: parent
+                                text: Services.AudioService.micMuted ? "UNMUTE MIC" : "MUTE MIC"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                color: Services.AudioService.micMuted ? Config.ThemeConfig.colors.error : Config.BarConfig.colorText }
+                            MouseArea { id: micBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMicMute() }
+                        }
+                    }
+                }
+                Item { height: 12; visible: Services.AudioService.hasAudio }
+
+                // ── MUTE footer ──
                 Rectangle {
                     visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; height: 26
-                    radius: 0
+                    Layout.fillWidth: true; height: 32
+                    radius: 6
                     color: {
                         if (muteBtnArea.containsMouse)
                             return Services.AudioService.muted ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillHover
