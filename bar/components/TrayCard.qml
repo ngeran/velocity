@@ -33,6 +33,24 @@ PanelWindow {
     // so the closing view's content, header and height don't flash to another
     // body while the 140ms fade runs.
     property string lastTray: ""
+    // NETWORK CREDENTIALS sub-view (QR) — only meaningful for the network tray.
+    property bool qrOpen: false
+    // Copy feedback (QR view) — auto-resets so the button label reverts.
+    property bool copied: false
+    property bool copyFailed: false
+    Timer {
+        id: copyResetTimer
+        interval: 1600
+        onTriggered: { card.copied = false; card.copyFailed = false }
+    }
+    Connections {
+        target: Services.NetworkService
+        function onQrCopyDone(ok) {
+            card.copied = ok
+            card.copyFailed = !ok
+            copyResetTimer.restart()
+        }
+    }
     signal closeRequested()
 
     // HOVER-OUT DISMISSAL
@@ -43,6 +61,7 @@ PanelWindow {
     property bool hasHoveredDropdown: false
     onActiveTrayChanged: {
         if (activeTray !== "") lastTray = activeTray
+        if (activeTray !== "network") qrOpen = false   // QR view is network-only
         hoverCloseTimer.stop()        // any open / switch / close cancels a pending close
         card.hasHoveredDropdown = false
         // Popup-gated polling: detail probes run only while their popup is the
@@ -86,7 +105,7 @@ PanelWindow {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.topMargin: 0   // overlay already starts below the bar
-        width: 260
+        width: 320
         // Both network and bluetooth share the network body's height so the two
         // popups are the same size (+55 = header 34 + separator 1 + outer
         // margins 20). Since the bluetooth device list moved into a ListView
@@ -95,12 +114,15 @@ PanelWindow {
         // shrinking below its own content (relevant when Wi-Fi is off, which
         // collapses networkBody to ~147px).
         // Keyed on lastTray so the height stays frozen through the fade-out.
-        height: card.lastTray === "network" ? (networkBody.implicitHeight + 55)
+        // The QR credentials view replaces the network body and has its own
+        // height budget.
+        height: card.lastTray === "network"
+                ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 55)
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
               : 220
         color: Config.BarConfig.colorBackground
-        radius: 0   // sharp corners
+        radius: 10
 
         // 140ms OutCubic fade (Omarchy popup idiom); the window's keep-alive
         // visibility (visible: activeTray !== "" || opacity > 0) lets this run.
@@ -159,6 +181,26 @@ PanelWindow {
                     font.letterSpacing: 2.5
                     color: Config.BarConfig.colorText
                     Layout.fillWidth: true
+                }
+                Text {
+                    // QR entry — opens the NETWORK CREDENTIALS view
+                    visible: card.lastTray === "network" && Services.NetworkService.isConnected
+                    text: "󰀄"
+                    font.family: Config.BarConfig.fontNerd
+                    font.pixelSize: 13
+                    color: hdrQrArea.containsMouse || card.qrOpen
+                           ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
+                    Behavior on color { ColorAnimation { duration: 100 } }
+                    MouseArea {
+                        id: hdrQrArea
+                        anchors.fill: parent; anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onClicked: {
+                            card.qrOpen = true
+                            Services.NetworkService.generateQr()
+                        }
+                    }
                 }
                 Text {
                     text: "✕"
@@ -243,6 +285,32 @@ PanelWindow {
                             color: Services.NetworkService.isConnected ? Config.BarConfig.colorBackground : Config.BarConfig.colorTextDim }
                     }
                     Item { Layout.fillWidth: true }
+                    // QR Connect — opens the NETWORK CREDENTIALS view
+                    Rectangle {
+                        visible: Services.NetworkService.isConnected
+                        width: qrConnRow.implicitWidth + 16; height: 22
+                        radius: 3
+                        color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Row {
+                            id: qrConnRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Text { text: "󰀄"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 10; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: "QR Connect"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        MouseArea {
+                            id: qrConnArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                card.qrOpen = true
+                                Services.NetworkService.generateQr()
+                            }
+                        }
+                    }
                 }
                 Item { height: 14; visible: Services.NetworkService.hasNetwork }
                 // Named state (Omarchy): radio-off otherwise reads as a broken
@@ -344,11 +412,11 @@ PanelWindow {
                     }
                 }
 
-                // ── Wi-Fi radio on/off toggle ──
+                // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; height: 26; radius: 0
+                    Layout.fillWidth: true; height: 32; radius: 6
                     color: {
                         if (wifiBtnArea.containsMouse)
                             return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
@@ -601,6 +669,220 @@ PanelWindow {
                         Services.AudioService.toggleMute()
                         Services.OsdService.showMute(Services.AudioService.muted)
                     } }
+                }
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        // NETWORK CREDENTIALS (QR) — replaces the body when qrOpen. Card-level
+        // overlay: it must cover the header too, and its clicks must not fall
+        // through to the tray backdrop.
+        // ═══════════════════════════════════════════════════════════════════════
+        Item {
+            id: qrBody
+            anchors.fill: parent
+            visible: card.qrOpen && card.lastTray === "network"
+            z: 10
+            implicitHeight: qrCol.implicitHeight + 24
+
+            // swallow all clicks; buttons below re-stop them explicitly
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                id: qrCol
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 0
+
+                // ── header: dot · NETWORK CREDENTIALS · ✕ ──
+                Item {
+                    Layout.fillWidth: true
+                    height: 30
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 8
+                        Rectangle { width: 6; height: 6; radius: 3; color: Config.BarConfig.colorAccent; Layout.alignment: Qt.AlignVCenter }
+                        Text {
+                            text: "NETWORK CREDENTIALS"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                            font.bold: true; font.letterSpacing: 2.5
+                            color: Config.BarConfig.colorText
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "✕"
+                            font.pixelSize: 11
+                            color: qrCloseArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            MouseArea {
+                                id: qrCloseArea
+                                anchors.fill: parent; anchors.margins: -4
+                                cursorShape: Qt.PointingHandCursor; hoverEnabled: true
+                                onClicked: card.qrOpen = false
+                            }
+                        }
+                    }
+                }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+
+                // ── white QR card (scanner contract: light ground, dark modules)
+                Item { height: 14 }
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 200
+                    height: qrGrid.matrix.length > 0 ? qrGrid.matrix.length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 120
+                    color: "#f2f2f2"
+                    radius: 12
+
+                    Grid {
+                        id: qrGrid
+                        property var matrix: Services.NetworkService.qrMatrix
+                        property int modulePx: 6
+                        property int quiet: 3
+                        anchors.centerIn: parent
+                        columns: matrix.length > 0 ? matrix[0].length : 0
+                        visible: matrix.length > 0
+
+                        Repeater {
+                            model: qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length * qrGrid.matrix.length : 0
+
+                            Rectangle {
+                                readonly property int row: Math.floor(index / (qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length : 1))
+                                readonly property int col: index % (qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length : 1)
+                                readonly property bool dark: {
+                                    if (qrGrid.matrix.length === 0 || row >= qrGrid.matrix.length) return false
+                                    var line = qrGrid.matrix[row] || ""
+                                    return col < line.length && line.charAt(col) === "1"
+                                }
+                                width: qrGrid.modulePx; height: qrGrid.modulePx
+                                color: dark ? "#141414" : "#f2f2f2"
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 20
+                        visible: Services.NetworkService.qrMatrix.length === 0
+                        text: Services.NetworkService.qrError !== "" ? Services.NetworkService.qrError : "generating…"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        color: "#141414"
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+                Item { height: 10 }
+
+                // ── ssid • security • band ──
+                Row {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    Text {
+                        text: Services.NetworkService.qrSsid !== "" ? Services.NetworkService.qrSsid : "—"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                        color: Config.BarConfig.colorText
+                    }
+                    Text { text: "•"; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
+                    Text {
+                        text: Services.NetworkService.qrSecurity !== "" ? Services.NetworkService.qrSecurity : "OPEN"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.primary
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text { text: "•"; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
+                    Text {
+                        text: Services.NetworkService.qrBand !== "" ? Services.NetworkService.qrBand : "—"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        color: Config.BarConfig.colorTextDim
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+                Item { height: 10 }
+
+                // ── NETWORK KEY chip + Copy ──
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 40
+                    radius: 8
+                    color: Config.ThemeConfig.fillRest
+                    border.color: Config.BarConfig.colorBorder; border.width: 1
+
+                    Text {
+                        anchors.left: parent.left; anchors.leftMargin: 12
+                        anchors.top: parent.top; anchors.topMargin: 6
+                        text: "NETWORK KEY"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 7
+                        font.bold: true; font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Text {
+                        anchors.left: parent.left; anchors.leftMargin: 12
+                        anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                        text: Services.NetworkService.qrPassword !== "" ? Services.NetworkService.qrPassword : "—"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                        color: Config.BarConfig.colorText
+                    }
+                    Rectangle {
+                        anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: copyRow.implicitWidth + 16; height: 24
+                        radius: 6
+                        color: copyArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Row {
+                            id: copyRow
+                            anchors.centerIn: parent
+                            spacing: 5
+                            Text { text: card.copied ? "✓" : "󰆏"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 10; color: card.copied ? Config.ThemeConfig.colors.success : Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: card.copied ? "Copied" : "Copy"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        MouseArea {
+                            id: copyArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.NetworkService.copyQrPassword()
+                        }
+                    }
+                }
+                Text {
+                    visible: card.copyFailed
+                    text: "copy failed — wl-copy is not installed"
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                    color: Config.ThemeConfig.colors.error
+                }
+                Item { height: 8 }
+
+                // ── footer: hint · Close ──
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: "SCAN CAMERA OR QR READER"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 7
+                        font.bold: true; font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                        Layout.fillWidth: true
+                    }
+                    Rectangle {
+                        width: closeLbl.implicitWidth + 18; height: 24
+                        radius: 6
+                        color: footerCloseArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Text {
+                            id: closeLbl; anchors.centerIn: parent
+                            text: "Close"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                            color: Config.BarConfig.colorText
+                        }
+                        MouseArea {
+                            id: footerCloseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: card.qrOpen = false
+                        }
+                    }
                 }
             }
         }

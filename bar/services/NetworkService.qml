@@ -309,4 +309,77 @@ Item {
         root.txTotal = ""
         root._stats = null
     }
+
+    // ── WI-FI QR — credentials of the ACTIVE connection as a scannable code.
+    // Requires qrencode (manifest-level dependency; degrades to qrError).
+    property var qrMatrix: []           // "0101…" rows
+    property string qrSsid: ""
+    property string qrSecurity: ""      // "WPA2-Personal" / "WPA3-Personal" / "Open"
+    property string qrBand: ""          // "2.4 GHz" / "5 GHz"
+    property string qrPassword: ""
+    property string qrError: ""
+
+    function generateQr() {
+        _qrProc.buffer = ""
+        _qrProc.command = ["bash", "-c",
+            "iface=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); " +
+            "[ -z \"$iface\" ] && iface=$(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null | awk -F: '$2==\"wifi\" && $3 ~ /^connected/{print $1;exit}'); " +
+            "[ -z \"$iface\" ] && echo 'No active Wi-Fi connection' && exit 0; " +
+            "uuid=$(nmcli --get-values GENERAL.CON-UUID device show \"$iface\" | head -n1); " +
+            "mapfile -t fl < <(nmcli --show-secrets --escape no --get-values " +
+            "802-11-wireless.ssid,802-11-wireless-security.key-mgmt,802-11-wireless-security.psk connection show uuid \"$uuid\"); " +
+            "ssid=${fl[0]}; km=${fl[1]}; pw=${fl[2]}; " +
+            "[ -z \"$ssid\" ] && echo 'Could not read the Wi-Fi name' && exit 0; " +
+            "freq=$(nmcli -t -f IN-USE,FREQ device wifi list ifname \"$iface\" 2>/dev/null | awk -F: '$1 ~ /\\*/{print $2; exit}'); " +
+            "band=2.4\\ GHz; [ -n \"$freq\" ] && [ \"$freq\" -ge 5000 ] 2>/dev/null && band=5\\ GHz; " +
+            "sec=nopass; seclabel=Open; " +
+            "case \"$km\" in sae) sec=WPA; seclabel=WPA3-Personal;; wpa-psk) sec=WPA; seclabel=WPA2-Personal;; \"\") ;; *) sec=WPA; seclabel=$km;; esac; " +
+            "printf 'meta\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$seclabel\" \"$ssid\" \"$pw\" \"$band\" \"$sec\"; " +
+            "payload=\"WIFI:T:$sec;S:$ssid;P:$pw;\"; " +
+            "qrencode --type ASCII --margin 4 --output - <<< \"$payload\" | " +
+            "awk '{r=\"\";for(c=1;c<=length($0);c+=2) r =r (substr($0,c,2) ~ /#/ ? 1 : 0); print r}'"]
+        _qrProc.running = true
+    }
+
+    property var _qrProc: Process {
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { root._qrProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var raw = root._qrProc.buffer
+            root._qrProc.buffer = ""
+            root.qrMatrix = []
+            root.qrSsid = ""; root.qrSecurity = ""; root.qrBand = ""; root.qrPassword = ""
+            if (raw.indexOf("No active Wi-Fi") !== -1 || raw.trim() === "") {
+                root.qrError = raw.trim() !== "" ? raw.trim().split("\n")[0] : "no active wi-fi"
+                return
+            }
+            var rows = []
+            raw.split("\n").forEach(function(line) {
+                if (line.indexOf("meta\t") === 0) {
+                    var f = line.split("\t")
+                    root.qrSecurity = f[1] || ""; root.qrSsid = f[2] || ""
+                    root.qrPassword = f[3] || ""; root.qrBand = f[4] || ""
+                } else if (line !== "") rows.push(line)
+            })
+            root.qrMatrix = rows
+            root.qrError = rows.length === 0 ? "qrencode not found — add it to the flake" : ""
+        }
+    }
+
+    // Copy the PSK to the Wayland clipboard. The key travels as a positional
+    // parameter ($1) — never interpolated into the shell string (it can
+    // contain any character). Requires wl-clipboard.
+    signal qrCopyDone(bool ok)
+    function copyQrPassword() {
+        if (qrPassword === "") { qrCopyDone(false); return }
+        _copyProc.command = ["sh", "-c", "printf %s \"$1\" | wl-copy", "sh", qrPassword]
+        _copyProc.running = true
+    }
+
+    property var _copyProc: Process {
+        command: []
+        onExited: function(code) { root.qrCopyDone(code === 0) }
+    }
 }
