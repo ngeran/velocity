@@ -216,7 +216,7 @@ PanelWindow {
                 id: list
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 10
+                Layout.margins: 12
                 clip: true
                 spacing: 8
                 model: Services.NotificationService.model
@@ -259,7 +259,7 @@ PanelWindow {
             // ----- history: rows archived on expiry (in-memory, capped) -----
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.margins: 10
+                Layout.margins: 12
                 spacing: 6
                 visible: Services.NotificationService.history.count > 0
 

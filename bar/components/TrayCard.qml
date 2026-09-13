@@ -107,22 +107,19 @@ PanelWindow {
         anchors.right: parent.right
         anchors.topMargin: 0   // overlay already starts below the bar
         anchors.rightMargin: 5 // 5px breathing room from the screen edge
-        width: 320
-        // Both network and bluetooth share the network body's height so the two
-        // popups are the same size (+55 = header 34 + separator 1 + outer
-        // margins 20). Since the bluetooth device list moved into a ListView
-        // with an explicit capped height, btBody.implicitHeight is reliable —
-        // the Math.max() keeps the bluetooth box at the wifi height while never
-        // shrinking below its own content (relevant when Wi-Fi is off, which
-        // collapses networkBody to ~147px).
+        // CONTENT-FITTED: width and height derive from the ACTIVE body's
+        // implicit size + shared chrome (12px content margins ×2 + 34 header
+        // + 1 separator ≈ 59). The 300 floor keeps tiny bodies usable.
+        width: Math.max(300, networkBody.implicitWidth,
+                             btBody.implicitWidth,
+                             volumeBody.implicitWidth) + 24
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
         height: card.lastTray === "network"
-                ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 55)
-              : card.lastTray === "volume" ? volumeBody.implicitHeight + 55
-              : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
-                                                          btBody.implicitHeight + 55)
+                ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 59)
+              : card.lastTray === "volume" ? volumeBody.implicitHeight + 59
+              : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59
               : 220
         color: Config.BarConfig.colorBackground
         radius: 10
@@ -156,7 +153,7 @@ PanelWindow {
     // -------------------------------------------------------------------------
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
+        anchors.margins: 12
         spacing: 0
 
         // ── HEADER ──
@@ -271,7 +268,7 @@ PanelWindow {
             ColumnLayout {
                 id: networkBody
                 Layout.fillWidth: true
-                Layout.margins: 18
+                Layout.margins: 16
                 spacing: 0
 
                 // nmcli absent — dim dash instead of a misleading "DISCONNECTED" pill
@@ -358,9 +355,12 @@ PanelWindow {
                     property string value: "—"
                     property bool valueBold: true
                     property color valueColor: Config.BarConfig.colorText
+                    // content-based width: the card sizes itself from these
+                    implicitWidth: lblTxt.implicitWidth + valTxt.implicitWidth + 16
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
                     Text {
+                        id: lblTxt
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.label
@@ -369,6 +369,7 @@ PanelWindow {
                         color: Config.BarConfig.colorTextDim
                     }
                     Text {
+                        id: valTxt
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.value
@@ -501,7 +502,7 @@ PanelWindow {
             // PAIRED & NEARBY list with CONNECT/PAIR, DISABLE footer.
             ColumnLayout {
                 id: btBody
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+                Layout.fillWidth: true; Layout.margins: 16; spacing: 0
 
                 // bluetoothctl absent — dim dash instead of a misleading "OFF" pill
                 Text {
@@ -846,7 +847,7 @@ PanelWindow {
             // INPUT SOURCE mic strip, MUTE footer.
             ColumnLayout {
                 id: volumeBody
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+                Layout.fillWidth: true; Layout.margins: 16; spacing: 0
 
                 // wpctl absent — dim dash instead of a misleading "0%"
                 Text {
