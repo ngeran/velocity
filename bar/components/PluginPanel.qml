@@ -111,7 +111,7 @@ PanelWindow {
         anchors.topMargin: panelRoot.offY + 8
         x: panelRoot.anchorX === "center"
            ? (parent.width - width) / 2 + panelRoot.offX
-           : parent.width - width - 12 - panelRoot.offX
+           : parent.width - width - 5 - panelRoot.offX
         width: panelRoot.contentWidth
         implicitHeight: bodyCol.implicitHeight + 20
         color: Config.BarConfig.colorBackground

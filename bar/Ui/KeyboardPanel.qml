@@ -30,7 +30,7 @@ Rectangle {
     anchors.top: parent.top
     anchors.topMargin: 38
     anchors.right: parent.right
-    anchors.rightMargin: 12
+    anchors.rightMargin: 5
     width: contentWidth + 24
     height: contentHeight + 24
     visible: open

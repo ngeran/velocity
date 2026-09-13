@@ -69,7 +69,8 @@ PanelWindow {
         id: panel
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        anchors.right: parent.right      // pinned to the right edge — never depends on parent.width timing
+        anchors.right: parent.right      // pinned right, 5px in — same edge gap as the tray popups
+        anchors.rightMargin: 5
         width: root.panelWidth
         color: Config.ThemeConfig.colors.background          // pure black (OLED-safe)
         border.color: Config.ThemeConfig.colors.border       // subtle structure

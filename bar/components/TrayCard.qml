@@ -271,7 +271,7 @@ PanelWindow {
             ColumnLayout {
                 id: networkBody
                 Layout.fillWidth: true
-                Layout.margins: 12
+                Layout.margins: 18
                 spacing: 0
 
                 // nmcli absent — dim dash instead of a misleading "DISCONNECTED" pill
@@ -291,7 +291,7 @@ PanelWindow {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; spacing: 6
                     Rectangle {
-                        width: typeLbl.implicitWidth + 16; height: 22
+                        width: typeLbl.implicitWidth + 18; height: 26
                         radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
@@ -303,7 +303,7 @@ PanelWindow {
                             color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Rectangle {
-                        width: connLbl.implicitWidth + 16; height: 22
+                        width: connLbl.implicitWidth + 18; height: 26
                         radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
@@ -318,7 +318,7 @@ PanelWindow {
                     // QR Connect — opens the NETWORK CREDENTIALS view
                     Rectangle {
                         visible: Services.NetworkService.isConnected
-                        width: qrConnRow.implicitWidth + 16; height: 22
+                        width: qrConnRow.implicitWidth + 18; height: 26
                         radius: 5
                         color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
@@ -342,7 +342,7 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 14; visible: Services.NetworkService.hasNetwork }
+                Item { height: 16; visible: Services.NetworkService.hasNetwork }
                 // Named state (Omarchy): radio-off otherwise reads as a broken
                 // "everything empty" popup — say why it's empty.
                 Text {
@@ -359,12 +359,12 @@ PanelWindow {
                     property bool valueBold: true
                     property color valueColor: Config.BarConfig.colorText
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 34
+                    Layout.preferredHeight: 40
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.label
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                     }
@@ -372,7 +372,7 @@ PanelWindow {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.value
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 14
                         font.bold: parent.valueBold
                         color: parent.valueColor
                         elide: Text.ElideMiddle
@@ -395,11 +395,11 @@ PanelWindow {
                 RowLayout {
                     visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 34
+                    Layout.preferredHeight: 40
                     spacing: 0
                     Text {
                         text: "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                         Layout.alignment: Qt.AlignVCenter
@@ -407,7 +407,7 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                     Text {
                         text: Services.NetworkService.signalStrength + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 14; font.bold: true
                         color: Config.BarConfig.colorText
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -434,9 +434,9 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
                     label: "GATEWAY"
@@ -469,14 +469,14 @@ PanelWindow {
                           : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
                     valueBold: false
                 }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.NetworkService.isConnected }
+                Item { height: 12; visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; height: 32; radius: 6
+                    Layout.fillWidth: true; height: 38; radius: 6
                     color: {
                         if (wifiBtnArea.containsMouse)
                             return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
