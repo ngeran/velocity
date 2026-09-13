@@ -112,7 +112,7 @@ PanelWindow {
         // + 1 separator ≈ 59). The 300 floor keeps tiny bodies usable.
         width: Math.max(300, networkBody.implicitWidth,
                              btBody.implicitWidth,
-                             volumeBody.implicitWidth) + 24
+                             volumeBody.implicitWidth) + 44
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
@@ -288,7 +288,7 @@ PanelWindow {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; spacing: 6
                     Rectangle {
-                        width: typeLbl.implicitWidth + 18; height: 26
+                        width: typeLbl.implicitWidth + 18; height: 24
                         radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
@@ -300,7 +300,7 @@ PanelWindow {
                             color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Rectangle {
-                        width: connLbl.implicitWidth + 18; height: 26
+                        width: connLbl.implicitWidth + 18; height: 24
                         radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
@@ -315,7 +315,7 @@ PanelWindow {
                     // QR Connect — opens the NETWORK CREDENTIALS view
                     Rectangle {
                         visible: Services.NetworkService.isConnected
-                        width: qrConnRow.implicitWidth + 18; height: 26
+                        width: qrConnRow.implicitWidth + 18; height: 24
                         radius: 5
                         color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
@@ -339,7 +339,7 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 16; visible: Services.NetworkService.hasNetwork }
+                Item { height: 12; visible: Services.NetworkService.hasNetwork }
                 // Named state (Omarchy): radio-off otherwise reads as a broken
                 // "everything empty" popup — say why it's empty.
                 Text {
@@ -358,13 +358,13 @@ PanelWindow {
                     // content-based width: the card sizes itself from these
                     implicitWidth: lblTxt.implicitWidth + valTxt.implicitWidth + 16
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 40
+                    Layout.preferredHeight: 32
                     Text {
                         id: lblTxt
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.label
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                     }
@@ -373,7 +373,7 @@ PanelWindow {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.value
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 14
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13
                         font.bold: parent.valueBold
                         color: parent.valueColor
                         elide: Text.ElideMiddle
@@ -396,11 +396,11 @@ PanelWindow {
                 RowLayout {
                     visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 40
+                    Layout.preferredHeight: 32
                     spacing: 0
                     Text {
                         text: "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                         Layout.alignment: Qt.AlignVCenter
@@ -408,7 +408,7 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                     Text {
                         text: Services.NetworkService.signalStrength + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 14; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
                         color: Config.BarConfig.colorText
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -435,9 +435,9 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
+                Item { height: 6; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
+                Item { height: 6; visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
                     label: "GATEWAY"
@@ -470,14 +470,14 @@ PanelWindow {
                           : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
                     valueBold: false
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
+                Item { height: 6; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 12; visible: Services.NetworkService.isConnected }
+                Item { height: 10; visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; height: 38; radius: 6
+                    Layout.fillWidth: true; height: 34; radius: 6
                     color: {
                         if (wifiBtnArea.containsMouse)
                             return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
