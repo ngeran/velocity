@@ -206,7 +206,6 @@ ShellRoot {
                         if (modelData === "network")       return networkSlot
                         if (modelData === "bluetooth")     return bluetoothSlot
                         if (modelData === "volume")        return volumeSlot
-                        if (modelData === "power")         return powerSlot
                         if (modelData === "logs")          return logsSlot
                         if (modelData === "notifications") return notificationsSlot
                         return null
@@ -282,14 +281,6 @@ ShellRoot {
                 Layout.alignment: Qt.AlignVCenter
                 isActive: panelWindow.activeTray === "volume"
                 onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
-            }
-        }
-        Component {
-            id: powerSlot
-            Components.BatteryIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "power"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "power" ? "" : "power"
             }
         }
         Component {
