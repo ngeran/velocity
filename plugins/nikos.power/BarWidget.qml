@@ -68,7 +68,7 @@ Item {
             font.pixelSize: api ? api.bar.fontSizeIcon : 13
             color: {
                 if (root.hot) return api.theme.colors.accent
-                if (!PW.BatteryService.hasBattery) return api.theme.colors.primary
+                if (!PW.BatteryService.hasBattery) return api.bar.colorText
                 if (PW.BatteryService.charging) return api.theme.colors.success
                 if (PW.BatteryService.percentage <= 20) return api.theme.colors.error
                 if (PW.BatteryService.percentage <= 50) return api.theme.colors.warning

@@ -65,7 +65,7 @@ Item {
             font.family: api ? api.bar.fontNerd : "monospace"
             font.pixelSize: api ? api.bar.fontSizeIcon : 13
             color: root.hot ? api.theme.colors.accent
-                            : (api ? api.theme.colors.primary : "#888")
+                            : (api ? api.bar.colorText : "#888")
             anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 120 } }
         }

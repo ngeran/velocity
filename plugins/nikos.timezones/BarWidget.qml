@@ -67,7 +67,7 @@ Item {
             font.pixelSize: api ? api.bar.fontSizeIcon : 13
             color: (root.expanded || mouseArea.containsMouse)
                    ? api.theme.colors.accent
-                   : (api ? api.theme.colors.primary : "#888")
+                   : (api ? api.bar.colorText : "#888")
             anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 120 } }
         }

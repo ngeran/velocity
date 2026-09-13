@@ -66,14 +66,17 @@ Item {
     }
 
     // Anchor cluster — borderless: "Saturday 15:41" · live weather glyph ·°C
-    // Hover-only coloring (open popups do NOT recolor the anchor).
+    // PASSIVE handlers only (HoverHandler/TapHandler): a sibling MouseArea's
+    // hover-steal made containsMouse never fire on hover, then stick true
+    // after a click (accent frozen). Passive handlers coexist cleanly.
     Rectangle {
         anchors.centerIn: parent
         implicitWidth: anchorRow.implicitWidth + 24
         height: api ? api.bar.barHeight - 6 : 20
         radius: 6
-        color: anchorMa.containsMouse ? api.theme.withAlpha(api.theme.colors.text, 0.06)
-                                      : "transparent"
+        color: anchorHover.hovered ? api.theme.withAlpha(api.theme.colors.text, 0.06)
+                                   : "transparent"
+        HoverHandler { id: anchorHover }
 
         Row {
             id: anchorRow
@@ -85,24 +88,19 @@ Item {
                 text: root._formattedDate(clk.date)
                 font.family: api ? api.bar.fontFamily : "monospace"
                 font.pixelSize: 12
-                color: timeMa.containsMouse ? api.theme.colors.accent
-                                            : (api ? api.theme.colors.text : "#ddd")
+                color: timeHover.hovered ? api.theme.colors.accent
+                                         : (api ? api.theme.colors.text : "#ddd")
                 anchors.verticalCenter: parent.verticalCenter
                 Behavior on color { ColorAnimation { duration: 120 } }
 
-                MouseArea {
-                    id: timeMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: calPanel.toggle()
-                }
+                HoverHandler { id: timeHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: calPanel.toggle() }
             }
 
             // Live weather — condition glyph + temperature from the EMBEDDED
             // WeatherSource (self-contained; the nikos.weather plugin was
-            // removed). Click forces a refresh. Temp hidden until the first
-            // valid sample lands. Glyph matches the temperature's color.
+            // removed). Left click toggles the popup, right click refreshes.
+            // Glyph matches the temperature's color.
             Item {
                 width: wxRow.implicitWidth
                 height: parent.height
@@ -117,8 +115,8 @@ Item {
                         text: wxSource.glyph
                         font.family: api ? api.bar.fontNerd : "monospace"
                         font.pixelSize: 13
-                        color: wxMa.containsMouse ? api.theme.colors.accent
-                                                  : (api ? api.theme.colors.text : "#888")
+                        color: wxHover.hovered ? api.theme.colors.accent
+                                               : (api ? api.theme.colors.text : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -127,25 +125,18 @@ Item {
                         text: wxSource.temp
                         font.family: api ? api.bar.fontFamily : "monospace"
                         font.pixelSize: 11
-                        color: wxMa.containsMouse ? api.theme.colors.accent
-                                                  : (api ? api.theme.colors.text : "#ddd")
+                        color: wxHover.hovered ? api.theme.colors.accent
+                                               : (api ? api.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                 }
 
-                MouseArea {
-                    id: wxMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: function(mouse) {
-                        if (mouse.button === Qt.RightButton)
-                            wxSource.refresh()
-                        else
-                            wxPanel.toggle()
-                    }
+                HoverHandler { id: wxHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: wxPanel.toggle() }
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    onTapped: wxSource.refresh()
                 }
             }
         }
@@ -158,15 +149,6 @@ Item {
             wxPanel.item.hostTheme = api ? api.theme : null
             wxPanel.item.wx = wxSource
         }
-    }
-
-    // Panel-open state for the active underlines
-
-    MouseArea {
-        id: anchorMa
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
     }
 
     // ── CALENDAR POPUP — centered under the anchor, TEMPORAL MAP styling ────
