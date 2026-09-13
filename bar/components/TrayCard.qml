@@ -673,9 +673,6 @@ PanelWindow {
             }
         }
 
-    }
-    }   // dropdown Rectangle
-}
         // ═════════════════════════════════════════════════════════════════════
         // NETWORK CREDENTIALS (QR) — replaces the body when qrOpen. Card-level
         // overlay: it must cover the header too, and its clicks must not fall
@@ -889,3 +886,6 @@ PanelWindow {
                 }
             }
         }
+    }   // content ColumnLayout
+    }   // dropdown Rectangle
+}
