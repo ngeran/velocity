@@ -27,7 +27,7 @@ Item {
                   : (Services.AudioService.volume > 50 ? "󰕾" : "󰕿")
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
-            color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.ThemeConfig.colors.primary
+            color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.BarConfig.colorText
             anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 120 } }
         }

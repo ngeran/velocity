@@ -294,34 +294,35 @@ PanelWindow {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; spacing: 6
                     Rectangle {
-                        width: typeLbl.implicitWidth + 12; height: 18
-                        radius: 0
+                        width: typeLbl.implicitWidth + 16; height: 22
+                        radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
-                        border.color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
+                        border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
                         border.width: 1
+                        Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: typeLbl; anchors.centerIn: parent
                             text: !Services.NetworkService.isConnected ? "NONE" : (Services.NetworkService.connectionType === "wifi" ? "WIFI" : "ETH")
                             font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                            color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
+                            color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Rectangle {
-                        width: connLbl.implicitWidth + 14; height: 18
-                        radius: 0
-                        color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.ThemeConfig.fillRest
-                        border.color: Services.NetworkService.isConnected ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
+                        width: connLbl.implicitWidth + 16; height: 22
+                        radius: 5
+                        color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
+                        border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: connLbl; anchors.centerIn: parent
                             text: Services.NetworkService.isConnected ? "CONNECTED" : "DISCONNECTED"
                             font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                            color: Services.NetworkService.isConnected ? Config.BarConfig.colorBackground : Config.BarConfig.colorTextDim }
+                            color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Item { Layout.fillWidth: true }
                     // QR Connect — opens the NETWORK CREDENTIALS view
                     Rectangle {
                         visible: Services.NetworkService.isConnected
                         width: qrConnRow.implicitWidth + 16; height: 22
-                        radius: 3
+                        radius: 5
                         color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
