@@ -35,7 +35,13 @@ Scope {
     readonly property var source: Pipewire.defaultAudioSource
 
     // PipeWire only populates node properties for tracked objects — track ALL
-    // of them; the views filter. Imperative assignment per trap #2.
+    // of them; the views filter. The registry signal is `valuesChanged` ON THE
+    // NODES MODEL — Pipewire.onNodesChanged does not exist, and the mismatch
+    // left the tracker empty forever (volume stuck at 0%). The default sink
+    // is ALSO tracked declaratively (re-fires on every output switch — the
+    // old, proven pattern) so its volume reads work the moment it appears.
+    PwObjectTracker { objects: root.sink ? [root.sink] : [] }
+
     PwObjectTracker {
         id: tracker
         objects: []
@@ -49,8 +55,8 @@ Scope {
             " vol=" + volume + " muted=" + muted)
     }
     Connections {
-        target: Pipewire
-        function onNodesChanged() { tracker.objects = Pipewire.nodes.values }
+        target: Pipewire.nodes
+        function onValuesChanged() { tracker.objects = Pipewire.nodes.values }
     }
 
     // Audio sinks, DEFAULT FIRST. Recomputes on registry changes; the node
