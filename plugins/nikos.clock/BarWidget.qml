@@ -2,14 +2,13 @@
 // nikos.clock — CENTER-slot plugin (plugin api 1)
 // =============================================================================
 // Center anchor pill: date-time · live weather glyph · temperature.
-//   • time click  → this plugin's CALENDAR popup (TEMPORAL MAP styling)
-//   • weather click → the nikos.weather popup; right-click forces a refresh
+//   • time click    → this plugin's CALENDAR popup (TEMPORAL MAP styling)
+//   • weather click → force a refresh of the embedded WeatherSource fetcher
 // Colours ride api tokens; active modules get an underline + primary border.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import "../nikos.weather" as WX
 import "file:///home/nikos/.config/quickshell/bar/components" as Host
 
 Item {
@@ -31,6 +30,11 @@ Item {
     SystemClock {
         id: clk
         precision: SystemClock.Minutes
+    }
+
+    // Embedded weather fetcher — self-contained (no cross-plugin import).
+    WeatherSource {
+        id: wxSource
     }
 
     readonly property var _days:   ["SUN","MON","TUE","WED","THU","FRI","SAT"]
@@ -108,10 +112,10 @@ Item {
                 }
             }
 
-            // Live weather — condition glyph + temperature from the
-            // nikos.weather service singleton (same module URL → one shared
-            // instance). Click toggles the weather panel; right-click forces
-            // a refresh. Temp hidden until the first valid sample lands.
+            // Live weather — condition glyph + temperature from the EMBEDDED
+            // WeatherSource (self-contained; the nikos.weather plugin was
+            // removed). Click forces a refresh. Temp hidden until the first
+            // valid sample lands.
             Item {
                 width: wxRow.implicitWidth
                 height: parent.height
@@ -123,34 +127,24 @@ Item {
                     spacing: 4
 
                     Text {
-                        text: WX.WeatherService.glyph
+                        text: wxSource.glyph
                         font.family: api ? api.bar.fontNerd : "monospace"
                         font.pixelSize: 13
-                        color: wxOpen ? api.theme.colors.accent
-                                      : (wxMa.containsMouse ? "#7DCFFF" : (api ? api.theme.colors.warning : "#888"))
+                        color: wxMa.containsMouse ? "#7DCFFF"
+                                                  : (api ? api.theme.colors.warning : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
-                        visible: WX.WeatherService.hasData
-                        text: WX.WeatherService.temp
+                        visible: wxSource.hasData
+                        text: wxSource.temp
                         font.family: api ? api.bar.fontFamily : "monospace"
                         font.pixelSize: 11
-                        color: wxOpen || wxMa.containsMouse ? api.theme.colors.accent
-                                                            : (api ? api.theme.colors.text : "#ddd")
+                        color: wxMa.containsMouse ? api.theme.colors.accent
+                                                  : (api ? api.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
-                }
-
-                // Active-module underline (mockup idiom)
-                Rectangle {
-                    anchors.horizontalCenter: wxRow.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: -2
-                    width: wxRow.width; height: 2; radius: 1
-                    color: api.theme.colors.warning
-                    visible: wxOpen
                 }
 
                 MouseArea {
@@ -158,13 +152,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: function(mouse) {
-                        if (mouse.button === Qt.RightButton)
-                            api.host.requestRefreshPanel("nikos.weather")
-                        else
-                            api.host.requestTogglePanel("nikos.weather")
-                    }
+                    onClicked: wxSource.refresh()
                 }
             }
         }
@@ -172,8 +160,7 @@ Item {
 
     onApiChanged: if (calPanel.item) calPanel.item.api = api
 
-    // Panel-open state, read from the host tracker for the active underlines
-    readonly property bool wxOpen: api ? api.host.openPanel === "nikos.weather" : false
+    // Panel-open state for the calendar underline
     readonly property bool calOpen: api ? api.host.openPanel === "nikos.clock" : false
 
     MouseArea {
