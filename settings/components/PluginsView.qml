@@ -273,7 +273,7 @@ ColumnLayout {
                             // enable / disable — themed kit switch
                         ToggleSwitch {
                             checked: modelData.enabled
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
                             onToggled: view.mgr.setEnabled(modelData.id, !modelData.enabled)
                         }
 
@@ -285,7 +285,7 @@ ColumnLayout {
                         ConfirmDialog {
                             label: "DEL"
                             confirmLabel: "SURE?"
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter
                             onConfirmed: view.mgr.remove(modelData.id)
                         }
                     }
@@ -324,7 +324,7 @@ ColumnLayout {
 
         Text {
             anchors.left: parent.left; anchors.leftMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             text: "Plugins live in ~/.config/quickshell/plugins/<author.name>/ — each folder is self-contained; deleting it removes the plugin."
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
             color: Config.ThemeConfig.colors.textDim

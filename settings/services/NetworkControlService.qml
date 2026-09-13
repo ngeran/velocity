@@ -529,6 +529,7 @@ Item {
         root._syncNativeStatus()
         root._collectWifi()
         root._sampleLink()
+        root.detectDns()
     }
 
     // -------------------------------------------------------------------------
@@ -614,5 +615,196 @@ Item {
     // Reassign the whole object so change signals fire (nested-var gotcha).
     function _setStatus(patch) {
         root.connectionStatus = Object.assign({}, root.connectionStatus, patch)
+    }
+
+    // -------------------------------------------------------------------------
+    // DNS PROVIDER — DHCP | Cloudflare | Google | Custom (nmcli con mod).
+    // Reads the ACTIVE wifi profile (name ≠ ssid sometimes) and its current
+    // ipv4.dns / ignore-auto-dns to derive the mode shown by the segmented UI.
+    // -------------------------------------------------------------------------
+    property string activeConn: ""      // nmcli profile name of the active wifi
+    property string dnsMode: "dhcp"     // dhcp | cloudflare | google | custom
+    property string customDns: ""       // user-entered servers (custom mode)
+    property bool dnsBusy: false
+    property string dnsResult: ""       // inline feedback ("applied · reconnected")
+    property real _lastDnsDetect: 0     // epoch s — the probe is 2 forks; rate-limit
+
+    property var _dnsDetectProc: Process {
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { root._dnsDetectProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var out = root._dnsDetectProc.buffer; root._dnsDetectProc.buffer = ""
+            root.dnsBusy = false
+            var name = "", lines = out.split("\n")
+            for (var i = 0; i < lines.length; i++) {
+                var f = lines[i].split(":")
+                if (f.length >= 3 && f[1].indexOf("wireless") !== -1 && f[2] === connectionStatus.iface) {
+                    name = lines[i].substring(0, lines[i].lastIndexOf(":" + f[1] + ":" + f[2])).trim()
+                    break
+                }
+            }
+            root.activeConn = name
+            if (name === "") { root.dnsMode = "dhcp"; return }
+            var rd = _dnsReadProc
+            rd.buffer = ""
+            rd.onDone = function(dnsLine, ign) {
+                var mode = "custom", servers = dnsLine.split(",").filter(function(s){return s !== ""})
+                if (ign !== "yes" || servers.length === 0) mode = "dhcp"
+                else if (dnsLine.indexOf("1.1.1.1") !== -1) mode = "cloudflare"
+                else if (dnsLine.indexOf("8.8.8.8") !== -1) mode = "google"
+                root.dnsMode = mode
+            }
+            rd.command = ["sh", "-c",
+                "nmcli -g ipv4.dns connection show '" + name + "' 2>/dev/null; echo '--'; " +
+                "nmcli -g ipv4.ignore-auto-dns connection show '" + name + "' 2>/dev/null"]
+            rd.running = true
+        }
+    }
+
+    property var _dnsReadProc: Process {
+        command: []
+        property string buffer: ""
+        property var onDone: null
+        stdout: SplitParser { onRead: function(d) { root._dnsReadProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var out = root._dnsReadProc.buffer; root._dnsReadProc.buffer = ""
+            var parts = out.split("--\n")
+            var cb = root._dnsReadProc.onDone
+            if (cb) cb((parts[0] || "").trim(), (parts[1] || "").trim())
+        }
+    }
+
+    function detectDns() {
+        var now = new Date().getTime() / 1000
+        if (dnsBusy || now - _lastDnsDetect < 8) return
+        _lastDnsDetect = now
+        if (!connectionStatus.connected || connectionStatus.iface === "") return
+        dnsBusy = true
+        _dnsDetectProc.buffer = ""
+        _dnsDetectProc.command = ["sh", "-c",
+            "nmcli -t -f NAME,TYPE,DEVICE connection show --active 2>/dev/null"]
+        _dnsDetectProc.running = true
+    }
+
+    function applyDns(mode, custom) {
+        if (dnsBusy || activeConn === "") return
+        dnsBusy = true
+        dnsMode = mode
+        if (mode === "custom") customDns = (custom || "").trim()
+        var dns = mode === "cloudflare" ? "1.1.1.1 1.0.0.1"
+                : mode === "google"     ? "8.8.8.8 8.8.4.4"
+                : mode === "custom"     ? customDns : ""
+        var ign = mode === "dhcp" ? "no" : "yes"
+        if (mode === "custom" && dns === "") { dnsBusy = false; dnsResult = "enter servers first"; return }
+        dnsResult = "applying…"
+        _dnsApplyProc.buffer = ""
+        _dnsApplyProc.command = ["sh", "-c",
+            "nmcli connection mod '" + activeConn + "' ipv4.dns '" + dns + "' ipv4.ignore-auto-dns " + ign + " && " +
+            "nmcli connection up '" + activeConn + "' >/dev/null 2>&1 && echo APPLIED || echo FAILED"]
+        _dnsApplyProc.running = true
+    }
+
+    property var _dnsApplyProc: Process {
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { root._dnsApplyProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var out = root._dnsApplyProc.buffer; root._dnsApplyProc.buffer = ""
+            root.dnsBusy = false
+            root.dnsResult = out.indexOf("APPLIED") !== -1 ? "applied · reconnected"
+                                                           : "apply failed (see journal)"
+            root._lastDnsDetect = 0
+            root._sampleLink()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SPEED TEST — Cloudflare __down endpoint, curl speed_download → Mbps.
+    // -------------------------------------------------------------------------
+    property bool speedTesting: false
+    property string speedTestResult: ""
+
+    function runSpeedTest() {
+        if (speedTesting) return
+        speedTesting = true
+        speedTestResult = ""
+        _speedProc.command = ["sh", "-c",
+            "curl -o /dev/null -sS --max-time 25 -w '%{speed_download}' " +
+            "'https://speed.cloudflare.com/__down?bytes=15000000' 2>/dev/null || echo FAIL"]
+        _speedProc.running = true
+    }
+
+    property var _speedProc: Process {
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { root._speedProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var out = root._speedProc.buffer.trim(); root._speedProc.buffer = ""
+            root.speedTesting = false
+            if (out === "" || out.indexOf("FAIL") !== -1) { root.speedTestResult = "failed"; return }
+            var mbps = (parseFloat(out) * 8) / 1e6
+            root.speedTestResult = isNaN(mbps) ? "failed" : "≈ " + mbps.toFixed(1) + " Mbps"
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // WI-FI QR — payload WIFI:T:…;S:…;P:…; → qrencode ASCII → 0/1 matrix rows.
+    // Ported from the nikos.wifiqr plugin so the network popup can show the
+    // share code without opening the plugin panel.
+    // -------------------------------------------------------------------------
+    property var qrMatrix: []           // array of "0101…" strings
+    property string qrSsid: ""
+    property string qrSecurity: ""
+    property string qrPassword: ""
+    property string qrError: ""
+
+    function generateQr() {
+        _qrProc.buffer = ""
+        _qrProc.command = ["bash", "-c",
+            "iface=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); " +
+            "[ -z \"$iface\" ] && iface=$(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null | awk -F: '$2==\"wifi\" && $3 ~ /^connected/{print $1;exit}'); " +
+            "[ -z \"$iface\" ] && echo 'No active Wi-Fi connection' && exit 0; " +
+            "uuid=$(nmcli --get-values GENERAL.CON-UUID device show \"$iface\" | head -n1); " +
+            "mapfile -t fl < <(nmcli --show-secrets --escape no --get-values " +
+            "802-11-wireless.ssid,802-11-wireless-security.key-mgmt,802-11-wireless-security.psk connection show uuid \"$uuid\"); " +
+            "ssid=${fl[0]}; km=${fl[1]}; pw=${fl[2]}; " +
+            "[ -z \"$ssid\" ] && echo 'Could not read the Wi-Fi name' && exit 0; " +
+            "sec=nopass; [ -n \"$km\" ] && [ \"$km\" != none ] && sec=WPA; " +
+            "printf 'meta\\t%s\\t%s\\t%s\\n' \"$sec\" \"$ssid\" \"$pw\"; " +
+            "payload=\"WIFI:T:$sec;S:$ssid;P:$pw;\"; " +
+            "qrencode --type ASCII --margin 4 --output - <<< \"$payload\" | " +
+            "awk '{r=\"\";for(c=1;c<=length($0);c+=2) r =r (substr($0,c,2) ~ /#/ ? 1 : 0); print r}'"]
+        _qrProc.running = true
+    }
+
+    property var _qrProc: Process {
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { root._qrProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var raw = root._qrProc.buffer
+            root._qrProc.buffer = ""
+            root.qrMatrix = []
+            root.qrSsid = ""; root.qrSecurity = ""; root.qrPassword = ""
+            if (raw.indexOf("No active Wi-Fi") !== -1 || raw.trim() === "") {
+                root.qrError = raw.trim() !== "" ? raw.trim().split("\n")[0] : "no active wi-fi"
+                return
+            }
+            var rows = []
+            raw.split("\n").forEach(function(line) {
+                if (line.indexOf("meta\t") === 0) {
+                    var f = line.split("\t")
+                    root.qrSecurity = f[1] || ""; root.qrSsid = f[2] || ""; root.qrPassword = f[3] || ""
+                } else if (line !== "") rows.push(line)
+            })
+            root.qrMatrix = rows
+            root.qrError = rows.length === 0 ? "could not generate QR" : ""
+        }
     }
 }
