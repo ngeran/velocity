@@ -354,27 +354,70 @@ PanelWindow {
                     font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.italic: true
                     color: Config.BarConfig.colorTextDim
                 }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "SSID"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
-                    Text { text: Services.NetworkService.ssid; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                // ── detail rows — label left · value RIGHT (mockup) ──
+                component NetRow: Item {
+                    property string label: ""
+                    property string value: "—"
+                    property bool valueBold: true
+                    property color valueColor: Config.BarConfig.colorText
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 34
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: parent.label
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.letterSpacing: 1
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: parent.value
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13
+                        font.bold: parent.valueBold
+                        color: parent.valueColor
+                        elide: Text.ElideMiddle
+                        width: Math.min(implicitWidth, parent.width * 0.7)
+                        horizontalAlignment: Text.AlignRight
+                    }
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "IP"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
-                    Text { text: Services.NetworkService.ipAddress; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "SSID"
+                    value: Services.NetworkService.ssid
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi" }
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "IP"
+                    value: Services.NetworkService.ipAddress !== "" ? Services.NetworkService.ipAddress : "—"
+                }
+                // SIGNAL row — % + 4-bar meter on the right (mockup)
                 RowLayout {
                     visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
-                    Layout.fillWidth: true; spacing: 8
-                    Text { text: "SIGNAL"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 40 }
-                    Text { text: Services.NetworkService.signalStrength + "%"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText }
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 34
+                    spacing: 0
+                    Text {
+                        text: "SIGNAL"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.letterSpacing: 1
+                        color: Config.BarConfig.colorTextDim
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                     Item { Layout.fillWidth: true }
-                    // 4-bar signal meter — bars fill from the bottom (classic
-                    // phone-style strength), active past each 25% threshold.
+                    Text {
+                        text: Services.NetworkService.signalStrength + "%"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
+                        color: Config.BarConfig.colorText
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { width: 10 }
                     Item {
-                        height: 14
-                        width: sigBars.implicitWidth
+                        Layout.preferredWidth: sigBars.implicitWidth
+                        Layout.preferredHeight: 16
+                        Layout.alignment: Qt.AlignVCenter
                         Row {
                             id: sigBars
                             anchors.bottom: parent.bottom
@@ -383,10 +426,9 @@ PanelWindow {
                                 model: 4
                                 Rectangle {
                                     width: 4
-                                    height: 4 + index * 3
-                                    radius: 0
+                                    height: 5 + index * 3
                                     color: Services.NetworkService.signalStrength > index * 25
-                                           ? Config.BarConfig.colorAccent
+                                           ? Config.ThemeConfig.colors.primary
                                            : Config.ThemeConfig.hairlineSoft
                                     Behavior on color { ColorAnimation { duration: 120 } }
                                 }
@@ -394,56 +436,44 @@ PanelWindow {
                         }
                     }
                 }
-                // ── link diagnostics: gateway / DNS / latency ──
-                Item { height: 10; visible: Services.NetworkService.isConnected }
+                Item { height: 6; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "GATEWAY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                    Text { text: Services.NetworkService.gateway ? Services.NetworkService.gateway : "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                Item { height: 6; visible: Services.NetworkService.isConnected }
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "GATEWAY"
+                    value: Services.NetworkService.gateway !== "" ? Services.NetworkService.gateway : "—"
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "DNS"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                    Text { text: Services.NetworkService.dns ? Services.NetworkService.dns : "—"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText; Layout.fillWidth: true; elide: Text.ElideRight }
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "DNS"
+                    value: Services.NetworkService.dns !== "" ? Services.NetworkService.dns : "—"
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "LATENCY"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                    Text {
-                        text: Services.NetworkService.latencyMs >= 0 ? (Math.round(Services.NetworkService.latencyMs) + " ms") : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true
-                        color: Services.NetworkService.latencyMs < 0 ? Config.BarConfig.colorTextDim
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "LATENCY"
+                    value: Services.NetworkService.latencyMs >= 0 ? (Math.round(Services.NetworkService.latencyMs) + " ms") : "—"
+                    valueColor: Services.NetworkService.latencyMs < 0 ? Config.BarConfig.colorTextDim
                               : Services.NetworkService.latencyMs < 50 ? Config.ThemeConfig.colors.success
-                              : Services.NetworkService.latencyMs < 150 ? Config.ThemeConfig.colors.warning
                               : Config.ThemeConfig.colors.error
-                    }
                 }
-
-                // ── live throughput: rate · cumulative since iface up ──
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "RX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                    Text {
-                        // Empty rate = no sample yet (distinguished from a
-                        // genuine 0 B/s idle line).
-                        text: Services.NetworkService.rxRate === "" ? "—"
-                              : Services.NetworkService.rxRate + "  ·  " + Services.NetworkService.rxTotal
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText
-                        Layout.fillWidth: true; elide: Text.ElideRight
-                    }
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "RX"
+                    value: Services.NetworkService.rxRate === "" ? "—"
+                          : Services.NetworkService.rxRate + "  ·  " + Services.NetworkService.rxTotal
+                    valueBold: false
                 }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
-                RowLayout { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; spacing: 0
-                    Text { text: "TX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim; Layout.preferredWidth: 56 }
-                    Text {
-                        text: Services.NetworkService.txRate === "" ? "—"
-                              : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; color: Config.BarConfig.colorText
-                        Layout.fillWidth: true; elide: Text.ElideRight
-                    }
+                NetRow {
+                    visible: Services.NetworkService.isConnected
+                    label: "TX"
+                    value: Services.NetworkService.txRate === "" ? "—"
+                          : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
+                    valueBold: false
                 }
-
+                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Item { height: 10; visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
