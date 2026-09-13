@@ -358,7 +358,7 @@ PanelWindow {
                     // content-based width: the card sizes itself from these
                     implicitWidth: lblTxt.implicitWidth + valTxt.implicitWidth + 16
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
+                    Layout.preferredHeight: 28
                     Text {
                         id: lblTxt
                         anchors.left: parent.left
@@ -396,7 +396,7 @@ PanelWindow {
                 RowLayout {
                     visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
+                    Layout.preferredHeight: 28
                     spacing: 0
                     Text {
                         text: "SIGNAL"
@@ -435,9 +435,9 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 4; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 4; visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
                     label: "GATEWAY"
@@ -470,9 +470,9 @@ PanelWindow {
                           : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
                     valueBold: false
                 }
-                Item { height: 6; visible: Services.NetworkService.isConnected }
+                Item { height: 4; visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.NetworkService.isConnected }
+                Item { height: 8; visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
