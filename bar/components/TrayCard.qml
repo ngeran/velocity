@@ -9,6 +9,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import "../services" as Services
 import "../config" as Config
@@ -81,12 +82,14 @@ PanelWindow {
                 ? (Services.NetworkService.connectionType === "wifi" ? "󰖩" : "󰈀") : "󰖪"
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
+        if (lastTray === "power")     return Services.BatteryService.glyph
         return ""
     }
     readonly property string headerTitle: {
         if (lastTray === "network")   return "NETWORK"
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
+        if (lastTray === "power")     return "POWER"
         return ""
     }
 
@@ -119,6 +122,7 @@ PanelWindow {
         height: card.lastTray === "network"
                 ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 55)
               : card.lastTray === "volume" ? volumeBody.implicitHeight + 55
+              : card.lastTray === "power" ? powerBody.implicitHeight + 55
               : card.lastTray === "bluetooth" ? Math.max(networkBody.implicitHeight + 55,
                                                           btBody.implicitHeight + 55)
               : 220
@@ -184,6 +188,23 @@ PanelWindow {
                     Layout.fillWidth: true
                 }
                 Text {
+                    // BT scan/re-discover — visible on the bluetooth tray
+                    visible: card.lastTray === "bluetooth" && Services.BluetoothService.hasBluetooth
+                    text: "󰑐"
+                    font.family: Config.BarConfig.fontNerd
+                    font.pixelSize: 13
+                    color: hdrScanArea.containsMouse
+                           ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
+                    Behavior on color { ColorAnimation { duration: 100 } }
+                    MouseArea {
+                        id: hdrScanArea
+                        anchors.fill: parent; anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onClicked: Services.BluetoothService.startScan()
+                    }
+                }
+                Text {
                     // QR entry — opens the NETWORK CREDENTIALS view
                     visible: card.lastTray === "network" && Services.NetworkService.isConnected
                     text: "󰀄"
@@ -245,6 +266,7 @@ PanelWindow {
             currentIndex: {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
+                if (card.lastTray === "power")     return 3
                 return 0
             }
 
@@ -445,7 +467,10 @@ PanelWindow {
                 Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
             }
 
-            // ── Bluetooth ──
+
+            // ── Bluetooth ── mockup port: adapter row (ON pill · UP state ·
+            // DISCOVERABLE chip), connected-device cards with battery bars,
+            // PAIRED & NEARBY list with CONNECT/PAIR, DISABLE footer.
             ColumnLayout {
                 id: btBody
                 Layout.fillWidth: true; Layout.margins: 12; spacing: 0
@@ -463,410 +488,551 @@ PanelWindow {
                     color: Config.BarConfig.colorTextDim
                 }
 
-                RowLayout { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; spacing: 6
+                // ── adapter row: ON pill · UP state · DISCOVERABLE chip ──
+                RowLayout {
+                    visible: Services.BluetoothService.hasBluetooth
+                    Layout.fillWidth: true; spacing: 10
+
                     Rectangle {
-                        width: btLbl.implicitWidth + 12; height: 18
-                        radius: 0
-                        color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Config.ThemeConfig.fillRest
-                        border.color: Services.BluetoothService.powered ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
+                        width: btLbl.implicitWidth + 20; height: 26
+                        radius: 5
+                        color: Services.BluetoothService.powered ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
+                        border.color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
-                        Text { id: btLbl; anchors.centerIn: parent; text: Services.BluetoothService.powered ? "ON" : "OFF"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.BluetoothService.powered ? Config.BarConfig.colorBackground : Config.BarConfig.colorTextDim }
+                        Text { id: btLbl; anchors.centerIn: parent
+                            text: Services.BluetoothService.powered ? "ON" : "OFF"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.BluetoothService.togglePower()
+                        }
+                    }
+                    Text {
+                        text: Services.BluetoothService.powered ? "adapter: UP" : "adapter: DOWN"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        color: Config.BarConfig.colorTextDim
                     }
                     Item { Layout.fillWidth: true }
+                    Rectangle {
+                        visible: Services.BluetoothService.hasBluetooth
+                        width: discRow.implicitWidth + 16; height: 24
+                        radius: 5
+                        color: "transparent"
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Row {
+                            id: discRow
+                            anchors.centerIn: parent; spacing: 6
+                            Rectangle {
+                                width: 5; height: 5; radius: 2.5
+                                color: Config.ThemeConfig.colors.primary
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Text {
+                                text: "DISCOVERABLE"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                                font.letterSpacing: 1.2
+                                color: Config.BarConfig.colorText
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.BluetoothService.startScan()
+                        }
+                    }
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
                 Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
                 Item { height: 8; visible: Services.BluetoothService.hasBluetooth }
-                Text { visible: Services.BluetoothService.hasBluetooth; text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorTextDim }
-                Item { height: 6; visible: Services.BluetoothService.hasBluetooth }
-                // Capped ListView instead of an unbounded Repeater: sizes to its
-                // content up to ~4 rows and scrolls beyond that — and because
-                // the height is explicit, btBody.implicitHeight becomes
-                // reliable (Repeater delegates never were, which is what forced
-                // the old hand-tuned height formula in the dropdown binding).
-                ListView {
-                    id: btDeviceList
+
+                // ── CONNECTED section header ──
+                RowLayout {
                     visible: Services.BluetoothService.hasBluetooth
                     Layout.fillWidth: true
-                    Layout.preferredHeight: count > 0 ? Math.min(contentHeight, 64) : 0
-                    clip: true
-                    interactive: contentHeight > height
-                    spacing: 0
-                    model: Services.BluetoothService.devices
-                    delegate: Item {
-                        width: btDeviceList.width
-                        height: 18
-                        required property var modelData
-
-                        // Subtle row hover fill — pairs with the revealed
-                        // disconnect affordance.
-                        Rectangle {
-                            anchors.fill: parent
-                            color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
-
-                        // Hover catcher sits UNDER the content row so the
-                        // disconnect button (with its own MouseArea) still gets
-                        // clicks; plain Texts pass hover through.
-                        MouseArea {
-                            id: rowHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: 6
-                            Text { text: "󰂱"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorAccent }
-                            Text {
-                                text: modelData.name
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
-                                color: Config.BarConfig.colorText
-                                Layout.fillWidth: true; elide: Text.ElideRight
-                            }
-                            // Battery % when the device reports one (MX-style
-                            // mice/headsets do), dim right-aligned.
-                            Text {
-                                visible: Services.BluetoothService.deviceBatteries[modelData.address] !== undefined
-                                text: Services.BluetoothService.deviceBatteries[modelData.address] + "%"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
-                                color: Config.BarConfig.colorTextDim
-                            }
-                            // Hover-revealed disconnect (Omarchy row idiom).
-                            Text {
-                                visible: rowHover.containsMouse
-                                text: "✕"
-                                font.pixelSize: 10
-                                color: disconnectArea.containsMouse ? Config.ThemeConfig.colors.error : Config.BarConfig.colorTextDim
-                                Behavior on color { ColorAnimation { duration: 100 } }
-                                MouseArea {
-                                    id: disconnectArea
-                                    anchors.fill: parent
-                                    anchors.margins: -6   // generous hit target
-                                    cursorShape: Qt.PointingHandCursor
-                                    hoverEnabled: true
-                                    onClicked: Services.BluetoothService.disconnectDevice(modelData.address)
-                                }
-                            }
-                        }
-                    }
-                }
-                // Named empty states (Omarchy): off vs powered-but-nothing say
-                // different things, and point at where full management lives.
-                Text {
-                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.deviceCount === 0
-                    text: Services.BluetoothService.powered ? "No devices connected — pairing lives in Settings ▸ Control"
-                                                           : "Bluetooth is off"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; font.italic: true
-                }
-                Item { Layout.fillHeight: true; visible: Services.BluetoothService.hasBluetooth }
-                Rectangle {
-                    visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true; height: 26
-                    radius: 0
-                    color: {
-                        if (btBtnArea.containsMouse)
-                            return Services.BluetoothService.powered ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
-                        return Services.BluetoothService.powered ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
-                    }
-                    border.color: Services.BluetoothService.powered ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
-                    border.width: 1
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: 6
-                        Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.BluetoothService.powered ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
-                        Text { text: Services.BluetoothService.powered ? "DISABLE" : "ENABLE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.BluetoothService.powered ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
-                    }
-                    MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
-                }
-
-                // Nudge the DISABLE/ENABLE button 15px up from the bottom edge of
-                // the (wifi-matching) box so it isn't flush against it.
-                Item { height: 15; visible: Services.BluetoothService.hasBluetooth }
-            }
-
-            // ── Volume ── mockup port: hero %, dB scale, OUTPUT SINK picker,
-            // INPUT SOURCE mic strip, MUTE footer.
-            ColumnLayout {
-                id: volumeBody
-                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
-
-                // wpctl absent — dim dash instead of a misleading "0%"
-                Text {
-                    visible: !Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "—"
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 28
-                    color: Config.BarConfig.colorTextDim
-                }
-
-                // ── HERO — big glyph + huge % ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: 12
-
                     Text {
-                        text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 30
-                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Text {
-                        text: Math.round(Services.AudioService.volume) + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 52; font.bold: true
-                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Item { height: 6; visible: Services.AudioService.hasAudio }
-
-                // ── master slider ──
-                Slider {
-                    id: volSlider
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 28        // generous vertical click band
-                    hoverEnabled: true
-                    from: 0; to: 100
-                    value: Services.AudioService.volume
-                    onMoved: {
-                        Services.AudioService.setVolume(value)
-                        Services.OsdService.showVolume(value, Services.AudioService.muted)
-                    }
-                    background: Rectangle {
-                        x: volSlider.leftPadding
-                        y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        implicitHeight: 6; width: volSlider.availableWidth; radius: 0
-                        color: Config.ThemeConfig.hairlineSoft
-                        Rectangle {
-                            height: parent.height
-                            width: volSlider.visualPosition * parent.width
-                            radius: 0
-                            color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                        }
-                    }
-                    handle: Rectangle {
-                        x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
-                        y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        width: 18; height: 20; radius: 4
-                        color: Config.BarConfig.colorBackground
-                        border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                        border.width: 2
-                        scale: volSlider.pressed ? 1.15 : (volSlider.hovered ? 1.1 : 1.0)
-                        Behavior on scale { NumberAnimation { duration: 90 } }
-                    }
-                }
-                // ── dB scale labels (mockup) ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Text { text: "0 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "+6 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
-                }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
-
-                // ── OUTPUT SINK (PIPEWIRE) picker ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: 8
-                    Text {
-                        text: "OUTPUT SINK (PIPEWIRE)"
+                        text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"
                         font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
                         font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: Services.AudioService.hwLabel
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
-                        color: Config.ThemeConfig.colors.primary
-                        elide: Text.ElideMiddle
-                        Layout.maximumWidth: 130
+                        text: "BATTERY"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
                     }
                 }
-                Item { height: 8; visible: Services.AudioService.hasAudio }
+                Item { height: 6; visible: Services.BluetoothService.hasBluetooth }
 
+                // ── connected device cards ──
                 Repeater {
-                    visible: Services.AudioService.hasAudio
-                    model: Services.AudioService.sinks
+                    visible: Services.BluetoothService.hasBluetooth
+                    model: Services.BluetoothService.connectedDevices.slice(0, 4)
 
                     delegate: Rectangle {
                         required property var modelData
-                        readonly property bool isDefault: modelData === Services.AudioService.sink
-                        readonly property real sinkRowWidth: width
+                        readonly property var batt: Services.BluetoothService.deviceBatteries[modelData.address]
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 44
+                        Layout.preferredHeight: 46
+                        Layout.bottomMargin: 8
                         radius: 6
-                        color: sinkMa.containsMouse || isDefault
-                               ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: isDefault ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: 1
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12; anchors.rightMargin: 12
+                            spacing: 10
+
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorAccent }
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text {
+                                    text: modelData.name
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                    color: Config.BarConfig.colorText
+                                    elide: Text.ElideRight; Layout.maximumWidth: 190
+                                }
+                                Text {
+                                    text: modelData.address
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    color: Config.BarConfig.colorTextDim
+                                    elide: Text.ElideMiddle; Layout.maximumWidth: 190
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                visible: batt !== undefined
+                                text: batt + "%"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                color: Config.BarConfig.colorText
+                            }
+                            // battery bar (mockup) — green when healthy
+                            Rectangle {
+                                visible: batt !== undefined
+                                width: 22; height: 11; radius: 2
+                                color: Config.ThemeConfig.hairlineSoft
+                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top; anchors.bottom: parent.top
+                                    anchors.margins: 2
+                                    width: (parent.width - 4) * batt / 100
+                                    height: parent.height - 4
+                                    color: batt >= 50 ? Config.ThemeConfig.colors.success
+                                         : batt >= 25 ? Config.ThemeConfig.colors.warning
+                                         : Config.ThemeConfig.colors.error
+                                }
+                            }
+                            // hover-revealed disconnect (kept from the old row)
+                            Text {
+                                visible: rowHover.containsMouse
+                                text: "✕"
+                                font.pixelSize: 10
+                                color: discArea.containsMouse ? Config.ThemeConfig.colors.error : Config.BarConfig.colorTextDim
+                                MouseArea {
+                                    id: discArea
+                                    anchors.fill: parent; anchors.margins: -6
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.BluetoothService.disconnectDevice(modelData.address)
+                                }
+                            }
+                        }
+                        MouseArea {
+                            id: rowHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                    }
+                }
+
+                Text {
+                    visible: Services.BluetoothService.hasBluetooth &&
+                             Services.BluetoothService.connectedDevices.length === 0
+                    Layout.fillWidth: true
+                    text: Services.BluetoothService.powered
+                          ? "No devices connected — pairing lives in Settings ▸ Control"
+                          : "Bluetooth is off"
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.italic: true
+                    color: Config.BarConfig.colorTextDim
+                }
+                Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
+
+                // ── PAIRED & NEARBY ──
+                RowLayout {
+                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
+                    Layout.fillWidth: true
+                    Text {
+                        text: "PAIRED & NEARBY"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
+                              ? "SCANNING…" : "SIGNAL"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
+                               ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim
+                    }
+                }
+                Item { height: 6; visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
+
+                Repeater {
+                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
+                    model: Services.BluetoothService.pairedDevices.slice(0, 3)
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 46
+                        Layout.bottomMargin: 8
+                        radius: 6
+                        color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
 
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 12; anchors.rightMargin: 10
                             spacing: 10
-
-                            // selected dot (mockup: ● vs ○)
-                            Rectangle {
-                                width: 7; height: 7; radius: 3.5
-                                color: isDefault ? Config.ThemeConfig.colors.primary : "transparent"
-                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
-                            }
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorTextDim }
                             ColumnLayout {
                                 spacing: 1
                                 Layout.fillWidth: true
                                 Text {
-                                    text: modelData.description || modelData.nickname || modelData.name
+                                    text: modelData.name
                                     font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
-                                    color: isDefault ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
-                                    elide: Text.ElideRight
-                                    Layout.maximumWidth: sinkRowWidth - 150
+                                    color: Config.BarConfig.colorText
+                                    elide: Text.ElideRight; Layout.maximumWidth: 180
                                 }
                                 Text {
-                                    text: modelData.name
+                                    text: "Paired"
                                     font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
                                     color: Config.BarConfig.colorTextDim
-                                    elide: Text.ElideMiddle
-                                    Layout.maximumWidth: sinkRowWidth - 150
                                 }
                             }
-                            // DEFAULT chip + check, or Select hint
                             Rectangle {
-                                visible: isDefault
-                                width: defLbl.implicitWidth + 12; height: 17
-                                radius: 3
-                                color: Config.ThemeConfig.accentTint
-                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
-                                Text { id: defLbl; anchors.centerIn: parent
-                                    text: "DEFAULT"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1
-                                    color: Config.ThemeConfig.colors.primary }
-                            }
-                            Text {
-                                visible: isDefault
-                                text: "✓"
-                                font.pixelSize: 12
-                                color: Config.ThemeConfig.colors.primary
-                            }
-                            Text {
-                                visible: !isDefault
-                                text: "Select"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
-                                color: sinkMa.containsMouse ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
+                                width: pnLbl.implicitWidth + 16; height: 24
+                                radius: 5
+                                color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                Text { id: pnLbl; anchors.centerIn: parent
+                                    text: "CONNECT"
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                    color: Config.BarConfig.colorText }
+                                MouseArea {
+                                    id: pnArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.BluetoothService.connectDevice(modelData.address)
+                                }
                             }
                         }
-                        MouseArea {
-                            id: sinkMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: isDefault ? Qt.ArrowCursor : Qt.PointingHandCursor
-                            onClicked: if (!isDefault) Services.AudioService.setDefaultSink(modelData)
-                        }
+                        MouseArea { id: pnRow; anchors.fill: parent; hoverEnabled: true }
                     }
                 }
-                Item { height: 12; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
 
-                // ── INPUT SOURCE (microphone) ──
+                Repeater {
+                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
+                    model: Services.BluetoothService.nearbyDevices.slice(0, 2)
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 46
+                        Layout.bottomMargin: 8
+                        radius: 6
+                        color: nbRow.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12; anchors.rightMargin: 10
+                            spacing: 10
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorTextDim }
+                            ColumnLayout {
+                                spacing: 1
+                                Layout.fillWidth: true
+                                Text {
+                                    text: modelData.name
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                                    color: Config.BarConfig.colorText
+                                    elide: Text.ElideRight; Layout.maximumWidth: 180
+                                }
+                                Text {
+                                    text: "New device"
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    color: Config.BarConfig.colorTextDim
+                                }
+                            }
+                            Rectangle {
+                                width: nbLbl.implicitWidth + 16; height: 24
+                                radius: 5
+                                color: nbArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                Text { id: nbLbl; anchors.centerIn: parent
+                                    text: "PAIR"
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                    color: Config.BarConfig.colorText }
+                                MouseArea {
+                                    id: nbArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.BluetoothService.pairDevice(modelData.address)
+                                }
+                            }
+                        }
+                        MouseArea { id: nbRow; anchors.fill: parent; hoverEnabled: true }
+                    }
+                }
+                Item { height: 10; visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
+
+                // ── DISABLE / ENABLE BLUETOOTH footer (mockup full-width pill) ──
+                Rectangle {
+                    visible: Services.BluetoothService.hasBluetooth
+                    Layout.fillWidth: true; height: 32
+                    radius: 6
+                    color: btBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+                    border.color: Config.BarConfig.colorBorder; border.width: 1
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    RowLayout { anchors.centerIn: parent; spacing: 6
+                        Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Config.BarConfig.colorTextDim }
+                        Text { text: Services.BluetoothService.powered ? "DISABLE BLUETOOTH" : "ENABLE BLUETOOTH"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorText }
+                    }
+                    MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
+                }
+            }
+
+            // ── Power ── mockup port: chips · CHARGE bar · SOURCE · PROFILE ·
+            // POWER MENU. Battery blocks are gated on hasBattery (desktops show
+            // AC-only honestly), and the profile picker hides unless
+            // power-profiles-daemon is installed.
+            ColumnLayout {
+                id: powerBody
+                Layout.fillWidth: true; Layout.margins: 12; spacing: 0
+
+                // refresh the profile when the popup opens
+                Connections {
+                    target: card
+                    function onActiveTrayChanged() {
+                        if (card.activeTray === "power") Services.PowerProfilesService.refresh()
+                    }
+                }
+
+                // ── chips row: source · battery state · HEALTH ──
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+
+                    Rectangle {
+                        width: srcLbl.implicitWidth + 16; height: 20
+                        radius: 4
+                        color: "transparent"
+                        border.color: Services.BatteryService.onAc
+                                      ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
+                        border.width: 1
+                        Text { id: srcLbl; anchors.centerIn: parent
+                            text: Services.BatteryService.onAc ? "AC POWER" : "ON BATTERY"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                            font.letterSpacing: 1.5
+                            color: Services.BatteryService.onAc ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
+                    }
+                    Rectangle {
+                        visible: Services.BatteryService.hasBattery
+                        width: chgLbl.implicitWidth + 22; height: 20
+                        radius: 4
+                        color: Services.BatteryService.charging ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
+                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        Row {
+                            anchors.centerIn: parent; spacing: 5
+                            Rectangle {
+                                width: 5; height: 5; radius: 2.5
+                                color: Services.BatteryService.charging ? Config.ThemeConfig.colors.success : Config.BarConfig.colorTextDim
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Text { id: chgLbl; anchors.verticalCenter: parent.verticalCenter
+                                text: Services.BatteryService.stateLabel
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                                font.letterSpacing: 1.5
+                                color: Services.BatteryService.charging ? Config.ThemeConfig.colors.success : Config.BarConfig.colorTextDim }
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        visible: Services.BatteryService.hasBattery && Services.BatteryService.healthPct > 0
+                        text: "HEALTH:  " + Services.BatteryService.healthPct + "%"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        color: Config.BarConfig.colorTextDim
+                    }
+                }
+                Item { height: 12 }
+
+                // ── CHARGE block (battery present) ──
                 ColumnLayout {
-                    visible: Services.AudioService.hasMic
-                    Layout.fillWidth: true; spacing: 6
+                    visible: Services.BatteryService.hasBattery
+                    Layout.fillWidth: true; spacing: 8
 
                     RowLayout {
                         Layout.fillWidth: true; spacing: 8
-                        Text { text: "󰍬"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorTextDim }
                         Text {
-                            text: "INPUT SOURCE"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                            text: "CHARGE"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true
                             font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorText
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Services.BatteryService.percentage + "%"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 15; font.bold: true
+                            color: Config.BarConfig.colorText
+                        }
+                        Text {
+                            visible: Services.BatteryService.timeLabel !== ""
+                            text: Services.BatteryService.timeLabel
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                            color: Config.BarConfig.colorTextDim
+                        }
+                    }
+                    // gradient-ish charge bar: primary fill with an info tip
+                    Rectangle {
+                        Layout.fillWidth: true; height: 8; radius: 2
+                        color: Config.ThemeConfig.hairlineSoft
+                        Rectangle {
+                            width: parent.width * Services.BatteryService.percentage / 100
+                            height: parent.height; radius: 2
+                            color: Services.BatteryService.charging ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorAccent
+                            Behavior on width { NumberAnimation { duration: 200 } }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: Services.BatteryService.hasEnergy
+                                  ? "Capacity: " + Services.BatteryService.energyNow.toFixed(1) + " / " +
+                                    Services.BatteryService.energyFull.toFixed(1) + " Wh"
+                                  : "Capacity: —"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
                             color: Config.BarConfig.colorTextDim
                         }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: Math.round(Services.AudioService.micVolume) + "%"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.bold: true
-                            color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                        }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 10
-                        Slider {
-                            id: micSlider
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 22
-                            hoverEnabled: true
-                            from: 0; to: 100
-                            value: Services.AudioService.micVolume
-                            onMoved: Services.AudioService.setMicVolume(value)
-                            background: Rectangle {
-                                x: micSlider.leftPadding
-                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                implicitHeight: 4; width: micSlider.availableWidth; radius: 0
-                                color: Config.ThemeConfig.hairlineSoft
-                                Rectangle {
-                                    height: parent.height
-                                    width: micSlider.visualPosition * parent.width
-                                    color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                                }
-                            }
-                            handle: Rectangle {
-                                x: micSlider.leftPadding + micSlider.visualPosition * (micSlider.availableWidth - width)
-                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                width: 14; height: 14; radius: 7
-                                color: Config.BarConfig.colorText
-                            }
-                        }
-                        Rectangle {
-                            width: micLbl.implicitWidth + 16; height: 24
-                            radius: 6
-                            color: micBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                            border.color: Config.BarConfig.colorBorder; border.width: 1
-                            Text { id: micLbl; anchors.centerIn: parent
-                                text: Services.AudioService.micMuted ? "UNMUTE MIC" : "MUTE MIC"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
-                                color: Services.AudioService.micMuted ? Config.ThemeConfig.colors.error : Config.BarConfig.colorText }
-                            MouseArea { id: micBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMicMute() }
+                            visible: Services.BatteryService.energyRate > 0.5
+                            text: "Rate: " + (Services.BatteryService.charging ? "+" : "−") +
+                                  Services.BatteryService.energyRate.toFixed(1) + " W"
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                            color: Config.BarConfig.colorTextDim
                         }
                     }
                 }
-                Item { height: 12; visible: Services.AudioService.hasAudio }
+                Item { height: 10; visible: Services.BatteryService.hasBattery }
+                Rectangle { visible: Services.BatteryService.hasBattery; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Item { height: 10; visible: Services.BatteryService.hasBattery }
 
-                // ── MUTE footer ──
+                // ── SOURCE row ──
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        text: "SOURCE"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: Services.BatteryService.onAc ? "AC / Wall" : "Battery"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 12; font.bold: true
+                        color: Config.BarConfig.colorText
+                    }
+                }
+                Item { height: 12; visible: Services.PowerProfilesService.available }
+
+                // ── POWER PROFILE (hidden until power-profiles-daemon exists) ──
+                ColumnLayout {
+                    visible: Services.PowerProfilesService.available
+                    Layout.fillWidth: true; spacing: 8
+
+                    Text {
+                        text: "POWER PROFILE"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true
+                        font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+
+                        Repeater {
+                            model: [
+                                { key: "power-saver", label: "POWER SAVER" },
+                                { key: "balanced",    label: "BALANCED" },
+                                { key: "performance", label: "PERFORMANCE" }
+                            ]
+
+                            delegate: Rectangle {
+                                // inline-literal model → implicit modelData
+                                readonly property var seg: modelData
+                                readonly property bool on: Services.PowerProfilesService.profile === seg.key
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 30
+                                radius: 6
+                                color: on ? Config.ThemeConfig.accentTint
+                                          : (ppMa.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest)
+                                border.color: on ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
+                                border.width: 1
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: parent.seg.label
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: parent.on
+                                    color: parent.on ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim
+                                }
+                                MouseArea {
+                                    id: ppMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.PowerProfilesService.setProfile(parent.seg.key)
+                                }
+                            }
+                        }
+                    }
+                }
+                Item { height: 12 }
+
+                // ── POWER MENU footer — opens the settings power menu ──
                 Rectangle {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; height: 32
-                    radius: 6
-                    color: {
-                        if (muteBtnArea.containsMouse)
-                            return Services.AudioService.muted ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillHover
-                        return Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
-                    }
-                    border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
-                    border.width: 1
+                    Layout.fillWidth: true; height: 34
+                    radius: 8
+                    color: pmArea.containsMouse ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
+                    border.color: Config.ThemeConfig.colors.primary; border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: 6
-                        Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
-                        Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
+                    RowLayout { anchors.centerIn: parent; spacing: 8
+                        Text { text: "⏻"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 13; color: Config.ThemeConfig.colors.primary }
+                        Text { text: "POWER MENU"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.bold: true; font.letterSpacing: 2.5; color: Config.BarConfig.colorText }
                     }
-                    MouseArea { id: muteBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {
-                        Services.AudioService.toggleMute()
-                        Services.OsdService.showMute(Services.AudioService.muted)
-                    } }
+                    MouseArea {
+                        id: pmArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            card.closeRequested()
+                            pmProc.running = true
+                        }
+                    }
+                }
+                Process {
+                    id: pmProc
+                    command: ["qs", "-c", "settings", "ipc", "call", "powerMenu", "toggle"]
                 }
             }
         }

@@ -48,6 +48,26 @@ Item {
     property bool charging: sysBattery ? sysBattery.state === UPowerDevice.Charging
                                        : false
 
+    // ── POWER POPUP fields (mockup: CHARGE / Capacity / Rate / HEALTH) ──────
+    // All read off the tracked UPower device; undefined-safe ("" / 0 fallback)
+    // so a desktop without a battery renders dashes, not errors.
+    readonly property real energyNow: sysBattery ? (sysBattery.energy || 0) : 0
+    readonly property real energyFull: sysBattery ? (sysBattery.energyFull || 0) : 0
+    readonly property real energyRate: sysBattery ? (sysBattery.energyRate || 0) : 0
+    readonly property real healthPct: sysBattery ? Math.round(sysBattery.capacity || 0) : 0
+    readonly property bool hasEnergy: energyFull > 0
+
+    // "00:08 to full" / "01:12 left" — UPower gives seconds; discharging uses
+    // timeToEmpty, charging timeToFull.
+    readonly property string timeLabel: {
+        if (!sysBattery) return ""
+        var s = charging ? (sysBattery.timeToFull || 0) : (sysBattery.timeToEmpty || 0)
+        if (!s || s <= 0) return ""
+        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+        var t = (h > 0 ? h + ":" : "") + String(m).padStart(2, "0")
+        return charging ? "(" + t + " to full)" : "(" + t + " left)"
+    }
+
     Component.onCompleted: console.log(
         "[BatteryService] native UPower: hasBattery=" + hasBattery +
         " onAc=" + onAc + " pct=" + percentage + " charging=" + charging +

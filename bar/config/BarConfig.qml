@@ -36,7 +36,7 @@ Item {
     // Right-rail slot order (bar-config.json "rightLayout"). Plugins ride the
     // single "plugins" slot; their internal order comes from plugins-state.json.
     readonly property var defaultRightLayout: ["plugins", "network",
-                                               "bluetooth", "volume",
+                                               "bluetooth", "volume", "power",
                                                "logs", "notifications"]
     property var rightLayout: defaultRightLayout
     // Rail spacing that compensates for slot CONTENT: the 32px icon slots
@@ -82,7 +82,7 @@ Item {
             // Right-rail slot order — keys validated against the known set;
             // unknown keys are dropped, empty falls back to the default.
             if (Array.isArray(data.rightLayout)) {
-                var legal = ["plugins", "network", "bluetooth",
+                var legal = ["plugins", "network", "bluetooth", "power",
                              "volume", "logs", "notifications"]
                 var cleaned = data.rightLayout.filter(function(k) { return legal.indexOf(k) !== -1 })
                 rightLayout = cleaned.length > 0 ? cleaned : defaultRightLayout
