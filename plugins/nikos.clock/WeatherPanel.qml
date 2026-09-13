@@ -107,6 +107,10 @@ ColumnLayout {
         ColumnLayout {
             spacing: 2
             Layout.fillWidth: true
+            // The row must be able to SHRINK: layouts refuse to go below their
+            // widest child's implicit width unless minimumWidth is released —
+            // without this the DAY RANGE column overflowed the card.
+            Layout.minimumWidth: 0
 
             Row {
                 spacing: 4
@@ -125,6 +129,7 @@ ColumnLayout {
             }
 
             Text {
+                Layout.fillWidth: true
                 text: {
                     if (!wx) return "—"
                     var c = wx.condition || "—"
@@ -133,12 +138,15 @@ ColumnLayout {
                 }
                 font.family: _mono(); font.pixelSize: 10
                 color: _c("textDim")
+                elide: Text.ElideRight
             }
         }
 
+        // Right column — DAY RANGE / H·L / UV
         ColumnLayout {
             spacing: 3
             Layout.alignment: Qt.AlignTop
+            Layout.maximumWidth: 160
 
             Text {
                 text: "DAY RANGE"
