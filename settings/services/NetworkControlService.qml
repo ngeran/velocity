@@ -754,8 +754,8 @@ Item {
 
     // -------------------------------------------------------------------------
     // WI-FI QR — payload WIFI:T:…;S:…;P:…; → qrencode ASCII → 0/1 matrix rows.
-    // Ported from the nikos.wifiqr plugin so the network popup can show the
-    // share code without opening the plugin panel.
+    // Ported from the (removed) nikos.wifiqr plugin so the network popup can show the
+    // share code without opening any external panel.
     // -------------------------------------------------------------------------
     property var qrMatrix: []           // array of "0101…" strings
     property string qrSsid: ""
