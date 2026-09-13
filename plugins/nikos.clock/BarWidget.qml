@@ -116,7 +116,7 @@ Item {
                         font.family: api ? api.bar.fontNerd : "monospace"
                         font.pixelSize: 13
                         color: wxHover.hovered ? api.theme.colors.accent
-                                               : (api ? api.theme.colors.text : "#888")
+                                               : (api ? api.theme.colors.success : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }

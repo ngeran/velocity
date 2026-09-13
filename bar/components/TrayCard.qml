@@ -106,6 +106,7 @@ PanelWindow {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.topMargin: 0   // overlay already starts below the bar
+        anchors.rightMargin: 5 // 5px breathing room from the screen edge
         width: 320
         // Both network and bluetooth share the network body's height so the two
         // popups are the same size (+55 = header 34 + separator 1 + outer
@@ -839,6 +840,8 @@ PanelWindow {
                     }
                     MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
                 }
+            }
+
             // ── Volume ── mockup port: hero %, dB scale, OUTPUT SINK picker,
             // INPUT SOURCE mic strip, MUTE footer.
             ColumnLayout {
@@ -1122,8 +1125,6 @@ PanelWindow {
                 }
             }
 
-
-            }
         }
 
         // ═════════════════════════════════════════════════════════════════════

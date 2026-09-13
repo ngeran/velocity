@@ -32,7 +32,10 @@ Item {
         }
         Text {
             visible: root.expanded
-            text: Services.NetworkService.isConnected ? "NET" : "OFFLINE"
+            // Hover reveals the LIVE IP when connected (mockup), else state
+            text: Services.NetworkService.isConnected
+                  ? (Services.NetworkService.ipAddress !== "" ? Services.NetworkService.ipAddress : "NET")
+                  : "OFFLINE"
             font.family: Config.BarConfig.fontFamily
             font.pixelSize: 11
             color: Config.ThemeConfig.colors.text
