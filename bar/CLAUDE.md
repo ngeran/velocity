@@ -31,7 +31,7 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ## Architecture
 
 ### Entry point
-- **`shell.qml`** — The only file Quickshell reads. One `PanelWindow` anchored to the top edge (`WlrLayerShell.Top`) on the primary screen — single-monitor today (no `Variants`).
+- **`shell.qml`** — Entry point. One `PanelWindow` PER REAL OUTPUT via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData` — see the memory notes). The shared `TrayCard` popup follows whichever bar opened a tray.
 
 ### Three-layer separation
 
@@ -54,11 +54,12 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 shell.qml (root layout)
 ├── WorkspaceWidget.qml → WorkspaceButton.qml (repeater)
 └── System tray icons (right-aligned)
-    ├── KeyboardWidget.qml (click → cycle XKB layout US/GR)
-    ├── NetworkIcon.qml (click → impala)
-    ├── BluetoothIcon.qml (click → bluetui)
-    ├── VolumeIcon.qml (scroll → volume, click → wiremix)
-    └── BatteryIcon.qml (click → popup with % & status)
+    ├── NetworkIcon.qml    (hover: live IP · click → TrayCard NETWORK popup)
+    ├── BluetoothIcon.qml  (click → TrayCard BLUETOOTH popup)
+    ├── VolumeIcon.qml     (scroll → volume · click → TrayCard VOLUME popup)
+    ├── [plugin pills — nikos.keyboard, nikos.timezones, nikos.power …]
+    ├── LogsIcon.qml       (click → system log overlay)
+    └── NotificationButton.qml (click → notification center; unread badge)
 ```
 
 ### QML module registration
@@ -76,18 +77,18 @@ Every directory has a `qmldir` file. Components/services are registered there an
 - **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by `KeyboardService` via socket2 `activelayout` events). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (via `quickshell ipc -c bar call keyboard next`).
 
 ### Network (W)
-- **Click**: Launch impala network TUI
+- **Click**: Open the TrayCard NETWORK popup (status, DNS picker, QR, networks)
 
 ### Bluetooth (B)
-- **Click**: Launch bluetui bluetooth TUI
+- **Click**: Open the TrayCard BLUETOOTH popup (devices, connect/pair, scan)
 
 ### Volume (V)
 - **Scroll up**: Increase volume
 - **Scroll down**: Decrease volume
-- **Click**: Launch wiremix audio TUI
+- **Click**: Open the TrayCard VOLUME popup (slider, sink picker, mic)
 
-### Battery (BATT)
-- **Click**: Toggle popup showing battery percentage, status, and level bar
+### Power (plugin pill)
+- **Click**: Open the nikos.power popup (AC state, charge, source, power menu)
 
 ---
 
@@ -147,9 +148,9 @@ To move the bar to the bottom, edit `shell.qml` and change `anchors.top` → `an
 | `hyprctl` | Workspace seed + Lua dispatcher (`hl.dsp.*`) + keyboard layout probes |
 | `upower` | Daemon (enabled in omni-nix) behind the native UPower client |
 | `journalctl` | EventService kernel incident tail |
-| `nmcli` | Popup-gated diagnostics only (DNS) — settings process also uses it |
+| `nmcli` | BAR popup probes (link/DNS/ping) + QR credentials + settings network section |
 | `bluetoothctl` / `wpctl` | Settings process only (control services); the bar is native |
-| `impala` / `bluetui` / `wiremix` | TUIs launched from tray icons |
+| `qrencode` | TrayCard NETWORK popup QR (add to flake — currently missing) |
 
 **On NixOS:** All packages managed via `~/.omni-nix/flake.nix`.
 
