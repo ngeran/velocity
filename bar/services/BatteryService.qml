@@ -12,7 +12,7 @@
 // power supply: no — verified live — so it never flips the bar into
 // "on battery".
 //
-// PROPERTIES (unchanged from the sysfs version — BatteryIcon/TrayCard intact)
+// PROPERTIES — consumed by the nikos.power plugin pill + popup
 //   hasBattery : bool   — a system battery device is present
 //   onAc       : bool   — running on AC / wall power
 //   percentage : int    — battery charge (0-100; 100 when no battery)

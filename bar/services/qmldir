@@ -13,4 +13,3 @@ singleton OsdService 1.0 OsdService.qml
 singleton LogService 1.0 LogService.qml
 singleton EventService 1.0 EventService.qml
 singleton PluginHostService 1.0 PluginHostService.qml
-singleton PowerProfilesService 1.0 PowerProfilesService.qml

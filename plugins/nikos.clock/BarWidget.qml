@@ -4,7 +4,7 @@
 // Center anchor pill: date-time · live weather glyph · temperature.
 //   • time click    → this plugin's CALENDAR popup (TEMPORAL MAP styling)
 //   • weather click → force a refresh of the embedded WeatherSource fetcher
-// Colours ride api tokens; active modules get an underline + primary border.
+// Colours ride api tokens. Hover-only accents; popups do not recolor the anchor.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts

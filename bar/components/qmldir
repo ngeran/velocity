@@ -6,7 +6,6 @@ WorkspaceWidget 1.0 WorkspaceWidget.qml
 NetworkIcon 1.0 NetworkIcon.qml
 BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
-BatteryIcon 1.0 BatteryIcon.qml
 TrayCard 1.0 TrayCard.qml
 NotificationCenter 1.0 NotificationCenter.qml
 FastfetchOverlay 1.0 FastfetchOverlay.qml
@@ -20,5 +19,3 @@ LogsOverlay 1.0 LogsOverlay.qml
 PluginPanel 1.0 PluginPanel.qml
 ToggleSwitch 1.0 ToggleSwitch.qml
 Toggle 1.0 Toggle.qml
-ConfirmDialog 1.0 ConfirmDialog.qml
-Dropdown 1.0 Dropdown.qml
