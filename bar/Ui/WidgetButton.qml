@@ -33,7 +33,9 @@ Item {
         text: wbtn.text
         font.family: wbtn.fontFamily
         font.pixelSize: wbtn.fontSize
-        color: "transparent"
+        // Render the button's own text (upstream behaviour). Plugins that draw
+        // their own labels pass text: " " so nothing shows behind them.
+        color: wbtn.foreground
     }
 
     MouseArea {

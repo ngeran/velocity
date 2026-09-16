@@ -644,6 +644,7 @@ Item {
     property var _syncers: [
         { key: "ghostty",  fn: function(c) { themeService._syncGhostty(c) } },
         { key: "kitty",    fn: function(c) { themeService._syncKitty(c) } },
+        { key: "tmux",     fn: function(c) { themeService._syncTmux(c) } },
         { key: "hyprlock", fn: function(c) { themeService._syncHyprlock(c) } },
         { key: "nvim",     fn: function(c) { themeService._syncNvim(c) } },
         { key: "rofi",     fn: function(c) { themeService._syncRofi(c) } },
@@ -760,6 +761,37 @@ Item {
             "color15 " + colors.text + "\n";
         themeService._atomicWrite(kittyConf, kittyContent);
         themeService._runSh("pkill -SIGUSR1 kitty || true", "kitty reload");
+    }
+
+    // -------------------------------------------------------------------------
+    // tmux: palette to ~/.cache/theme/tmux.conf (runtime-writable; tmux.conf
+    // sources it at startup, and `tmux source-file` hot-applies it to a
+    // RUNNING server on every theme change — same realtime contract as
+    // ghostty's config-watch and kitty's SIGUSR1). Atomic write. Colour
+    // mapping matches the ghostty palette block: blue→primary, black→
+    // background, brightblack→outline. tmux accepts #rrggbb in all styles.
+    // -------------------------------------------------------------------------
+    function _syncTmux(colors) {
+        var tmuxConf = themeService.homeDir + "/.cache/theme/tmux.conf";
+        var tmuxContent =
+            "# Managed by QuickShell ThemeService — sourced at END of tmux.conf.\n" +
+            "# Do not edit; regenerate by switching theme in the dashboard.\n" +
+            "set -g status-style \"bg=default,fg=" + colors.text + "\"\n" +
+            "set -g status-left \"#[fg=" + colors.background + ",bg=" + colors.primary + ",bold] #S #[bg=default] \"\n" +
+            "set -g status-right \"#[fg=" + colors.primary + "]#{?pane_in_mode,COPY ,}#{?client_prefix,PREFIX ,}#{?window_zoomed_flag,ZOOM ,}#[fg=" + colors.outline + "]#h \"\n" +
+            "set -g window-status-format \"#[fg=" + colors.outline + "] #I:#W \"\n" +
+            "set -g window-status-current-format \"#[fg=" + colors.primary + ",bold] #I:#W \"\n" +
+            "set -g pane-border-style \"fg=" + colors.outline + "\"\n" +
+            "set -g pane-active-border-style \"fg=" + colors.primary + "\"\n" +
+            "set -g message-style \"bg=default,fg=" + colors.primary + "\"\n" +
+            "set -g message-command-style \"bg=default,fg=" + colors.primary + "\"\n" +
+            "set -g mode-style \"bg=" + colors.primary + ",fg=" + colors.background + "\"\n" +
+            "setw -g clock-mode-colour \"" + colors.primary + "\"\n";
+        themeService._atomicWrite(tmuxConf, tmuxContent);
+        // Apply to every running server (default socket for the user). No server
+        // running → `|| true` makes it a silent no-op; new sessions pick the file
+        // up via the source-file line in ~/.config/tmux/tmux.conf.
+        themeService._runSh("tmux source-file \"$HOME/.cache/theme/tmux.conf\" 2>/dev/null || true", "tmux reload");
     }
 
     // -------------------------------------------------------------------------
