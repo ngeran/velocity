@@ -5,24 +5,21 @@ import Quickshell.Io
 Item {
   id: root
 
+  property var api: null              // injected by the host loader
   property string pendingMode: "--region"
   readonly property bool busy: captureDelay.running || captureProcess.running
 
   readonly property string scriptPath: decodeURIComponent(
     String(Qt.resolvedUrl("scripts/retina-screenshot")).replace(/^file:\/\//, ""))
 
-  // The engine's fail() only prints to stderr and no notify-send exists on
-  // this system — surface problems as a Hyprland toast instead, so a click
-  // can never fail silently again.
-  function toast(message, isError) {
-    notifyProc.command = ["hyprctl", "notify",
-      isError ? "3" : "1", "5000",
-      isError ? "0xff6b6b" : "0x9ece6a",
-      " Retina Screenshot: " + message]
-    notifyProc.running = true
+  // Feedback through the bar's bottom-center OSD — the same elegant card as
+  // the keyboard-layout popup (api.osd is the bar's live OsdService, injected
+  // by the host loader). The engine's fail() prints to stderr only and no
+  // notify-send exists here, so this card is the only visible channel.
+  function toast(message) {
+    if (api && api.osd) api.osd.show("󰄀", 0, false, message)
+    else console.log("[retina-screenshot] " + message)
   }
-
-  Process { id: notifyProc; command: [] }
 
   // Preflight: the script aborts before opening the picker when a required
   // binary is absent. One cheap probe per click. wl-copy is NOT blocking —
@@ -59,7 +56,7 @@ Item {
       if (lines.indexOf("wl-copy") === -1) root.wlCopyAvailable = true
       if (blockers.length > 0) {
         console.log("[retina-screenshot] missing commands: " + blockers.join(", "))
-        toast("install " + blockers.join(", ") + " (add to flake)", true)
+        toast("install " + blockers.join(", ") + " (add to flake)")
         return
       }
       captureDelay.restart()
@@ -77,13 +74,13 @@ Item {
         var msg = String(captureProcess.errorLine || "").replace(/^retina-screenshot:\s*/, "").trim()
         if (msg !== "") {
           console.log("[retina-screenshot] " + msg)
-          toast(msg, true)
+          toast(msg)
         }
       } else {
         // Success prints the saved path; a cancelled picker exits 0 silently.
         var path = String(captureProcess.savedPath || "").trim()
         if (path !== "")
-          toast("saved " + path.replace(/^.*\/Pictures\//, "~/Pictures/"), false)
+          toast("Saved " + path)
       }
       captureProcess.errorLine = ""
       captureProcess.savedPath = ""
