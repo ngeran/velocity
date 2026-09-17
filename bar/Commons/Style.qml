@@ -17,6 +17,8 @@ QtObject {
 
     readonly property QtObject font: QtObject {
         readonly property string family: root.family
+        readonly property int title: 15
+        readonly property int heading: 13
         readonly property int body: 12
         readonly property int bodySmall: 10
         readonly property int caption: 9

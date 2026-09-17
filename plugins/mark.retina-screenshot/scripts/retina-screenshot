@@ -117,7 +117,11 @@ lua_quote() {
 }
 
 lua_dispatch() {
-  "$HYPRCTL" eval "hl.dispatch($1)" >/dev/null
+  # This fork prints eval errors to stdout but still exits 0 — verify the
+  # reply text, or a bad dispatch is a silent no-op.
+  local reply
+  reply=$("$HYPRCTL" eval "hl.dispatch($1)" 2>/dev/null) || return 1
+  [[ $reply == ok ]] || return 1
 }
 
 move_workspace_to_monitor() {
@@ -199,9 +203,12 @@ move_window() {
 configure_output() {
   local name=$1 width=$2 height=$3 scale=$4
   if [[ $HYPRLAND_LUA == 1 ]]; then
-    "$HYPRCTL" eval \
+    # Fork prints eval errors to stdout with exit 0 — check the reply.
+    local reply
+    reply=$("$HYPRCTL" eval \
       "hl.monitor({ output = $(lua_quote "$name"), mode = \"${width}x${height}@60\", position = \"auto\", scale = $scale })" \
-      >/dev/null
+      2>/dev/null) || return 1
+    [[ $reply == ok ]] || return 1
   else
     "$HYPRCTL" keyword monitor "$name,${width}x${height}@60,auto,$scale" >/dev/null
   fi
@@ -613,10 +620,13 @@ fi
 "$HYPRCTL" output create headless "$OUTPUT_NAME" >/dev/null || fail "could not create the headless output"
 OUTPUT_CREATED=1
 
-if [[ $HYPRLAND_LUA == 0 ]]; then
-  configure_output "$OUTPUT_NAME" "$VIRTUAL_WIDTH" "$VIRTUAL_HEIGHT" "$SCALE" || \
-    fail "could not configure the headless output"
-fi
+# Re-apply the mode rule AFTER creation: on some Hyprland builds (including
+# the Lua fork this runs on) a rule registered before the backend exists is
+# ignored and the output stays on its 1920x1080 fallback; applying it to the
+# live output switches the mode immediately. Stock Hyprland ignores the
+# redundant second application.
+configure_output "$OUTPUT_NAME" "$VIRTUAL_WIDTH" "$VIRTUAL_HEIGHT" "$SCALE" || \
+  fail "could not configure the headless output"
 
 OUTPUT_READY=0
 for _ in {1..50}; do
@@ -625,7 +635,7 @@ for _ in {1..50}; do
   if [[ -n $HEADLESS_JSON && \
         $(jq -r '.width' <<<"$HEADLESS_JSON") == "$VIRTUAL_WIDTH" && \
         $(jq -r '.height' <<<"$HEADLESS_JSON") == "$VIRTUAL_HEIGHT" && \
-        $(jq -r '.scale' <<<"$HEADLESS_JSON") == "$SCALE" ]]; then
+        $(awk -v v="$(jq -r '.scale' <<<"$HEADLESS_JSON")" 'BEGIN { printf "%.4g", v }') == "$SCALE" ]]; then
     OUTPUT_READY=1
     break
   fi

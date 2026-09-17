@@ -75,8 +75,13 @@ PanelWindow {
     function fittedContentHeight(h) { return h + 24 }
 
     // ── per-module settings store ────────────────────────────────────────────
+    // `settings` is the upstream in-memory map widgets inject onto the panel
+    // (their persist functions write it); setting() prefers it over the JSON
+    // store so toggles take effect immediately in the live binding.
+    property var settings: ({})
     property string _storeRaw: "{}"
     function setting(key, def) {
+        if (settings !== null && settings[key] !== undefined) return settings[key]
         try {
             var j = JSON.parse(_storeRaw)
             var v = j && j[moduleName] ? j[moduleName][key] : undefined

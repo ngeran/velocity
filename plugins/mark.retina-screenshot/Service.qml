@@ -98,7 +98,12 @@ Item {
     interval: 250
     repeat: false
     onTriggered: {
-      var args = ["timeout", "--signal=TERM", "--kill-after=3s", "180s",
+      // OMARCHY_SCREENSHOT_DIR lands captures in the usual Screenshots dir
+      // (the script's default is ~/Pictures root).
+      var home = Quickshell.env("HOME") || ""
+      var args = ["env",
+                  "OMARCHY_SCREENSHOT_DIR=" + home + "/Pictures/Screenshots",
+                  "timeout", "--signal=TERM", "--kill-after=3s", "180s",
                   root.scriptPath, root.pendingMode, "--scale", "2"]
       if (!root.wlCopyAvailable) args.push("--no-copy")
       captureProcess.command = args
