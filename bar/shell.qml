@@ -30,6 +30,18 @@ ShellRoot {
     // routes summon/hide through the plugin's own open/close/toggle.
     property var pluginItems: ({})
 
+    // Border re-sync on compositor reload: any `hyprctl reload` reverts
+    // Hyprland borders to the login-time Lua values (Tier-1 T1 experiment);
+    // socket2 emits `configreloaded` when that happens, and the theme's
+    // borders are re-evalled live from the current palette.
+    Connections {
+        target: Services.HyprlandService
+        function onSocketEvent(line) {
+            if (String(line).indexOf("configreloaded") === 0)
+                Config.ThemeConfig.applyHyprlandBorders()
+        }
+    }
+
     // Cross-plugin panel bus: route toggle/refresh requests to the plugin
     // whose root registered the matching id (e.g. clock sun → weather panel).
     Connections {

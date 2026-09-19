@@ -129,6 +129,37 @@ Item {
     }
 
     // =========================================================================
+    // HYPRLAND BORDER SYNC — live border theming (reload-then-eval contract)
+    // -------------------------------------------------------------------------
+    // Any `hyprctl reload` reverts borders to the login-time Lua values
+    // (Tier-1 T1 experiment); a `hyprctl eval` lands them live again. So this
+    // runs on EVERY palette intake (startup + theme swaps) and again on the
+    // socket2 `configreloaded` event (wired in shell.qml). Alphas preserved
+    // from look-and-feel.lua (active 0x88, inactive 0x66 — same OLED
+    // headroom). argv form, no sh -c, so no quote escaping. Borders snap
+    // (1px) rather than riding the palette cross-fade; sourcing from
+    // _fadeTarget because root.colors is the frame-0 mix at call time.
+    // =========================================================================
+    function applyHyprlandBorders() {
+        var c = root._fadeTarget || root.colors
+        var active = "rgba(" + String(c.secondary || "").replace("#", "").toLowerCase() + "88)"
+        var inactive = "rgba(" + String(c.border || "").replace("#", "").toLowerCase() + "66)"
+        var lua = "hl.config({ general = { col = { active_border = \"" + active
+                + "\", inactive_border = \"" + inactive + "\" } } })"
+        if (borderProc.running) borderProc.running = false
+        borderProc.command = ["hyprctl", "eval", lua]
+        borderProc.running = true
+    }
+
+    Process {
+        id: borderProc
+        onExited: function(code, status) {
+            if (code !== 0)
+                console.warn("[Bar ThemeConfig] hyprland border eval failed, exit", code)
+        }
+    }
+
+    // =========================================================================
     // SINGLE-TOKEN MUTATION HELPER
     // =========================================================================
 
@@ -248,6 +279,7 @@ Item {
 
         if (next) {
             root._setColors(next)
+            root.applyHyprlandBorders()
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
         }
     }
