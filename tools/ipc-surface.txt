@@ -1,0 +1,52 @@
+# ipc-surface.txt — the reviewed IPC contract (bar + settings processes).
+#
+# Checked by tools/check-ipc. Column 1 is target.function exactly as declared
+# in bar/shell.qml / settings/shell.qml (the checker re-extracts those, so a
+# handler that disappears fails the gate). Column 2 is the caller class:
+#
+#   bound    a Hyprland keybind in ~/.omni-nix/configs/hypr/keybindings.lua
+#            dispatches it — the bind must exist (drift check) and parse
+#   internal called from inside the repo (QML spawn strings); the checker
+#            must find the call site
+#   manual   CLI / external tools by design — exempt from caller search
+#   unused   declared, no known caller — warns only; either wire it, delete
+#            it, or reclassify
+#
+# A caller that names an undeclared target.function is ALWAYS a hard failure
+# (the silent no-op keybind class) wherever it is found.
+
+# ---- bar process -----------------------------------------------------------
+osd.volume               manual    # external media-key/cli surface
+osd.mute                 manual
+osd.ping                 unused    # health probe, nothing calls it today
+plugins.rescan           manual    # qs -c bar ipc call plugins ... (host mgmt)
+plugins.list             manual
+plugins.enable           manual
+plugins.disable          manual
+plugins.order            manual
+plugins.summon           manual
+plugins.hide             manual
+barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
+keyboard.next            bound     # SUPER+SHIFT+SPACE (US/GR cycle)
+timezone.toggle          unused    # pill toggles in-process; IPC kept external
+keybinds.toggle          bound     # SUPER+K
+zaiUsage.toggle          bound     # SUPER+Z
+logs.toggle              bound     # SUPER+T
+
+# ---- settings process ------------------------------------------------------
+SettingsWindow.toggle             bound    # SUPER+A
+SettingsWindow.show               unused
+SettingsWindow.hide               unused
+SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
+SettingsWindow.openControlAudio   unused   # deep-link surface, awaiting wiring
+SettingsWindow.openControlBluetooth unused
+SettingsWindow.openControlDisplay unused
+SettingsWindow.openControlPlugins unused
+SettingsWindow.openControlPower   unused
+SettingsWindow.openControlSystem  unused
+SettingsWindow.openCore           unused
+SettingsWindow.openSettings       unused
+SettingsWindow.openThemeTab       unused
+PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
+PluginManager.refresh             manual
+powerMenu.toggle                  bound    # SUPER+P

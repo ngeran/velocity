@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+# check-ipc — IPC parity gate: keybinds/buttons may only dispatch to handlers
+# that actually exist. Adapted from ryoku-arch's shell-binds audit.
+#
+# Three sets are compared:
+#   DECLARED — IpcHandler target/function pairs extracted live from
+#              bar/shell.qml and settings/shell.qml (the code is the truth
+#              for what exists)
+#   USED     — `ipc -c <proc> call <target> <fn>` strings found in
+#              ~/.omni-nix/configs/hypr/keybindings.lua and across this repo
+#   MANIFEST — tools/ipc-surface.txt, the reviewed contract (what each
+#              handler is FOR: bound / internal / manual / unused)
+#
+# Hard failures:
+#   - a USED pair with no DECLARED handler      (silent no-op keybind)
+#   - a MANIFEST entry with no DECLARED handler (stale contract)
+#   - a `bound` entry whose keybind vanished from keybindings.lua
+#   - an `internal` entry with no call site found in the repo
+# Warnings (exit 0): `unused` handlers, MANIFEST entries missing from USED.
+#
+# Environment overrides (for testing): IPC_QS_DIR (this repo),
+# IPC_OMNI_DIR (omni-nix checkout), IPC_SURFACE (manifest path).
+set -euo pipefail
+
+QS_DIR="${IPC_QS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+OMNI_DIR="${IPC_OMNI_DIR:-$HOME/.omni-nix}"
+SURFACE="${IPC_SURFACE:-$QS_DIR/tools/ipc-surface.txt}"
+KEYBINDS="$OMNI_DIR/configs/hypr/keybindings.lua"
+
+status=0
+fail() { echo "check-ipc: FAIL: $*" >&2; status=1; }
+warn() { echo "check-ipc: warn: $*" >&2; }
+
+# --- DECLARED: target.function from both shell.qml roots ----------------------
+declared="$(
+  awk '
+    /IpcHandler \{/ { inipc = 1; t = "" }
+    inipc && /target:/ {
+      x = $0; sub(/.*target:/, "", x); gsub(/["[:space:]]/, "", x); t = x
+    }
+    inipc && /function [A-Za-z]/ {
+      f = $0; sub(/.*function[[:space:]]+/, "", f); sub(/[([:space:]].*/, "", f)
+      if (t != "" && f != "") print t "." f
+    }
+    inipc && /^    \}/ { inipc = 0 }
+  ' "$QS_DIR/bar/shell.qml" "$QS_DIR/settings/shell.qml" | sort -u
+)"
+[[ -n $declared ]] || { fail "no IpcHandler functions extracted — extraction broke"; exit 1; }
+
+# --- USED: caller strings from keybinds + repo -------------------------------
+used_raw="$(
+  {
+    grep -hEo 'ipc -c [a-zA-Z]+ (call )+[A-Za-z]+( [A-Za-z]+)?' "$KEYBINDS" 2>/dev/null || true
+    grep -rhoE '(quickshell|qs)[ a-zA-Z]*-c [a-zA-Z]+ (call|ipc call) [A-Za-z]+ [A-Za-z]+' \
+      "$QS_DIR" \
+      --include='*.qml' --include='*.sh' 2>/dev/null |
+      grep -v "$QS_DIR/\.claude" || true
+    grep -hoE 'quickshell ipc -c [a-zA-Z]+ call [A-Za-z]+ [A-Za-z]+' \
+      $(grep -rl 'quickshell ipc' "$OMNI_DIR/configs" 2>/dev/null) 2>/dev/null || true
+  } | awk '{
+    # normalize: ... -c <proc> ... call <target> <fn>  ->  proc|target|fn
+    for (i = 1; i <= NF; i++) if ($i == "-c") { proc = $(i+1) }
+    for (i = 1; i <= NF; i++) if ($i == "call") { t = $(i+1); f = $(i+2) }
+    if (proc != "" && t != "" && f != "") print proc "|" t "." f
+  }' | sort -u
+)"
+
+# --- checks -------------------------------------------------------------------
+while IFS='|' read -r proc pair; do
+  [[ -n $pair ]] || continue
+  if ! grep -qxF "$pair" <<< "$declared"; then
+    fail "caller '$proc' dispatches to undeclared handler '$pair'"
+  fi
+done <<< "$used_raw"
+
+while read -r pair klass rest; do
+  case $pair in ''|\#*) continue ;; esac
+  if ! grep -qxF "$pair" <<< "$declared"; then
+    fail "manifest lists '$pair' but no handler declares it"
+    continue
+  fi
+  case $klass in
+    bound)
+      if ! grep -q "call ${pair%%.*} ${pair#*.}" "$KEYBINDS" 2>/dev/null; then
+        fail "'$pair' is marked bound but no keybind dispatches it in $KEYBINDS"
+      fi ;;
+    internal)
+      hit="$(grep -rl "call ${pair%%.*} ${pair#*.}" "$QS_DIR" --include='*.qml' 2>/dev/null | head -1 || true)"
+      [[ -n $hit ]] || fail "'$pair' is marked internal but no repo call site was found" ;;
+    manual) : ;;
+    unused) warn "'$pair' is declared but unused — wire, delete, or reclassify" ;;
+    *)      fail "'$pair' has unknown class '$klass' (bound|internal|manual|unused)" ;;
+  esac
+done < "$SURFACE"
+
+# Orphan report: declared handlers absent from the manifest entirely.
+while IFS= read -r d; do
+  grep -q "^$d[[:space:]]" "$SURFACE" || warn "declared '$d' is not in $SURFACE (add it with a class)"
+done <<< "$declared"
+
+if (( status == 0 )); then
+  echo "check-ipc: OK ($(wc -l <<< "$declared") declared, $(grep -c . <<< "$used_raw") used, manifest consistent)"
+fi
+exit "$status"
