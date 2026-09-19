@@ -220,7 +220,10 @@ PanelWindow {
                 clip: true
                 spacing: 8
                 model: Services.NotificationService.model
-                delegate: NotificationCard {}
+                delegate: StaggerIn {
+                    index: model.index
+                    NotificationCard {}
+                }
 
                 // empty state
                 ColumnLayout {

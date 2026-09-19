@@ -19,5 +19,6 @@ LogsOverlay 1.0 LogsOverlay.qml
 PluginPanel 1.0 PluginPanel.qml
 PluginSlot 1.0 PluginSlot.qml
 ToggleSwitch 1.0 ToggleSwitch.qml
+StaggerIn 1.0 StaggerIn.qml
 Toggle 1.0 Toggle.qml
 Popover 1.0 Popover.qml
