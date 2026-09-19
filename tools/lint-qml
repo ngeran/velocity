@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#
+# lint-qml — fail on QML that cannot load (the fatal subset of qmllint).
+#
+# Adapted from ryoku-arch's bin/ryoku-dev-lint-qml to this NixOS + quickshell
+# repo. qmllint is advisory in general (unqualified access, unused imports,
+# dynamic-member noise), but a few of its findings mean the file will not
+# instantiate at all — and one such file can take its whole shell process down
+# (the qmldir-miss incidents: an unregistered settings component crash-looped
+# the shell and killed every hotkey). Those classes are hard failures here;
+# everything else is ignored.
+#
+# Fatal phrasing, calibrated against qtdeclarative 6.11 (older qmllint said
+# "is not a type" / "Cannot assign to non-existent property"; 6.11 says):
+#   unknown component   -> "X was not found. Did you add all imports..."  [import]
+#   wrong signal handler-> no matching signal found for handler "onX"
+#   unknown property    -> Could not find property "x"     (instantiation-fatal;
+#                          DISTINCT from the dynamic-access noise
+#                          "Member ... not found on type", which is ignored)
+#
+# Types resolve against, in order: the qtdeclarative that ships qmllint (Qt's
+# own modules), the Quickshell package's qml dir, every entry in
+# QML2_IMPORT_PATH, LINT_QML_IMPORTS (colon-separated extras), and the config
+# root itself. If imports do NOT resolve, the gate would drown in false
+# "was not found" hits — which is itself a useful signal that the tooling
+# moved; fix the paths, do not weaken the regex.
+#
+# Usage: tools/lint-qml [config-root...]    (default: bar settings)
+# Exit:  0 clean · 1 fatal findings · 2 environment error
+#
+# Why plugins/ is opt-in, not a default root: omarchy-pocket declares module
+# qs.Ui TWICE (qs/Ui/qmldir and qs/Ui/Ui/qmldir) — the runtime importer picks
+# the inner one, qmllint the outer, so QsBarWidget and every member of it are
+# false "was not found" hits under lint (its tests/qml also import the Pk.
+# alias that only the test rig registers). The plugin host already isolates
+# load failures (reportError), so: `tools/lint-qml plugins` to review it
+# knowingly, and read its output as divergence-unless-proven-otherwise.
+set -euo pipefail
+
+# --- locate qmllint ----------------------------------------------------------
+QMLLINT_BIN="${QMLLINT_BIN:-$(command -v qmllint || true)}"
+if [[ -z $QMLLINT_BIN ]]; then
+  # Not on PATH: pull the qtdeclarative that ships with the running
+  # quickshell (version-matched, survives store-hash churn).
+  qs_pkg="$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")"
+  QMLLINT_BIN="$(nix-store -q --requisites "$qs_pkg/bin/quickshell" 2>/dev/null |
+    grep 'qtdeclarative-6' | sort |
+    while IFS= read -r d; do
+      if [[ -x $d/bin/qmllint ]]; then echo "$d/bin/qmllint"; break; fi
+    done)"
+fi
+if [[ -z $QMLLINT_BIN || ! -x $QMLLINT_BIN ]]; then
+  echo "lint-qml: qmllint not found (needs qtdeclarative-6 in the closure)" >&2
+  exit 2
+fi
+
+imports=()
+# Qt's own modules (QtQuick, QtQml, labs...) live next to the qmllint that ships them.
+qtd_qml="$(dirname "$(dirname "$QMLLINT_BIN")")/lib/qt-6/qml"
+[[ -d $qtd_qml ]] && imports+=(-I "$qtd_qml")
+# Quickshell modules from the running package.
+qs_pkg="$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")"
+[[ -d $qs_pkg/lib/qt-6/qml ]] && imports+=(-I "$qs_pkg/lib/qt-6/qml")
+# Whatever the shells themselves get via the environment (profile extras).
+IFS=':' read -r -a prof <<< "${QML2_IMPORT_PATH:-}"
+for p in "${prof[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
+IFS=':' read -r -a extra <<< "${LINT_QML_IMPORTS:-}"
+for p in "${extra[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
+
+# --- the findings that mean "this file will not load" ------------------------
+fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicate signal name|Duplicate method name|Syntax error'
+
+status=0
+roots=("$@")
+(( ${#roots[@]} )) || roots=(bar settings)
+for root in "${roots[@]}"; do
+  if [[ ! -d $root ]]; then
+    echo "lint-qml: no such directory: $root" >&2
+    status=2
+    continue
+  fi
+  mapfile -t files < <(find "$root" -name '*.qml' -type f | sort)
+  (( ${#files[@]} )) || continue
+  hits="$(
+    ( cd "$root" && "$QMLLINT_BIN" "${imports[@]}" -I . "${files[@]#"$root"/}" 2>&1 || true ) |
+      grep -E "$fatal" || true
+  )"
+  if [[ -n $hits ]]; then
+    echo "lint-qml: $root: QML that cannot load:" >&2
+    printf '  %s\n' "$hits" >&2
+    status=1
+  fi
+done
+exit "$status"
