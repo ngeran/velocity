@@ -31,6 +31,7 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
 import "." as Config
+import "../lib/theme-mix.mjs" as Mix
 
 Item {
     id: root
@@ -75,6 +76,57 @@ Item {
 
     readonly property string themeFilePath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.cache/theme/colors.json").replace("file://", "")
     property string lastCachedData: ""
+
+    // =========================================================================
+    // PALETTE CROSS-FADE (ryoku Tokens blend, adapted)
+    // -------------------------------------------------------------------------
+    // applyTheme routes through _setColors: the previous palette (as parsed
+    // RGB) is kept and _blend walks 0→1 at MotionConfig.swap/OutCubic,
+    // recomputing root.colors as a per-frame hex mix — every colors.* binding
+    // in the process fades with zero consumer changes. Instant paths: startup
+    // restore (applied === "" — no boot flash), reduceMotion, and unchanged
+    // palettes (equality guard also stops nudge/poll double-fires from
+    // restarting a running fade). The final frame assigns the exact target.
+    // =========================================================================
+    property real _blend: 1
+    property var _fadePrevRGB: null
+    property var _fadeTarget: null
+
+    // Standalone animation (NOT "on _blend"): a value-source `on` animation
+    // owns the property even while stopped, making the manual _blend writes
+    // below ambiguous. target/property form stays fully imperative.
+    NumberAnimation {
+        id: paletteFade
+        target: root
+        property: "_blend"
+        to: 1
+        duration: Config.MotionConfig.swap
+        easing.type: Easing.OutCubic
+    }
+
+    on_BlendChanged: root._applyBlend(root._blend)
+
+    function _applyBlend(t) {
+        if (!root._fadeTarget) return
+        root.colors = (t >= 1) ? root._fadeTarget : Mix.mixPalettes(root._fadePrevRGB, root._fadeTarget, t)
+    }
+
+    function _setColors(next) {
+        if (root._fadeTarget && Mix.palettesEqual(next, root._fadeTarget)) return
+        var instant = (Config.MotionConfig.swap === 0) || (root.metadata.applied === "")
+        var prevRGB = Mix.parsePalette(root.colors)
+        root._fadeTarget = next
+        root._fadePrevRGB = prevRGB
+        paletteFade.stop()
+        if (instant) {
+            root._blend = 1
+            root._applyBlend(1)
+            return
+        }
+        root._blend = 0
+        root._applyBlend(0)
+        paletteFade.start()
+    }
 
     // =========================================================================
     // SINGLE-TOKEN MUTATION HELPER
@@ -141,9 +193,10 @@ Item {
             return
         }
 
+        var next = null
         if (data.colors) {
             var c = data.colors
-            root.colors = {
+            next = {
                 // Tier 1
                 "background":       c.background       || root.colors.background,
                 "surface":          c.surface          || root.colors.surface,
@@ -163,7 +216,6 @@ Item {
                 "error":            c.error            || root.colors.error,
                 "info":             c.info             || root.colors.info
             }
-            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
         }
 
         if (data.metadata) {
@@ -180,21 +232,23 @@ Item {
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Metadata applied. oledClamp:", root.metadata.oledClamp)
         }
 
-        // QD-OLED Safe: force pure-black backgrounds. Kept as defense (the bar is
-        // a separate process reading colors.json — can't fully trust external
-        // writers). Includes the text-luminance safeguard so dim text on pure
-        // black is bumped to a readable default (matches ThemeService.clampOLED).
-        if (root.metadata.oledClamp) {
-            var cb = {}
-            for (var kb in root.colors) cb[kb] = root.colors[kb]
-            cb.background = "#000000"
-            cb.surface = "#000000"
-            cb.surfaceVariant = "#000000"
-            cb.surfaceContainer = "#000000"
-            if (root.luminance(cb.text) < 0.18) cb.text = "#e0e0e0"
-            if (root.luminance(cb.textDim) < 0.12) cb.textDim = "#808080"
-            root.colors = cb
+        // QD-OLED Safe: force pure-black backgrounds. Clamped IN PLACE on the
+        // mapped palette BEFORE the cross-fade, so the fade target is final
+        // (fading toward a color that then snaps to the clamp would flicker).
+        // Defense only — ThemeService is the sole pre-clamping writer.
+        if (next && root.metadata.oledClamp) {
+            next.background = "#000000"
+            next.surface = "#000000"
+            next.surfaceVariant = "#000000"
+            next.surfaceContainer = "#000000"
+            if (root.luminance(next.text) < 0.18) next.text = "#e0e0e0"
+            if (root.luminance(next.textDim) < 0.12) next.textDim = "#808080"
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] OLED clamp applied")
+        }
+
+        if (next) {
+            root._setColors(next)
+            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
         }
     }
 

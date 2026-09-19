@@ -69,6 +69,7 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
 import "./" as Config
+import "../lib/theme-mix.mjs" as Mix
 
 Item {
     id: root
@@ -218,9 +219,10 @@ Item {
 
         if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Current metadata.oledClamp BEFORE:", root.metadata.oledClamp)
 
+        var next = null
         if (data.colors) {
             var c = data.colors
-            root.colors = {
+            next = {
                 // Tier 1
                 "background":       c.background       || root.colors.background,
                 "surface":          c.surface          || root.colors.surface,
@@ -240,7 +242,7 @@ Item {
                 "error":            c.error            || root.colors.error,
                 "info":             c.info             || root.colors.info
             }
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Colors applied. New background:", root.colors.background)
+            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Colors mapped. New background:", next.background)
         }
 
         if (data.metadata) {
@@ -263,6 +265,11 @@ Item {
 
             if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
         }
+
+        // Cross-fade route (see PALETTE CROSS-FADE block) — after the metadata
+        // assignment above so the startup instant-path check reads a stamped
+        // `applied` (mirrors the bar copy's ordering).
+        if (next) root._setColors(next)
 
         // NOTE: no inline OLED clamp here. ThemeService is the SOLE pre-clamping
         // writer — every bundle reaching applyTheme (in-process or via colors.json
@@ -290,6 +297,56 @@ Item {
     // Track last cached data and timestamp to avoid redundant re-application
     property string lastCachedData: ""
     property string lastCachedTimestamp: ""
+
+    // =========================================================================
+    // PALETTE CROSS-FADE (ryoku Tokens blend, adapted)
+    // -------------------------------------------------------------------------
+    // applyTheme routes through _setColors: previous palette (parsed RGB) is
+    // kept, _blend walks 0→1 at MotionConfig.swap/OutCubic, and root.colors is
+    // recomputed as a per-frame hex mix — every colors.* binding fades with
+    // zero consumer changes. Instant paths: startup restore (applied === ""),
+    // reduceMotion, unchanged palettes. updateColorToken stays a DIRECT
+    // reassign on purpose: accent-editor drags emit continuous updates and
+    // must not chase a 210ms fade. SYNC WITH bar/config/ThemeConfig.qml.
+    // =========================================================================
+    property real _blend: 1
+    property var _fadePrevRGB: null
+    property var _fadeTarget: null
+
+    // Standalone animation (NOT "on _blend"): a value-source `on` animation
+    // owns the property even while stopped, making the manual _blend writes
+    // below ambiguous. target/property form stays fully imperative.
+    NumberAnimation {
+        id: paletteFade
+        target: root
+        property: "_blend"
+        to: 1
+        duration: Config.MotionConfig.swap
+        easing.type: Easing.OutCubic
+    }
+
+    on_BlendChanged: root._applyBlend(root._blend)
+
+    function _applyBlend(t) {
+        if (!root._fadeTarget) return
+        root.colors = (t >= 1) ? root._fadeTarget : Mix.mixPalettes(root._fadePrevRGB, root._fadeTarget, t)
+    }
+
+    function _setColors(next) {
+        if (root._fadeTarget && Mix.palettesEqual(next, root._fadeTarget)) return
+        var instant = (Config.MotionConfig.swap === 0) || (root.metadata.applied === "")
+        root._fadePrevRGB = Mix.parsePalette(root.colors)
+        root._fadeTarget = next
+        paletteFade.stop()
+        if (instant) {
+            root._blend = 1
+            root._applyBlend(1)
+            return
+        }
+        root._blend = 0
+        root._applyBlend(0)
+        paletteFade.start()
+    }
 
     // FileView watcher for event-driven theme sync
     property var cacheWatcher: FileView {
