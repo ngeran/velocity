@@ -144,7 +144,7 @@ Item {
     readonly property color colorAccent: ThemeConfig.colors.secondary
     readonly property color colorText: ThemeConfig.colors.text
     readonly property color colorTextDim: ThemeConfig.colors.textDim
-    readonly property color colorMuted: ThemeConfig.colors.error
+    readonly property color colorMuted: ThemeConfig.colors.textDim
     readonly property color colorBorder: ThemeConfig.colors.border
 
     // =========================================================================
