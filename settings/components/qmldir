@@ -40,6 +40,7 @@ DisplayInfoCard 1.0 DisplayInfoCard.qml
 WeatherCard 1.0 WeatherCard.qml
 CoreEventsPane 1.0 CoreEventsPane.qml
 ControlSeg 1.0 ControlSeg.qml
+ControlRow 1.0 ControlRow.qml
 SectionHeader 1.0 SectionHeader.qml
 PowerPill 1.0 PowerPill.qml
 AudioDeviceRow 1.0 AudioDeviceRow.qml

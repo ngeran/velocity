@@ -182,38 +182,24 @@ ColumnLayout {
     // ═════════════════════════════════════════════════════════════════════════
     // 1. HEADER — breadcrumb · Display Manager · badges · global actions
     // ═════════════════════════════════════════════════════════════════════════
-    RowLayout {
+    // Reserved-footprint header (ControlRow): the action pills claim their
+    // width and the title column absorbs the squeeze at the 720×480 floor
+    // (label elides, chips clip) instead of pushing controls off-panel.
+    ControlRow {
         Layout.fillWidth: true
-        spacing: 10
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 1
-            Text {
-                text: "CONTROLS  /  HARDWARE & DISPLAY OUTPUTS"
-                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-                font.letterSpacing: 1.2; color: Config.ThemeConfig.colors.textDim
-            }
-            RowLayout {
-                spacing: 10
-                Text {
-                    text: "Display Manager"
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 20
-                    font.bold: true; color: Config.ThemeConfig.colors.text
-                }
-                Chip {
-                    visible: Services.MonitorService.monitors.length > 0
-                    text: Services.MonitorService.monitors.length + " DISPLAY" +
-                          (Services.MonitorService.monitors.length !== 1 ? "S" : "") + " ACTIVE"
-                    chipColor: Config.ThemeConfig.colors.success
-                }
-                Chip {
-                    text: Services.MonitorService.persistState === "dirty"
-                          ? "UNSTAGED CHANGES" : "IN SYNC WITH NIXOS"
-                    chipColor: Services.MonitorService.persistState === "dirty"
-                          ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.success
-                }
-            }
+        caption: "CONTROLS  /  HARDWARE & DISPLAY OUTPUTS"
+        label: "Display Manager"
+        chips: {
+            var out = []
+            if (Services.MonitorService.monitors.length > 0)
+                out.push({ text: Services.MonitorService.monitors.length + " DISPLAY" +
+                           (Services.MonitorService.monitors.length !== 1 ? "S" : "") + " ACTIVE",
+                           color: Config.ThemeConfig.colors.success })
+            out.push(Services.MonitorService.persistState === "dirty"
+                     ? { text: "UNSTAGED CHANGES", color: Config.ThemeConfig.colors.warning }
+                     : { text: "IN SYNC WITH NIXOS", color: Config.ThemeConfig.colors.success })
+            return out
         }
 
         ActionPill { text: "DETECT"; onActivated: Services.MonitorService.refresh() }
