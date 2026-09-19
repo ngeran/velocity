@@ -29,6 +29,7 @@ Item {
     function close()  { panel.close() }
 
     Host.PluginPanel {
+        anchorItem: root   // center the panel under this pill (Popover)
         id: panel
         pluginId: "nikos.timezones"
         title: "TIME ZONES"

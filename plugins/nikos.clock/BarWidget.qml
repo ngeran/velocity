@@ -153,6 +153,7 @@ Item {
 
     // ── CALENDAR POPUP — centered under the anchor, TEMPORAL MAP styling ────
     Host.PluginPanel {
+        anchorItem: root   // center the panel under this pill (Popover)
         id: calPanel
         pluginId: "nikos.clock"
         title: "CALENDAR"
@@ -178,6 +179,7 @@ Item {
     // distinct pluginId keeps the host's one-at-a-time tracker working (a
     // weather open closes the calendar and vice versa).
     Host.PluginPanel {
+        anchorItem: root   // center the panel under this pill (Popover)
         id: wxPanel
         pluginId: "nikos.clock.wx"
         title: "ATMOSPHERE"
