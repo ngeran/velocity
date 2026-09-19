@@ -226,6 +226,18 @@ Item {
         }
     }
 
+    // IPC nudge entry point (theme.reload) — the settings process fires this
+    // right after its atomic colors.json write, because cross-process file
+    // watches can miss atomic-rename inode swaps (see ryoku nudgePalette).
+    // reload() is the ASYNC path re-read (completes via onTextChanged — a
+    // synchronous text() right after reload() returns stale cache); the
+    // immediate ingestThemeText(text()) covers the same-inode case. Both
+    // dedupe through lastCachedData, so a nudge racing the 2s poll is free.
+    function reloadFromDisk() {
+        themeFile.reload()
+        root.ingestThemeText(themeFile.text())
+    }
+
     FileView {
         id: themeFile
         path: root.themeFilePath

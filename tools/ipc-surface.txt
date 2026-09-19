@@ -26,6 +26,7 @@ plugins.disable          manual
 plugins.order            manual
 plugins.summon           manual
 plugins.hide             manual
+theme.reload             internal  # ThemeService push nudge after colors.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
 keyboard.next            bound     # SUPER+SHIFT+SPACE (US/GR cycle)
 timezone.toggle          unused    # pill toggles in-process; IPC kept external

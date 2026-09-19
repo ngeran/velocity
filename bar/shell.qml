@@ -516,6 +516,19 @@ ShellRoot {
     // IPC HANDLERS — External Control
     // =========================================================================
 
+    // Theme push nudge — settings ThemeService fires this right after its
+    // atomic colors.json write so the bar follows theme swaps in ~0ms instead
+    // of waiting out the FileView watch / 2s poll fallback. Registered here
+    // (not in a singleton) for the same qmldir-resolution reason as the
+    // other handlers.
+    IpcHandler {
+        target: "theme"
+        function reload(): string {
+            Config.ThemeConfig.reloadFromDisk()
+            return "ok"
+        }
+    }
+
     // Bar visibility toggle (for Hyprland keybind)
     IpcHandler {
         id: barToggleIpc

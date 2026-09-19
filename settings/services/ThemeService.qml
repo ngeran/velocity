@@ -184,10 +184,21 @@ Item {
     /**
      * Writes the theme bundle to ~/.cache/theme/colors.json (bar sync channel).
      * Atomic, consolidated helper for all apply paths.
+     *
+     * On completion it nudges the bar over IPC: cross-process file watches can
+     * miss atomic-rename inode swaps (the bar keeps its inotify watch + 2s
+     * poll as fallback), so the push makes theme swaps land in ~0ms. Fire-and-
+     * forget with ryoku's 10×150ms retry — a bar mid-hot-reload drops early
+     * calls; the poll backstop still covers total failure.
      */
     function _writeColorsJson(bundle, metadata) {
         var colorsJsonPath = themeService.homeDir + "/.cache/theme/colors.json";
-        themeService._atomicWrite(colorsJsonPath, JSON.stringify({ colors: bundle, metadata: metadata }));
+        themeService._atomicWrite(colorsJsonPath, JSON.stringify({ colors: bundle, metadata: metadata }), function(ok) {
+            if (!ok) return;
+            var nudge = "n=0; until quickshell ipc -c bar call theme reload 2>&1 | grep -q ok; do " +
+                        "n=$((n+1)); [ $n -ge 10 ] && exit 1; sleep 0.15; done";
+            themeService._runSh(nudge, "bar theme nudge");
+        });
     }
 
     /**
