@@ -25,9 +25,18 @@ Item {
     property var item: null
     property int _generation: 0
 
-    // Loader sized itself to its item; keep that contract for the rail layout.
-    width: item ? item.width : 0
-    height: item ? item.height : 0
+    // Loader-identical sizing contract. Layouts size children by
+    // implicitWidth/implicitHeight, and plugin widgets use the hover-reveal
+    // idiom (animate implicitWidth, never a fixed width — see
+    // plugins/nikos.power/BarWidget.qml header), so the slot must PASS THROUGH
+    // the item's implicit size. item.width alone is wrong: that idiom never
+    // sets it (T6 regression: hover-revealed text painted over neighbor icons
+    // because the slot never grew). The width fallback covers roots that size
+    // explicitly without implicit (defensive both ways).
+    implicitWidth: item ? (item.implicitWidth || item.width || 0) : 0
+    implicitHeight: item ? (item.implicitHeight || item.height || 0) : 0
+    width: implicitWidth
+    height: implicitHeight
 
     onSourceChanged: rebuild()
     Component.onCompleted: rebuild()
