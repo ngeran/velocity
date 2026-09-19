@@ -41,6 +41,7 @@ WeatherCard 1.0 WeatherCard.qml
 CoreEventsPane 1.0 CoreEventsPane.qml
 ControlSeg 1.0 ControlSeg.qml
 ControlRow 1.0 ControlRow.qml
+BarFailureBanner 1.0 BarFailureBanner.qml
 SectionHeader 1.0 SectionHeader.qml
 PowerPill 1.0 PowerPill.qml
 AudioDeviceRow 1.0 AudioDeviceRow.qml

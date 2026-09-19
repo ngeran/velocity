@@ -13,3 +13,4 @@ singleton ThermalService 1.0 ThermalService.qml
 singleton CoreEngineService 1.0 CoreEngineService.qml
 singleton EventsReader 1.0 EventsReader.qml
 singleton PluginManagerService 1.0 PluginManagerService.qml
+singleton BarWatchService 1.0 BarWatchService.qml

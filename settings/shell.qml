@@ -106,6 +106,12 @@ ShellRoot {
     }
 
     // =========================================================================
+    // BAR FAILURE BANNER — "the bar is down and here's why" (BarWatch feeds
+    // it; auto-shows on bar death, auto-hides on recovery).
+    // =========================================================================
+    Components.BarFailureBanner { }
+
+    // =========================================================================
     // IPC HANDLER — toggle window visibility from other instances (e.g. bar)
     // =========================================================================
     IpcHandler {
