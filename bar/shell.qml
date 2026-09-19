@@ -30,6 +30,22 @@ ShellRoot {
     // routes summon/hide through the plugin's own open/close/toggle.
     property var pluginItems: ({})
 
+    // One bar popover at a time, across classes: a plugin panel registering
+    // itself open closes the tray card and the notification center. (The
+    // reverse directions live in the bar's onActiveTrayChanged and the NC's
+    // onShownChanged — all three funnel through the two registries:
+    // trayOwner.activeTray and PluginHostService.openPanel.)
+    Connections {
+        target: Services.PluginHostService
+        function onOpenPanelChanged() {
+            if (Services.PluginHostService.openPanel === "") return
+            if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
+                shellRoot.trayOwner.activeTray = ""
+            if (ncLoader.item && ncLoader.item.shown)
+                ncLoader.item.close()
+        }
+    }
+
     // Border re-sync on compositor reload: any `hyprctl reload` reverts
     // Hyprland borders to the login-time Lua values (Tier-1 T1 experiment);
     // socket2 emits `configreloaded` when that happens, and the theme's
@@ -143,11 +159,14 @@ ShellRoot {
             visible: validScreen && !userHidden
 
             // A bar showing a tray card becomes the tray owner (its output
-            // hosts the TrayCard until closed).
+            // hosts the TrayCard until closed). Opening a tray also closes
+            // any open plugin panel — one bar popover at a time, all classes.
             onActiveTrayChanged: {
                 if (activeTray !== "") {
                     shellRoot.trayOwner = panelWindow
                     if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
+                    if (Services.PluginHostService.openPanel !== "")
+                        Services.PluginHostService.openPanel = ""
                 }
             }
 
@@ -399,14 +418,18 @@ ShellRoot {
         Components.NotificationCenter { }
     }
 
-    // ...and opening the notification center closes the tray card.
-    // (target null-safe: no connection until the center has loaded)
+    // ...and opening the notification center closes the tray card and any
+    // plugin panel. (target null-safe: no connection until the center has
+    // loaded)
     Connections {
         target: ncLoader.item
         function onShownChanged() {
-            if (ncLoader.item && ncLoader.item.shown && shellRoot.trayOwner
-                && shellRoot.trayOwner.activeTray !== "")
-                shellRoot.trayOwner.activeTray = ""
+            if (ncLoader.item && ncLoader.item.shown) {
+                if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
+                    shellRoot.trayOwner.activeTray = ""
+                if (Services.PluginHostService.openPanel !== "")
+                    Services.PluginHostService.openPanel = ""
+            }
         }
     }
 
