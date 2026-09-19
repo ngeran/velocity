@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# check-tools — every external tool a feature gates on must exist in the closure.
+#
+# Ryoku's rule ("a feature that gates on tool X makes X a hard depend of the
+# desktop package, or the feature ships wired-but-dead") translated to NixOS:
+# the tool must resolve in the session PATH. Regression this catches: the
+# TrayCard NETWORK QR popup shipped while qrencode was missing from the flake
+# (bar CLAUDE.md still lists it as "add to flake — currently missing").
+#
+# Tiers:
+#   required — the shells cannot run without it            → FAIL
+#   feature  — a named feature breaks silently without it  → FAIL
+#   optional — feature degrades gracefully                 → WARN
+#
+# Env: CHECK_TOOLS_HIDE="t1 t2" pretends tools are missing (bite-proof for
+# the gate itself; also how CI can fail a candidate closure without a VM).
+set -u
+export LC_ALL=C
+
+fail=0
+n_required=0
+n_feature=0
+n_optional=0
+hidden=" ${CHECK_TOOLS_HIDE:-} "
+
+have() {
+  if [[ $hidden == *" $1 "* ]]; then return 1; fi
+  command -v "$1" >/dev/null 2>&1
+}
+
+check() { # tier tool feature-note
+  local tier=$1 tool=$2 note=$3
+  case $tier in
+    required) n_required=$((n_required + 1)) ;;
+    feature)  n_feature=$((n_feature + 1)) ;;
+    optional) n_optional=$((n_optional + 1)) ;;
+  esac
+  if have "$tool"; then return 0; fi
+  case $tier in
+    required) echo "check-tools: FAIL: required '$tool' missing ($note)" >&2; fail=1 ;;
+    feature)  echo "check-tools: FAIL: '$tool' missing — $note" >&2; fail=1 ;;
+    optional) echo "check-tools: warn: '$tool' missing — $note (degrades)" >&2 ;;
+  esac
+}
+
+# --- required: the shells cannot run at all ---------------------------------
+check required quickshell "the shell runtime itself"
+check required hyprctl     "HyprlandService (socket2, dispatch, layout probes)"
+check required nc          "HyprlandService socket2 stream (socat is NOT a substitute here)"
+check required nmcli       "NetworkService probes + TrayCard/settings network"
+check required journalctl  "EventService kernel tail + settings logs"
+check required curl        "notification/web bridges (no python3 in the bar env)"
+check required git         "PluginManagerService install-from-git pipeline"
+
+# --- feature: wired today, breaks silently if absent ------------------------
+check feature qrencode     "TrayCard NETWORK popup QR (wifi share)"
+check feature upower       "battery daemon behind the native UPower client"
+check feature bluetoothctl "settings bluetooth control services"
+check feature wpctl        "settings audio control services"
+check feature node         "plugin tooling that shells out to node"
+check feature nvidia-smi   "settings GPU telemetry section (this is the NVIDIA box)"
+
+# --- optional: degrade gracefully by design ---------------------------------
+check optional fastfetch   "FastfetchOverlay hides itself without it"
+check optional ping        "network diagnostics popup falls back to ip-only view"
+
+if (( fail )); then
+  echo "check-tools: FAIL — add the missing tools to ~/.omni-nix and omni-apply" >&2
+else
+  echo "check-tools: OK ($n_required required, $n_feature feature, $n_optional optional — closure complete)"
+fi
+exit $fail
