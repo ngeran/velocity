@@ -12,8 +12,8 @@ Rectangle {
     border.width: 1
     radius: 12
 
-    Behavior on color { ColorAnimation { duration: 140 } }
-    Behavior on border.color { ColorAnimation { duration: 140 } }
+    Behavior on color { ColorAnimation { duration: Config.MotionConfig.flap } }
+    Behavior on border.color { ColorAnimation { duration: Config.MotionConfig.flap } }
 
     Rectangle {
         x: on ? parent.width - width - 3 : 3
@@ -22,7 +22,7 @@ Rectangle {
         radius: 9
         color: Config.ControlConfig.accent
 
-        Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        Behavior on x { NumberAnimation { duration: Config.MotionConfig.flap; easing.type: Config.MotionConfig.easeSnap } }
     }
 
     MouseArea {

@@ -43,7 +43,7 @@ Item {
                 font.bold: true
                 elide: Text.ElideRight
                 width: parent.width
-                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
             }
             Text {
                 visible: root.description !== ""

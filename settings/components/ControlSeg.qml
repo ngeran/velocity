@@ -56,8 +56,8 @@ Rectangle {
     border.color: root.active ? root.accent : Config.ThemeConfig.colors.outlineVariant
     border.width: 1
 
-    Behavior on color { ColorAnimation { duration: 100 } }
-    Behavior on border.color { ColorAnimation { duration: 100 } }
+    Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
+    Behavior on border.color { ColorAnimation { duration: Config.MotionConfig.snap } }
 
     // -------------------------------------------------------------------------
     // LABEL

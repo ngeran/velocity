@@ -8,7 +8,7 @@ Item {
     implicitWidth: iconRow.implicitWidth
         height: Config.BarConfig.barHeight
     clip: true
-    Behavior on implicitWidth { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+    Behavior on implicitWidth { NumberAnimation { duration: Config.MotionConfig.move; easing.type: Config.MotionConfig.ease } }
 
     property bool isActive: false
     signal trayRequested()
@@ -27,7 +27,7 @@ Item {
             font.pixelSize: Config.BarConfig.fontSizeIcon
             color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.BarConfig.colorText
             anchors.verticalCenter: parent.verticalCenter
-            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
         }
         Text {
             visible: root.expanded
