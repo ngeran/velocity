@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit: qmldir <-> file consistency (T17). Fails the commit when a
-# component is deleted/unregistered without its counterpart.
+# Pre-commit: the full blocking gate battery (check-all) — qmldir consistency,
+# fatal-subset qmllint, IPC parity, unit tests, tool availability.
 repo=$(git rev-parse --show-toplevel)
-"$repo/tools/check-qmldir"
+"$repo/tools/check-all"

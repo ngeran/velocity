@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# check-all — every gate in one command (and the pre-commit entry point).
+#
+# Blocking set (a failure exits nonzero):
+#   check-qmldir   qmldir <-> file consistency
+#   lint-qml       QML that cannot load (fatal-subset qmllint)
+#   check-ipc      keybinds/buttons may only dispatch to declared handlers
+#   run-unit-tests pure-logic suites (*.test.mjs)
+#   check-tools    wired features must have their external tools (blocking
+#                  since qrencode landed via omni-apply; --relax demotes it
+#                  to advisory for mid-rebuild workflows)
+#
+# The T2 incident is why this exists: a duplicate-method crash shipped to a
+# live bar because gates ran only when remembered. ~4s total — cheap enough
+# for every commit.
+set -u
+cd "$(dirname "$0")/.."
+
+tools_blocking=1
+[[ "${1:-}" == "--relax" ]] && tools_blocking=0
+
+fail=0
+run_blocking() { # label cmd...
+    local label=$1; shift
+    echo "── $label"
+    if ! "$@"; then
+        echo "check-all: FAIL at $label" >&2
+        fail=1
+    fi
+}
+
+run_blocking "qmldir consistency" tools/check-qmldir
+run_blocking "QML loadability (fatal subset)" tools/lint-qml
+run_blocking "IPC parity" tools/check-ipc
+run_blocking "unit tests" tools/run-unit-tests
+
+echo "── tool availability"
+if (( tools_blocking )); then
+    run_blocking "tool availability" tools/check-tools
+else
+    tools/check-tools || echo "check-all: advisory (--relax) — see above"
+fi
+
+if (( fail == 0 )); then
+    echo "check-all: OK"
+fi
+exit "$fail"
