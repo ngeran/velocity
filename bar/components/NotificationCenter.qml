@@ -60,7 +60,7 @@ PanelWindow {
         color: Config.ThemeConfig.colors.background
         opacity: root.shown ? 0.45 : 0.0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
         MouseArea { anchors.fill: parent; onClicked: root.close() }
     }
 
@@ -86,14 +86,14 @@ PanelWindow {
         transform: Translate {
             x: root.shown ? 0 : panel.hiddenOffset
             Behavior on x {
-                NumberAnimation { duration: 320; easing.type: Easing.OutExpo }
+                NumberAnimation { duration: Config.MotionConfig.move; easing.type: Easing.OutExpo }
             }
         }
 
         // macOS-style entrance: fast, confident deceleration, no overshoot on open;
         // slightly quicker, snappier curve on close (matches Notification Center feel).
         Behavior on opacity {
-            NumberAnimation { duration: root.shown ? 220 : 180; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: root.shown ? Config.MotionConfig.swap : Config.MotionConfig.flap; easing.type: Config.MotionConfig.ease }
         }
 
         // stop clicks inside the panel from reaching the backdrop
@@ -176,7 +176,7 @@ PanelWindow {
                         color: clearMa.containsMouse
                                ? Config.ThemeConfig.colors.error
                                : Config.ThemeConfig.colors.textDim
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
                     }
                     Text {
                         id: clearLabel
@@ -187,7 +187,7 @@ PanelWindow {
                         font.pixelSize: 10
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
                     }
 
                     MouseArea {
@@ -286,7 +286,7 @@ PanelWindow {
                         font.pixelSize: 9; font.bold: true
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.7
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
                         MouseArea {
                             id: histClearMa
                             anchors.fill: parent; anchors.margins: -6

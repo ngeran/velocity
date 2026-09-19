@@ -37,7 +37,7 @@ PanelWindow {
         color: Config.ThemeConfig.colors.background
         opacity: root.shown ? 0.45 : 0.0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
         MouseArea { anchors.fill: parent; onClicked: root.close() }
     }
 
@@ -53,8 +53,8 @@ PanelWindow {
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
-        Behavior on opacity { NumberAnimation { duration: 200 } }
-        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
+        Behavior on scale { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
 
         Keys.onEscapePressed: root.close()
         MouseArea { anchors.fill: parent }   // stop click-through to the backdrop

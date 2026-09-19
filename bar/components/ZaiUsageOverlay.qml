@@ -176,7 +176,7 @@ PanelWindow {
         color: root.cBg
         opacity: root.shown ? 0.55 : 0.0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
         MouseArea { anchors.fill: parent; onClicked: root.close() }
     }
 
@@ -194,8 +194,8 @@ PanelWindow {
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
-        Behavior on opacity { NumberAnimation { duration: 200 } }
-        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
+        Behavior on scale { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
 
         Keys.onEscapePressed: root.close()
         MouseArea { anchors.fill: parent }   // swallow clicks so they don't close the overlay
@@ -280,7 +280,7 @@ PanelWindow {
                         : Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
                     border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
                     border.width: 1
-                    Behavior on color { ColorAnimation { duration: 250 } }
+                    Behavior on color { ColorAnimation { duration: Config.MotionConfig.flap } }
 
                     ColumnLayout {
                         id: multiplierCol
@@ -350,7 +350,7 @@ PanelWindow {
                 color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.30)
                 border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
                 border.width: 1
-                Behavior on border.color { ColorAnimation { duration: 250 } }
+                Behavior on border.color { ColorAnimation { duration: Config.MotionConfig.flap } }
 
                 RowLayout {
                     anchors.fill: parent
