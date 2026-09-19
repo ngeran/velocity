@@ -228,18 +228,20 @@ ShellRoot {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 8
                 // --- USER PLUGINS (bar-widget kind) ---
-                // One Loader per enabled, validated plugin. api/theme come from
-                // the host as injected object references (never imports) so
-                // plugins share the process-wide singletons; a plugin that
-                // fails to load reports into PluginHostService and leaves the
-                // bar running.
+                // One generation-guarded slot per enabled, validated plugin
+                // (PluginSlot = ryoku PluginObjectSlot port): a broken plugin
+                // keeps the previous instance mounted and reports into
+                // PluginHostService instead of tearing the rail down. api/theme
+                // come from the host as injected object references (never
+                // imports) so plugins share the process-wide singletons.
                 Repeater {
                     model: Services.PluginHostService.barWidgetPlugins
 
-                    Loader {
+                    Components.PluginSlot {
                         Layout.alignment: Qt.AlignVCenter
+                        pluginId: modelData.id
                         source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                        onLoaded: {
+                        configure: function(item) {
                             // Our nikos.* roots expose pluginId; omarchy-shaped
                             // roots (QsBarWidget) carry moduleName instead —
                             // assigning a non-existent property throws.
@@ -250,10 +252,6 @@ ShellRoot {
                             var reg = shellRoot.pluginItems
                             reg[modelData.id] = item
                             shellRoot.pluginItems = reg
-                        }
-                        onStatusChanged: {
-                            if (status === Loader.Error)
-                                Services.PluginHostService.reportError(modelData.id, "BarWidget failed to load (see journal)")
                         }
                     }
                 }
