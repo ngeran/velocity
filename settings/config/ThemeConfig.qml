@@ -70,6 +70,7 @@ import Qt.labs.platform
 import Quickshell.Io
 import "./" as Config
 import "../lib/theme-mix.mjs" as Mix
+import "../lib/tier.mjs" as Tier
 
 Item {
     id: root
@@ -184,10 +185,7 @@ Item {
     // mapping lives here so every ramp retints identically on a theme swap.
     // =========================================================================
     function tierColor(value, warn, crit) {
-        if (!isFinite(value) || value < 0) return root.colors.secondary
-        if (value >= crit) return root.colors.error
-        if (value >= warn) return root.colors.warning
-        return root.colors.secondary
+        return root.colors[Tier.tierFor(value, warn, crit)]
     }
 
     // =========================================================================

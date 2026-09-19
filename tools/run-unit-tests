@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# run-unit-tests — discover and run every *.test.mjs (plain node, no framework).
+#
+# Ryoku pattern: pure logic lives in lib/*.mjs so it is testable outside QML;
+# tests are colocated next to the lib and auto-discovered here — adding a test
+# requires zero runner changes. Exit 1 on the first failing suite (or run all
+# and report; here: run all, report, exit nonzero if any failed).
+#
+# Usage: tools/run-unit-tests [path...]   (default: bar settings)
+set -u
+
+cd "$(dirname "$0")/.."
+roots=("$@")
+(( ${#roots[@]} )) || roots=(bar settings)
+
+mapfile -t tests < <(find "${roots[@]}" -name '*.test.mjs' -type f | sort)
+if (( ${#tests[@]} == 0 )); then
+  echo "run-unit-tests: no *.test.mjs found under ${roots[*]}" >&2
+  exit 1
+fi
+
+fail=0
+for t in "${tests[@]}"; do
+  echo "== $t"
+  if ! node "$t"; then
+    echo "run-unit-tests: FAIL: $t" >&2
+    fail=1
+  fi
+done
+if (( fail == 0 )); then
+  echo "run-unit-tests: OK (${#tests[@]} suites)"
+fi
+exit "$fail"

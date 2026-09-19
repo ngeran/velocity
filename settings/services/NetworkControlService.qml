@@ -32,6 +32,7 @@ import Quickshell.Io
 import "../config" as Config
 import "NetworkControlModel.js" as Model
 import "History.js" as History
+import "../lib/netparse.mjs" as Netparse
 
 Item {
     id: root
@@ -412,21 +413,9 @@ Item {
     property var _enrichBySsid: ({})
 
     function _absorbEnrich(out) {
-        var bySsid = {}
-        var lines = out.split("\n")
-        for (var i = 0; i < lines.length; i++) {
-            var parts = lines[i].split("\\:").join("\u0001").split(":")
-            if (parts.length < 5) continue
-            var ssid = parts[0].split("\u0001").join(":")
-            if (!ssid) continue                      // hidden AP — nothing to merge onto
-            var freq = parseInt(parts[3]) || 0
-            bySsid[ssid] = {
-                bssid: parts[1].split("\u0001").join(":").toLowerCase(),
-                chan: parts[2] || "--",
-                freq: freq,
-                band: freq >= 5000 ? "5 GHz" : (freq > 0 ? "2.4 GHz" : "")
-            }
-        }
+        // Parsing lives in ../lib/netparse.mjs (node-tested; the \: escape
+        // handling is encoded in netparse.test.mjs, not re-derived here).
+        var bySsid = Netparse.parseWifiEnrich(out)
         root._enrichBySsid = bySsid
         _collectWifi()                               // single merge path (no-churn)
         var active = bySsid[connectionStatus.ssid]
