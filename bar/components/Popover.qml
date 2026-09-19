@@ -41,6 +41,7 @@ Item {
     property Item anchorItem: null          // trigger (pill/icon) — optional
     property string anchorFallback: "right" // "right" | "center"
     property real cardWidth: 320
+    property real cardHeight: -1            // -1 = auto (content + 2*padding)
     property real edgeMargin: 5
     property real gap: 8                    // drop below the host's top edge
     property real padding: 10               // card inner padding
@@ -48,15 +49,42 @@ Item {
     property real offY: 0
     property bool opened: false
     property bool hoverClose: false
+    // Hosts whose open state lives elsewhere (e.g. TrayCard's activeTray):
+    // bind `opened`, set externalState, and handle dismissRequested — the
+    // backdrop / hover-out / timers ASK instead of writing (a write would
+    // break the host's binding).
+    property bool externalState: false
+    // TrayCard idiom: only start the hover-out timer after the cursor has
+    // actually entered the card (opening with the cursor still on the bar
+    // icon must not auto-close).
+    property bool hoverCloseNeedsEntry: false
+    // Tray-style cards are a seamless extension of the bar — no border.
+    property bool showBorder: true
 
     default property alias content: cardBody.data
+    // Hosts with their own internal geometry (TrayCard's per-body sizing):
+    // children of cardArea anchor-fill the card instead of flowing in the
+    // column.
+    property alias cardArea: cardAreaHost.data
 
     signal popOpened()
     signal popClosed()
+    signal dismissRequested()
 
     // For host windows' fade-out tail: keep the window mapped while the card
     // is still fading (visible: opened || cardOpacity > 0).
     readonly property real cardOpacity: card.opacity
+
+    property bool _hoverEntered: false
+
+    function _dismiss() {
+        if (externalState) { dismissRequested(); return }
+        close()
+    }
+
+    function open() { if (!opened) { _hoverEntered = false; opened = true; popOpened() } }
+    function close() { if (opened) { _hoverEntered = false; opened = false; popClosed() } }
+    function toggle() { opened ? close() : open() }
 
     width: cardWidth
     height: card.implicitHeight
@@ -70,9 +98,6 @@ Item {
         return parent ? parent.width : 0   // "right"
     }
 
-    function open() { if (!opened) { opened = true; popOpened() } }
-    function close() { if (opened) { opened = false; popClosed() } }
-    function toggle() { opened ? close() : open() }
 
     // ── backdrop: click-outside dismiss (misses only — card is above) ───────
     MouseArea {
@@ -80,7 +105,7 @@ Item {
         anchors.fill: parent
         z: pop.z - 1            // strictly behind the popover card
         enabled: pop.opened
-        onClicked: pop.close()
+        onClicked: pop._dismiss()
     }
 
     // ── the card ────────────────────────────────────────────────────────────
@@ -99,10 +124,12 @@ Item {
             return base - pop.offX
         }
         y: pop.gap + pop.offY - (pop.opened ? 0 : 6)   // settle-lift from -6
-        implicitHeight: cardBody.implicitHeight + 2 * pop.padding
+        implicitHeight: pop.cardHeight >= 0
+                        ? pop.cardHeight
+                        : cardBody.implicitHeight + 2 * pop.padding
         color: Config.BarConfig.colorBackground
         radius: 10
-        border.width: 1
+        border.width: pop.showBorder ? 1 : 0
         border.color: Config.ThemeConfig.colors.border
         opacity: pop.opened ? 1 : 0
         visible: pop.opened || opacity > 0
@@ -115,14 +142,19 @@ Item {
         HoverHandler {
             enabled: pop.hoverClose
             onHoveredChanged: {
-                if (hovered) hoverCloseTimer.stop()
-                else if (pop.opened) hoverCloseTimer.restart()
+                if (hovered) {
+                    hoverCloseTimer.stop()
+                    pop._hoverEntered = true
+                } else if (pop.opened
+                           && (!pop.hoverCloseNeedsEntry || pop._hoverEntered)) {
+                    hoverCloseTimer.restart()
+                }
             }
         }
         Timer {
             id: hoverCloseTimer
             interval: 450
-            onTriggered: if (pop.opened) pop.close()
+            onTriggered: if (pop.opened) pop._dismiss()
         }
 
         ColumnLayout {
@@ -131,6 +163,14 @@ Item {
             y: pop.padding
             width: parent.width - 2 * pop.padding
             spacing: 0
+        }
+
+        // Fill-slot for hosts with custom internal geometry (anchor-fill).
+        // Declared AFTER the column so tray content stacks above the
+        // click-swallower.
+        Item {
+            id: cardAreaHost
+            anchors.fill: parent
         }
     }
 }

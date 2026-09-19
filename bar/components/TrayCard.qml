@@ -16,7 +16,7 @@ import "../config" as Config
 PanelWindow {
     id: card
     // Keep the window alive through the fade-out (opacity > 0 while closing).
-    visible: activeTray !== "" || dropdown.opacity > 0
+    visible: activeTray !== "" || dropdown.cardOpacity > 0
 
     // Full-screen transparent overlay. A click landing anywhere outside the
     // dropdown closes it — the same click-outside dismissal the
@@ -29,6 +29,9 @@ PanelWindow {
     aboveWindows: true
 
     property string activeTray: ""
+    // The tray icon that opened this card (set by shell.qml on the owning
+    // bar) — the Popover centers the card under it.
+    property Item anchorItem: null
     // The tray that is open OR was last open — stays frozen during the fade-out
     // so the closing view's content, header and height don't flash to another
     // body while the 140ms fade runs.
@@ -53,26 +56,15 @@ PanelWindow {
     }
     signal closeRequested()
 
-    // HOVER-OUT DISMISSAL
-    // The card closes shortly after the cursor leaves the dropdown — but only
-    // once the cursor has actually entered it. This guard means opening a tray
-    // (cursor still on the bar icon) doesn't immediately start the close timer;
-    // you have to move into the card and back out for it to dismiss on hover.
-    property bool hasHoveredDropdown: false
+    // HOVER-OUT DISMISSAL: lives in the Popover primitive (hoverClose +
+    // hoverCloseNeedsEntry — the entered-guard idiom this card introduced).
     onActiveTrayChanged: {
         if (activeTray !== "") lastTray = activeTray
         if (activeTray !== "network") qrOpen = false   // QR view is network-only
-        hoverCloseTimer.stop()        // any open / switch / close cancels a pending close
-        card.hasHoveredDropdown = false
         // Popup-gated polling: detail probes run only while their popup is the
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
         Services.BluetoothService.popupOpen = activeTray === "bluetooth"
-    }
-    Timer {
-        id: hoverCloseTimer
-        interval: 450
-        onTriggered: if (card.activeTray !== "") card.closeRequested()
     }
 
     readonly property string headerIcon: {
@@ -90,67 +82,48 @@ PanelWindow {
         return ""
     }
 
-    // Click-catcher spanning the whole screen. Only clicks that miss the card
-    // land here (the card is stacked above it) → close.
-    MouseArea {
-        anchors.fill: parent
-        onClicked: card.closeRequested()
-    }
-
     // -------------------------------------------------------------------------
-    // DROPDOWN CARD — pinned under the bar, top-right. Sharp corners (radius 0).
+    // DROPDOWN CARD — Popover primitive, anchored under the trigger icon.
+    // Sharp-cornered seamless bar extension: no border, gap 0 (the overlay
+    // already starts below the bar), edgeMargin 5. External state: activeTray
+    // owns opened; backdrop/hover dismissals route back via dismissRequested.
     // -------------------------------------------------------------------------
-    Rectangle {
+    Popover {
         id: dropdown
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: 0   // overlay already starts below the bar
-        anchors.rightMargin: 5 // 5px breathing room from the screen edge
+        externalState: true
+        opened: card.activeTray !== ""
+        onDismissRequested: card.closeRequested()
+        hoverClose: true
+        hoverCloseNeedsEntry: true
+        showBorder: false
+        padding: 0
+        gap: 0
+        edgeMargin: 5
+        anchorItem: card.anchorItem
         // CONTENT-FITTED: width and height derive from the ACTIVE body's
         // implicit size + shared chrome (12px content margins ×2 + 34 header
         // + 1 separator ≈ 59). The 300 floor keeps tiny bodies usable.
-        width: Math.max(300, networkBody.implicitWidth,
+        cardWidth: Math.max(300, networkBody.implicitWidth,
                              btBody.implicitWidth,
                              volumeBody.implicitWidth) + 44
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
-        height: card.lastTray === "network"
+        cardHeight: card.lastTray === "network"
                 ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 59)
               : card.lastTray === "volume" ? volumeBody.implicitHeight + 59
               : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59
               : 220
-        color: Config.BarConfig.colorBackground
-        radius: 10
 
-        // 140ms OutCubic fade (Omarchy popup idiom); the window's keep-alive
-        // visibility (visible: activeTray !== "" || opacity > 0) lets this run.
-        opacity: card.activeTray !== "" ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-
-        // Swallow clicks inside the card so they don't bubble to the backdrop.
-        MouseArea { anchors.fill: parent }
-
-        // Hover tracking drives the hover-out dismissal. HoverHandler is a
-        // passive pointer handler, so it doesn't steal clicks/hover from the
-        // slider or buttons inside the card — it just reports whether the
-        // cursor is within the dropdown's bounds.
-        HoverHandler {
-            id: ddHover
-            onHoveredChanged: {
-                if (hovered) {
-                    hoverCloseTimer.stop()
-                    card.hasHoveredDropdown = true
-                } else if (card.hasHoveredDropdown) {
-                    hoverCloseTimer.restart()
-                }
-            }
-        }
+        // Tray geometry is card-internal (per-body sizing) — flow through the
+        // fill slot, not the primitive's padding column.
+        cardArea: trayContent
 
     // -------------------------------------------------------------------------
     // CONTENT
     // -------------------------------------------------------------------------
     ColumnLayout {
+        id: trayContent
         anchors.fill: parent
         anchors.margins: 12
         spacing: 0

@@ -130,6 +130,9 @@ ShellRoot {
             screen: modelData
 
             property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
+            // The icon that opened the tray — TrayCard's Popover centers
+            // under it. Set by the icon slots' trayRequested handlers.
+            property Item trayAnchor: null
 
             // Placeholder/zero-sized screens (connector hotplug churn) must
             // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
@@ -274,7 +277,10 @@ ShellRoot {
             Components.NetworkIcon {
                 Layout.alignment: Qt.AlignVCenter
                 isActive: panelWindow.activeTray === "network"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
+                onTrayRequested: {
+                    panelWindow.trayAnchor = this
+                    panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
+                }
             }
         }
         Component {
@@ -282,7 +288,10 @@ ShellRoot {
             Components.BluetoothIcon {
                 Layout.alignment: Qt.AlignVCenter
                 isActive: panelWindow.activeTray === "bluetooth"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
+                onTrayRequested: {
+                    panelWindow.trayAnchor = this
+                    panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
+                }
             }
         }
         Component {
@@ -290,7 +299,10 @@ ShellRoot {
             Components.VolumeIcon {
                 Layout.alignment: Qt.AlignVCenter
                 isActive: panelWindow.activeTray === "volume"
-                onTrayRequested: panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
+                onTrayRequested: {
+                    panelWindow.trayAnchor = this
+                    panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
+                }
             }
         }
         Component {
@@ -349,6 +361,7 @@ ShellRoot {
     // =========================================================================
     Components.TrayCard {
         activeTray: shellRoot.trayOwner ? shellRoot.trayOwner.activeTray : ""
+        anchorItem: shellRoot.trayOwner ? shellRoot.trayOwner.trayAnchor : null
         onCloseRequested: if (shellRoot.trayOwner) shellRoot.trayOwner.activeTray = ""
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
     }

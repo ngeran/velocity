@@ -11,12 +11,15 @@
 # everything else is ignored.
 #
 # Fatal phrasing, calibrated against qtdeclarative 6.11 (older qmllint said
-# "is not a type" / "Cannot assign to non-existent property"; 6.11 says):
+# "is not a type" / "Cannot assign to non-existent property" / "Duplicate
+# method name"; 6.11 says "Duplicated method name" — the T2 incident shipped
+# a bar-crashing duplicate because the regex only knew the old spelling):
 #   unknown component   -> "X was not found. Did you add all imports..."  [import]
 #   wrong signal handler-> no matching signal found for handler "onX"
 #   unknown property    -> Could not find property "x"     (instantiation-fatal;
 #                          DISTINCT from the dynamic-access noise
 #                          "Member ... not found on type", which is ignored)
+#   duplicate member    -> Duplicated method name / Duplicated signal name
 #
 # Types resolve against, in order: the qtdeclarative that ships qmllint (Qt's
 # own modules), the Quickshell package's qml dir, every entry in
@@ -68,7 +71,7 @@ IFS=':' read -r -a extra <<< "${LINT_QML_IMPORTS:-}"
 for p in "${extra[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
 
 # --- the findings that mean "this file will not load" ------------------------
-fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicate signal name|Duplicate method name|Syntax error'
+fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicat(ed|e) (signal|method) name|Syntax error'
 
 status=0
 roots=("$@")
