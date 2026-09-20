@@ -76,6 +76,13 @@ Item {
             // Marginalia index: 1-based position among real outputs (computed
             // rather than trusting a delegate index that Variants may not
             // provide).
+            // QD-OLED: the active-workspace plate stays bright only this
+            // long after a switch (feedback), then dims to a faint tint.
+            property bool wsPlateBright: false
+
+            // ── MARGINALIA index: 1-based position among real outputs (computed
+            // rather than trusting a delegate index that Variants may not
+            // provide).
             readonly property int screenIndex: {
                 var ss = Quickshell.screens
                 for (var i = 0; i < ss.length; i++)
@@ -94,6 +101,21 @@ Item {
                     host.closeNotificationCenter()
                     if (Services.PluginHostService.openPanel !== "")
                         Services.PluginHostService.openPanel = ""
+                }
+            }
+
+            Timer {
+                id: wsPlateDim
+                interval: 45000
+                running: panelWindow.wsPlateBright
+                repeat: false
+                onTriggered: panelWindow.wsPlateBright = false
+            }
+            Connections {
+                target: Services.HyprlandService
+                function onActiveWorkspaceChanged() {
+                    panelWindow.wsPlateBright = true   // bright = feedback only
+                    wsPlateDim.restart()
                 }
             }
 
@@ -141,7 +163,7 @@ Item {
                 font.family: Config.BarConfig.fontFamily
                 font.pixelSize: 9
                 color: Config.ThemeConfig.colors.textDim
-                opacity: 0.55
+                opacity: 0.4
             }
 
             Components.ArchLogo {
@@ -165,7 +187,7 @@ Item {
                     "00000000"
                 ]
                 ink: Config.ThemeConfig.colors.textDim
-                inkOpacity: 0.6
+                inkOpacity: 0.4
             }
 
             // ── RYOKU WORKSPACES — inverted-plate emphasis ────────────────────
@@ -183,17 +205,22 @@ Item {
                         readonly property bool active: Services.HyprlandService.activeWorkspace === ws
                         implicitWidth: wsNum.implicitWidth + (active ? 12 : 6)
                         implicitHeight: 17
-                        radius: 2
+                        radius: 0   // QD-OLED: no anti-aliased corner subpixels
                         // Ryoku press grammar: hover = ink @0.08, pressed
-                        // @0.16, active = the inverted plate. snap-timed.
+                        // @0.16, snap-timed. The active plate inverts BRIGHT
+                        // only as switch feedback (wsPlateBright), then
+                        // settles to a faint @0.10 tint — no static bright
+                        // fill (QD-OLED burn-in rule).
                         color: wsCell.active
-                               ? Config.ThemeConfig.colors.text
+                               ? (panelWindow.wsPlateBright
+                                   ? Config.ThemeConfig.colors.text
+                                   : Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.10))
                                : wsMa.pressed
                                  ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.16)
                                  : wsMa.containsMouse
                                    ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.08)
                                    : "transparent"
-                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.move } }
 
                         Text {
                             id: wsNum
@@ -202,8 +229,11 @@ Item {
                             font.family: Config.BarConfig.fontFamily
                             font.pixelSize: 10
                             font.letterSpacing: 1.2
-                            color: wsCell.active ? Config.ThemeConfig.colors.background
-                                                 : Config.ThemeConfig.colors.textDim
+                            color: wsCell.active
+                                   ? (panelWindow.wsPlateBright
+                                       ? Config.ThemeConfig.colors.background
+                                       : Config.ThemeConfig.colors.text)
+                                   : Config.ThemeConfig.colors.textDim
                             opacity: wsCell.active ? 1.0 : (wsMa.containsMouse ? 0.95 : 0.62)
                             Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.snap } }
                         }
@@ -248,35 +278,20 @@ Item {
                 }
             }
 
-            // ── RYOKU MARGINALIA — katakana gloss + numbered index plate ────
+            // ── RYOKU MARGINALIA — katakana gloss + screen index. Text-only,
+            // no border box: a static 1px rectangle outline is exactly the
+            // shape QD-OLED burn-in hates. Very dim (0.45). ────────────────
             Text {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.rightMargin: 6
-                text: "リョク"
+                text: "リョク  R·" + (panelWindow.screenIndex < 10
+                                     ? "0" + panelWindow.screenIndex
+                                     : panelWindow.screenIndex)
                 font.family: Config.BarConfig.fontFamily
                 font.pixelSize: 8
+                font.letterSpacing: 1.0
                 color: Config.ThemeConfig.colors.textDim
-                opacity: 0.55
-            }
-            Rectangle {
-                Layout.alignment: Qt.AlignVCenter
-                implicitWidth: plateNum.implicitWidth + 10
-                implicitHeight: 15
-                radius: 2
-                border.width: 1
-                border.color: Config.ThemeConfig.hairline
-
-                Text {
-                    id: plateNum
-                    anchors.centerIn: parent
-                    text: "R·" + (panelWindow.screenIndex < 10
-                                 ? "0" + panelWindow.screenIndex
-                                 : panelWindow.screenIndex)
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 8
-                    font.letterSpacing: 1.0
-                    color: Config.ThemeConfig.colors.textDim
-                }
+                opacity: 0.45
             }
             Item {
                 width: Config.BarConfig.barPadding
@@ -284,12 +299,15 @@ Item {
             }
         }
 
-        // ── RYOKU FRAME EDGE — 1px hairline under the bar ────────────────────
+        // ── RYOKU FRAME EDGE — 1px under the bar. Static full-width line, so
+        // the alpha is deliberately BELOW the theme hairline token (~4.5% ink
+        // ≈ a couple of nits on QD-OLED — dimmer than the rounding-AA it
+        // replaces). ────────────────────────────────────────────────────────
         Rectangle {
             anchors.bottom: parent.bottom
             width: parent.width
             height: 1
-            color: Config.ThemeConfig.hairline
+            color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)
         }
 
         // ── slot components (order-independent definitions) ──────────────────
