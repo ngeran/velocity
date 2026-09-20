@@ -1,7 +1,17 @@
 {
+  "schemaVersion": 1,
   "barHeight": 26,
   "workspaceCount": 5,
   "clockCity": "Local",
   "clockOffset": 0,
-  "rightLayout": ["plugins", "network", "bluetooth", "volume", "power", "logs", "notifications"]
+  "barStyle": "ryoku",
+  "rightLayout": [
+    "plugins",
+    "network",
+    "bluetooth",
+    "volume",
+    "power",
+    "logs",
+    "notifications"
+  ]
 }
