@@ -6,8 +6,10 @@
 // grammar expressed through our live theme tokens:
 //   • workspaces = mono tracked numbers, INVERTED-PLATE emphasis (selected
 //     state flips to a bone plate — emphasis by inversion, not color)
-//   • 1px hairline frame edge under the bar (ink at low alpha over text)
-//   • registration marks (+) in the dead zones at both ends — print chrome
+//   • 1px hairline frame edge under the bar (ink at ~4.5% — near-invisible,
+//     edge definition only). Ornament chrome (glyphs/marginalia/reg marks)
+//     was REMOVED per user rule: nothing stays that isn't clickable or
+//     doing a job (also the strictest QD-OLED posture)
 // Deeper divergence (own glyph set, marginalia, frame edges on 4 sides) is
 // later-phase work; v1 deliberately reuses the theme-driven tray icons and
 // plugin pills.
@@ -73,22 +75,10 @@ Item {
             // userHidden keeps the IPC toggle out of the binding (assignment
             // would break it).
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
-            // Marginalia index: 1-based position among real outputs (computed
-            // rather than trusting a delegate index that Variants may not
-            // provide).
             // QD-OLED: the active-workspace plate stays bright only this
             // long after a switch (feedback), then dims to a faint tint.
             property bool wsPlateBright: false
 
-            // ── MARGINALIA index: 1-based position among real outputs (computed
-            // rather than trusting a delegate index that Variants may not
-            // provide).
-            readonly property int screenIndex: {
-                var ss = Quickshell.screens
-                for (var i = 0; i < ss.length; i++)
-                    if (ss[i] === panelWindow.screen) return i + 1
-                return 1
-            }
             property bool userHidden: false
             visible: validScreen && !userHidden
 
@@ -156,38 +146,10 @@ Item {
 
             // --- LEFT SIDE ---
 
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.barPadding
-                text: "+"
-                font.family: Config.BarConfig.fontFamily
-                font.pixelSize: 9
-                color: Config.ThemeConfig.colors.textDim
-                opacity: 0.4
-            }
-
             Components.ArchLogo {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 6
+                Layout.leftMargin: Config.BarConfig.barPadding
                 onTriggered: host.toggleFastfetch()
-            }
-
-            // ── RYOKU PIXEL GLYPH — 1-bit asanoha star (print separator) ─────
-            RyokuPixel {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 10
-                glyph: [
-                    "00011000",
-                    "00011000",
-                    "11011011",
-                    "11100111",
-                    "11011011",
-                    "00011000",
-                    "00011000",
-                    "00000000"
-                ]
-                ink: Config.ThemeConfig.colors.textDim
-                inkOpacity: 0.4
             }
 
             // ── RYOKU WORKSPACES — inverted-plate emphasis ────────────────────
@@ -278,21 +240,6 @@ Item {
                 }
             }
 
-            // ── RYOKU MARGINALIA — katakana gloss + screen index. Text-only,
-            // no border box: a static 1px rectangle outline is exactly the
-            // shape QD-OLED burn-in hates. Very dim (0.45). ────────────────
-            Text {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.rightMargin: 6
-                text: "リョク  R·" + (panelWindow.screenIndex < 10
-                                     ? "0" + panelWindow.screenIndex
-                                     : panelWindow.screenIndex)
-                font.family: Config.BarConfig.fontFamily
-                font.pixelSize: 8
-                font.letterSpacing: 1.0
-                color: Config.ThemeConfig.colors.textDim
-                opacity: 0.45
-            }
             Item {
                 width: Config.BarConfig.barPadding
                 Layout.fillHeight: true
