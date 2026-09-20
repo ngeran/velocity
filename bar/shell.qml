@@ -114,6 +114,9 @@ ShellRoot {
     // Touching it imperatively at shell start guarantees construction (the
     // collector's journal tail + generation watcher depend on it).
     Component.onCompleted: {
+        // Style init (also flows through onRequestedStyleChanged on config
+        // changes; this covers the first load).
+        effectiveStyle = requestedStyle
         // Member access (not a bare reference — those never evaluate) to
         // force EventService construction: QML singletons build lazily and
         // nothing else references the collector until a panel binds it.
@@ -142,7 +145,12 @@ ShellRoot {
     // Loader.Error — a broken style never renders an empty bar.
     // =========================================================================
     readonly property string requestedStyle: Config.BarConfig.barStyle
-    property string effectiveStyle: requestedStyle
+    // Plain property (NO binding to requestedStyle): the fallback assigns it,
+    // and a binding made the Loader's source ↔ Error-handler assignment a
+    // binding loop — QML's detector then killed the source binding and the
+    // bar rendered EMPTY. Changes flow through the two handlers only, and
+    // the fallback defers via callLater out of the evaluation cascade.
+    property string effectiveStyle: "vector"
     onRequestedStyleChanged: effectiveStyle = requestedStyle
 
     Loader {
@@ -150,10 +158,10 @@ ShellRoot {
         source: "styles/" + shellRoot.effectiveStyle + "/Scene.qml"
         onLoaded: item.host = shellRoot
         onStatusChanged: {
-            if (status === Loader.Error) {
+            if (status === Loader.Error && shellRoot.effectiveStyle !== "vector") {
                 console.error("[Bar] style '" + shellRoot.effectiveStyle
                               + "' failed to load — falling back to vector")
-                shellRoot.effectiveStyle = "vector"
+                Qt.callLater(function() { shellRoot.effectiveStyle = "vector" })
             }
         }
     }

@@ -240,13 +240,16 @@ Item {
         id: styleScanProc
         command: ["sh", "-c",
             "ls -1d '" + StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles/'*/Scene.qml 2>/dev/null | sed 's|.*/styles/||; s|/Scene.qml||' | sort"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { styleScanProc.buffer += data } }
-        onStarted: buffer = ""
+        // SplitParser delivers lines WITHOUT newlines (the documented trap) —
+        // accumulating `buffer += data` concatenated style names into one
+        // bogus "ryokuvector" entry. Collect per-line into an array instead.
+        property var lines: []
+        stdout: SplitParser { onRead: function(data) { styleScanProc.lines.push(String(data).trim()) } }
+        onStarted: lines = []
         onExited: {
-            var lines = styleScanProc.buffer.trim().split("\n").filter(function(l) { return l.length > 0 })
-            styleScanProc.buffer = ""
-            if (lines.length > 0) root.barStyles = lines
+            var found = styleScanProc.lines.filter(function(l) { return l.length > 0 })
+            styleScanProc.lines = []
+            if (found.length > 0) root.barStyles = found
         }
     }
 
