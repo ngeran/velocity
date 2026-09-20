@@ -31,7 +31,9 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ## Architecture
 
 ### Entry point
-- **`shell.qml`** — Entry point. One `PanelWindow` PER REAL OUTPUT via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData` — see the memory notes). The shared `TrayCard` popup follows whichever bar opened a tray.
+- **`shell.qml` — the HOST** (Phase-1 style architecture): IPC handlers, shared overlays (TrayCard, NotificationCenter, Logs/Keybinds/Zai/Fastfetch, OSD), headless plugin services, and the **style Loader** — it loads `styles/<barStyle>/Scene.qml` (barStyle from bar-config.json, default `vector`; Loader.Error auto-falls back to vector so a broken style never renders an empty bar).
+- **`styles/vector/Scene.qml` — THE VECTOR BAR** (default style): one `PanelWindow` per real output via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData`). The whole rail layout — workspaces, slots, tray icons, plugin pills — lives here. It receives the host as `host` (trayOwner, overlay toggles + ncShown/logsShown, pluginItems registry) and exposes `instances` for the barToggle IPC.
+- **Adding a bar style** = new folder `styles/<name>/` with a `Scene.qml` honoring the same host contract (see vector's header). It appears automatically in Settings → Bar (styles are scanned) and swaps live — no restart.
 
 ### Three-layer separation
 

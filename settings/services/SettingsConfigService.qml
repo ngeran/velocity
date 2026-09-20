@@ -39,6 +39,10 @@ Item {
 
     // Bar settings (cross-process - bar reads from config file)
     property int barHeight: 26                  // 20, 26, 32, 40
+    // Bar style (bar/styles/<name>/Scene.qml) — live-swappable; the bar
+    // falls back to "vector" when a style is missing/broken.
+    property string barStyle: "vector"
+    property var barStyles: ["vector"]          // scanned from bar/styles/
     property int workspaceCount: 5             // 3, 5, 7, 9
 
     // Clock settings (cross-process - bar reads from config file)
@@ -152,6 +156,9 @@ Item {
         if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1) {
             root.barHeight = data.barHeight
         }
+        if (typeof data.barStyle === "string" && data.barStyle.length > 0) {
+            root.barStyle = data.barStyle
+        }
         if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1) {
             root.workspaceCount = data.workspaceCount
         }
@@ -176,11 +183,34 @@ Item {
             barHeight: root.barHeight,
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
-            clockOffset: root.clockOffset
+            clockOffset: root.clockOffset,
+            barStyle: root.barStyle
         }
         var json = JSON.stringify(barConfig, null, 2)
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
         ThemeService._atomicWrite(barConfigPath, json)
+    }
+
+    // ── bar style discovery ────────────────────────────────────────────────
+    // A style = a folder under ~/.config/quickshell/bar/styles/ with a
+    // Scene.qml. Scanned at service init and on every BAR STYLE pick (new
+    // style folders appear without restarting the settings shell).
+    function scanBarStyles() {
+        styleScanProc.running = true
+    }
+
+    Process {
+        id: styleScanProc
+        command: ["sh", "-c",
+            "ls -1d '" + StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles/'*/Scene.qml 2>/dev/null | sed 's|.*/styles/||; s|/Scene.qml||' | sort"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { styleScanProc.buffer += data } }
+        onStarted: buffer = ""
+        onExited: {
+            var lines = styleScanProc.buffer.trim().split("\n").filter(function(l) { return l.length > 0 })
+            styleScanProc.buffer = ""
+            if (lines.length > 0) root.barStyles = lines
+        }
     }
 
     // =========================================================================
@@ -189,5 +219,6 @@ Item {
 
     Component.onCompleted: {
         loadSettings()
+        scanBarStyles()
     }
 }

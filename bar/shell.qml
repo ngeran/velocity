@@ -126,253 +126,38 @@ ShellRoot {
     // one is showing so the single TrayCard renders on the right output.
     property var trayOwner: null
 
+    // Overlay-state feedback for the style scene (isActive on icons).
+    readonly property bool ncShown: ncLoader.item ? ncLoader.item.shown : false
+    readonly property bool logsShown: logsLoader.item ? logsLoader.item.shown : false
+
+    function closeNotificationCenter() {
+        if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
+    }
+
     // =========================================================================
-    // BARS — one PanelWindow per real output (Variants; hotplug-safe)
+    // BAR STYLE — swappable strip scene (styles/<name>/Scene.qml, ryoko's
+    // barStyle pattern). The style OWNS its windows; the host keeps IPC,
+    // services, and shared overlays. effectiveStyle follows BarConfig.barStyle
+    // (hot-swappable via bar-config.json) but rolls back to vector on
+    // Loader.Error — a broken style never renders an empty bar.
     // =========================================================================
-    Variants {
-        id: bars
-        model: Quickshell.screens
+    readonly property string requestedStyle: Config.BarConfig.barStyle
+    property string effectiveStyle: requestedStyle
+    onRequestedStyleChanged: effectiveStyle = requestedStyle
 
-        PanelWindow {
-            id: panelWindow
-
-            // Variants REQUIRE the delegate to declare the model item slot:
-            // without `modelData` (plain property — a `required property`
-            // breaks on JS-array models), delegate recreation fails initial-
-            // property assignment and the window NEVER re-attaches to an
-            // output. Symptom: after lock/DPMS off-on the bar is gone for
-            // good ("PanelWindow does not have a property called modelData").
-            property var modelData: null
-            screen: modelData
-
-            property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
-            // The icon that opened the tray — TrayCard's Popover centers
-            // under it. Set by the icon slots' trayRequested handlers.
-            property Item trayAnchor: null
-
-            // Placeholder/zero-sized screens (connector hotplug churn) must
-            // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
-            // userHidden keeps the IPC toggle out of the binding (assignment
-            // would break it).
-            readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
-            property bool userHidden: false
-            visible: validScreen && !userHidden
-
-            // A bar showing a tray card becomes the tray owner (its output
-            // hosts the TrayCard until closed). Opening a tray also closes
-            // any open plugin panel — one bar popover at a time, all classes.
-            onActiveTrayChanged: {
-                if (activeTray !== "") {
-                    shellRoot.trayOwner = panelWindow
-                    if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
-                    if (Services.PluginHostService.openPanel !== "")
-                        Services.PluginHostService.openPanel = ""
-                }
-            }
-
-            // =========================================================================
-            // POSITIONING
-            // =========================================================================
-
-            anchors {
-                top: true
-                left: true
-                right: true
-            }
-
-        // =========================================================================
-        // APPEARANCE (from config)
-        // =========================================================================
-
-        implicitHeight: Config.BarConfig.barHeight
-        color: Config.BarConfig.colorBackground
-
-        // =========================================================================
-        // MAIN LAYOUT (Left and Right Sections)
-        // =========================================================================
-
-        // Click on empty bar area closes the open tray card.
-        MouseArea {
-            anchors.fill: parent
-            enabled: panelWindow.activeTray !== ""
-            onClicked: panelWindow.activeTray = ""
-        }
-
-        // (one-popup-at-a-time + tray-owner registration live in the
-        //  onActiveTrayChanged at the top of this window)
-
-        RowLayout {
-            anchors.fill: parent
-            spacing: 0
-
-            // --- LEFT SIDE ---
-
-            Components.ArchLogo {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.barPadding
-                onTriggered: shellRoot.toggleFastfetch()
-            }
-
-            Components.WorkspaceWidget {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.iconSpacing
-            }
-
-            // --- HUGE MIDDLE GAP ---
-            // This spacer now pushes everything else all the way to the right side
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-            }
-
-            // --- RIGHT SIDE — order-driven rail (bar-config.json "rightLayout")
-            // Each slot keeps its exact hand-tuned wiring; the ORDER comes from
-            // config and hot-reloads with the 2s bar-config.json watcher.
-            Repeater {
-                model: Config.BarConfig.rightLayout
-
-                Loader {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 0
-                    Layout.rightMargin: Config.BarConfig.slotMargin
-                    sourceComponent: {
-                        if (modelData === "plugins")       return pluginsSlot
-                        if (modelData === "network")       return networkSlot
-                        if (modelData === "bluetooth")     return bluetoothSlot
-                        if (modelData === "volume")        return volumeSlot
-                        if (modelData === "logs")          return logsSlot
-                        if (modelData === "notifications") return notificationsSlot
-                        return null
-                    }
-                }
-            }
-
-            Item {
-                width: Config.BarConfig.barPadding
-                Layout.fillHeight: true
-            }
-        }
-
-        // ── slot components (order-independent definitions) ──────────────────
-        // keyboard converted → plugins/nikos.keyboard (lives in the plugins
-        // slot); "keyboard" as a rail key is no longer legal.
-        Component {
-            id: pluginsSlot
-            RowLayout {
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 8
-                // --- USER PLUGINS (bar-widget kind) ---
-                // One generation-guarded slot per enabled, validated plugin
-                // (PluginSlot = ryoku PluginObjectSlot port): a broken plugin
-                // keeps the previous instance mounted and reports into
-                // PluginHostService instead of tearing the rail down. api/theme
-                // come from the host as injected object references (never
-                // imports) so plugins share the process-wide singletons.
-                Repeater {
-                    model: Services.PluginHostService.barWidgetPlugins
-
-                    Components.PluginSlot {
-                        Layout.alignment: Qt.AlignVCenter
-                        pluginId: modelData.id
-                        source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                        configure: function(item) {
-                            // Our nikos.* roots expose pluginId; omarchy-shaped
-                            // roots (QsBarWidget) carry moduleName instead —
-                            // assigning a non-existent property throws.
-                            if (item.pluginId !== undefined) item.pluginId = modelData.id
-                            if (item.api !== undefined) item.api = Services.PluginHostService.api
-                            // Registry for the plugins IPC (summon/hide route
-                            // through the plugin's own open/close/toggle).
-                            var reg = shellRoot.pluginItems
-                            reg[modelData.id] = item
-                            shellRoot.pluginItems = reg
-                        }
-                    }
-                }
-            }
-        }
-        Component {
-            id: networkSlot
-            Components.NetworkIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "network"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
-                }
-            }
-        }
-        Component {
-            id: bluetoothSlot
-            Components.BluetoothIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "bluetooth"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
-                }
-            }
-        }
-        Component {
-            id: volumeSlot
-            Components.VolumeIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "volume"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
-                }
-            }
-        }
-        Component {
-            id: logsSlot
-            Components.LogsIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: logsLoader.item ? logsLoader.item.shown : false
-                onTriggered: shellRoot.toggleLogs()
-            }
-        }
-        Component {
-            id: notificationsSlot
-            Components.NotificationButton {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: ncLoader.item ? ncLoader.item.shown : false
-                onCenterRequested: shellRoot.toggleNotificationCenter()
-            }
-        }
-
-        // =========================================================================
-        // PERFECTLY CENTERED — center-slot plugins
-        // =========================================================================
-        // Anchored to the panel window, so it stays dead-center regardless of
-        // the rails. The clock is a plugin (nikos.clock) — the built-in
-        // ClockWidget fallback was removed; disabling every center plugin
-        // leaves the center empty by design.
-
-        Row {
-            anchors.centerIn: parent
-            spacing: 14
-            Repeater {
-                model: Services.PluginHostService.centerWidgetPlugins
-
-                Loader {
-                    source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                    onLoaded: {
-                        if (item.pluginId !== undefined) item.pluginId = modelData.id
-                        if (item.api !== undefined) item.api = Services.PluginHostService.api
-                        var reg = shellRoot.pluginItems
-                        reg[modelData.id] = item
-                        shellRoot.pluginItems = reg
-                    }
-                    onStatusChanged: {
-                        if (status === Loader.Error)
-                            Services.PluginHostService.reportError(modelData.id, "Center plugin failed to load (see journal)")
-                    }
-                }
+    Loader {
+        id: styleLoader
+        source: "styles/" + shellRoot.effectiveStyle + "/Scene.qml"
+        onLoaded: item.host = shellRoot
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.error("[Bar] style '" + shellRoot.effectiveStyle
+                              + "' failed to load — falling back to vector")
+                shellRoot.effectiveStyle = "vector"
             }
         }
     }
-    }   // Variants (per-output bars)
+
 
     // =========================================================================
     // SHARED TRAY CARD — dropdown for Network/Bluetooth/Volume/Power.
@@ -583,7 +368,7 @@ ShellRoot {
         function toggle() {
             // All bars together (per-output variants). Flip userHidden so the
             // validScreen binding stays intact.
-            const insts = bars.instances || []
+            const insts = (styleLoader.item && styleLoader.item.instances) || []
             let anyVisible = false
             for (let i = 0; i < insts.length; i++)
                 if (insts[i].visible) { anyVisible = true; break }

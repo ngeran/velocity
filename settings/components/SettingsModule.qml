@@ -158,7 +158,7 @@ Item {
             spacing: Config.ControlConfig.space4
 
             SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Bar"
-                subtitle: "Top-bar height and workspace dots" }
+                subtitle: "Bar style, top-bar height and workspace dots" }
 
             CoreCard {
                 Layout.fillWidth: true
@@ -166,6 +166,22 @@ Item {
                 accent: Config.ControlConfig.accent
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: Config.ControlConfig.space4
+                    SettingRow {
+                        label: "BAR STYLE"
+                        value: Services.SettingsConfigService.barStyle.toUpperCase()
+                        Repeater {
+                            model: Services.SettingsConfigService.barStyles
+                            delegate: OptSeg {
+                                text: modelData.toUpperCase()
+                                active: Services.SettingsConfigService.barStyle === modelData
+                                onPicked: {
+                                    Services.SettingsConfigService.barStyle = modelData
+                                    Services.SettingsConfigService.saveSettings()
+                                    Services.SettingsConfigService.scanBarStyles()
+                                }
+                            }
+                        }
+                    }
                     SettingRow {
                         label: "BAR HEIGHT"
                         value: Services.SettingsConfigService.barHeight + "px"

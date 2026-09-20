@@ -32,6 +32,10 @@ Item {
     property int barHeight: 26
     property int workspaceCount: 5
     property string clockCity: "Local"
+    // Bar style (styles/<name>/Scene.qml). Validated: non-empty, no path
+    // separators — anything else keeps the current style; the host's Loader
+    // falls back to "vector" when the folder/Scene is missing or broken.
+    property string barStyle: "vector"
     property int clockOffset: 0
     // Right-rail slot order (bar-config.json "rightLayout"). Plugins ride the
     // single "plugins" slot; their internal order comes from plugins-state.json.
@@ -77,6 +81,10 @@ Item {
                 workspaceCount = data.workspaceCount
             if (data.clockCity !== undefined)
                 clockCity = data.clockCity
+            if (typeof data.barStyle === "string"
+                && data.barStyle.length > 0
+                && data.barStyle.indexOf("/") === -1)
+                barStyle = data.barStyle
             if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
                 clockOffset = data.clockOffset
             // Right-rail slot order — keys validated against the known set;
