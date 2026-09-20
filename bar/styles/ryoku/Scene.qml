@@ -1,20 +1,16 @@
 // =============================================================================
-// styles/vector/Scene.qml — THE VECTOR BAR (default style)
+// styles/ryoku/Scene.qml — THE RYOKU BAR (v1: frame-strip identity)
 // =============================================================================
-// Moved verbatim from shell.qml's bar strip (Phase-1 style architecture): this
-// style owns its windows (one PanelWindow per output via Variants) and the
-// whole rail layout — workspaces, layout slots, tray icons, plugin pills.
-// The HOST (shell.qml) owns IPC handlers, shared overlays (TrayCard,
-// notification center, logs/keybinds/zai/fastfetch, OSD), and services.
-//
-// Contract with the host (injected as `host`):
-//   host.trayOwner                — set to this window when a tray opens
-//   host.closeNotificationCenter()/toggleLogs()/toggleFastfetch()/toggleNotificationCenter()
-//   host.ncShown / host.logsShown — overlay state for isActive feedback
-//   host.pluginItems              — plugin registry (summon/hide IPC routing)
-//   sceneRoot.instances           — per-output windows (barToggle IPC)
-// Fallback: a style whose Scene.qml fails to load rolls the host back to
-// vector, so the bar never renders empty.
+// Same host contract and machinery as vector (windows, tray ownership, rail
+// slots, plugin pills) — a different VISUAL LANGUAGE, ryoku's "paper and ink"
+// grammar expressed through our live theme tokens:
+//   • workspaces = mono tracked numbers, INVERTED-PLATE emphasis (selected
+//     state flips to a bone plate — emphasis by inversion, not color)
+//   • 1px hairline frame edge under the bar (ink at low alpha over text)
+//   • registration marks (+) in the dead zones at both ends — print chrome
+// Deeper divergence (own glyph set, marginalia, frame edges on 4 sides) is
+// later-phase work; v1 deliberately reuses the theme-driven tray icons and
+// plugin pills.
 // =============================================================================
 
 import QtQuick
@@ -121,15 +117,62 @@ Item {
 
             // --- LEFT SIDE ---
 
-            Components.ArchLogo {
+            Text {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Config.BarConfig.barPadding
+                text: "+"
+                font.family: Config.BarConfig.fontFamily
+                font.pixelSize: 9
+                color: Config.ThemeConfig.colors.textDim
+                opacity: 0.55
+            }
+
+            Components.ArchLogo {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
                 onTriggered: host.toggleFastfetch()
             }
 
-            Components.WorkspaceWidget {
+            // ── RYOKU WORKSPACES — inverted-plate emphasis ────────────────────
+            Row {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.iconSpacing
+                Layout.leftMargin: 10
+                spacing: 10
+
+                Repeater {
+                    model: Config.BarConfig.workspaceCount
+
+                    Rectangle {
+                        id: wsCell
+                        readonly property int ws: index + 1
+                        readonly property bool active: Services.HyprlandService.activeWorkspace === ws
+                        implicitWidth: wsNum.implicitWidth + (active ? 12 : 0)
+                        implicitHeight: 17
+                        radius: 2
+                        color: active ? Config.ThemeConfig.colors.text : "transparent"
+
+                        Text {
+                            id: wsNum
+                            anchors.centerIn: parent
+                            text: wsCell.ws < 10 ? "0" + wsCell.ws : "" + wsCell.ws
+                            font.family: Config.BarConfig.fontFamily
+                            font.pixelSize: 10
+                            font.letterSpacing: 1.2
+                            color: wsCell.active ? Config.ThemeConfig.colors.background
+                                                 : Config.ThemeConfig.colors.textDim
+                            opacity: wsCell.active ? 1.0 : (wsMa.containsMouse ? 0.95 : 0.62)
+                            Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.snap } }
+                        }
+
+                        MouseArea {
+                            id: wsMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.HyprlandService.switchTo(wsCell.ws)
+                        }
+                    }
+                }
             }
 
             // --- HUGE MIDDLE GAP ---
@@ -161,10 +204,27 @@ Item {
                 }
             }
 
+            Text {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.rightMargin: 6
+                text: "+"
+                font.family: Config.BarConfig.fontFamily
+                font.pixelSize: 9
+                color: Config.ThemeConfig.colors.textDim
+                opacity: 0.55
+            }
             Item {
                 width: Config.BarConfig.barPadding
                 Layout.fillHeight: true
             }
+        }
+
+        // ── RYOKU FRAME EDGE — 1px hairline under the bar ────────────────────
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 1
+            color: Config.ThemeConfig.hairline
         }
 
         // ── slot components (order-independent definitions) ──────────────────
