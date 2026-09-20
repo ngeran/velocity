@@ -1,0 +1,4 @@
+# qmldir for the ryoku style folder — sibling types must be registered
+# here; the runtime Loader path does NOT resolve bare siblings in style dirs
+# without it (qmllint does, so the lint gate cannot catch this class).
+RyokuPixel 1.0 RyokuPixel.qml

@@ -20,7 +20,7 @@ function clamp255(v) {
 // "#rrggbb" -> [r,g,b] (0..255); tolerates #rrggbbaa; null when unparseable.
 export function parseHex(h) {
     if (typeof h !== "string") return null
-    var s = h.replace("#", "")
+    let s = h.replace("#", "")
     if (s.length === 8) s = s.substring(0, 6)
     if (s.length !== 6 || /[^0-9a-fA-F]/.test(s)) return null
     return [
@@ -32,7 +32,7 @@ export function parseHex(h) {
 
 export function toHex(r, g, b) {
     function two(v) {
-        var s = clamp255(v).toString(16)
+        let s = clamp255(v).toString(16)
         return s.length === 1 ? "0" + s : s
     }
     return "#" + two(r) + two(g) + two(b)
@@ -42,11 +42,11 @@ export function toHex(r, g, b) {
 // present in only one side is a difference (never silently equal).
 export function palettesEqual(a, b) {
     if (!a || !b) return false
-    for (var k in b) {
+    for (let k in b) {
         if (!Object.prototype.hasOwnProperty.call(a, k)) return false
         if (String(a[k]) !== String(b[k])) return false
     }
-    for (var k2 in a) {
+    for (let k2 in a) {
         if (!Object.prototype.hasOwnProperty.call(b, k2)) return false
     }
     return true
@@ -54,10 +54,10 @@ export function palettesEqual(a, b) {
 
 // Palette -> { key: [r,g,b] } for fast per-frame mixing.
 export function parsePalette(p) {
-    var out = {}
-    for (var k in p) {
+    let out = {}
+    for (let k in p) {
         if (!Object.prototype.hasOwnProperty.call(p, k)) continue
-        var rgb = parseHex(p[k])
+        let rgb = parseHex(p[k])
         if (rgb) out[k] = rgb
     }
     return out
@@ -69,11 +69,11 @@ export function parsePalette(p) {
 export function mixPalettes(prevRGB, target, t) {
     if (t <= 0) t = 0
     if (t >= 1) t = 1
-    var out = {}
-    for (var k in target) {
+    let out = {}
+    for (let k in target) {
         if (!Object.prototype.hasOwnProperty.call(target, k)) continue
-        var to = parseHex(target[k])
-        var from = (prevRGB && Object.prototype.hasOwnProperty.call(prevRGB, k)) ? prevRGB[k] : null
+        let to = parseHex(target[k])
+        let from = (prevRGB && Object.prototype.hasOwnProperty.call(prevRGB, k)) ? prevRGB[k] : null
         if (!from || !to || t === 1) {
             out[k] = target[k]
             continue

@@ -28,14 +28,14 @@ export function bandFromFreq(mhz) {
 // { ssid: { bssid(lowercase), chan, freq, band } }. Hidden APs (empty SSID)
 // and short lines are skipped, mirroring _absorbEnrich.
 export function parseWifiEnrich(out) {
-    var bySsid = {}
-    var lines = String(out).split("\n")
-    for (var i = 0; i < lines.length; i++) {
-        var parts = splitTerseLine(lines[i])
+    let bySsid = {}
+    let lines = String(out).split("\n")
+    for (let i = 0; i < lines.length; i++) {
+        let parts = splitTerseLine(lines[i])
         if (parts.length < 5) continue
-        var ssid = parts[0]
+        let ssid = parts[0]
         if (!ssid) continue
-        var freq = parseInt(parts[3]) || 0
+        let freq = parseInt(parts[3]) || 0
         bySsid[ssid] = {
             bssid: parts[1].toLowerCase(),
             chan: parts[2] || "--",

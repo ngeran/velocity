@@ -207,7 +207,7 @@ Item {
     property var barConfigRead: Process {
         command: ["cat", StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { barConfigRead.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { barConfigRead.buffer += data + "\n" } }
         onStarted: buffer = ""
         onExited: {
             if (running === false && barConfigRead.buffer.trim().length > 0) {

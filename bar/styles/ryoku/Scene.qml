@@ -34,6 +34,14 @@ Item {
         reg[id] = item
         host.pluginItems = reg
     }
+    // Scene teardown (style swap) destroys plugin items — drop their registry
+    // entries so the host's summon/hide IPC never routes to dead objects.
+    function unregisterPlugin(id) {
+        if (!host || !host.pluginItems[id]) return
+        let reg = host.pluginItems
+        delete reg[id]
+        host.pluginItems = reg
+    }
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
@@ -305,6 +313,7 @@ Item {
                     Components.PluginSlot {
                         Layout.alignment: Qt.AlignVCenter
                         pluginId: modelData.id
+                        Component.onDestruction: sceneRoot.unregisterPlugin(modelData.id)
                         source: "file://" + modelData.dir + modelData.entryPoints.barWidget
                         configure: function(item) {
                             // Our nikos.* roots expose pluginId; omarchy-shaped
