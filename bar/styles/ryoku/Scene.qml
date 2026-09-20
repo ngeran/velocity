@@ -65,6 +65,15 @@ Item {
             // userHidden keeps the IPC toggle out of the binding (assignment
             // would break it).
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
+            // Marginalia index: 1-based position among real outputs (computed
+            // rather than trusting a delegate index that Variants may not
+            // provide).
+            readonly property int screenIndex: {
+                var ss = Quickshell.screens
+                for (var i = 0; i < ss.length; i++)
+                    if (ss[i] === panelWindow.screen) return i + 1
+                return 1
+            }
             property bool userHidden: false
             visible: validScreen && !userHidden
 
@@ -133,6 +142,24 @@ Item {
                 onTriggered: host.toggleFastfetch()
             }
 
+            // ── RYOKU PIXEL GLYPH — 1-bit asanoha star (print separator) ─────
+            RyokuPixel {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 10
+                glyph: [
+                    "00011000",
+                    "00011000",
+                    "11011011",
+                    "11100111",
+                    "11011011",
+                    "00011000",
+                    "00011000",
+                    "00000000"
+                ]
+                ink: Config.ThemeConfig.colors.textDim
+                inkOpacity: 0.6
+            }
+
             // ── RYOKU WORKSPACES — inverted-plate emphasis ────────────────────
             Row {
                 Layout.alignment: Qt.AlignVCenter
@@ -146,10 +173,19 @@ Item {
                         id: wsCell
                         readonly property int ws: index + 1
                         readonly property bool active: Services.HyprlandService.activeWorkspace === ws
-                        implicitWidth: wsNum.implicitWidth + (active ? 12 : 0)
+                        implicitWidth: wsNum.implicitWidth + (active ? 12 : 6)
                         implicitHeight: 17
                         radius: 2
-                        color: active ? Config.ThemeConfig.colors.text : "transparent"
+                        // Ryoku press grammar: hover = ink @0.08, pressed
+                        // @0.16, active = the inverted plate. snap-timed.
+                        color: wsCell.active
+                               ? Config.ThemeConfig.colors.text
+                               : wsMa.pressed
+                                 ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.16)
+                                 : wsMa.containsMouse
+                                   ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.08)
+                                   : "transparent"
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
 
                         Text {
                             id: wsNum
@@ -204,14 +240,35 @@ Item {
                 }
             }
 
+            // ── RYOKU MARGINALIA — katakana gloss + numbered index plate ────
             Text {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.rightMargin: 6
-                text: "+"
+                text: "リョク"
                 font.family: Config.BarConfig.fontFamily
-                font.pixelSize: 9
+                font.pixelSize: 8
                 color: Config.ThemeConfig.colors.textDim
                 opacity: 0.55
+            }
+            Rectangle {
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: plateNum.implicitWidth + 10
+                implicitHeight: 15
+                radius: 2
+                border.width: 1
+                border.color: Config.ThemeConfig.hairline
+
+                Text {
+                    id: plateNum
+                    anchors.centerIn: parent
+                    text: "R·" + (panelWindow.screenIndex < 10
+                                 ? "0" + panelWindow.screenIndex
+                                 : panelWindow.screenIndex)
+                    font.family: Config.BarConfig.fontFamily
+                    font.pixelSize: 8
+                    font.letterSpacing: 1.0
+                    color: Config.ThemeConfig.colors.textDim
+                }
             }
             Item {
                 width: Config.BarConfig.barPadding
