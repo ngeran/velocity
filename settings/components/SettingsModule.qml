@@ -20,6 +20,14 @@ import "../services" as Services
 Item {
     id: root
 
+    // Style folders appear without a settings restart: rescan whenever the
+    // BAR section is entered (the init-time scan only knows styles that
+    // existed when the settings shell started).
+    onActiveChanged: {
+        if (active === "bar")
+            Services.SettingsConfigService.scanBarStyles()
+    }
+
     property string active: "appearance"
 
     readonly property var navItems: [

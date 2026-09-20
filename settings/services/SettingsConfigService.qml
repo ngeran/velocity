@@ -108,6 +108,7 @@ Item {
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
+            barStyle: root.barStyle,
             matugenOnWallpaperChange: root.matugenOnWallpaperChange
         }
 
@@ -186,9 +187,45 @@ Item {
             clockOffset: root.clockOffset,
             barStyle: root.barStyle
         }
+        // Preserve bar-owned keys this service does not model (rightLayout,
+        // motionScale, reduceMotion, …) — captured from bar-config.json at
+        // init. A whole-file rewrite here used to silently reset them on
+        // every settings save.
+        for (var k in root.barConfigExtras) {
+            if (Object.prototype.hasOwnProperty.call(root.barConfigExtras, k))
+                barConfig[k] = root.barConfigExtras[k]
+        }
         var json = JSON.stringify(barConfig, null, 2)
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
         ThemeService._atomicWrite(barConfigPath, json)
+    }
+
+    // ── bar-config extras capture ───────────────────────────────────────────
+    // Everything in bar-config.json the service does NOT model, so saves can
+    // merge it back instead of clobbering it.
+    property var barConfigExtras: ({})
+    property var barConfigRead: Process {
+        command: ["cat", StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { barConfigRead.buffer += data } }
+        onStarted: buffer = ""
+        onExited: {
+            if (running === false && barConfigRead.buffer.trim().length > 0) {
+                try {
+                    var data = JSON.parse(barConfigRead.buffer)
+                    var modeled = ["schemaVersion", "barHeight", "workspaceCount",
+                                   "clockCity", "clockOffset", "barStyle"]
+                    var extras = {}
+                    for (var k in data) {
+                        if (Object.prototype.hasOwnProperty.call(data, k)
+                                && modeled.indexOf(k) === -1)
+                            extras[k] = data[k]
+                    }
+                    root.barConfigExtras = extras
+                } catch (e) { /* keep empty extras */ }
+            }
+            barConfigRead.buffer = ""
+        }
     }
 
     // ── bar style discovery ────────────────────────────────────────────────
@@ -219,6 +256,7 @@ Item {
 
     Component.onCompleted: {
         loadSettings()
+        barConfigRead.running = true
         scanBarStyles()
     }
 }
