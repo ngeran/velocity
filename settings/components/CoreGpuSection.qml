@@ -161,19 +161,39 @@ ColumnLayout {
                                 visible: index < root.procCapacity
                                 height: 30
                                 radius: Config.ControlConfig.radiusSmall
-                                color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-                                border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
+                                // xray present → rows deep-link: hover lights up,
+                                // click summons the overlay on this pid.
+                                readonly property bool inspectable: Services.PluginManagerService.hasPlugin("io.github.randazraik.xray")
+                                color: rowMa.containsMouse
+                                       ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.08)
+                                       : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+                                border.color: rowMa.containsMouse
+                                              ? Config.ThemeConfig.colors.primary
+                                              : Config.ThemeConfig.colors.outlineVariant; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
                                 ColumnLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; spacing: 3
                                     RowLayout { Layout.fillWidth: true; spacing: 6
                                         Text { text: (index + 1).toString().padStart(2, "0"); color: Config.ThemeConfig.colors.primary
                                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                                         Text { text: modelData.name; color: Config.ThemeConfig.colors.text
                                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                        Text { visible: rowMa.containsMouse; text: "X-RAY"; color: Config.ThemeConfig.colors.primary
+                                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
                                         Text { text: modelData.memMiB.toFixed(0) + " MiB"; color: Config.ControlConfig.accent
                                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                                     }
                                     CoreBar { Layout.fillWidth: true; barHeight: 2
                                         value: modelData.memMiB / root.procMaxMem * 100; barColor: Config.ControlConfig.accent }
+                                }
+                                MouseArea {
+                                    id: rowMa
+                                    anchors.fill: parent
+                                    enabled: parent.inspectable
+                                    hoverEnabled: parent.inspectable
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.PluginManagerService.inspectExternal(
+                                        "io.github.randazraik.xray",
+                                        JSON.stringify({ query: "pid:" + modelData.pid }))
                                 }
                             }
                         }

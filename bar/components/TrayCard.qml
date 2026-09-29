@@ -73,12 +73,14 @@ PanelWindow {
                 ? (Services.NetworkService.connectionType === "wifi" ? "󰖩" : "󰈀") : "󰖪"
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
+        if (lastTray === "privacy")   return "󰍍"
         return ""
     }
     readonly property string headerTitle: {
         if (lastTray === "network")   return "NETWORK"
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
+        if (lastTray === "privacy")   return "PRIVACY"
         return ""
     }
 
@@ -105,7 +107,8 @@ PanelWindow {
         // + 1 separator ≈ 59). The 300 floor keeps tiny bodies usable.
         cardWidth: Math.max(300, networkBody.implicitWidth,
                              btBody.implicitWidth,
-                             volumeBody.implicitWidth) + 44
+                             volumeBody.implicitWidth,
+                             privacyBody.implicitWidth) + 44
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
@@ -113,6 +116,7 @@ PanelWindow {
                 ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 59)
               : card.lastTray === "volume" ? volumeBody.implicitHeight + 59
               : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59
+              : card.lastTray === "privacy" ? privacyBody.implicitHeight + 59
               : 220
 
         // Tray geometry is card-internal (per-body sizing) — flow through the
@@ -1098,6 +1102,90 @@ PanelWindow {
                 }
             }
 
+        }
+
+        // ── PRIVACY BODY — who is watching or listening ──
+        // Reads PrivacyService (native PipeWire link graph): one section per
+        // active kind, each app that holds a capture stream under it.
+        ColumnLayout {
+            id: privacyBody
+            visible: card.lastTray === "privacy"
+            Layout.fillWidth: true; Layout.margins: 16; spacing: 0
+
+            readonly property var kindRows: {
+                var defs = [
+                    { key: "mic", glyph: "󰋎", label: "MICROPHONE" },
+                    { key: "camera", glyph: "󰍛", label: "CAMERA" },
+                    { key: "screen", glyph: "󰍹", label: "SCREEN" }
+                ]
+                var out = []
+                for (var i = 0; i < defs.length; i++) {
+                    var apps = Services.PrivacyService.appsFor(defs[i].key)
+                    if (apps.length > 0)
+                        out.push({ glyph: defs[i].glyph, label: defs[i].label, apps: apps })
+                }
+                return out
+            }
+
+            Text {
+                visible: !Services.PrivacyService.hasActive
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: "Nothing is watching or listening."
+                font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                color: Config.BarConfig.colorTextDim
+            }
+
+            Repeater {
+                model: privacyBody.kindRows
+
+                delegate: ColumnLayout {
+                    id: kindSection
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 8
+                        Text {
+                            text: kindSection.modelData.glyph
+                            font.family: Config.BarConfig.fontNerd; font.pixelSize: 13
+                            color: Config.ThemeConfig.colors.error
+                        }
+                        Text {
+                            text: kindSection.modelData.label
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                            font.bold: true; font.letterSpacing: 1.5
+                            color: Config.BarConfig.colorTextDim
+                        }
+                        Item { Layout.fillWidth: true }
+                        Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.error }
+                    }
+
+                    Repeater {
+                        model: kindSection.modelData.apps
+
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true; Layout.leftMargin: 21; spacing: 8
+                            Text {
+                                text: modelData.app || "Unknown app"
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                                color: Config.BarConfig.colorText
+                                Layout.fillWidth: true; elide: Text.ElideRight
+                            }
+                            Text {
+                                visible: modelData.pid !== null
+                                text: "pid " + modelData.pid
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                                color: Config.BarConfig.colorTextDim
+                            }
+                        }
+                    }
+
+                    Item { height: 10 }
+                }
+            }
         }
 
         // ═════════════════════════════════════════════════════════════════════

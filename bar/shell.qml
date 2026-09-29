@@ -43,6 +43,7 @@ ShellRoot {
                 shellRoot.trayOwner.activeTray = ""
             if (ncLoader.item && ncLoader.item.shown)
                 ncLoader.item.close()
+            shellRoot.dismissOverlays()
         }
     }
 
@@ -211,9 +212,9 @@ ShellRoot {
         Components.NotificationCenter { }
     }
 
-    // ...and opening the notification center closes the tray card and any
-    // plugin panel. (target null-safe: no connection until the center has
-    // loaded)
+    // ...and opening the notification center closes the tray card, any
+    // plugin panel, and any plugin overlay. (target null-safe: no connection
+    // until the center has loaded)
     Connections {
         target: ncLoader.item
         function onShownChanged() {
@@ -222,6 +223,7 @@ ShellRoot {
                     shellRoot.trayOwner.activeTray = ""
                 if (Services.PluginHostService.openPanel !== "")
                     Services.PluginHostService.openPanel = ""
+                shellRoot.dismissOverlays()
             }
         }
     }
@@ -283,6 +285,139 @@ ShellRoot {
     }
 
     // =========================================================================
+    // PLUGIN OVERLAYS — overlay-kind plugin roots (xray-class full-screen
+    // inspectors), mounted by the HOST process so they survive style swaps.
+    // keepLoaded semantics: enabled overlays load once and stay warm, hidden
+    // until summoned through their own open(payload)/close()/toggle(payload).
+    // =========================================================================
+    property var overlayItems: ({})   // manifest id → mounted overlay root
+
+    function registerOverlay(id, item) {
+        var reg = shellRoot.overlayItems
+        reg[id] = item
+        shellRoot.overlayItems = reg
+    }
+    function unregisterOverlay(id) {
+        if (!shellRoot.overlayItems[id]) return
+        var reg = shellRoot.overlayItems
+        delete reg[id]
+        shellRoot.overlayItems = reg
+    }
+    // Dismiss every open overlay — the reverse direction of the tray/NC/panel
+    // exclusivity: those three close overlays before showing themselves.
+    function dismissOverlays() {
+        var reg = shellRoot.overlayItems
+        for (var id in reg) {
+            if (!Object.prototype.hasOwnProperty.call(reg, id)) continue
+            if (reg[id] && reg[id].shown) reg[id].close()
+        }
+    }
+
+    // Repeater needs an Item parent to insert into (same reason the service
+    // plugins block wraps its own) — a bare Repeater under ShellRoot is
+    // silently inert.
+    Item {
+        visible: false
+        Repeater {
+            model: Services.PluginHostService.overlayPlugins
+
+            // Item wrapper: the Loader carries the overlay window; the
+            // Connections watches its shown so exclusivity fires on the
+            // FLIP, not just on registry reassignments.
+            Item {
+                id: overlaySlot
+                required property var modelData
+                readonly property string overlayId: modelData.id
+
+            Loader {
+                id: overlayLoader
+                source: "file://" + overlaySlot.modelData.dir + overlaySlot.modelData.entryPoints.overlay
+                onStatusChanged: {
+                    if (status === Loader.Error)
+                        Services.PluginHostService.reportError(overlaySlot.overlayId, "overlay failed to load")
+                }
+                onLoaded: {
+                    var it = item
+                    // Guarded injections — omarchy-shaped roots may not carry
+                    // the property (assigning a non-existent property throws).
+                    if (it.pluginId !== undefined) it.pluginId = overlaySlot.overlayId
+                    if (it.api !== undefined) it.api = Services.PluginHostService.api
+                    if (it.manifest !== undefined) it.manifest = overlaySlot.modelData
+                    // `shell` compat shim — the omarchy-shell surface overlay
+                    // plugins call into (xray: shell.toggle / shell.appLibrary).
+                    // Lifecycle verbs route through our registries; anything
+                    // the shim does not implement reports instead of throwing.
+                    if (it.shell !== undefined) {
+                        it.shell = {
+                            toggle: function(id, payload) { return shellRoot._summonAny(id, payload || "{}") },
+                            summon: function(id, payload) { return shellRoot._summonAny(id, payload || "{}") },
+                            hide: function(id) { shellRoot.dismissOverlays(); return "ok" },
+                            appLibrary: null   // omarchy app browser — not shimmed yet
+                        }
+                    }
+                    shellRoot.registerOverlay(overlaySlot.overlayId, it)
+                }
+            }
+            Component.onDestruction: shellRoot.unregisterOverlay(overlayId)
+
+            Connections {
+                target: overlayLoader.item
+                function onShownChanged() {
+                    if (overlayLoader.item && overlayLoader.item.shown)
+                        shellRoot.overlayOpened(overlaySlot.overlayId)
+                }
+            }
+        }
+    }
+    }
+
+    // One overlay opening closes every OTHER overlay plus tray/NC/panel —
+    // overlays are the fourth class in the one-popover-at-a-time contract.
+    // (The tray/NC/panel reverse direction lives in dismissOverlays().)
+    function overlayOpened(id) {
+        var reg = shellRoot.overlayItems
+        for (var other in reg) {
+            if (!Object.prototype.hasOwnProperty.call(reg, other) || other === id) continue
+            if (reg[other] && reg[other].shown) reg[other].close()
+        }
+        if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
+            shellRoot.trayOwner.activeTray = ""
+        if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
+        if (Services.PluginHostService.openPanel !== "")
+            Services.PluginHostService.openPanel = ""
+    }
+
+    // summon/hide across BOTH registries — widget plugins (open/close) and
+    // overlays (open(payload)/close). One verb for IPC and the shell shim.
+    // Overlay exclusivity fires from the shown flip (overlayOpened).
+    function _summonAny(id, payloadJson) {
+        var w = shellRoot.pluginItems[id]
+        if (w) {
+            if (w.open) { w.open(); return "ok" }
+            return "no open()"
+        }
+        var ov = shellRoot.overlayItems[id]
+        if (ov) {
+            if (ov.open) { ov.open(payloadJson || "{}"); return "ok" }
+            if (ov.toggle) { ov.toggle(payloadJson || "{}"); return "ok" }
+            return "no open()"
+        }
+        return "not loaded"
+    }
+
+    // An overlay opening (its shown flip → overlayOpened) already closes the
+    // other classes; here the REVERSE: the tray card opening dismisses
+    // overlays. (The tray direction is hosted by the style Scene — trayOwner
+    // is the TrayCard.)
+    Connections {
+        target: shellRoot.trayOwner
+        function onActiveTrayChanged() {
+            if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
+                shellRoot.dismissOverlays()
+        }
+    }
+
+    // =========================================================================
     // OSD — volume / mute feedback card (renders OsdService state)
     // =========================================================================
     Components.Osd { }
@@ -337,17 +472,20 @@ ShellRoot {
             return "ok"
         }
         // Phase 3 lifecycle: route through the plugin's own open/close/toggle.
-        function summon(id: string): string {
-            var it = shellRoot.pluginItems[id]
-            if (!it) return "not loaded"
-            if (it.open) { it.open(); return "ok" }
-            return "no open()"
+        // Overlays take an optional JSON payload ({"query":"pid:4242"}-style
+        // deep links); widget plugins ignore it.
+        function summon(id: string, payload: string): string {
+            return shellRoot._summonAny(id, payload || "")
         }
         function hide(id: string): string {
             var it = shellRoot.pluginItems[id]
-            if (!it) return "not loaded"
-            if (it.close) { it.close(); return "ok" }
-            return "no close()"
+            if (it && it.close) { it.close(); return "ok" }
+            var ov = shellRoot.overlayItems[id]
+            if (ov) {
+                if (ov.close) { ov.close(); return "ok" }
+                return "no close()"
+            }
+            return "not loaded"
         }
     }
 

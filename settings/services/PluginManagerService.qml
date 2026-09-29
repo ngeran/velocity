@@ -88,6 +88,33 @@ Item {
             catch (e) { root.lastError = "bad list output" }
         })
     }
+
+    // ── deep links: settings surfaces → bar overlay plugins ─────────────────
+    // "Inspect this process" from the Core GPU pane: summons an overlay
+    // plugin (xray) in the BAR process with a query payload
+    // ({"query":"pid:4242"}). hasPlugin() reads the last bar list; the Core
+    // tab never loads it, so inspectExternal refreshes first and retries once
+    // the answer lands — then reports instead of silently doing nothing.
+    function hasPlugin(id) {
+        for (var i = 0; i < root.plugins.length; i++) {
+            var p = root.plugins[i]
+            if (p.id === id && p.status === "ready" && p.enabled) return true
+        }
+        return false
+    }
+    function inspectExternal(id, payload) {
+        if (root.plugins.length === 0) refresh()
+        if (!hasPlugin(id)) {
+            run(["true"], function() {
+                if (hasPlugin(id))
+                    run(["qs", "-c", "bar", "ipc", "call", "plugins", "summon", id, payload])
+                else
+                    root.lastError = "inspect: " + id + " is not installed or not enabled"
+            })
+            return
+        }
+        run(["qs", "-c", "bar", "ipc", "call", "plugins", "summon", id, payload])
+    }
     function rescan() {
         run(["qs", "-c", "bar", "ipc", "call", "plugins", "rescan"], function() { root.refresh() })
     }
@@ -201,9 +228,17 @@ Item {
              "node -e '"
              + "const fs=require(\"fs\");"
              + "try { const m=JSON.parse(fs.readFileSync(\"manifest.quattro.json\",\"utf8\"));"
+             // Kinds velocity actually hosts — bar-widget, service, overlay —
+             // carried over with their entries (an overlay plugin converts to
+             // an overlay, not into a rail pill).
+             + "const kinds=(m.kinds||[\"bar-widget\"]).filter(k=>[\"bar-widget\",\"service\",\"overlay\"].indexOf(k)!==-1);"
+             + "const eps={};"
+             + "if(kinds.indexOf(\"bar-widget\")!==-1)eps.barWidget=(m.entryPoints&&m.entryPoints.barWidget)||\"BarWidget.qml\";"
+             + "if(kinds.indexOf(\"service\")!==-1)eps.service=(m.entryPoints&&m.entryPoints.service)||\"Service.qml\";"
+             + "if(kinds.indexOf(\"overlay\")!==-1)eps.overlay=(m.entryPoints&&m.entryPoints.overlay)||\"XRay.qml\";"
              + "const out={schemaVersion:1,api:2,id:m.id,name:m.name||m.id,version:String(m.version||\"0.1.0\"),"
              + "description:(m.description||\"\").slice(0,200),author:m.author||\"quattro\","
-             + "kinds:[\"bar-widget\"],entryPoints:{barWidget:(m.entryPoints&&m.entryPoints.barWidget)||\"BarWidget.qml\"},"
+             + "kinds:kinds.length?kinds:[\"bar-widget\"],entryPoints:eps,"
              + "commands:[],compat:\"quattro\"};"
              + "fs.writeFileSync(\"manifest.json\",JSON.stringify(out,null,2)); } catch(e) { process.exit(1) }' "
              + "&& echo CONVERTED"],

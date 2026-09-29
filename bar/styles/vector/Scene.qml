@@ -156,12 +156,15 @@ Item {
                 Loader {
                     Layout.alignment: Qt.AlignVCenter
                     Layout.leftMargin: 0
-                    Layout.rightMargin: Config.BarConfig.slotMargin
+                    // Auto-empty slots (privacy pill hides when idle) collapse
+                    // their margin too — no dead gap between neighbours.
+                    Layout.rightMargin: item && item.implicitWidth > 0 ? Config.BarConfig.slotMargin : 0
                     sourceComponent: {
                         if (modelData === "plugins")       return pluginsSlot
                         if (modelData === "network")       return networkSlot
                         if (modelData === "bluetooth")     return bluetoothSlot
                         if (modelData === "volume")        return volumeSlot
+                        if (modelData === "privacy")       return privacySlot
                         if (modelData === "logs")          return logsSlot
                         if (modelData === "notifications") return notificationsSlot
                         return null
@@ -242,6 +245,17 @@ Item {
                 onTrayRequested: {
                     panelWindow.trayAnchor = this
                     panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
+                }
+            }
+        }
+        Component {
+            id: privacySlot
+            Components.PrivacyIcon {
+                Layout.alignment: Qt.AlignVCenter
+                isActive: panelWindow.activeTray === "privacy"
+                onTrayRequested: {
+                    panelWindow.trayAnchor = this
+                    panelWindow.activeTray = panelWindow.activeTray === "privacy" ? "" : "privacy"
                 }
             }
         }

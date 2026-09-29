@@ -24,7 +24,7 @@ plugins.list             manual
 plugins.enable           manual
 plugins.disable          manual
 plugins.order            manual
-plugins.summon           manual
+plugins.summon           manual    # id + optional JSON payload (overlay deep links)
 plugins.hide             manual
 theme.reload             internal  # ThemeService push nudge after colors.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "api": 1,
+  "id": "nikos.example-overlay",
+  "name": "Example Overlay",
+  "version": "1.0.0",
+  "description": "SDK sample for the overlay plugin kind: a full-screen overlay root with open(payload)/close()/toggle(payload), a `shown` property the host watches for one-at-a-time exclusivity, and the payload round-trip.",
+  "author": "nikos",
+  "kinds": ["overlay"],
+  "entryPoints": { "overlay": "Overlay.qml" },
+  "commands": []
+}

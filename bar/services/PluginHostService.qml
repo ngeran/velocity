@@ -45,6 +45,10 @@ Item {
     readonly property var barWidgetPlugins: root._byKind("bar-widget", "right")
     readonly property var centerWidgetPlugins: root._byKind("bar-widget", "center")
     readonly property var servicePlugins: root._byKind("service", "")
+    // Overlay-kind plugins: full-screen PanelWindow roots mounted by the
+    // HOST process (not the rail) — hidden until summoned, kept loaded once
+    // mounted (the "overlay" contract is keepLoaded semantics).
+    readonly property var overlayPlugins: root._byKind("overlay", "")
 
     // The plugin panel that is currently open (manifest id, or ""). Opening
     // one panel closes the others — same one-at-a-time contract as TrayCard.
@@ -238,7 +242,7 @@ Item {
         if (!Array.isArray(m.kinds) || m.kinds.length === 0) return _bad(dir, "kinds missing")
         if (!m.entryPoints || typeof m.entryPoints !== "object") return _bad(dir, "entryPoints missing")
 
-        var legalKinds = ["bar-widget", "service"]
+        var legalKinds = ["bar-widget", "service", "overlay"]
         for (var k = 0; k < m.kinds.length; k++) {
             var kind = m.kinds[k]
             if (legalKinds.indexOf(kind) === -1) return _bad(dir, "unsupported kind: " + kind)

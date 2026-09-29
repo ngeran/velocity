@@ -41,7 +41,8 @@ Item {
     // single "plugins" slot; their internal order comes from plugins-state.json.
     readonly property var defaultRightLayout: ["plugins", "network",
                                                "bluetooth", "volume",
-                                               "logs", "notifications"]
+                                               "privacy", "logs",
+                                               "notifications"]
     property var rightLayout: defaultRightLayout
     // Rail spacing that compensates for slot CONTENT: the 32px icon slots
     // carry ~9px of glyph whitespace per side (visual gap ≈ 19px at margin 0),
@@ -91,7 +92,7 @@ Item {
             // unknown keys are dropped, empty falls back to the default.
             if (Array.isArray(data.rightLayout)) {
                 var legal = ["plugins", "network", "bluetooth",
-                             "volume", "logs", "notifications"]
+                             "volume", "privacy", "logs", "notifications"]
                 var cleaned = data.rightLayout.filter(function(k) { return legal.indexOf(k) !== -1 })
                 rightLayout = cleaned.length > 0 ? cleaned : defaultRightLayout
             }
