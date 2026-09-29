@@ -9,6 +9,7 @@
 //   BAR        — bar height, workspace dots       (SettingsConfigService + saveSettings)
 //   CLOCK      — city (text input), UTC offset    (SettingsConfigService + saveSettings)
 //   IDLE & LOCK— dim/lock/off timeouts, suspend   (HypridleService + saveConfig)
+//   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
 // =============================================================================
 
@@ -26,6 +27,9 @@ Item {
     onActiveChanged: {
         if (active === "bar")
             Services.SettingsConfigService.scanBarStyles()
+        // The DESKTOP pane follows Hyprland instead of trusting the store —
+        // poll only while it is the pane on screen.
+        Services.HyprSettingsService.watching = (active === "desktop")
     }
 
     property string active: "appearance"
@@ -33,6 +37,7 @@ Item {
     readonly property var navItems: [
         { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
         { key: "bar",        label: "BAR",        icon: "󰖬" },
+        { key: "desktop",    label: "DESKTOP",    icon: "󰍹" },
         { key: "clock",      label: "CLOCK",      icon: "󰥔" },
         { key: "idle",       label: "IDLE & LOCK", icon: "󰌾" }
     ]
@@ -77,9 +82,14 @@ Item {
         }
 
         // ── Setting row: eyebrow + live value + option pills ────────────
+        // `changed` + onResetRow drive the DESKTOP pane's undo marks: a dot
+        // beside the value and a one-click RESET chip, only on a row this
+        // window has moved away from what it found there first.
         component SettingRow: ColumnLayout {
             property string label: ""
             property string value: ""
+            property bool changed: false
+            signal resetRow()
             default property alias options: optionRow.data
             spacing: Config.ControlConfig.space1
             RowLayout {
@@ -88,8 +98,25 @@ Item {
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                     font.bold: true; font.letterSpacing: 1.0 }
                 Item { Layout.fillWidth: true }
+                Text { visible: changed; text: "●"; color: Config.ThemeConfig.colors.warning
+                    font.pixelSize: 10 }
                 Text { text: value; color: Config.ThemeConfig.colors.text
                     font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 16; font.bold: true }
+                Rectangle {
+                    visible: changed
+                    width: resetLbl.implicitWidth + 14; height: 20
+                    radius: height / 2
+                    color: resetArea.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.16) : "transparent"
+                    border.color: Config.ThemeConfig.colors.error; border.width: 1
+                    Text { id: resetLbl; anchors.centerIn: parent
+                        text: "RESET"
+                        color: Config.ThemeConfig.colors.error
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                        font.bold: true; font.letterSpacing: 0.8 }
+                    MouseArea { id: resetArea; anchors.fill: parent
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: resetRow() }
+                }
             }
             RowLayout {
                 id: optionRow
@@ -104,6 +131,61 @@ Item {
             signal picked()
             height: 26
             onChosen: picked()
+        }
+
+        // ── DESKTOP (Hyprland) row helpers ─────────────────────────────
+        // One row per catalog entry; choices become pills, bools become a
+        // PowerPill. Values read live from Hyprland (one batched getoption),
+        // writes apply instantly through hl.config eval — "…" means the
+        // readback has not landed, never a fallback number.
+        component HyprRow: SettingRow {
+            id: hyprRow
+            property var def: null
+            function fmt(v) {
+                if (v === undefined) return "…"
+                if (v === true) return "ON"
+                if (v === false) return "OFF"
+                return String(v)
+            }
+            label: def.label
+            value: fmt(Services.HyprSettingsService.effective(def.key))
+            changed: Services.HyprSettingsService.isChanged(def.key)
+            onResetRow: Services.HyprSettingsService.reset(def.key)
+
+            Repeater {
+                model: hyprRow.def ? (hyprRow.def.choices || []) : []
+                delegate: OptSeg {
+                    required property var modelData
+                    text: hyprRow.fmt(modelData)
+                    active: Services.HyprSettingsService.effective(hyprRow.def.key) === modelData
+                    onPicked: Services.HyprSettingsService.set(hyprRow.def.key, modelData)
+                }
+            }
+        }
+
+        component HyprToggleRow: SettingRow {
+            id: hyprToggleRow
+            property var def: null
+            label: def.label
+            value: Services.HyprSettingsService.effective(def.key) === undefined
+                   ? "…" : (Services.HyprSettingsService.effective(def.key) ? "ON" : "OFF")
+            changed: Services.HyprSettingsService.isChanged(def.key)
+            onResetRow: Services.HyprSettingsService.reset(def.key)
+            PowerPill {
+                on: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
+                enabled: Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== undefined
+                onClicked: Services.HyprSettingsService.set(
+                    hyprToggleRow.def.key,
+                    Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== true)
+            }
+        }
+
+        component GroupHeader: Text {
+            property string title: ""
+            text: title
+            color: Config.ThemeConfig.colors.textDim; opacity: 0.8
+            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+            font.bold: true; font.letterSpacing: 1.5
         }
 
         // ── APPEARANCE ─────────────────────────────────────────────────
@@ -215,6 +297,77 @@ Item {
                         }
                     }
                     Item { Layout.fillHeight: true }
+                }
+            }
+        }
+
+        // ── DESKTOP (Hyprland) ─────────────────────────────────────────
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Config.ControlConfig.space4
+            visible: root.active === "desktop"
+            spacing: Config.ControlConfig.space4
+
+            SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Desktop"
+                subtitle: "Hyprland blur, shadows, gaps, borders, rounding, opacity — applied live" }
+
+            CoreCard {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                accent: Config.ControlConfig.accent
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: Config.ControlConfig.space3
+
+                    GroupHeader { title: "EFFECTS" }
+                    HyprToggleRow { def: Services.HyprSettingsService.def("blur") }
+                    HyprRow { def: Services.HyprSettingsService.def("blurSize") }
+                    HyprRow { def: Services.HyprSettingsService.def("blurPasses") }
+                    HyprToggleRow { def: Services.HyprSettingsService.def("blurPopups") }
+                    HyprToggleRow { def: Services.HyprSettingsService.def("shadows") }
+
+                    GroupHeader { title: "WINDOWS" }
+                    HyprRow { def: Services.HyprSettingsService.def("gapsIn") }
+                    HyprRow { def: Services.HyprSettingsService.def("gapsOut") }
+                    HyprRow { def: Services.HyprSettingsService.def("borderSize") }
+                    HyprRow { def: Services.HyprSettingsService.def("rounding") }
+                    HyprRow { def: Services.HyprSettingsService.def("activeOpacity") }
+                    HyprRow { def: Services.HyprSettingsService.def("inactiveOpacity") }
+
+                    Item { Layout.fillHeight: true }
+
+                    // Error footer — apply refusals surface verbatim.
+                    Text {
+                        Layout.fillWidth: true
+                        visible: Services.HyprSettingsService.lastError !== ""
+                        text: Services.HyprSettingsService.lastError
+                        color: Config.ThemeConfig.colors.error; wrapMode: Text.Wrap
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                    }
+
+                    // Changed footer — count + the one destructive escape hatch.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: Services.HyprSettingsService.loaded
+                        Text {
+                            visible: Services.HyprSettingsService.changedCount > 0
+                            text: Services.HyprSettingsService.changedCount + " CHANGED"
+                            color: Config.ThemeConfig.colors.warning
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                            font.bold: true; font.letterSpacing: 0.8
+                        }
+                        Item { Layout.fillWidth: true }
+                        ConfirmDialog {
+                            visible: Services.HyprSettingsService.changedCount > 0
+                            label: "RESET ALL"
+                            confirmLabel: "CONFIRM?"
+                            onConfirmed: Services.HyprSettingsService.resetAll()
+                        }
+                    }
+
+                    Text { Layout.fillWidth: true
+                        text: "Applied live to Hyprland · kept in ~/.config/hypr/velocity-settings.lua · your own config answers again on reset"
+                        color: Config.ThemeConfig.colors.textDim; opacity: 0.7
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
                 }
             }
         }
