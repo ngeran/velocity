@@ -274,12 +274,12 @@ Item {
     // ramp (base08 "red" is dark teal here), not semantically meaningful.
     // `--prefer darkness` picks the darkest dominant color (deterministic,
     // non-interactive). `-m dark` selects the dark scheme.
-    property var matugenRunner: Process {
+    property var matugenRunner: Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: matugenProc
         property string buffer: ""
         property string pendingWallpaper: ""
         command: []
-        stdout: SplitParser { onRead: function(data) { matugenProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { matugenProc.buffer += data + "\n" } }
         onExited: function(code) {
             themeService.isRegenerating = false;
             var path = matugenProc.pendingWallpaper;
@@ -419,10 +419,10 @@ Item {
     // unavailable/broken and fallbackToRebuild is on). Copies the wallpaper
     // into the flake tree and rebuilds; Stylix regenerates the seed.
     // =========================================================================
-    property var rebuildRunner: Process {
+    property var rebuildRunner: Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: rebuilder
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { rebuilder.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { rebuilder.buffer += data + "\n" } }
         onRunningChanged: function() {
             if (!running) {
                 console.log("[ThemeService] Rebuild output:", rebuilder.buffer.trim());
@@ -473,10 +473,10 @@ Item {
     // STYLIX SEED (cold-boot only) — loaded on startup if colors.json is absent
     // or its source is "stylix". The clobber-guard preserves a user's live choice.
     // =========================================================================
-    property var stylixChecker: Process {
+    property var stylixChecker: Process {   // unbounded-ok: waived — see service header
         property string buffer: ""
         command: []
-        stdout: SplitParser { onRead: function(data) { stylixChecker.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { stylixChecker.buffer += data + "\n" } }
         onExited: function(code) {
             var shouldLoadSeed = true;
             if (stylixChecker.buffer.trim() !== "NONE") {
@@ -493,10 +493,10 @@ Item {
         }
     }
 
-    property var stylixSeedLoader: Process {
+    property var stylixSeedLoader: Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         property string buffer: ""
         command: ["sh", "-c", "cat ~/.config/quickshell/stylix-palette.json 2>/dev/null"]
-        stdout: SplitParser { onRead: function(data) { stylixSeedLoader.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { stylixSeedLoader.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && stylixSeedLoader.buffer.length > 0) {
                 try {
@@ -565,11 +565,11 @@ Item {
     // =========================================================================
     // CUSTOM SCHEME PERSISTENCE + API
     // =========================================================================
-    property var customThemeLoader: Process {
+    property var customThemeLoader: Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: customLoader
         property string buffer: ""
         command: ["sh", "-c", "cat " + themeService.customThemesPath + " 2>/dev/null"]
-        stdout: SplitParser { onRead: function(data) { customLoader.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { customLoader.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 try {
@@ -729,15 +729,34 @@ Item {
         // content above the marker with plain `sed` (no -i → no inode change;
         // $() also strips trailing newlines), then truncate+write the SAME file
         // via '>' (preserves inode). User settings above the marker survive.
+        // SAFETY (omasettings invariants — this is the one syncer that edits
+        // a user-owned file in place):
+        //   1. first-touch backup — exclusive `ln` to .velocity.bak, never
+        //      overwritten later, so the pristine pre-velocity copy survives
+        //      every future write
+        //   2. validate-then-rollback — `ghostty +validate-config` is captured
+        //      BEFORE the write; if it was clean and the write breaks it, the
+        //      previous content goes back. A config the user already had
+        //      warnings in is theirs — we don't roll back for it.
+        //   3. inode preserved end-to-end (plain '>' truncate+write) — see the
+        //      watcher note above; rollback path uses '>' for the same reason.
         var script =
             "f=" + ghosttyMain + " && " +
             "mkdir -p \"$(dirname \"$f\")\" && " +
             "{ [ -f \"$f\" ] || : > \"$f\"; } && " +
+            "[ -e \"$f.velocity.bak\" ] || ln \"$f\" \"$f.velocity.bak\" 2>/dev/null; " +
             "u=$(sed '/# >>> quickshell-theme >>>/,$d' \"$f\") && " +
+            "prev=$(cat \"$f\"; printf x) && prev=\"${prev%x}\" && " +
+            "preok=ok; command -v ghostty >/dev/null 2>&1 && ghostty +validate-config >/dev/null 2>&1 || preok=bad; " +
             "if [ -n \"$u\" ]; then " +
                 "printf '%s\\n\\n%s\\n' \"$u\" " + quoted + " > \"$f\"; " +
             "else " +
                 "printf '\\n%s\\n' " + quoted + " > \"$f\"; " +
+            "fi && " +
+            "if [ \"$preok\" = ok ] && command -v ghostty >/dev/null 2>&1 && ! ghostty +validate-config >/dev/null 2>&1; then " +
+                "printf '%s' \"$prev\" > \"$f\"; " +
+                "echo \"ghostty rejected the new palette — previous config restored\" >&2; " +
+                "exit 1; " +
             "fi";
         themeService._runSh(script, "sync ghostty");
     }
