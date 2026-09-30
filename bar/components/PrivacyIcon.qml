@@ -10,7 +10,7 @@ import "../services" as Services
 Item {
     id: root
 
-    readonly property bool active: Services.PrivacyService.hasActive
+    readonly property bool active: Services.PrivacyService.hasActive || Services.PrivacyService.hasInhibitors
     property bool isActive: false          // tray body open
     signal trayRequested()
 
@@ -47,7 +47,8 @@ Item {
                 model: root.active ? [
                     Services.PrivacyService.appsFor("mic").length > 0,
                     Services.PrivacyService.appsFor("camera").length > 0,
-                    Services.PrivacyService.appsFor("screen").length > 0
+                    Services.PrivacyService.appsFor("screen").length > 0,
+                    Services.PrivacyService.hasInhibitors
                 ] : []
 
                 Rectangle {

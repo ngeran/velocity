@@ -1128,12 +1128,61 @@ PanelWindow {
             }
 
             Text {
-                visible: !Services.PrivacyService.hasActive
+                visible: !Services.PrivacyService.hasActive && !Services.PrivacyService.hasInhibitors
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: "Nothing is watching or listening."
                 font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
                 color: Config.BarConfig.colorTextDim
+            }
+
+            // ── SLEEP INHIBITORS — what is keeping the machine awake ──
+            ColumnLayout {
+                visible: Services.PrivacyService.hasInhibitors
+                Layout.fillWidth: true
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 8
+                    Text {
+                        text: "󰌾"
+                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 13
+                        color: Config.ThemeConfig.colors.warning
+                    }
+                    Text {
+                        text: "KEPT AWAKE"
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                        font.bold: true; font.letterSpacing: 1.5
+                        color: Config.BarConfig.colorTextDim
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                Repeater {
+                    model: Services.PrivacyService.inhibitors
+
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true; Layout.leftMargin: 21; spacing: 8
+                        Text {
+                            text: modelData.who
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                            color: Config.BarConfig.colorText
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            visible: modelData.why !== ""
+                            text: modelData.why
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                            color: Config.BarConfig.colorTextDim
+                            elide: Text.ElideRight
+                            Layout.maximumWidth: 140
+                        }
+                    }
+                }
+
+                Item { height: 10 }
             }
 
             Repeater {

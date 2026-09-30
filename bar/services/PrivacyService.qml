@@ -35,6 +35,48 @@ Item {
 
     function appsFor(kind) { return active[kind] || [] }
 
+    // ── sleep inhibitors — who is keeping the machine awake ─────────────
+    // Same pill, second detector: systemd-inhibit, filtered to sleep. Runs
+    // on a slow cadence (15s — inhibitors change rarely) through the
+    // bounded contract like every other shell-out here.
+    property var inhibitors: []     // [{ who, why }]
+    readonly property bool hasInhibitors: inhibitors.length > 0
+
+    BoundedProcess {
+        id: inhProc
+        command: ["sh", "-c", "systemd-inhibit --list --json=short 2>/dev/null"]
+        timeoutMs: 4000
+        maxBytes: 131072
+        onDone: function(out) {
+            var next = []
+            try {
+                var arr = JSON.parse(out)
+                for (var i = 0; i < arr.length; i++) {
+                    var it = arr[i]
+                    var what = String(it.What || it.what || "")
+                    var mode = String(it.Mode || it.mode || "")
+                    // "delay" inhibitors (NetworkManager et al.) are routine
+                    // noise — only "block" mode actually keeps the machine up.
+                    if (what.indexOf("sleep") === -1 || mode !== "block") continue
+                    next.push({
+                        who: String(it.Who || it.who || "unknown"),
+                        why: String(it.Why || it.why || "")
+                    })
+                }
+            } catch (e) { /* keep previous */ }
+            if (JSON.stringify(next) !== JSON.stringify(root.inhibitors))
+                root.inhibitors = next
+        }
+    }
+
+    Timer {
+        interval: 15000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: inhProc.run()
+    }
+
     // ── pw-dump poll ────────────────────────────────────────────────────
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: dumpProc
