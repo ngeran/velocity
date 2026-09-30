@@ -4,8 +4,9 @@
 # that actually exist. Adapted from ryoku-arch's shell-binds audit.
 #
 # Three sets are compared:
-#   DECLARED — IpcHandler target/function pairs extracted live from
-#              bar/shell.qml and settings/shell.qml (the code is the truth
+#   DECLARED — IpcHandler target/function pairs extracted live from any
+#              shell .qml under bar/ and settings/ (handlers may live in
+#              components/services; the code is the truth
 #              for what exists)
 #   USED     — `ipc -c <proc> call <target> <fn>` strings found in
 #              ~/.omni-nix/configs/hypr/keybindings.lua and across this repo
@@ -35,16 +36,23 @@ warn() { echo "check-ipc: warn: $*" >&2; }
 # --- DECLARED: target.function from both shell.qml roots ----------------------
 declared="$(
   awk '
-    /IpcHandler \{/ { inipc = 1; t = "" }
-    inipc && /target:/ {
-      x = $0; sub(/.*target:/, "", x); gsub(/["[:space:]]/, "", x); t = x
+    # brace-depth state machine (NOT indent matching — root-level handlers in
+    # component files close functions at 4 spaces and broke the old ^    })
+    # heuristic, silently dropping every function after the first).
+    /IpcHandler \{/ && !inipc { inipc = 1; t = ""; depth = 0 }
+    inipc {
+      if (/^[[:space:]]*target[[:space:]]*:[[:space:]]*"/) {
+        x = $0; sub(/.*target:/, "", x); gsub(/["[:space:]]/, "", x); t = x
+      }
+      if ($0 ~ /function [A-Za-z]/) {
+        f = $0; sub(/.*function[[:space:]]+/, "", f); sub(/[([:space:]].*/, "", f)
+        if (t != "" && f != "") print t "." f
+      }
+      n = gsub(/{/, "{"); m = gsub(/}/, "}")
+      depth += n - m
+      if (depth <= 0) inipc = 0
     }
-    inipc && /function [A-Za-z]/ {
-      f = $0; sub(/.*function[[:space:]]+/, "", f); sub(/[([:space:]].*/, "", f)
-      if (t != "" && f != "") print t "." f
-    }
-    inipc && /^    \}/ { inipc = 0 }
-  ' "$QS_DIR/bar/shell.qml" "$QS_DIR/settings/shell.qml" | sort -u
+  ' $(find "$QS_DIR/bar" "$QS_DIR/settings" -name "*.qml" 2>/dev/null) | sort -u
 )"
 [[ -n $declared ]] || { fail "no IpcHandler functions extracted — extraction broke"; exit 1; }
 
@@ -57,7 +65,10 @@ used_raw="$(
       --include='*.qml' --include='*.sh' 2>/dev/null |
       grep -v "$QS_DIR/\.claude" || true
     grep -hoE 'quickshell ipc -c [a-zA-Z]+ call [A-Za-z]+ [A-Za-z]+' \
-      $(grep -rl 'quickshell ipc' "$OMNI_DIR/configs" 2>/dev/null) 2>/dev/null || true
+      $(grep -rl 'quickshell ipc' "$OMNI_DIR/configs" 2>/dev/null) 2>/dev/null </dev/null || true
+    # ^ </dev/null: when OMNI_DIR is missing the file list is empty and grep
+    # would fall through to reading stdin — hanging the whole gate (flaky,
+    # stdin-lottery; bit twice in one session)
   } | awk '{
     # normalize: ... -c <proc> ... call <target> <fn>  ->  proc|target|fn
     for (i = 1; i <= NF; i++) if ($i == "-c") { proc = $(i+1) }

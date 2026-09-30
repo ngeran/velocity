@@ -56,3 +56,4 @@ CoreSystemPane 1.0 CoreSystemPane.qml
 PluginsView 1.0 PluginsView.qml
 ToggleSwitch 1.0 ToggleSwitch.qml
 ConfirmDialog 1.0 ConfirmDialog.qml
+DisplayIpc 1.0 DisplayIpc.qml

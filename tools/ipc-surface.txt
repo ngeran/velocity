@@ -55,3 +55,27 @@ SettingsWindow.openThemeTab       unused
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P
+display.status                   manual    # truth probe (persist state, target, monitors)
+display.stage                    manual    # stage live display settings (the panel button, scriptable)
+display.refresh                   manual    # one-shot monitor poll (the poll timer is dashboard-gated)
+notifications.add                 manual    # ingest surface (docs in NotificationService header)
+notifications.clear               manual    # soft clear
+notifications.restore              manual    # undo the soft clear
+notifications.readAll             manual    # mark all read
+notifications.list                manual    # dump the visible model (truth probes)
+wallpaper-service.toggleCycling   manual    # cycle pill toggles in-process; IPC kept external
+wallpaper-service.cycleNow       manual    # skip to next wallpaper in the cycle
+wallpaper-service.getCount       manual    # wallpaper count (scripting)
+wallpaper-service.getCurrentInfo manual    # current wallpaper info (scripting)
+wallpaper-service.getCyclingEnabled manual # cycle state (scripting)
+wallpaper-service.getInterval    manual    # cycle interval (scripting)
+wallpaper-service.setWallpaperByIndex manual # set wallpaper by index (scripting)
+wallpaper-service.setWallpaperByPath manual # set wallpaper by path (scripting)
+wallpaper-service.setWallpaperDir     manual # set + persist the wallpaper dir (scripting)
+wallpaper-service.setInterval     manual    # set cycle interval (scripting)
+wallpaper-service.setTransition   manual    # set transition style (scripting)
+wallpaper-service.getList         manual    # wallpaper list (scripting)
+wallpaper-service.getTransition   manual    # transition style (scripting)
+wallpaper-service.getWallpaperDir manual    # wallpaper dir (scripting)
+wallpaper-service.refreshList     manual    # rescan the wallpaper dir
+wallpaper-service.setCyclingEnabled manual  # cycle on/off (scripting)

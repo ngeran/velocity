@@ -11,9 +11,20 @@
 //   `hyprctl keyword` is refused by the Lua parser and `hyprctl output` is a
 //   no-op echo (accepts bogus props with "ok"). A full rule must always be
 //   sent — a partial hl.monitor would reset the omitted attrs.
-//   Reload reverts eval'd values to the nix config → persistence goes through
-//   stageToNix() (rewrites ~/.omni-nix/configs/hypr/monitors.lua + git add;
-//   the user's omni-apply makes it permanent).
+//
+// CABLE-PROOF RULES (verified 2026-09-30 live: desc-keyed eval → ok + readback):
+//   Every rule is keyed `output = 'desc:<EDID description>'`, not by connector
+//   name — the name (HDMI-A-1) changes when the cable moves ports; the desc
+//   follows the physical display. Reload reverts eval'd values to the config
+//   file → persistence goes through stageToNix(): it splices a velocity-managed
+//   block into ~/.config/hypr/monitors.lua (omarchy's file — everything outside
+//   the markers is untouched), one FULL desc-keyed rule per display. Rules for
+//   currently-absent displays are PRESERVED on re-stage (remember-absent): the
+//   file accumulates one rule per display ever staged, and Hyprland — which
+//   auto-reloads on save — re-applies a rule whenever that display reappears
+//   on any port. Stage pipeline: first-touch backup (monitors.lua.velocity-bak,
+//   never overwritten) → atomic write → `hyprctl configerrors` validation →
+//   restore on failure.
 //
 // monitors[] entry:
 //   { name, desc, make, model, w, h, refreshHz, scale, vrr, dpms, transform,
@@ -24,6 +35,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 import "../config" as Config
 
@@ -90,11 +102,11 @@ Item {
     readonly property real revertSecondsLeft: pendingRevert
         ? Math.max(0, Math.ceil((pendingRevert.deadline - Date.now()) / 1000)) : 0
 
-    // ── persistence state: live values vs the nix source of truth ──────────
-    // "dirty" = live differs from ~/.omni-nix/configs/hypr/monitors.lua
-    //          (a reload would lose the live tweaks — stage them!)
+    // ── persistence state: live values vs the staged desc-keyed rules ──────
+    // "dirty" = some live display has no staged rule, or its staged
+    //           mode/scale/bitdepth/vrr differ (a reload would drop them —
+    //           stage!). See the STORE section for the block format.
     property string persistState: "clean"
-    property string nixRuleText: ""
 
     // -------------------------------------------------------------------------
     // POLL — hyprctl monitors -j (JSON). 10s while the dashboard is open; also
@@ -139,31 +151,34 @@ Item {
     // -------------------------------------------------------------------------
     // over: { mode, scale, bitdepth, vrr, cm, sdrbrightness, sdrsaturation,
     //         sdr_min_luminance, sdr_max_luminance }  (undefined = keep live)
-    function currentModeString() {
-        var p = target
+    // Keyed by `desc:` — see the header. ruleFor() builds for any monitor;
+    // ruleString() targets the selection.
+    function currentModeStringFor(p) {
         if (!p) return "preferred"
         // Trim trailing zeros: 119.88 stays, 60.00 → 60
         var hz = String(parseFloat(p.refreshHz.toFixed(2)))
         return p.w + "x" + p.h + "@" + hz
     }
 
-    function liveBitdepth() {
-        var p = target
+    function currentModeString() { return currentModeStringFor(target) }
+
+    function _bitdepthOf(p) {
         if (!p) return 10
         // XBGR2101010/ARGB2101010 → 10-bit; XRGB8888/ARGB8888 → 8-bit
         return (p.format.indexOf("2101010") !== -1 || p.format.indexOf("101010") !== -1) ? 10 : 8
     }
 
-    function ruleString(over) {
-        var p = target
+    function liveBitdepth() { return _bitdepthOf(target) }
+
+    function ruleFor(p, over) {
         if (!p) return ""
         var o = over || {}
-        var mode = o.mode !== undefined ? o.mode : currentModeString()
+        var mode = o.mode !== undefined ? o.mode : currentModeStringFor(p)
         var scale = o.scale !== undefined ? o.scale : p.scale
-        var bd = o.bitdepth !== undefined ? o.bitdepth : liveBitdepth()
+        var bd = o.bitdepth !== undefined ? o.bitdepth : _bitdepthOf(p)
         var vrr = o.vrr !== undefined ? o.vrr : vrrMode
         var pos = p.x + "x" + p.y
-        var s = "hl.monitor({ output = '" + p.name + "', mode = '" + mode
+        var s = "hl.monitor({ output = 'desc:" + p.desc + "', mode = '" + mode
               + "', position = '" + pos + "', scale = " + scale
               + ", bitdepth = " + bd + ", vrr = " + vrr
         // transform only when rotated (or explicitly requested) — never emit
@@ -277,22 +292,61 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // NIX SOURCE — the persistence target (read at startup; rewritten by stage)
+    // STORE — ~/.config/hypr/monitors.lua (omarchy's file, required by
+    // hyprland.lua; Hyprland auto-reloads it on save). Velocity owns ONLY the
+    // marked block: one FULL desc-keyed rule per display ever staged — rules
+    // for currently-absent displays stay put (remember-absent), so a replug
+    // on any port re-applies automatically. Everything outside the markers is
+    // never read or rewritten.
     // -------------------------------------------------------------------------
+    readonly property string hyprDir: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "") + "/.config/hypr"
+    readonly property string storePath: hyprDir + "/monitors.lua"
+    readonly property string blockBegin: "-- BEGIN velocity-managed (desc-keyed display rules; the velocity Display panel re-stages this block)"
+    readonly property string blockEnd: "-- END velocity-managed"
+
+    // The whole file text (FileView) — persist state parses the block out of it.
+    property string storeText: ""
+
     FileView {
-        id: nixFile
-        path: "/home/nikos/.omni-nix/configs/hypr/monitors.lua"
-        watchChanges: false
-        onLoaded: {
-            root.nixRuleText = text()
-            root._seedFromNix()
+        id: storeFile
+        path: root.storePath
+        watchChanges: true
+        printErrors: false
+
+        // The ThemeConfig colors.json pattern (proven against the async-reload
+        // staleness — a synchronous text() right after reload() returns the
+        // stale cache): instant ingest on same-inode changes, ingest from
+        // textChanged for async reload completions, blocking read at startup.
+        onFileChanged: root._ingestStore(storeFile.text())
+        onTextChanged: root._ingestStore(text())
+
+        Component.onCompleted: root._ingestStore(storeFile.text())
+    }
+
+    // Safety poll for tmp+mv inode swaps (our own stage writes replace the
+    // file) — reload() re-reads by path in C++. Zero forks, cheap text.
+    Timer {
+        id: storePoller
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: {
+            storeFile.reload()
+            root._ingestStore(storeFile.text())
         }
     }
 
-    // cmAutoHdr lives in look-and-feel.lua (render block), not monitors.lua.
+    function _ingestStore(t) {
+        var s = String(t || "")
+        if (s === storeText) return   // idempotent for the poller
+        storeText = s
+        _seedFromStore()
+    }
+
+    // cmAutoHdr lives in the look-and-feel render block, not monitors.lua.
     FileView {
         id: lookFile
-        path: "/home/nikos/.omni-nix/configs/hypr/look-and-feel.lua"
+        path: root.hyprDir + "/looknfeel.lua"
         watchChanges: false
         onLoaded: {
             var m = /cm_auto_hdr\s*=\s*(\d)/.exec(text())
@@ -300,39 +354,78 @@ Item {
         }
     }
 
-    Component.onCompleted: { nixFile.reload(); lookFile.reload() }
+    Component.onCompleted: lookFile.reload()   // storeFile reads itself at startup
 
-    // Seeds vrrMode (config value) and computes the initial persist state.
-    function _seedFromNix() {
-        var m = /vrr\s*=\s*(\d)/.exec(nixRuleText)
-        if (m) vrrMode = parseInt(m[1], 10)
+    function _managedInner(text) {
+        var b = text.indexOf(root.blockBegin)
+        if (b === -1) return ""
+        var e = text.indexOf(root.blockEnd, b)
+        if (e === -1) return ""
+        return text.substring(b + root.blockBegin.length, e)
+    }
+
+    // Staged rules: one hl.monitor({...}) line per desc, in stage order.
+    function _storedRules(inner) {
+        var lines = inner.split("\n"), out = []
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i].trim()
+            if (l.indexOf("hl.monitor({") === 0 && l.indexOf("desc:") !== -1)
+                out.push(l)
+        }
+        return out
+    }
+
+    function _ruleDesc(ruleLine) {
+        var m = /output = 'desc:([^']*)'/.exec(ruleLine)
+        return m ? m[1] : ""
+    }
+
+    function _storedAttr(ruleLine, name) {
+        // attr values come in both quote styles (mode/cm single-quoted, the
+        // omarchy template uses double quotes) — strip either.
+        var re = new RegExp("\\b" + name + "\\s*=\\s*['\"]?([^'\",}]*)['\"]?")
+        var m = re.exec(ruleLine)
+        return m ? String(m[1]).trim() : ""
+    }
+
+    // Seeds vrrMode (the configured value) from the target's staged rule.
+    function _seedFromStore() {
+        var inner = _managedInner(storeText)
+        var stored = _storedRules(inner)
+        var desc = primary ? primary.desc : ""
+        for (var i = 0; i < stored.length; i++) {
+            if (_ruleDesc(stored[i]) !== desc && desc !== "") continue
+            var m = /vrr\s*=\s*(\d)/.exec(stored[i])
+            if (m) { vrrMode = parseInt(m[1], 10); break }
+        }
         _recomputePersistState()
     }
 
-    // "dirty" when the nix source's mode/scale/bitdepth/vrr differ from live.
-    // (cm/sdr* are intentionally ignored: the source keeps none today, so any
-    // live HDR session is by definition transient until staged.)
+    // "dirty" when any LIVE display's rule is missing from the block or its
+    // mode/scale/bitdepth/vrr differ from live. (cm/sdr* intentionally
+    // ignored: SDR defaults differ per display and staging keeps them too.)
     function _recomputePersistState() {
-        var p = primary
-        if (!p || nixRuleText === "") return
-        var parts = []
-        var mm = /mode\s*=\s*"([^"]*)"/.exec(nixRuleText)
-        var sm = /scale\s*=\s*"?([\d.]+)"?/.exec(nixRuleText)
-        var bm = /bitdepth\s*=\s*(\d+)/.exec(nixRuleText)
-        var vm = /vrr\s*=\s*(\d+)/.exec(nixRuleText)
-        if (mm) parts.push(mm[1])
-        if (sm) parts.push(sm[1])
-        if (bm) parts.push(bm[1])
-        if (vm) parts.push(vm[1])
-        var live = [currentModeString(), String(p.scale), String(liveBitdepth()), String(vrrMode)]
-        var nixMode = mm ? _trimModeHz(mm[1]) : ""
-        live[0] = _trimModeHz(live[0])
-        persistState = (nixMode === live[0] && parts[1] === live[1]
-                        && parts[2] === live[2] && parts[3] === live[3]) ? "clean" : "dirty"
+        var ms = root.monitors
+        if (ms.length === 0) return
+        var stored = _storedRules(_managedInner(storeText))
+        for (var i = 0; i < ms.length; i++) {
+            var m = ms[i]
+            var rule = ""
+            for (var j = 0; j < stored.length; j++)
+                if (_ruleDesc(stored[j]) === m.desc) { rule = stored[j]; break }
+            if (rule === "" || _storedAttr(rule, "mode") !== _trimModeHz(currentModeStringFor(m)) ||
+                _storedAttr(rule, "scale") !== String(m.scale) ||
+                _storedAttr(rule, "bitdepth") !== String(_bitdepthOf(m)) ||
+                _storedAttr(rule, "vrr") !== String(vrrMode)) {
+                persistState = "dirty"
+                return
+            }
+        }
+        persistState = "clean"
     }
 
-    // "3840x2160@240" vs live "3840x2160@119.88" — compare res only for the
-    // mode part? No: compare full but via parseFloat so 60.00 == 60.
+    // "3840x2160@240" vs live "3840x2160@119.88" — compare via parseFloat so
+    // 60.00 == 60.
     function _trimModeHz(mode) {
         var m = /^(\d+x\d+)@([\d.]+)$/.exec(mode)
         if (!m) return mode
@@ -340,57 +433,108 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // STAGE TO NIX — rewrite the monitor attrs in the omni-nix source to the
-    // current live values, then git add. The user's omni-apply persists.
+    // STAGE — splice the managed block (fresh rule per live display, preserved
+    // rules for absent ones) into monitors.lua. Pipeline: backup-once → atomic
+    // write → Hyprland auto-reload → configerrors validation → restore on
+    // failure. (The stage button's "apply" half is Hyprland's reload itself.)
     // -------------------------------------------------------------------------
+    property string _preStageText: ""   // file text before the splice, for restore
+
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: stageProc
         command: []; running: false
-        onExited: function(code) {
-            if (code === 0) {
-                nixFile.reload()
-                CommandService.pushLog("[display] staged monitor settings → omni-nix (run omni-apply)", "info")
-            } else {
-                CommandService.pushLog("[display] stage failed exit=" + code, "error")
-            }
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { stageProc.buffer += data + "\n" } }
+        onRunningChanged: if (!running) {
+            var out = stageProc.buffer.trim()
+            stageProc.buffer = ""
+            if (out === "WROTE") root._validateStage()
+            else CommandService.pushLog("[display] stage write failed: " + out, "error")
+        }
+    }
+
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+        id: validateProc
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { validateProc.buffer += data + "\n" } }
+        onRunningChanged: if (!running) {
+            var out = validateProc.buffer.trim()
+            validateProc.buffer = ""
+            if (out === "ok" || out === "")
+                root._stageDone()
+            else
+                root._stageRestore("[display] configerrors after stage — restored: " + out)
+        }
+    }
+
+    // Hyprland reloads the file asynchronously; give it a beat before asking.
+    Timer { id: validateDelay; interval: 600; onTriggered: validateProc.running = true }
+
+    function _validateStage() { validateDelay.restart() }
+
+    function _stageDone() {
+        _preStageText = ""
+        storeFile.reload()   // poller settles the inode swap within 2s
+        CommandService.pushLog("[display] staged " + root.monitors.length +
+                               " display rule(s) → monitors.lua (desc-keyed: survives cable moves and reloads)", "info")
+    }
+
+    function _stageRestore(why) {
+        var esc = _preStageText.replace(/\\/g, "\\\\").replace(/'/g, "'\\''")
+        restoreProc.command = ["sh", "-c",
+            "printf '%s' '" + esc + "' > " + storePath + ".tmp.$$ && mv -f " + storePath + ".tmp.$$ " + storePath]
+        restoreProc.running = true
+        CommandService.pushLog(why, "error")
+    }
+
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+        id: restoreProc
+        command: []; running: false
+        onRunningChanged: if (!running) {
+            _preStageText = ""
+            storeFile.reload()   // poller settles the inode swap within 2s
         }
     }
 
     function stageToNix() {
-        var p = target
-        if (!p) return
-        var text = nixRuleText
-        var liveMode = currentModeString()
-        var liveScale = String(p.scale)
-        var liveBd = String(liveBitdepth())
-        var liveVrr = String(vrrMode)
-        var cm = p.colorPreset
-        var hdrOn = cm !== "" && cm !== "srgb"
+        var ms = root.monitors
+        if (ms.length === 0) return
+        var fileText = storeText
+        var inner = _managedInner(fileText)
+        var stored = _storedRules(inner)
 
-        function setAttr(txt, name, value) {
-            var re = new RegExp("(\\b" + name + '\\s*=\\s*)("[^"]*"|[\\d.]+)')
-            if (re.test(txt)) return txt.replace(re, "$1" + value)
-            return txt.replace(/(\}\s*\))\s*$/, ", " + name + " = " + value + " })")
+        // Fresh rules for every live display; keep stored rules for displays
+        // that are absent right now (remember-absent).
+        var liveDescs = {}
+        var lines = []
+        for (var i = 0; i < ms.length; i++) {
+            liveDescs[ms[i].desc] = true
+            lines.push("    " + ruleFor(ms[i], {}))
         }
-        // Lua number attrs unquoted; mode quoted.
-        text = setAttr(text, "mode", "\"" + liveMode + "\"")
-        text = setAttr(text, "scale", liveScale)
-        text = setAttr(text, "bitdepth", liveBd)
-        text = setAttr(text, "vrr", liveVrr)
-        // HDR block: add cm + tune when live, drop when back to SDR.
-        if (hdrOn) {
-            text = setAttr(text, "cm", "'" + cm + "'")
-            text = setAttr(text, "sdrbrightness", String(p.sdrBrightness))
-            text = setAttr(text, "sdr_max_luminance", String(p.sdrMaxLuminance))
-        }
+        for (var j = 0; j < stored.length; j++)
+            if (!liveDescs[_ruleDesc(stored[j])]) lines.push("    " + stored[j])
 
-        // printf to the source (single-quote-escaped), then stage in git.
-        var escaped = text.replace(/'/g, "'\\''")
+        var block = root.blockBegin + "\n" + lines.join("\n") + "\n" + root.blockEnd
+        var newText
+        if (inner !== "") {
+            newText = fileText.substring(0, fileText.indexOf(root.blockBegin)) + block +
+                      fileText.substring(fileText.indexOf(root.blockEnd) + root.blockEnd.length)
+        } else if (fileText !== "") {
+            newText = fileText.replace(/\s*$/, "\n\n") + block + "\n"
+        } else {
+            newText = "-- Display rules staged by the velocity settings panel.\n" + block + "\n"
+        }
+        if (newText === fileText) { _recomputePersistState(); return }
+
+        _preStageText = fileText
+        var esc = newText.replace(/\\/g, "\\\\").replace(/'/g, "'\\''")
         stageProc.command = ["sh", "-c",
-            "printf '%s' '" + escaped + "' > /home/nikos/.omni-nix/configs/hypr/monitors.lua" +
-            " && git -C /home/nikos/.omni-nix add configs/hypr/monitors.lua"]
+            "F=" + storePath + "\n" +
+            // first-touch backup, never overwritten (ln fails when it exists)
+            "[ -e \"$F\" ] && ln \"$F\" \"$F.velocity-bak\" 2>/dev/null\n" +
+            "printf '%s' '" + esc + "' > \"$F.tmp.$$\" && mv -f \"$F.tmp.$$\" \"$F\" && echo WROTE"]
         stageProc.running = true
-        _recomputePersistState()
     }
 
     // -------------------------------------------------------------------------

@@ -6,11 +6,13 @@
 //   telemetry     selected panel summary + status pills + 6-tile spec grid
 //   config grid   MODE (res/refresh/orientation) · SCALE · HDR & COLOR ·
 //                 VRR + QD-OLED GUARD (burn-in safe preset, blank timer)
-//   persistence   stage live settings → omni-nix monitors.lua
+//   persistence   stage live settings → desc-keyed rules in ~/.config/hypr/monitors.lua
 //
 // All applies ride MonitorService's verified `hyprctl eval hl.monitor({...})`
-// mechanism; risky changes get the 10s Keep/Revert window; STAGE persists via
-// omni-apply. QD-OLED defaults are burn-in-first: 10-bit, VRR on, HDR with
+// mechanism (rules are desc-keyed: they follow the physical display across
+// cable moves); risky changes get the 10s Keep/Revert window; STAGE splices
+// the managed block into monitors.lua — Hyprland's auto-reload applies it.
+// QD-OLED defaults are burn-in-first: 10-bit, VRR on, HDR with
 // conservative SDR-white (≤250 nits, preset sets 203), auto-blank ≤10 min.
 // =============================================================================
 
@@ -198,7 +200,7 @@ ColumnLayout {
                            color: Config.ThemeConfig.colors.success })
             out.push(Services.MonitorService.persistState === "dirty"
                      ? { text: "UNSTAGED CHANGES", color: Config.ThemeConfig.colors.warning }
-                     : { text: "IN SYNC WITH NIXOS", color: Config.ThemeConfig.colors.success })
+                     : { text: "STAGED · CABLE-PROOF", color: Config.ThemeConfig.colors.success })
             return out
         }
 
@@ -914,8 +916,8 @@ ColumnLayout {
             Text {
                 Layout.fillWidth: true
                 text: Services.MonitorService.persistState === "dirty"
-                      ? "Live settings differ from ~/.omni-nix/configs/hypr/monitors.lua — a reload reverts them."
-                      : "Live settings match the nix source · staged changes land on the next omni-apply."
+                      ? "Live settings are not staged to ~/.config/hypr/monitors.lua — a reload drops them."
+                      : "Staged desc-keyed rules match live · they follow each display across cable moves."
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
                 color: Config.ThemeConfig.colors.textDim
                 elide: Text.ElideRight

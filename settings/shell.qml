@@ -111,6 +111,10 @@ ShellRoot {
     // =========================================================================
     Components.BarFailureBanner { }
 
+    // Display-section IPC (status/stage probes) — component-owned so it reads
+    // the "../services" MonitorService instance, not this file's twin.
+    Components.DisplayIpc { }
+
     // =========================================================================
     // IPC HANDLER — toggle window visibility from other instances (e.g. bar)
     // =========================================================================
