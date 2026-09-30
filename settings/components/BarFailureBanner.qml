@@ -19,7 +19,9 @@ import "../config" as Config
 PanelWindow {
     id: banner
 
-    visible: !Services.BarWatchService.barAlive
+    // devMode: no systemd unit exists (quickshell -p testing) — nothing to
+    // watch, nothing to announce.
+    visible: !Services.BarWatchService.devMode && !Services.BarWatchService.barAlive
 
     anchors { top: true; left: true; right: true }
     implicitHeight: 34

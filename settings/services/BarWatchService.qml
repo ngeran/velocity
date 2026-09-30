@@ -43,6 +43,11 @@ Item {
     }
 
     // ── the ONE probe: systemd MainPID → by-pid symlink → instance dir ──────
+    // DEV MODE — the unit doesn't exist at all (`quickshell -p` testing, no
+    // omni-nix deployment). Nothing to watch, so the banner never shows and
+    // the poll drops to the slow cadence; the watch itself is inert.
+    property bool devMode: false
+
     function resolveBar() {
         resolverProc.running = true
     }
@@ -50,6 +55,7 @@ Item {
     Process {
         id: resolverProc
         command: ["sh", "-c",
+            "systemctl --user cat quickshell-bar >/dev/null 2>&1 || { echo DEV-MODE; exit 0; }; " +
             "pid=$(systemctl --user show -p MainPID --value quickshell-bar 2>/dev/null); " +
             "[ -n \"$pid\" ] && [ \"$pid\" != \"0\" ] && readlink \"" + root.runtimeDir + "/by-pid/$pid\" 2>/dev/null || true"]
         property string buffer: ""
@@ -58,6 +64,13 @@ Item {
         onExited: {
             var out = resolverProc.buffer.trim()
             resolverProc.buffer = ""
+            if (out === "DEV-MODE") {
+                if (!root.devMode) root._log("dev mode — no quickshell-bar unit, watch inert")
+                root.devMode = true
+                root._setAlive(true)   // nothing to fail; keep the banner hidden
+                return
+            }
+            root.devMode = false
             if (out.length === 0) {
                 root._setAlive(false)   // unit dead or in RestartSec wait
                 return
