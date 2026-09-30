@@ -46,6 +46,69 @@ Item {
     property string coreActiveSection: "system"
     property bool coreDeepLink: false
 
+    // ── SEARCH — palette navigation funnel ────────────────────────────────
+    // Rows self-register in SearchIndex (see the service); picking a result
+    // lands here: switch to the entry's tab + sub-section, then flash the
+    // row once the tab-slide settles. (Fixed panes don't scroll — showing
+    // the pane IS showing the row, §6.1.)
+    //
+    // Search IPC bridge — the handlers LIVE in shell.qml (check-ipc extracts
+    // declared IPC only from the shell roots; see ipc-surface.txt) but must
+    // run against THIS file's SearchIndex instance: "../services" vs
+    // shell.qml's "services" is two singletons (the SharedState trap above).
+    // shell.qml calls these through.
+    Component.onCompleted: Services.SearchIndex.activated.connect(root._navigate)
+
+    function searchIpcQuery(q) {
+        var hits = Services.SearchIndex.search(q)
+        var out = []
+        for (var i = 0; i < hits.length; i++)
+            out.push({ title: hits[i].title, tab: hits[i].tab, section: hits[i].section })
+        return JSON.stringify(out)
+    }
+
+    function searchIpcOpen(q) {
+        searchPalette.openPalette()
+        paletteInput.text = q
+    }
+
+    function searchIpcList() {
+        return "entries=" + Services.SearchIndex.entries.length + " " +
+               JSON.stringify(Services.SearchIndex.entries.map(function(e) {
+                   return { title: e.title, tab: e.tab, section: e.section }
+               }))
+    }
+
+    function _navigate(entry) {
+        var tab = String(entry.tab || "")
+        if (tab === "settings") {
+            root.openSettingsTab()
+            if (entry.section !== undefined && entry.section !== "")
+                settingsModule.active = entry.section
+        } else if (tab === "control") {
+            root.openControlTab(entry.section || "network")
+        } else if (tab === "core") {
+            root.openCoreTab(entry.section || "system")
+        } else if (tab === "theme") {
+            root.openThemeTab()
+        }
+        if (entry.item) {
+            flashTimer.target = entry.item
+            flashTimer.restart()
+        }
+    }
+
+    function _flashItem(item) {
+        if (!item) return
+        var p = item.mapToItem(root, 0, 0)
+        rowFlash.x = p.x - 5
+        rowFlash.y = p.y - 5
+        rowFlash.width = item.width + 10
+        rowFlash.height = item.height + 10
+        rowFlash.visible = true
+        flashAnim.restart()
+    }
+
     // =========================================================================
     // PUBLIC FUNCTIONS
     // =========================================================================
@@ -112,6 +175,7 @@ Item {
         onTabSelected: function(index) {
             root.currentTab = index
         }
+        onSearchRequested: searchPalette.openPalette()
     }
 
     // =========================================================================
@@ -287,6 +351,7 @@ Item {
             }
 
             Components.SettingsModule {
+                id: settingsModule
                 anchors.fill: parent
             }
         }
@@ -335,6 +400,202 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // =========================================================================
+    // SEARCH PALETTE — opened from the sidebar magnifier chip. Input + ranked
+    // results over the content; Esc / click-away closes, arrows + Enter run it
+    // keyboard-first. Results come from SearchIndex (rows self-registered).
+    // =========================================================================
+
+    // click-away layer (under the palette, over everything else)
+    MouseArea {
+        anchors.fill: parent
+        z: 39
+        enabled: searchPalette.open
+        visible: searchPalette.open
+        onClicked: searchPalette.closePalette()
+    }
+
+    Rectangle {
+        id: searchPalette
+        property bool open: false
+        property var results: []
+        property int activeIndex: 0
+
+        function openPalette() {
+            open = true
+            results = []
+            activeIndex = 0
+            paletteInput.text = ""
+            paletteInput.forceActiveFocus()
+        }
+        function closePalette() {
+            open = false
+            paletteInput.focus = false
+        }
+        function refresh() {
+            results = Services.SearchIndex.search(paletteInput.text)
+            activeIndex = 0
+        }
+        function activateIndex(i) {
+            if (i < 0 || i >= results.length) return
+            var e = results[i]
+            closePalette()
+            Services.SearchIndex.activate(e)
+        }
+
+        z: 40
+        anchors.top: parent.top
+        anchors.topMargin: 84   // just under the 72px shared header
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 440
+        height: open ? 47 + Math.min(results.length, 8) * 34 : 0
+        visible: open
+        color: Config.ThemeConfig.colors.background
+        border.color: paletteInput.activeFocus ? Config.ThemeConfig.colors.secondary
+                                               : Config.ThemeConfig.colors.border
+        border.width: 1
+        radius: Config.SettingsConfig.radiusMd
+        Behavior on height { NumberAnimation { duration: 80 } }
+
+        ColumnLayout {
+            id: paletteBody
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: 0
+
+            // ---- input row ----
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 46
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "󰍉"
+                    font.family: Config.ControlConfig.fontNerd
+                    font.pixelSize: 14
+                    color: Config.ThemeConfig.colors.textDim
+                }
+                TextInput {
+                    id: paletteInput
+                    anchors.left: parent.left
+                    anchors.leftMargin: 40
+                    anchors.right: parent.right
+                    anchors.rightMargin: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Config.ThemeConfig.colors.text
+                    font.family: Config.SettingsConfig.fontFamily
+                    font.pixelSize: 14
+                    selectByMouse: true
+                    clip: true
+                    onTextChanged: searchPalette.refresh()
+                    Keys.onEscapePressed: searchPalette.closePalette()
+                    Keys.onDownPressed: searchPalette.activeIndex =
+                        Math.min(searchPalette.activeIndex + 1, searchPalette.results.length - 1)
+                    Keys.onUpPressed: searchPalette.activeIndex =
+                        Math.max(searchPalette.activeIndex - 1, 0)
+                    Keys.onReturnPressed: searchPalette.activateIndex(searchPalette.activeIndex)
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: paletteInput.text === ""
+                        text: "search settings…"
+                        color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.SettingsConfig.fontFamily
+                        font.pixelSize: 14
+                        opacity: 0.55
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Config.ThemeConfig.colors.border
+                visible: searchPalette.results.length > 0
+            }
+
+            // ---- results ----
+            Repeater {
+                model: searchPalette.open ? searchPalette.results.slice(0, 8) : []
+
+                delegate: Rectangle {
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 34
+                    color: index === searchPalette.activeIndex
+                           ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.10)
+                           : "transparent"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        spacing: 8
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            text: modelData.title
+                            color: Config.ThemeConfig.colors.text
+                            font.family: Config.SettingsConfig.fontFamily
+                            font.pixelSize: 12
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: String(modelData.tab).toUpperCase() +
+                                  (modelData.section !== "" ? " · " + String(modelData.section).toUpperCase() : "")
+                            color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono
+                            font.pixelSize: 8
+                            font.bold: true
+                            font.letterSpacing: 0.8
+                        }
+                    }
+
+                    MouseArea {
+                        id: resultArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPositionChanged: searchPalette.activeIndex = index
+                        onClicked: searchPalette.activateIndex(index)
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- row highlight flash (search navigation lands here) ----
+    Timer {
+        id: flashTimer
+        interval: Config.SettingsConfig.animDurationNormal + 170   // tab slide settles
+        property var target: null
+        onTriggered: root._flashItem(target)
+    }
+    Rectangle {
+        id: rowFlash
+        z: 50
+        visible: false
+        opacity: 0
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.10)
+        border.color: Config.ThemeConfig.colors.secondary
+        border.width: 2
+        radius: 6
+        SequentialAnimation {
+            id: flashAnim
+            NumberAnimation { target: rowFlash; property: "opacity"; to: 1; duration: 90 }
+            PauseAnimation { duration: 620 }
+            NumberAnimation { target: rowFlash; property: "opacity"; to: 0; duration: 260 }
+            onStopped: rowFlash.visible = false
         }
     }
 }

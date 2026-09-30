@@ -235,6 +235,25 @@ ShellRoot {
     }
 
     // =========================================================================
+    // IPC HANDLER — dashboard search (scripting / truth probes / deep-link).
+    // Runs through dashboard.* bridges: the search index singleton lives under
+    // the components' "../services" import, a DIFFERENT instance from this
+    // file's "services" (see ModernDashboard — the SharedState trap).
+    //   quickshell ipc -c settings call search query lock
+    // =========================================================================
+    IpcHandler {
+        target: "search"
+
+        function query(q: string): string { return dashboard.searchIpcQuery(q) }
+
+        // Open the palette pre-filled. NOT named "show" — that word is a
+        // `quickshell ipc` CLI subcommand, so it can't serve as a verb here.
+        function open(q: string) { dashboard.searchIpcOpen(q) }
+
+        function list(): string { return dashboard.searchIpcList() }
+    }
+
+    // =========================================================================
     // PANEL WINDOW — transparent full-width top stage
     // =========================================================================
     PanelWindow {

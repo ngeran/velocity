@@ -15,3 +15,4 @@ singleton EventsReader 1.0 EventsReader.qml
 singleton PluginManagerService 1.0 PluginManagerService.qml
 singleton BarWatchService 1.0 BarWatchService.qml
 singleton HyprSettingsService 1.0 HyprSettingsService.qml
+singleton SearchIndex 1.0 SearchIndex.qml

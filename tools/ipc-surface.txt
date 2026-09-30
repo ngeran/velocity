@@ -36,6 +36,9 @@ zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
 
 # ---- settings process ------------------------------------------------------
+search.query                      manual    # scripting/truth probe (dashboard search index)
+search.open                       manual    # opens the palette pre-filled (deep-link)
+search.list                       manual    # index dump for probes
 SettingsWindow.toggle             bound    # SUPER+A
 SettingsWindow.show               unused
 SettingsWindow.hide               unused

@@ -18,7 +18,15 @@ Item {
 
     // Telemetry session (Shibumi consumer-refcount, single-consumer case):
     // this tab's Loader instantiation IS the CoreEngine/Gpu/Thermal gate.
-    Component.onCompleted: Services.CoreEngineService.coreVisible = true
+    Component.onCompleted: {
+        Services.CoreEngineService.coreVisible = true
+        // Section-level search entries — keyed, so re-opening the tab
+        // (Loader re-creates this whole subtree) replaces rather than leaks.
+        for (var i = 0; i < root.navItems.length; i++)
+            Services.SearchIndex.register({ key: "core:" + root.navItems[i].key,
+                title: root.navItems[i].label, tab: "core",
+                section: root.navItems[i].key, keywords: "core telemetry", item: null })
+    }
     Component.onDestruction: Services.CoreEngineService.coreVisible = false
 
     readonly property var navItems: [

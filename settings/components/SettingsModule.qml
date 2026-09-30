@@ -85,13 +85,23 @@ Item {
         // `changed` + onResetRow drive the DESKTOP pane's undo marks: a dot
         // beside the value and a one-click RESET chip, only on a row this
         // window has moved away from what it found there first.
+        // SELF-REGISTRATION: every row lands in SearchIndex at creation with
+        // its pane key (`section`) and optional `keywords` — new rows show up
+        // in search with no index to maintain. The HyprRow variants below
+        // derive title/keywords from the catalog instead.
         component SettingRow: ColumnLayout {
             property string label: ""
             property string value: ""
             property bool changed: false
+            property string section: ""
+            property string keywords: ""
             signal resetRow()
             default property alias options: optionRow.data
             spacing: Config.ControlConfig.space1
+            Component.onCompleted: if (label !== "")
+                Services.SearchIndex.register({ title: label, tab: "settings",
+                    section: section, keywords: keywords, item: this })
+            Component.onDestruction: Services.SearchIndex.unregister(this)
             RowLayout {
                 Layout.fillWidth: true
                 Text { text: label; color: Config.ThemeConfig.colors.textDim
@@ -151,6 +161,12 @@ Item {
             value: fmt(Services.HyprSettingsService.effective(def.key))
             changed: Services.HyprSettingsService.isChanged(def.key)
             onResetRow: Services.HyprSettingsService.reset(def.key)
+            section: "desktop"
+            keywords: (def && def.keyword ? def.keyword + " " : "") + "hyprland"
+            Component.onCompleted: if (def !== null)
+                Services.SearchIndex.register({ title: def.label, tab: "settings",
+                    section: "desktop", keywords: keywords, item: hyprRow })
+            Component.onDestruction: Services.SearchIndex.unregister(hyprRow)
 
             Repeater {
                 model: hyprRow.def ? (hyprRow.def.choices || []) : []
@@ -171,6 +187,12 @@ Item {
                    ? "…" : (Services.HyprSettingsService.effective(def.key) ? "ON" : "OFF")
             changed: Services.HyprSettingsService.isChanged(def.key)
             onResetRow: Services.HyprSettingsService.reset(def.key)
+            section: "desktop"
+            keywords: (def && def.keyword ? def.keyword + " " : "") + "hyprland"
+            Component.onCompleted: if (def !== null)
+                Services.SearchIndex.register({ title: def.label, tab: "settings",
+                    section: "desktop", keywords: keywords, item: hyprToggleRow })
+            Component.onDestruction: Services.SearchIndex.unregister(hyprToggleRow)
             PowerPill {
                 on: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
                 enabled: Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== undefined
@@ -206,6 +228,8 @@ Item {
                     Layout.fillWidth: true; spacing: Config.ControlConfig.space4
                     SettingRow {
                         label: "ANIMATION SPEED"
+                        section: "appearance"
+                        keywords: "motion cadence speed"
                         value: Services.SettingsConfigService.animationSpeed.toUpperCase()
                         OptSeg { text: "FAST"; pickedValue: "fast"
                             active: Services.SettingsConfigService.animationSpeed === "fast"
@@ -219,6 +243,8 @@ Item {
                     }
                     SettingRow {
                         label: "CORNER RADIUS"
+                        section: "appearance"
+                        keywords: "rounding corners"
                         value: Services.SettingsConfigService.cornerRadius + "px"
                         Repeater {
                             model: [0, 4, 8, 12]
@@ -258,6 +284,8 @@ Item {
                     Layout.fillWidth: true; spacing: Config.ControlConfig.space4
                     SettingRow {
                         label: "BAR STYLE"
+                        section: "bar"
+                        keywords: "theme vector look"
                         value: Services.SettingsConfigService.barStyle.toUpperCase()
                         Repeater {
                             model: Services.SettingsConfigService.barStyles
@@ -274,6 +302,7 @@ Item {
                     }
                     SettingRow {
                         label: "BAR HEIGHT"
+                        section: "bar"
                         value: Services.SettingsConfigService.barHeight + "px"
                         Repeater {
                             model: [20, 26, 32, 40]
@@ -286,6 +315,7 @@ Item {
                     }
                     SettingRow {
                         label: "WORKSPACE DOTS"
+                        section: "bar"
                         value: Services.SettingsConfigService.workspaceCount + " dots"
                         Repeater {
                             model: [3, 5, 7, 9]
@@ -395,6 +425,7 @@ Item {
                             font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                             font.bold: true; font.letterSpacing: 1.0 }
                         Rectangle {
+                            id: cityCard
                             Layout.fillWidth: true; Layout.preferredWidth: 220
                             Layout.preferredHeight: 32
                             radius: Config.ControlConfig.radiusPill
@@ -402,6 +433,10 @@ Item {
                             border.color: cityInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
                             border.width: 1
                             Behavior on border.color { ColorAnimation { duration: 100 } }
+                            Component.onCompleted: Services.SearchIndex.register({
+                                title: "CITY", tab: "settings", section: "clock",
+                                keywords: "city clock label text", item: cityCard })
+                            Component.onDestruction: Services.SearchIndex.unregister(cityCard)
                             TextInput {
                                 id: cityInput
                                 anchors.fill: parent
@@ -428,6 +463,8 @@ Item {
 
                     SettingRow {
                         label: "TIMEZONE"
+                        section: "clock"
+                        keywords: "utc offset"
                         value: Services.SettingsConfigService.clockOffset === 0 ? "LOCAL"
                              : "UTC" + (Services.SettingsConfigService.clockOffset >= 0 ? "+" : "")
                                + Services.SettingsConfigService.clockOffset
@@ -464,6 +501,7 @@ Item {
 
                     SettingRow {
                         label: "DIM AFTER"
+                        section: "idle"
                         value: Math.round(Services.HypridleService.dimTimeout / 60) + " min"
                         Repeater {
                             model: [1, 2, 3, 5, 10]
@@ -476,6 +514,8 @@ Item {
                     }
                     SettingRow {
                         label: "LOCK AFTER"
+                        section: "idle"
+                        keywords: "hyprlock"
                         value: Math.round(Services.HypridleService.lockTimeout / 60) + " min"
                         Repeater {
                             model: [2, 5, 10, 15, 30]
@@ -488,6 +528,8 @@ Item {
                     }
                     SettingRow {
                         label: "DISPLAY OFF"
+                        section: "idle"
+                        keywords: "screen off dpms"
                         value: Math.round(Services.HypridleService.displayOffTimeout / 60) + " min"
                         Repeater {
                             model: [5, 10, 15, 20, 30]
@@ -500,6 +542,8 @@ Item {
                     }
                     SettingRow {
                         label: "SUSPEND"
+                        section: "idle"
+                        keywords: "sleep memory"
                         value: Services.HypridleService.suspendEnabled
                                ? (Services.HypridleService.suspendTimeout / 60) + " min" : "OFF"
                         PowerPill {
@@ -513,6 +557,7 @@ Item {
                     SettingRow {
                         visible: Services.HypridleService.suspendEnabled
                         label: "SUSPEND AFTER"
+                        section: "idle"
                         Repeater {
                             model: [15, 30, 45, 60]
                             delegate: OptSeg {

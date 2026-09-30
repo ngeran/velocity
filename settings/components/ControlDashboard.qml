@@ -31,7 +31,16 @@ Item {
     // The section INITIAL value ("network") is set at construction — no change
     // signal fires — so publish it here too, or the section-gated wifi polls
     // never start when the Control tab opens straight to the default section.
-    Component.onCompleted: Config.SharedState.controlSection = root.activeSection
+    Component.onCompleted: {
+        Config.SharedState.controlSection = root.activeSection
+        // Section-level search entries — the control panes register their own
+        // rows over time; today search lands you on the right section.
+        var secs = Config.ControlConfig.sections
+        for (var i = 0; i < secs.length; i++)
+            Services.SearchIndex.register({ key: "control:" + secs[i].key,
+                title: secs[i].label, tab: "control",
+                section: secs[i].key, keywords: "control section", item: null })
+    }
 
     Rectangle {
         id: baseBg

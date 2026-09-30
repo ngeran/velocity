@@ -31,6 +31,7 @@ Rectangle {
     // =========================================================================
     property int currentIndex: 0
     signal tabSelected(int index)
+    signal searchRequested()
 
     readonly property var tabModel: [
         { key: "dashboard",  label: "DASHBOARD",   icon: "⊞" },   // index 0
@@ -164,5 +165,43 @@ Rectangle {
         }
 
         Item { Layout.fillHeight: true }   // push everything up
+
+        // --- SEARCH chip (bottom) — opens the settings search palette -------
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+
+            Rectangle {
+                id: searchChip
+                anchors.centerIn: parent
+                width: 40; height: 40
+                radius: Config.ControlConfig.radiusSmall
+                color: searchArea.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.12)
+                                                : "transparent"
+                border.color: searchArea.containsMouse ? Config.ThemeConfig.colors.secondary
+                                                       : Config.ThemeConfig.colors.border
+                border.width: 1
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "󰍉"
+                    font.family: Config.ControlConfig.fontNerd
+                    font.pixelSize: 16
+                    color: searchArea.containsMouse ? Config.ThemeConfig.colors.secondary
+                                                    : Config.ThemeConfig.colors.textDim
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+
+                MouseArea {
+                    id: searchArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: sidebarRoot.searchRequested()
+                }
+            }
+        }
     }
 }
