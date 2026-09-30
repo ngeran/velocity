@@ -12,6 +12,7 @@ import Qt.labs.platform
 import Quickshell
 import Quickshell.Io
 import "../Commons" as CT
+import "../services" as Services
 
 Item {
     id: root
@@ -51,6 +52,20 @@ Item {
             barRunProc.command = ["sh", "-c", cmd]
             barRunProc.running = true
         }
+        // `bar.shell` — the omarchy surface converted bar-widgets call into
+        // (xray: `bar.shell.toggle(moduleName, "{}")` from its launcher
+        // button). Routed through the host's summon registries, which cover
+        // widget plugins AND overlay plugins with one verb.
+        readonly property var shell: shellObj
+    }
+
+    QtObject {
+        id: shellObj
+        // Routed via PluginHostService — the host (bar/shell.qml) owns the
+        // registries and connects to these signals once.
+        function toggle(id, payload) { Services.PluginHostService.compatSummonRequested(id, payload || "{}") }
+        function summon(id, payload) { Services.PluginHostService.compatSummonRequested(id, payload || "{}") }
+        function hide(id) { Services.PluginHostService.compatHideRequested(id) }
     }
 
     Process {

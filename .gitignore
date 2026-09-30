@@ -68,3 +68,6 @@ ui_refresh/
 *.bmp
 *.ico
 *.svg
+
+# third-party converted plugin (runtime pool; big — not for the repo)
+plugins/io.github.randazraik.xray/

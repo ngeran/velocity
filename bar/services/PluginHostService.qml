@@ -58,6 +58,11 @@ Item {
     // toggle/refresh without knowing the weather plugin's internals.
     signal togglePanelRequested(string id)
     signal refreshPanelRequested(string id)
+    // Converted bar-widget compat (QsBarWidget's bar.shell.*): a plugin's
+    // launcher button summoning ANY plugin (widget or overlay). The host
+    // connects these to its registries; the service is just the bus.
+    signal compatSummonRequested(string id, string payload)
+    signal compatHideRequested(string id)
     function requestTogglePanel(id) { togglePanelRequested(id) }
     function requestRefreshPanel(id) { refreshPanelRequested(id) }
 

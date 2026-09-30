@@ -37,6 +37,12 @@ ShellRoot {
     // trayOwner.activeTray and PluginHostService.openPanel.)
     Connections {
         target: Services.PluginHostService
+        function onCompatSummonRequested(id, payload) { shellRoot._summonAny(id, payload) }
+        function onCompatHideRequested(id) {
+            var it = shellRoot.pluginItems[id]
+            if (it && it.close) { it.close(); return }
+            shellRoot.dismissOverlays()
+        }
         function onOpenPanelChanged() {
             if (Services.PluginHostService.openPanel === "") return
             if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
@@ -391,11 +397,10 @@ ShellRoot {
     // overlays (open(payload)/close). One verb for IPC and the shell shim.
     // Overlay exclusivity fires from the shown flip (overlayOpened).
     function _summonAny(id, payloadJson) {
+        // Dual-kind plugins (xray: overlay + bar-widget) register in BOTH
+        // registries — a widget without open() must not shadow the overlay.
         var w = shellRoot.pluginItems[id]
-        if (w) {
-            if (w.open) { w.open(); return "ok" }
-            return "no open()"
-        }
+        if (w && w.open) { w.open(); return "ok" }
         var ov = shellRoot.overlayItems[id]
         if (ov) {
             if (ov.open) { ov.open(payloadJson || "{}"); return "ok" }
