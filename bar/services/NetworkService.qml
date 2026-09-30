@@ -237,7 +237,9 @@ Item {
             "cat /sys/class/net/" + root.iface + "/statistics/rx_bytes " +
             "    /sys/class/net/" + root.iface + "/statistics/tx_bytes 2>/dev/null"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { statsProc.buffer += data } }
+        // SplitParser is per-line — rejoin WITH the newline (codebase
+        // trap): the two counters must stay separate fields for parseStats.
+        stdout: SplitParser { onRead: function(data) { statsProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 var s = Model.parseStats(statsProc.buffer)
