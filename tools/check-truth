@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# check-truth — machine-truth probes (xray pattern): recompute expected values
+# independently from the LIVE system, cross-check velocity's logic against them.
+#
+# These need a live desktop + PipeWire; they are NOT part of check-all's
+# blocking set. Run on a real session:
+#
+#   tools/check-truth            # all probes
+#   tools/check-truth privacy    # just the privacy pill probe
+#   tools/check-truth throughput # just the network-rate probe
+#   tools/check-truth overlay    # just the plugin-overlay lifecycle smoke
+#
+# Probe semantics:
+#   privacy    — synthesize a REAL capture (null-sink + remap-source mic +
+#                pw-record), dump the graph once, derive the expected survey
+#                with an INDEPENDENT python path, and require bar/lib/
+#                privacy.mjs's surveyPrivacy to agree exactly.
+#   throughput — read /sys counters for the default route's iface twice, 2s
+#                apart; recompute the rate in python and require
+#                NetworkModel.throughputState to produce the same value.
+#   overlay    — stage the SDK sample overlay, launch the bar, drive
+#                summon(payload) / hide over IPC, require ok at every step.
+set -u
+cd "$(dirname "$0")/.."
+
+fail=0
+probes=${*:-"privacy throughput overlay"}
+
+run_probe() { # name
+    echo "── truth: $1"
+}
+
+# ── privacy ──────────────────────────────────────────────────────────────────
+if [[ " $probes " == *" privacy "* ]]; then
+run_probe privacy
+SINK_MOD="" SRC_MOD="" REC_PID=""
+cleanup_privacy() {
+    [ -n "$REC_PID" ] && kill "$REC_PID" 2>/dev/null
+    [ -n "$SRC_MOD" ] && pactl unload-module "$SRC_MOD" 2>/dev/null
+    [ -n "$SINK_MOD" ] && pactl unload-module "$SINK_MOD" 2>/dev/null
+    rm -f /tmp/truth-probe.wav
+}
+trap cleanup_privacy EXIT
+
+SINK_MOD=$(pactl load-module module-null-sink sink_name=truthsink 2>/dev/null) || SINK_MOD=""
+SRC_MOD=$(pactl load-module module-remap-source master=truthsink.monitor source_name=truthmic \
+    source_properties=device.description=Desk\ Microphone 2>/dev/null) || SRC_MOD=""
+if [ -z "$SINK_MOD" ] || [ -z "$SRC_MOD" ]; then
+    echo "  SKIP: pactl modules unavailable (no PipeWire session?)"
+else
+    timeout 12 pw-record --target truthmic /tmp/truth-probe.wav 2>/dev/null &
+    REC_PID=$!
+    sleep 4
+    pw-dump 2>/dev/null > /tmp/truth-dump.json
+    kill "$REC_PID" 2>/dev/null; wait "$REC_PID" 2>/dev/null; REC_PID=""
+
+    # Independent derivation: python, fresh logic, same dump.
+    python3 - <<'PYEOF' > /tmp/truth-expected.json
+import json, sys
+objs = json.load(open("/tmp/truth-dump.json"))
+nodes, links = {}, []
+for o in objs:
+    info = o.get("info") or {}
+    props = info.get("props") or {}
+    if o.get("type") == "PipeWire:Interface:Node":
+        nodes[o["id"]] = {"mc": props.get("media.class", ""), "name": props.get("node.name", ""),
+                          "desc": props.get("node.description", "")}
+    elif o.get("type") == "PipeWire:Interface:Link":
+        o_, i_ = info.get("output-node-id"), info.get("input-node-id")
+        if o_ is not None and i_ is not None and str(info.get("state", "")).lower() in ("", "active"):
+            links.append((int(o_), int(i_)))
+out = {"mic": [], "camera": [], "screen": []}
+for src, tgt in links:
+    s, t = nodes.get(src, {}), nodes.get(tgt, {})
+    mc_t = t.get("mc", "")
+    if not mc_t.startswith("Stream/Input/"):
+        continue
+    hay = (s.get("name", "") + " " + s.get("desc", "") + " " + s.get("mc", "")).lower()
+    app = t.get("name", "") or s.get("name", "")
+    if mc_t == "Stream/Input/Video":
+        kind = "camera" if any(w in hay for w in ("camera", "webcam", "v4l2", "uvc")) else "screen"
+    else:
+        kind = "screen" if "monitor" in hay or "virtual" in hay else "mic"
+    entry = {"app": app, "pid": None}
+    if entry not in out[kind]:
+        out[kind].append(entry)
+print(json.dumps(out))
+PYEOF
+
+    # velocity's side: same dump through the real classifier
+    node -e '
+import("/home/nikos/github/ngeran/velocity/bar/lib/privacy.mjs").then(P => {
+  const fs = require("fs")
+  const objs = JSON.parse(fs.readFileSync("/tmp/truth-dump.json", "utf8"))
+  const nodes = {}, links = []
+  for (const o of objs) {
+    const info = o.info || {}, props = info.props || {}
+    if (o.type === "PipeWire:Interface:Node")
+      nodes[o.id] = { mediaClass: props["media.class"] || "", name: props["node.name"] || "",
+                      description: props["node.description"] || "", props }
+    else if (o.type === "PipeWire:Interface:Link") {
+      const s = parseInt(info["output-node-id"], 10), t = parseInt(info["input-node-id"], 10)
+      const st = String(info.state || "").toLowerCase()
+      if (!isNaN(s) && !isNaN(t) && (st === "" || st === "active")) links.push({ sourceId: s, targetId: t })
+    }
+  }
+  console.log(JSON.stringify(P.surveyPrivacy(nodes, links)))
+})' > /tmp/truth-actual.json
+
+    # the truth this probe asserts: the SYNTHESIZED capture shows up as mic on
+    # both sides, and both sides agree exactly. A dump with zero capture links
+    # means the synthesis failed — that is a FAIL, not a pass-by-emptiness.
+    python3 - <<'PYEOF'
+import json, sys
+exp = json.load(open("/tmp/truth-expected.json"))
+act = json.load(open("/tmp/truth-actual.json"))
+ok = True
+if not any(a.get("app") == "pw-record" for a in exp["mic"]):
+    print("  FAIL: synthesized mic capture missing from independent derivation"); ok = False
+if exp != act:
+    print("  FAIL: derivation mismatch")
+    print("   expected:", json.dumps(exp, sort_keys=True))
+    print("   actual:  ", json.dumps(act, sort_keys=True))
+    ok = False
+sys.exit(0 if ok else 1)
+PYEOF
+    if [ $? -eq 0 ]; then echo "  PASS: survey matches independent derivation (mic: pw-record)"; else fail=1; fi
+    cleanup_privacy
+    trap - EXIT
+fi
+fi
+
+# ── throughput ───────────────────────────────────────────────────────────────
+if [[ " $probes " == *" throughput "* ]]; then
+run_probe throughput
+IFACE=$(ip -4 route show default 2>/dev/null | grep -oE 'dev \S+' | awk '{print $2; exit}')
+if [ -z "$IFACE" ] || [ ! -d "/sys/class/net/$IFACE/statistics" ]; then
+    echo "  SKIP: no default-route interface with counters"
+else
+    R1=$(cat "/sys/class/net/$IFACE/statistics/rx_bytes")
+    T1=$(cat "/sys/class/net/$IFACE/statistics/tx_bytes")
+    D1=$(date +%s%3N)
+    sleep 2
+    R2=$(cat "/sys/class/net/$IFACE/statistics/rx_bytes")
+    T2=$(cat "/sys/class/net/$IFACE/statistics/tx_bytes")
+    D2=$(date +%s%3N)
+    DT=$((D2 - D1))
+    [ "$DT" -lt 1 ] && DT=1
+
+    # python recomputes the expected rate strings independently
+    python3 - "$R1" "$T1" "$R2" "$T2" "$DT" > /tmp/truth-rate-expected.json <<'PYEOF'
+import json, sys
+r1, t1, r2, t2, dt_ms = (int(x) for x in sys.argv[1:6])
+def rate_bytes(delta, ms):
+    bps = max(delta, 0) * 1000.0 / ms
+    if bps < 1: return "0 B/s"
+    if bps < 1024: return f"{bps:.0f} B/s"
+    if bps < 1024 * 1024: return f"{bps / 1024:.0f} KB/s"
+    return f"{bps / 1048576:.1f} MB/s"
+print(json.dumps({"rx": rate_bytes(r2 - r1, dt_ms), "tx": rate_bytes(t2 - t1, dt_ms)}))
+PYEOF
+
+    node -e '
+import("/home/nikos/github/ngeran/velocity/bar/services/NetworkModel.js").then(M => {
+  const [r1, t1, r2, t2, dt] = process.argv.slice(1).map(Number)
+  const first = M.throughputState(null, "if", r1, t1, 0)
+  const second = M.throughputState(first.state, "if", r2, t2, dt)
+  console.log(JSON.stringify({ rx: second.rxRate, tx: second.txRate }))
+})' "$R1" "$T1" "$R2" "$T2" "$DT" > /tmp/truth-rate-actual.json
+
+    if python3 -c '
+import json, sys
+exp = json.load(open("/tmp/truth-rate-expected.json"))
+act = json.load(open("/tmp/truth-rate-actual.json"))
+mult = {"B/s": 1.0, "KB/s": 1024.0, "MB/s": 1048576.0}
+def to_bps(s):
+    v, unit = s.rsplit(" ", 1)
+    return float(v) * mult[unit]
+ok = all(abs(to_bps(exp[k]) - to_bps(act[k])) <= max(64.0, 0.01 * to_bps(exp[k])) for k in ("rx", "tx"))
+print("  PASS: rates match independent derivation (%s / %s)" % (act["rx"], act["tx"])) if ok else print("  FAIL: rate mismatch expected=%s actual=%s" % (json.dumps(exp), json.dumps(act)))
+sys.exit(0 if ok else 1)'; then :; else fail=1; fi
+fi
+fi
+
+# ── overlay lifecycle smoke ──────────────────────────────────────────────────
+if [[ " $probes " == *" overlay "* ]]; then
+run_probe overlay
+mkdir -p ~/.config/quickshell/plugins
+rm -rf ~/.config/quickshell/plugins/nikos.example-overlay
+cp -r plugins/nikos.example-overlay ~/.config/quickshell/plugins/ 2>/dev/null
+BAR="/home/nikos/github/ngeran/velocity/bar/shell.qml"
+nohup quickshell -p "$BAR" > /tmp/truth-bar.log 2>&1 &
+BAR_PID=$!
+sleep 7
+S1=$(quickshell -p "$BAR" ipc call plugins summon nikos.example-overlay '{"query":"pid:4242"}' 2>/dev/null)
+sleep 1
+S2=$(quickshell -p "$BAR" ipc call plugins hide nikos.example-overlay 2>/dev/null)
+S3=$(quickshell -p "$BAR" ipc call plugins summon io.github.definitely.missing '{}' 2>/dev/null)
+S4=$(quickshell -p "$BAR" ipc call plugins summon nikos.example-overlay 2>/dev/null)
+kill "$BAR_PID" 2>/dev/null; wait "$BAR_PID" 2>/dev/null
+rm -rf ~/.config/quickshell/plugins/nikos.example-overlay
+
+OK=1
+[ "$S1" = "ok" ] || { echo "  FAIL: summon → '$S1'"; OK=0; }
+[ "$S2" = "ok" ] || { echo "  FAIL: hide → '$S2'"; OK=0; }
+[ "$S3" = "not loaded" ] || { echo "  FAIL: unknown id → '$S3' (expected 'not loaded')"; OK=0; }
+if [ "$OK" = 1 ]; then echo "  PASS: overlay summon/hide/unknown all route correctly"; else fail=1; fi
+fi
+
+[ "$fail" = 0 ] && echo "check-truth: OK" || echo "check-truth: FAIL"
+exit "$fail"

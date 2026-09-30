@@ -24,7 +24,8 @@ plugins.list             manual
 plugins.enable           manual
 plugins.disable          manual
 plugins.order            manual
-plugins.summon           manual    # id + optional JSON payload (overlay deep links)
+plugins.summon           manual    # (id, payload) — BOTH required (Quickshell IPC has
+                                   # no optional params; pass "{}"), payload = deep-link query
 plugins.hide             manual
 theme.reload             internal  # ThemeService push nudge after colors.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
