@@ -59,11 +59,11 @@ Item {
     }
 
     // ── OS pretty name: PRETTY_NAME="Arch Linux" ─────────────────────────────
-    Process {
+    Process {   // unbounded-ok: trivial local check — no hang risk
         id: osProc
         command: ["sh", "-c", ". /etc/os-release 2>/dev/null && echo \"$PRETTY_NAME|$NAME\""]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { osProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { osProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && osProc.buffer.length > 0) {
                 var parts = osProc.buffer.trim().split("|")
@@ -75,11 +75,11 @@ Item {
     }
 
     // ── Kernel: uname -r ─────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: kernelProc
         command: ["uname", "-r"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { kernelProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { kernelProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && kernelProc.buffer.length > 0) {
                 root.kernel = kernelProc.buffer.trim()
@@ -89,11 +89,11 @@ Item {
     }
 
     // ── Hostname ─────────────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: hostnameProc
         command: ["sh", "-c", "hostnamectl hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || hostname 2>/dev/null"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { hostnameProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { hostnameProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && hostnameProc.buffer.length > 0) {
                 root.hostname = hostnameProc.buffer.trim()
@@ -103,11 +103,11 @@ Item {
     }
 
     // ── Username: whoami ─────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: userProc
         command: ["sh", "-c", "whoami"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { userProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { userProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && userProc.buffer.length > 0) {
                 var u = userProc.buffer.trim()
@@ -121,12 +121,12 @@ Item {
     // ── Motherboard / chipset: DMI sysfs (sys_vendor | board_name) ──────────
     // Chipset (X870E/B650E/Z790/…) is parsed out of the board model string,
     // which reliably embeds it (e.g. "TUF GAMING B650-E WIFI" → "B650E").
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: boardProc
         command: ["sh", "-c",
             "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && boardProc.buffer.length > 0) {
                 var parts = boardProc.buffer.split("|")
@@ -163,11 +163,11 @@ Item {
     }
 
     // ── Uptime: "up 2 hours, 15 minutes" ────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: uptimeProc
         command: ["sh", "-c", "uptime -p 2>/dev/null | sed 's/^up //' || cat /proc/uptime"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { uptimeProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { uptimeProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && uptimeProc.buffer.length > 0) {
                 var raw = uptimeProc.buffer.trim()
@@ -205,11 +205,11 @@ Item {
     }
 
     // ── Live metrics: CPU (delta-based, two-sample) ───────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: cpuProc
         command: ["sh", "-c", "grep '^cpu ' /proc/stat"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { cpuProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { cpuProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && cpuProc.buffer.length > 0) {
                 var f = cpuProc.buffer.trim().split(/\s+/)
@@ -230,11 +230,11 @@ Item {
     }
 
     // ── Live metrics: Memory (free command, proven pattern) ────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: memProc
         command: ["bash", "-c", "free | awk '/^Mem:/{printf \"%.2f\", $3/$2}'"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { memProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { memProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && memProc.buffer.length > 0) {
                 var v = parseFloat(memProc.buffer.trim())
@@ -245,11 +245,11 @@ Item {
     }
 
     // ── Live metrics: GPU (amdgpu sysfs, fallback 0) ───────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: gpuProc
         command: ["sh", "-c", "cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null | head -1"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 var v = parseInt(gpuProc.buffer.trim(), 10)
@@ -260,11 +260,11 @@ Item {
     }
 
     // ── Live metrics: Disk usage (root filesystem, df) ───────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: diskProc
         command: ["bash", "-c", "df / | awk 'NR==2{gsub(/%/,\"\",$5); print $5}'"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && diskProc.buffer.length > 0) {
                 var v = parseInt(diskProc.buffer, 10)

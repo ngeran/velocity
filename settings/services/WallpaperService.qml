@@ -130,14 +130,14 @@ Item {
     // STEP 1 — Resolve $HOME
     // =========================================================================
 
-    Process {
+    Process {   // unbounded-ok: trivial local check — no hang risk
         id: homeGetter
         command: ["sh", "-c", "echo $HOME"]
 
         property string buf: ""
 
         stdout: SplitParser {
-            onRead: data => { homeGetter.buf += data }
+            onRead: data => { homeGetter.buf += data + "\n" }
         }
 
         onRunningChanged: {
@@ -162,7 +162,7 @@ Item {
     // STEP 2 — Scan wallpaper directory for image files
     // =========================================================================
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: scanner
 
         property string buf: ""
@@ -279,7 +279,7 @@ Item {
     // WALLPAPER APPLICATION
     // =========================================================================
 
-    Process {
+    Process {   // unbounded-ok: platform command — short-lived; timeout migration queued
         id: awwwProcess
         running: false
 

@@ -79,7 +79,7 @@ Item {
     // Each answer arrives as its own JSON line; a failed getoption (keyword
     // gone in some future Hyprland) prints a non-JSON line and is skipped,
     // leaving that key undefined ("…" in the UI) instead of a fake value.
-    Process {
+    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: readProc
         command: ["hyprctl", "-j", "--batch", Hypr.batchArg(Hypr.CATALOG.map(function(d) { return d.keyword }))]
         property string buffer: ""
@@ -180,7 +180,7 @@ Item {
     }
 
     // ── live apply ──────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: applyProc
         command: []
         property string buffer: ""
@@ -188,7 +188,7 @@ Item {
         // hold it and send when the process frees up.
         property var queued: null
         stdout: SplitParser {
-            onRead: function(data) { applyProc.buffer += data }
+            onRead: function(data) { applyProc.buffer += data + "\n" }
         }
         onStarted: buffer = ""
         onRunningChanged: {
@@ -254,7 +254,7 @@ Item {
         ensureProc.running = true
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: ensureProc
         command: []
         property var pendingReady: null
@@ -268,12 +268,12 @@ Item {
     }
 
     // ── store load ──────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: loadProc
         command: []
         property string buffer: ""
         stdout: SplitParser {
-            onRead: function(data) { loadProc.buffer += data }
+            onRead: function(data) { loadProc.buffer += data + "\n" }
         }
         onStarted: buffer = ""
         onRunningChanged: {

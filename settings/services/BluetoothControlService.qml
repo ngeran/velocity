@@ -66,11 +66,11 @@ Item {
     // -------------------------------------------------------------------------
     // ADAPTER IDENTITY — one-shot (static per boot; no native address/version)
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: identityProc
         command: ["bluetoothctl", "show"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { identityProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { identityProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 var b = identityProc.buffer
@@ -135,11 +135,11 @@ Item {
 
     property int scanSecondsLeft: 0   // counts down while scanning
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: scanProc
         command: ["bluetoothctl", "--timeout", "8", "scan", "on"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { scanProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { scanProc.buffer += data + "\n" } }
         onExited: function(code) {
             // Final parse of the scan stream (catches the last RSSI updates),
             // then a paired/info refresh so beacons + signal are current.
@@ -192,11 +192,11 @@ Item {
     // POWER TOGGLE
     // -------------------------------------------------------------------------
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: powerProc
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { powerProc.buffer += data } }
-        stderr: SplitParser { onRead: function(data) { powerProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { powerProc.buffer += data + "\n" } }
+        stderr: SplitParser { onRead: function(data) { powerProc.buffer += data + "\n" } }
         onExited: function(code) {
             powerProc.buffer = ""
             root.refresh()
@@ -217,12 +217,12 @@ Item {
     // ACTIONS (serialized via queue)
     // -------------------------------------------------------------------------
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: actionProc
         property string label: ""
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { actionProc.buffer += data } }
-        stderr: SplitParser { onRead: function(data) { actionProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { actionProc.buffer += data + "\n" } }
+        stderr: SplitParser { onRead: function(data) { actionProc.buffer += data + "\n" } }
         onExited: function(code) {
             if (code === 0) CommandService.pushLog("[bluetooth] " + actionProc.label + " ok", "success")
             else CommandService.pushLog("[bluetooth] " + actionProc.label + " failed (exit " + code + "): " + actionProc.buffer.trim(), "error")

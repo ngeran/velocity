@@ -402,7 +402,7 @@ Item {
         id: startupReader
         command: ["sh", "-c", "cat " + root.externalCachePath]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { startupReader.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && startupReader.buffer.trim().length > 0) {
                 try {

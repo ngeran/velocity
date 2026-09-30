@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+// check-splitparser — SplitParser handlers must rejoin WITH the newline.
+//
+// Quickshell's SplitParser delivers per-line chunks WITHOUT newlines. A
+// handler that accumulates via `buffer += data` glues lines together — the
+// exact bug that killed the network tray's TX/RX (two sysfs counters became
+// one 17-digit number; parseStats returned null forever, silently).
+//
+// Rule: any handler that ACCUMULATES (concatenates its chunk variable) must
+// concatenate with a separator (`+= data + "\n"`). Handlers that consume each
+// chunk immediately (per-line JSON parsing, no accumulation) are fine.
+// Waiver: `// single-line` inside the SplitParser block.
+//
+// Usage: tools/check-splitparser [roots...]   (default: bar settings)
+const fs = require("fs"), path = require("path")
+
+const roots = process.argv.length > 2 ? process.argv.slice(2) : ["bar", "settings"]
+let files = []
+
+function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name)
+        if (e.isDirectory() && e.name !== ".git") walk(p)
+        else if (e.isFile() && e.name.endsWith(".qml")) files.push(p)
+    }
+}
+for (const r of roots) walk(r)
+
+function blockAt(src, openIdx) {
+    // brace-match from the '{' at openIdx
+    let depth = 0
+    for (let i = openIdx; i < src.length; i++) {
+        if (src[i] === "{") depth++
+        else if (src[i] === "}") { depth--; if (depth === 0) return { body: src.slice(openIdx, i + 1), end: i } }
+    }
+    return { body: src.slice(openIdx), end: src.length }
+}
+
+let bad = 0, checked = 0
+for (const f of files) {
+    const src = fs.readFileSync(f, "utf8")
+    let idx = src.indexOf("SplitParser", 0)
+    while (idx !== -1) {
+        const open = src.indexOf("{", idx)
+        if (open !== -1) {
+            const { body } = blockAt(src, open)
+            checked++
+            const waived = /\/\*\s*single-line|\/\/\s*single-line/.test(body)
+            // accumulation WITHOUT separator: `+= data` / `+= d` / `+= chunk` bare
+            const bare = body.match(/\+=\s*(data|d|chunk|line)\s*(?=[;}])/g)
+            if (bare && !waived) {
+                const line = src.slice(0, idx).split("\n").length
+                console.log(`check-splitparser: FAIL ${f}:${line} — accumulates without a separator (${bare[0]})`)
+                console.log(`  fix: ... += ${bare[0].slice(3).trim()} + "\\n"   (or waive with // single-line)`)
+                bad++
+            }
+        }
+        idx = src.indexOf("SplitParser", idx + 1)
+    }
+}
+console.log(`check-splitparser: ${checked} handlers scanned`)
+if (bad > 0) { console.log(`check-splitparser: FAIL (${bad} handlers)`); process.exit(1) }
+console.log("check-splitparser: OK")

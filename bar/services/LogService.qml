@@ -64,7 +64,7 @@ Item {
     // =========================================================================
     // JOURNAL STREAM
     // =========================================================================
-    Process {
+    Process {   // unbounded-ok: long-lived journal tail — popup/owner-gated, ring-buffered, backoff
         id: followProc
         command: ["sh", "-c", "journalctl -q -n 500 -f -o json --no-pager 2>/dev/null"]
         stdout: SplitParser { onRead: function(line) { root._ingest(line) } }

@@ -43,8 +43,15 @@ set -euo pipefail
 # --- locate qmllint ----------------------------------------------------------
 QMLLINT_BIN="${QMLLINT_BIN:-$(command -v qmllint || true)}"
 if [[ -z $QMLLINT_BIN ]]; then
-  # Not on PATH: pull the qtdeclarative that ships with the running
-  # quickshell (version-matched, survives store-hash churn).
+  # Not on PATH: Arch ships qmllint in qt6-tools (this box) — try it before
+  # the nix-store walk, which only resolves on nix-deployed quickshell.
+  for candidate in /usr/lib/qt6/bin/qmllint /usr/lib/qt6/libexec/qmllint; do
+    [[ -x $candidate ]] && QMLLINT_BIN=$candidate && break
+  done
+fi
+if [[ -z $QMLLINT_BIN ]]; then
+  # Still nothing: pull the qtdeclarative that ships with the running
+  # quickshell (version-matched, survives store-hash churn) on nix setups.
   qs_pkg="$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")"
   QMLLINT_BIN="$(nix-store -q --requisites "$qs_pkg/bin/quickshell" 2>/dev/null |
     grep 'qtdeclarative-6' | sort |
@@ -71,7 +78,7 @@ IFS=':' read -r -a extra <<< "${LINT_QML_IMPORTS:-}"
 for p in "${extra[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
 
 # --- the findings that mean "this file will not load" ------------------------
-fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicat(ed|e) (signal|method) name|Syntax error'
+fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicat(ed|e) (signal|method) name|Syntax error|Cannot assign to non-existent default property|Type .* is unavailable'
 
 status=0
 roots=("$@")

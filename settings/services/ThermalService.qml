@@ -34,14 +34,14 @@ Item {
     }
 
     // ── CPU package temp: coretemp/k10temp, max sensor ──────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: cpuTempProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do n=$(cat \"$d/name\" 2>/dev/null); " +
             "case \"$n\" in coretemp|k10temp) for i in $(seq 1 20); do " +
             "cat \"$d/temp${i}_input\" 2>/dev/null; done;; esac; done | sort -n | tail -1"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { cpuTempProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { cpuTempProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && cpuTempProc.buffer.trim().length) {
                 root.cpuTemp = root._parseMilli(cpuTempProc.buffer)
@@ -51,13 +51,13 @@ Item {
     }
 
     // ── NVMe temp: max over nvme hwmons ─────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: nvmeProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do [ \"$(cat \"$d/name\" 2>/dev/null)\" = nvme ] " +
             "&& cat \"$d/temp1_input\" 2>/dev/null; done | sort -n | tail -1"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { nvmeProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { nvmeProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && nvmeProc.buffer.trim().length) {
                 root.nvmeTemp = root._parseMilli(nvmeProc.buffer)
@@ -67,14 +67,14 @@ Item {
     }
 
     // ── Coolant temp: best-effort label scan (usually unavailable) ──────────
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: coolantProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do for i in 1 2 3 4 5 6; do " +
             "l=$(cat \"$d/temp${i}_label\" 2>/dev/null); case \"$l\" in " +
             "*water*|*coolant*|*liquid*|*aio*) cat \"$d/temp${i}_input\" 2>/dev/null;; esac; done; done | sort -n | tail -1"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { coolantProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { coolantProc.buffer += data + "\n" } }
         onRunningChanged: {
             var raw = (coolantProc.buffer || "").trim()
             if (!running && raw.length) {

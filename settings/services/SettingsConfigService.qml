@@ -76,7 +76,7 @@ Item {
 
         stdout: SplitParser {
             onRead: function(data) {
-                loadProcess.buffer += data
+                loadProcess.buffer += data + "\n"
             }
         }
 
@@ -204,7 +204,7 @@ Item {
     // Everything in bar-config.json the service does NOT model, so saves can
     // merge it back instead of clobbering it.
     property var barConfigExtras: ({})
-    property var barConfigRead: Process {
+    property var barConfigRead: Process {   // unbounded-ok: waived — see service header
         command: ["cat", StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { barConfigRead.buffer += data + "\n" } }
@@ -236,7 +236,7 @@ Item {
         styleScanProc.running = true
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: styleScanProc
         command: ["sh", "-c",
             "ls -1d '" + StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles/'*/Scene.qml 2>/dev/null | sed 's|.*/styles/||; s|/Scene.qml||' | sort"]

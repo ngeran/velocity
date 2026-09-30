@@ -172,7 +172,7 @@ Item {
             _emit("crit", "fs-error", msg.slice(0, 160))
     }
 
-    Process {
+    Process {   // unbounded-ok: long-lived journal tail — popup/owner-gated, ring-buffered, backoff
         id: followProc
         command: ["sh", "-c", "journalctl -f -k -o json --no-pager 2>/dev/null"]
         stdout: SplitParser { onRead: function(line) { root._ingest(line) } }
@@ -205,7 +205,7 @@ Item {
     // =========================================================================
 
     // history load — file is oldest→newest; model wants newest first
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: catProc
         property string buffer: ""
         command: ["cat", root.eventsPath]
@@ -235,11 +235,11 @@ Item {
     }
 
     // kernel version → boot event
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: unameProc
         property string buffer: ""
         command: ["uname", "-r"]
-        stdout: SplitParser { onRead: function(line) { unameProc.buffer += line } }
+        stdout: SplitParser { onRead: function(line) { unameProc.buffer += line + "\n" } }
         onRunningChanged: if (!running) {
             var k = unameProc.buffer.trim()
             unameProc.buffer = ""
@@ -248,11 +248,11 @@ Item {
     }
 
     // active system generation → switch detection (10-min poll)
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: readlinkProc
         property string buffer: ""
         command: ["sh", "-c", "readlink /run/current-system | sed 's|.*/||'"]
-        stdout: SplitParser { onRead: function(line) { readlinkProc.buffer += line } }
+        stdout: SplitParser { onRead: function(line) { readlinkProc.buffer += line + "\n" } }
         onRunningChanged: if (!running) {
             var gen = readlinkProc.buffer.trim()
             readlinkProc.buffer = ""

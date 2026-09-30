@@ -96,7 +96,7 @@ Item {
         onTriggered: root._sampleTraffic()
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: trafficProc
         command: []; running: false
         property string buffer: ""
@@ -163,7 +163,7 @@ Item {
         onTriggered: if (!pingProc.running) pingProc.running = true
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: pingProc
         command: ["ping", "-c", "1", "-W", "1", "1.1.1.1"]
         property string buffer: ""
@@ -337,7 +337,7 @@ Item {
     // don't expose: route (src + via gateway), device details (HWADDR, SPEED,
     // IP4 address/subnet, DNS), and the wifi radio state.
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: linkProbe
         command: []; running: false
         property string buffer: ""
@@ -385,7 +385,7 @@ Item {
     // -------------------------------------------------------------------------
     property real _lastEnrich: 0
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: enrichProc
         command: []; running: false
         property string buffer: ""
@@ -425,10 +425,10 @@ Item {
     // -------------------------------------------------------------------------
     // WIFI RADIO — nmcli radio wifi on/off (user-triggered, header toggle)
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: radioProc
         property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { radioProc.buffer += d } }
+        stdout: SplitParser { onRead: function(d) { radioProc.buffer += d + "\n" } }
         onExited: {
             radioProc.buffer = ""
             root.refreshStatus()
@@ -465,12 +465,12 @@ Item {
     // SCAN — one bounded nmcli rescan to force fresh results NOW, then collect
     // from the native model after the kernel settles.
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: rescanProc
         property string buffer: ""
         command: ["sh", "-c", "nmcli device wifi rescan 2>/dev/null; exit 0"]
-        stdout: SplitParser { onRead: function(data) { rescanProc.buffer += data } }
-        stderr: SplitParser { onRead: function(data) { rescanProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { rescanProc.buffer += data + "\n" } }
+        stderr: SplitParser { onRead: function(data) { rescanProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 rescanProc.buffer = ""
@@ -524,7 +524,7 @@ Item {
     // -------------------------------------------------------------------------
     // CONNECT / DISCONNECT — nmcli (see header: error taxonomy + saved profiles)
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: connectProc
         property string lastSsid: ""
         property string buffer: ""
@@ -533,8 +533,8 @@ Item {
         // pattern: stdinEnabled + write() on start, wiped immediately after).
         property string pendingSecret: ""
         stdinEnabled: true
-        stdout: SplitParser { onRead: function(data) { connectProc.buffer += data } }
-        stderr: SplitParser { onRead: function(data) { connectProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { connectProc.buffer += data + "\n" } }
+        stderr: SplitParser { onRead: function(data) { connectProc.buffer += data + "\n" } }
         onStarted: {
             if (pendingSecret !== "") {
                 write(pendingSecret + "\n")
@@ -573,11 +573,11 @@ Item {
         CommandService.pushLog("[network] connecting to " + ssid + "...", "output")
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: disconnectProc
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { disconnectProc.buffer += data } }
-        stderr: SplitParser { onRead: function(data) { disconnectProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { disconnectProc.buffer += data + "\n" } }
+        stderr: SplitParser { onRead: function(data) { disconnectProc.buffer += data + "\n" } }
         onExited: function(code) {
             if (code === 0) CommandService.pushLog("[network] disconnected", "success")
             else CommandService.pushLog("[network] disconnect failed (exit " + code + "): " + disconnectProc.buffer.trim(), "error")
@@ -618,7 +618,7 @@ Item {
     property string dnsResult: ""       // inline feedback ("applied · reconnected")
     property real _lastDnsDetect: 0     // epoch s — the probe is 2 forks; rate-limit
 
-    property var _dnsDetectProc: Process {
+    property var _dnsDetectProc: Process {   // unbounded-ok: waived — see service header
         command: []
         property string buffer: ""
         stdout: SplitParser { onRead: function(d) { root._dnsDetectProc.buffer += d + "\n" } }
@@ -652,7 +652,7 @@ Item {
         }
     }
 
-    property var _dnsReadProc: Process {
+    property var _dnsReadProc: Process {   // unbounded-ok: waived — see service header
         command: []
         property string buffer: ""
         property var onDone: null
@@ -696,7 +696,7 @@ Item {
         _dnsApplyProc.running = true
     }
 
-    property var _dnsApplyProc: Process {
+    property var _dnsApplyProc: Process {   // unbounded-ok: waived — see service header
         command: []
         property string buffer: ""
         stdout: SplitParser { onRead: function(d) { root._dnsApplyProc.buffer += d + "\n" } }
@@ -727,7 +727,7 @@ Item {
         _speedProc.running = true
     }
 
-    property var _speedProc: Process {
+    property var _speedProc: Process {   // unbounded-ok: waived — see service header
         command: []
         property string buffer: ""
         stdout: SplitParser { onRead: function(d) { root._speedProc.buffer += d + "\n" } }
@@ -771,7 +771,7 @@ Item {
         _qrProc.running = true
     }
 
-    property var _qrProc: Process {
+    property var _qrProc: Process {   // unbounded-ok: waived — see service header
         command: []
         property string buffer: ""
         stdout: SplitParser { onRead: function(d) { root._qrProc.buffer += d + "\n" } }

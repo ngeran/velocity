@@ -55,7 +55,7 @@ Item {
     // clocks.gr, name. memory.* are MiB → /1024 for GB. power/fan can be [N/A]
     // → NaN → 0. name is a trailing string field (rejoined in case a GPU name
     // ever contained a comma).
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: gpuProc
         command: [
             "nvidia-smi",
@@ -63,7 +63,7 @@ Item {
             "--format=csv,noheader,nounits"
         ]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && gpuProc.buffer.length > 0) {
                 var raw = gpuProc.buffer.trim().split("\n")[0].split(",")
@@ -95,7 +95,7 @@ Item {
     // basenamed. used_memory is the LAST field; the path sits between pid and
     // it (slice defensively handles any comma in the path). Sorted desc by
     // mem, capped to 6.
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: appsProc
         command: [
             "nvidia-smi",
@@ -103,7 +103,7 @@ Item {
             "--format=csv,noheader,nounits"
         ]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { appsProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { appsProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && appsProc.buffer.length > 0) {
                 var lines = appsProc.buffer.trim().split("\n")

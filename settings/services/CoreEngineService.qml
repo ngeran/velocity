@@ -76,7 +76,7 @@ Item {
     property bool lcdPresent: false                      // deepcool reader probe
     readonly property bool telemetryWanted: coreVisible || lcdPresent
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: lcdProbe
         // [d]eepcool regex self-match guard: pgrep -f scans full command
         // lines, and anything probing THIS file's path (~/.cache/deepcool/…)
@@ -235,7 +235,7 @@ Item {
     // IMPORTANT: SplitParser emits one callback per line WITHOUT the trailing
     // newline — a multi-line `df` would otherwise collapse into one blob and
     // split("\n") would yield a single element. Re-append "\n" before splitting.
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: diskProc
         command: ["bash", "-c", "df --output=source,fstype,size,used,avail,pcent,target 2>/dev/null"]
         property string buffer: ""

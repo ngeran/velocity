@@ -66,7 +66,7 @@ Item {
         onTriggered: root._refresh()
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: catProc
         property string buffer: ""
         command: ["cat", root.eventsPath]

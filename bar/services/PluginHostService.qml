@@ -105,7 +105,7 @@ Item {
         root.rescan()
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: stateWriter
         command: []; running: false
         onExited: function(code) {
@@ -148,7 +148,7 @@ Item {
     }
 
     // ── scan: one fork lists dirs, dumps manifests, and exposes symlinks ────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: scanProc
         command: []; running: false
         property string buffer: ""

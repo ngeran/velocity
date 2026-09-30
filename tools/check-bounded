@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// check-bounded — every Process in */services/ must declare its bounds.
+//
+// The TX/RX incident class taught us unreviewed shell-outs fail silently;
+// the flake taught us missing tools hang silently; a hung curl stops a poll
+// cadence forever. BoundedProcess (timeout + byte cap + stderr apart) is the
+// sanctioned one-shot form. Long-lived streams (journal tails, socket2) are a
+// different pattern with their own supervision — they stay plain `Process`
+// but must say so:
+//
+//   Process {   // unbounded-ok: long-lived journalctl -f tail, popup-gated + backoff
+//
+// Usage: tools/check-bounded [service dirs...]   (default: bar/services settings/services)
+const fs = require("fs"), path = require("path")
+
+const dirs = process.argv.length > 2 ? process.argv.slice(2) : ["bar/services", "settings/services"]
+let bad = 0, bounded = 0, waived = 0
+
+for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue
+    for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith(".qml")) continue
+        if (f === "BoundedProcess.qml") continue   // the primitive itself
+        const p = path.join(dir, f)
+        const src = fs.readFileSync(p, "utf8")
+        const lines = src.split("\n")
+        for (let i = 0; i < lines.length; i++) {
+            const m = lines[i].match(/^\s*(?:property\s+var\s+\w+:\s+)?(Process|BoundedProcess)\s*\{/)
+            if (!m) continue
+            if (m[1] === "BoundedProcess") { bounded++; continue }
+            // waiver: on the declaration line or within the next 3 lines
+            const context = lines.slice(i, i + 4).join("\n")
+            const w = context.match(/\/\/\s*unbounded-ok:/)
+            if (w) { waived++; continue }
+            const line = i + 1
+            console.log(`check-bounded: FAIL ${p}:${line} — plain Process without bounds`)
+            console.log(`  migrate to BoundedProcess (timeoutMs/maxBytes/onDone) or waive:`)
+            console.log(`  Process {   // unbounded-ok: <why this one is supervised differently>`)
+            bad++
+        }
+    }
+}
+console.log(`check-bounded: ${bounded} bounded · ${waived} waived`)
+if (bad > 0) { console.log(`check-bounded: FAIL (${bad} unbounded)`); process.exit(1) }
+console.log("check-bounded: OK")

@@ -67,7 +67,7 @@ QtObject {
 
         stdout: SplitParser {
             onRead: function(data) {
-                loadProcess.buffer += data
+                loadProcess.buffer += data + "\n"
             }
         }
 

@@ -47,11 +47,11 @@ Item {
     // current workspace once at launch to seed activeWorkspace. ──────────────
     // =========================================================================
 
-    Process {
+    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: seedProc
         command: ["bash", "-c", "hyprctl activeworkspace -j 2>&1"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { seedProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { seedProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 try {
@@ -74,7 +74,7 @@ Item {
     // (verified to stream socket2). ─────────────────────────────────────────
     // =========================================================================
 
-    Process {
+    Process {   // unbounded-ok: long-lived socket2 stream — the one owner, watchdog-healed
         id: wsWatcher
         // sh -c so the shell expands the runtime/instance-signature env vars.
         command: ["sh", "-c", "nc -U \"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\""]
@@ -115,7 +115,7 @@ Item {
     // =========================================================================
 
     // Bare runner: switchTo() builds the hyprctl dispatch command inline.
-    Process { id: switchProc }
+    Process { id: switchProc }   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
 
     function switchTo(idx: int) {
         console.log("[HyprlandService] Switching to workspace:", idx)

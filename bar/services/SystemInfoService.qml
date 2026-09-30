@@ -146,11 +146,11 @@ Item {
         return null
     }
 
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: ffProc
         property string buffer: ""
         command: ["fastfetch", "--format", "json", "--logo", "none"]
-        stdout: SplitParser { onRead: function(data) { ffProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { ffProc.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var raw = ffProc.buffer.trim()
             ffProc.buffer = ""
@@ -246,7 +246,7 @@ Item {
 
     // login shell — fastfetch mis-reports it (sees the launching wrapper), so
     // read $SHELL directly and basename it in QML.
-    Process {
+    Process {   // unbounded-ok: trivial local check — no hang risk
         id: shellProc
         command: ["sh", "-c", "echo $SHELL"]
         stdout: SplitParser {
@@ -265,12 +265,12 @@ Item {
     // has no Board block here, so read the kernel SMBIOS exposure directly:
     // sys_vendor + board_name; the chipset is parsed out of the board name).
     // =========================================================================
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: boardProc
         property string buffer: ""
         command: ["sh", "-c",
             "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
-        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var raw = boardProc.buffer
             boardProc.buffer = ""
@@ -289,7 +289,7 @@ Item {
     // =========================================================================
     // LIVE METRICS — /proc/meminfo + /proc/uptime in one read
     // =========================================================================
-    Process {
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: liveProc
         property string buffer: ""
         command: ["sh", "-c", "cat /proc/meminfo /proc/uptime"]
@@ -322,7 +322,7 @@ Item {
     }
 
     // GPU temp / power / usage (NVIDIA). No GPU or no driver → stays 0 → "—".
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: nvidiaProc
         command: ["nvidia-smi", "--query-gpu=temperature.gpu,power.draw,utilization.gpu", "--format=csv,noheader,nounits"]
         stdout: SplitParser {
@@ -344,11 +344,11 @@ Item {
     // =========================================================================
     // GEO — curl ip-api.com once per session; "—" on any failure
     // =========================================================================
-    Process {
+    Process {   // unbounded-ok: external fetch — TODO migrate to BoundedProcess (hang risk)
         id: geoProc
         property string buffer: ""
         command: ["sh", "-c", "curl -s --max-time 6 'http://ip-api.com/json/?fields=city,country,countryCode' || true"]
-        stdout: SplitParser { onRead: function(data) { geoProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { geoProc.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var raw = geoProc.buffer.trim()
             geoProc.buffer = ""

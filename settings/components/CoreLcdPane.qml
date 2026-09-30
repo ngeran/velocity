@@ -31,7 +31,7 @@ ColumnLayout {
     property Process loadProc: Process {
         command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { loadProc.buffer += d } }
+        stdout: SplitParser { onRead: function(d) { loadProc.buffer += d + "\n" } }
         onRunningChanged: {
             if (!running && loadProc.buffer.length) {
                 try {

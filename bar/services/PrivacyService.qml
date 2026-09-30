@@ -36,7 +36,7 @@ Item {
     function appsFor(kind) { return active[kind] || [] }
 
     // ── pw-dump poll ────────────────────────────────────────────────────
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: dumpProc
         command: ["sh", "-c", "pw-dump 2>/dev/null | head -c 4000000"]
         property string buffer: ""

@@ -42,7 +42,7 @@ Item {
     // busy with the 5s refresh) — so the latest request waits and runs next.
     property var _pendingCmd: null
     property var _pendingCb: null
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: opProc
         command: []; running: false
         property var onDone: null

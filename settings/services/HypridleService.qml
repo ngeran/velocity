@@ -50,7 +50,7 @@ Item {
         running: false
         property string buffer: ""
         stdout: SplitParser {
-            onRead: function(data) { readProcess.buffer += data }
+            onRead: function(data) { readProcess.buffer += data + "\n" }
         }
         onRunningChanged: {
             if (!running && readProcess.buffer.length > 0) {

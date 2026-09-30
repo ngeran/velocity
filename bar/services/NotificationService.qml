@@ -102,7 +102,7 @@ Item {
     property Process _storeReader: Process {
         command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _storeReader.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { _storeReader.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var lines = _storeReader.buffer.split("\n")
             _storeReader.buffer = ""
@@ -133,7 +133,7 @@ Item {
     property Process _dndReader: Process {
         command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _dndReader.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { _dndReader.buffer += data + "\n" } }
         onRunningChanged: if (!running) { root.dnd = (_dndReader.buffer.trim() === "1"); _dndReader.buffer = "" }
     }
     function setDnd(on) {

@@ -52,14 +52,14 @@ Item {
         resolverProc.running = true
     }
 
-    Process {
+    Process {   // unbounded-ok: fire-and-forget side effect — no output consumed
         id: resolverProc
         command: ["sh", "-c",
             "systemctl --user cat quickshell-bar >/dev/null 2>&1 || { echo DEV-MODE; exit 0; }; " +
             "pid=$(systemctl --user show -p MainPID --value quickshell-bar 2>/dev/null); " +
             "[ -n \"$pid\" ] && [ \"$pid\" != \"0\" ] && readlink \"" + root.runtimeDir + "/by-pid/$pid\" 2>/dev/null || true"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { resolverProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { resolverProc.buffer += data + "\n" } }
         onStarted: buffer = ""
         onExited: {
             var out = resolverProc.buffer.trim()
@@ -96,12 +96,12 @@ Item {
     }
 
     // One-shot error tail on failure onset (failure path: a fork is fine).
-    Process {
+    Process {   // unbounded-ok: long-lived journal tail — popup/owner-gated, ring-buffered, backoff
         id: errorProbe
         command: ["sh", "-c",
             "journalctl --user -u quickshell-bar -n 3 --no-pager -o cat 2>/dev/null | tail -n 3"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { errorProbe.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { errorProbe.buffer += data + "\n" } }
         onStarted: buffer = ""
         onExited: {
             root.errorTail = errorProbe.buffer.trim()

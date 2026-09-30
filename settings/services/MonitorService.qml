@@ -56,7 +56,7 @@ Item {
 
     // IDENTIFY — flash every monitor's name via a batched hyprctl notify
     // (omarchy-screens pattern, minus its python driver).
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: identifyProc
         command: []; running: false
     }
@@ -100,11 +100,11 @@ Item {
     // POLL — hyprctl monitors -j (JSON). 10s while the dashboard is open; also
     // refreshed after every applied rule (readback verification).
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: monProc
         command: ["hyprctl", "monitors", "-j"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { monProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { monProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 root.monitors = root._parseMonitors(monProc.buffer)
@@ -189,12 +189,12 @@ Item {
     // APPLY — single-flight rule Process with a trailing-write queue (sliders
     // can outpace hyprctl; the last requested rule always lands).
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: ruleProc
         command: []; running: false
         property string queued: ""
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { ruleProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { ruleProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
                 if (ruleProc.buffer.indexOf("ok") === -1)
@@ -226,11 +226,11 @@ Item {
 
     // Global (non-monitor) config, e.g. render.cm_auto_hdr for HDR "Auto".
     // Same eval mechanism; not queued behind ruleProc (independent target).
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: globalProc
         command: []; running: false
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { globalProc.buffer += data } }
+        stdout: SplitParser { onRead: function(data) { globalProc.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             if (globalProc.buffer.indexOf("ok") === -1)
                 CommandService.pushLog("[display] global apply failed: " + globalProc.buffer, "error")
@@ -264,7 +264,7 @@ Item {
     // -------------------------------------------------------------------------
     // DPMS — proven verb pair from HypridleService (hl.dsp.dpms enable/disable)
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: dpmsProc
         command: []; running: false
         onRunningChanged: if (!running) Qt.callLater(root.refresh)
@@ -343,7 +343,7 @@ Item {
     // STAGE TO NIX — rewrite the monitor attrs in the omni-nix source to the
     // current live values, then git add. The user's omni-apply persists.
     // -------------------------------------------------------------------------
-    Process {
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: stageProc
         command: []; running: false
         onExited: function(code) {
