@@ -78,13 +78,15 @@ Item {
 
     // -------------------------------------------------------------------------
     // PERSISTENCE — notifications.jsonl through the bar's write funnel
-    // (EventService._atomicWrite). The model survives bar restarts; unread and
-    // critical rows are what matters (read rows expire by tier anyway).
+    // (EventService._atomicWrite). The model survives bar restarts: read-marks
+    // (read/readAt), DnD-silent marks and unread rows all persist (read rows
+    // still expire by tier once their clock ran out before the restart).
     // Restored rows get clickId=0 — the previous session's DBus action ids
-    // died with it.
+    // died with it. Disk order is OLDEST-FIRST (the reader's contract).
     // -------------------------------------------------------------------------
     readonly property string storePath: "~/.config/quickshell/notifications.jsonl"
     readonly property int storeMax: 200
+    readonly property int storeMaxBytes: 262144   // reader input cap (256 KiB)
 
     function _persist() {
         var lines = []
@@ -99,39 +101,63 @@ Item {
         EventService._atomicWrite(root.storePath, lines.join("\n") + "\n")
     }
 
-    property Process _storeReader: Process {
-        command: []; running: false
+    Process {   // unbounded-ok: one-shot byte-capped store read (head -c), exits at EOF
+        id: _storeReader
+        command: []
+        running: false
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { _storeReader.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var lines = _storeReader.buffer.split("\n")
             _storeReader.buffer = ""
-            var restored = []
-            for (var i = lines.length - 1; i >= 0; i--) {   // disk oldest-first
+            var restored = 0, corrupt = 0, maxId = 0
+            // Disk is OLDEST-FIRST (writer's contract), so a straight walk with
+            // insert(0) lands the newest row at index 0 — the model's ordering
+            // invariant. (The old backwards walk restored the list reversed.)
+            for (var i = 0; i < lines.length; i++) {
                 var l = lines[i].trim()
                 if (!l) continue
-                try { restored.push(JSON.parse(l)) } catch (e) { /* skip malformed */ }
-            }
-            var maxId = 0
-            for (var j = 0; j < restored.length; j++) {     // insert(0) oldest→newest
-                var d = restored[j]
-                root.model.insert(0, {
-                    id: d.id, clickId: 0,
-                    appName: d.appName, appIcon: "",
+                var d = null
+                try { d = JSON.parse(l) } catch (e) { d = null }
+                // Per-line corrupt recovery: one bad line never blocks the
+                // rest. It is logged in full (quarantine-by-log) and healed
+                // away by the clean-store rewrite below; every other line
+                // still restores. Shape-check too — JSON.parse("123") parses.
+                if (!d || typeof d !== "object" || Array.isArray(d) ||
+                    typeof d.id !== "number" || !(d.id >= 1) ||
+                    typeof d.timestamp !== "number" || !(d.timestamp > 0)) {
+                    console.warn("[NotificationService] store: corrupt line skipped:", l)
+                    corrupt++
+                    continue
+                }
+                var row = {
+                    id: Math.floor(d.id), clickId: 0,
+                    appName: String(d.appName || "Notification"), appIcon: "",
                     glyph: root.appGlyph(d.appName, ""),
-                    summary: d.summary, body: d.body, urgency: d.urgency,
-                    timestamp: d.timestamp, read: d.read === true, readAt: d.readAt || 0
-                })
-                if (d.id > maxId) maxId = d.id
+                    summary: String(d.summary || ""), body: String(d.body || ""),
+                    urgency: Math.min(2, Math.max(0, Math.floor(d.urgency === undefined ? 1 : d.urgency))),
+                    timestamp: d.timestamp,
+                    read: d.read === true, readAt: (typeof d.readAt === "number" && isFinite(d.readAt)) ? d.readAt : 0
+                }
+                root.model.insert(0, row)
+                restored++
+                if (row.id > maxId) maxId = row.id
             }
             if (maxId >= root.nextId) root.nextId = maxId + 1
             root._recount()
-            console.log("[NotificationService] restored " + restored.length + " notifications")
+            if (corrupt > 0) {
+                console.warn("[NotificationService] store: " + corrupt +
+                             " corrupt line(s) dropped — rewriting a clean store")
+                root._persist()   // heal now, not on the next unrelated write
+            }
+            console.log("[NotificationService] restored " + restored + " notifications")
         }
     }
 
-    property Process _dndReader: Process {
-        command: []; running: false
+    Process {   // unbounded-ok: one-shot 32-byte flag read, exits at EOF
+        id: _dndReader
+        command: []
+        running: false
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { _dndReader.buffer += data + "\n" } }
         onRunningChanged: if (!running) { root.dnd = (_dndReader.buffer.trim() === "1"); _dndReader.buffer = "" }
@@ -303,7 +329,7 @@ Item {
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", "cat " + root._dndFlag + " 2>/dev/null || true"]
         _dndReader.running = true
-        _storeReader.command = ["sh", "-c", "cat " + root.storePath + " 2>/dev/null || true"]
+        _storeReader.command = ["sh", "-c", "head -c " + root.storeMaxBytes + " " + root.storePath + " 2>/dev/null || true"]
         _storeReader.running = true
     }
 }
