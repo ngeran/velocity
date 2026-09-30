@@ -132,75 +132,55 @@ Item {
     // POPUP DIAGNOSTICS — one-shot probes, fetched on open, polled while open
     // =========================================================================
 
-    Process {
+    BoundedProcess {
         id: ipProc
         command: ["sh", "-c", "ip -4 route get 1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}'"]
-        stdout: SplitParser {
-            onRead: function(data) {
-                var ip = data.trim()
-                if (ip !== "") root.ipAddress = ip
-            }
+        onDone: function(out) {
+            var ip = out.trim()
+            if (ip !== "") root.ipAddress = ip
         }
     }
 
-    function getIP() {
-        if (!ipProc.running) ipProc.running = true
-    }
+    function getIP() { ipProc.run() }
 
     // ── Gateway + active interface: `default via <gw> dev <iface>` ──────────
-    Process {
+    BoundedProcess {
         id: gwProc
         command: ["sh", "-c", "ip -4 route show default 2>/dev/null"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { gwProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var line = gwProc.buffer.trim()
-                gwProc.buffer = ""
-                var m = line.match(/via\s+(\S+)\s+dev\s+(\S+)/)
-                if (m) { root.gateway = m[1]; root.iface = m[2] }
-                else { root.gateway = ""; root.iface = "" }
-                // gwProc finished — iface is now known (or empty). Kick the
-                // throughput probe only if the popup is open AND we got an
-                // iface. This closes the race where statsProc ran with an
-                // empty iface and read /sys/class/net//statistics (no data).
-                if (root.popupOpen && root.iface !== "" && !statsProc.running)
-                    statsProc.running = true
-            }
+        onDone: function(out) {
+            var m = out.trim().match(/via\s+(\S+)\s+dev\s+(\S+)/)
+            if (m) { root.gateway = m[1]; root.iface = m[2] }
+            else { root.gateway = ""; root.iface = "" }
+            // gwProc finished — iface is now known (or empty). Kick the
+            // throughput probe only if the popup is open AND we got an
+            // iface. This closes the race where statsProc ran with an
+            // empty iface and read /sys/class/net//statistics (no data).
+            if (root.popupOpen && root.iface !== "")
+                statsProc.run()
         }
     }
 
     // ── PRIMARY DNS only: nmcli terse emits `IP4.DNS[1]:<ip>` ───────────────
-    Process {
+    BoundedProcess {
         id: dnsProc
         command: ["sh", "-c", "nmcli -t -f IP4.DNS dev show 2>/dev/null | grep ':' | head -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { dnsProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var line = dnsProc.buffer.trim()
-                dnsProc.buffer = ""
-                if (line.indexOf(":") !== -1)
-                    root.dns = line.substring(line.indexOf(":") + 1).trim()
-                else
-                    root.dns = ""
-            }
+        onDone: function(out) {
+            var line = out.trim()
+            if (line.indexOf(":") !== -1)
+                root.dns = line.substring(line.indexOf(":") + 1).trim()
+            else
+                root.dns = ""
         }
     }
 
-    // ── Latency: one ping to a stable target (1s timeout so it can't hang) ──
-    Process {
+    // ── Latency: one ping to a stable target (-W 1 so the tool can't hang;
+    // BoundedProcess timeout covers the spawn side) ──
+    BoundedProcess {
         id: pingProc
         command: ["sh", "-c", "ping -c 1 -W 1 1.1.1.1 2>/dev/null"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { pingProc.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                var out = pingProc.buffer
-                pingProc.buffer = ""
-                var m = out.match(/rtt[^=]*=\s*([0-9.]+)\/([0-9.]+)/)
-                root.latencyMs = m ? parseFloat(m[2]) : -1
-            }
+        onDone: function(out) {
+            var m = out.match(/rtt[^=]*=\s*([0-9.]+)\/([0-9.]+)/)
+            root.latencyMs = m ? parseFloat(m[2]) : -1
         }
     }
 
@@ -225,33 +205,26 @@ Item {
         // gwProc's output. gwProc's onRunningChanged kicks statsProc once
         // iface is known (fixes the empty-iface race that showed no data).
         if (isConnected) getIP()
-        if (isConnected && !gwProc.running)   gwProc.running = true
-        if (isConnected && !dnsProc.running)  dnsProc.running = true
-        if (isConnected && !pingProc.running) pingProc.running = true
+        if (isConnected) { gwProc.run(); dnsProc.run(); pingProc.run() }
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────
-    Process {
+    // (BoundedProcess rejoins lines WITH newlines — the TX/RX incident's
+    // glued-counter class is structurally impossible here.)
+    BoundedProcess {
         id: statsProc
         command: ["sh", "-c",
             "cat /sys/class/net/" + root.iface + "/statistics/rx_bytes " +
             "    /sys/class/net/" + root.iface + "/statistics/tx_bytes 2>/dev/null"]
-        property string buffer: ""
-        // SplitParser is per-line — rejoin WITH the newline (codebase
-        // trap): the two counters must stay separate fields for parseStats.
-        stdout: SplitParser { onRead: function(data) { statsProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                var s = Model.parseStats(statsProc.buffer)
-                statsProc.buffer = ""
-                if (s && root.iface) {
-                    var r = Model.throughputState(root._stats, root.iface, s.rx, s.tx, Date.now())
-                    root.rxRate = r.rxRate
-                    root.txRate = r.txRate
-                    root.rxTotal = r.rxTotal
-                    root.txTotal = r.txTotal
-                    root._stats = r.state
-                }
+        onDone: function(out) {
+            var s = Model.parseStats(out)
+            if (s && root.iface) {
+                var r = Model.throughputState(root._stats, root.iface, s.rx, s.tx, Date.now())
+                root.rxRate = r.rxRate
+                root.txRate = r.txRate
+                root.rxTotal = r.rxTotal
+                root.txTotal = r.txTotal
+                root._stats = r.state
             }
         }
     }
@@ -262,7 +235,7 @@ Item {
         interval: 2000
         repeat: true
         running: root.hasNetwork && root.popupOpen
-        onTriggered: if (root.isConnected && root.iface !== "" && !statsProc.running) statsProc.running = true
+        onTriggered: if (root.isConnected && root.iface !== "") statsProc.run()
     }
 
     // Gateway / DNS / latency refresh — slower cadence (these change rarely
@@ -281,23 +254,8 @@ Item {
         }
     }
 
-    // Hung-process reaper (Omarchy tailscale pattern): every poll is skipped
-    // while its own Process is still running, so one that never exits silently
-    // stops all refreshing and stays stopped. Sweep anything still running well
-    // inside the poll interval so the next tick starts clean.
-    Timer {
-        id: netWatchdog
-        interval: 15000
-        repeat: true
-        running: true
-        onTriggered: {
-            if (ipProc.running)     ipProc.running = false
-            if (gwProc.running)     gwProc.running = false
-            if (dnsProc.running)    dnsProc.running = false
-            if (pingProc.running)   pingProc.running = false
-            if (statsProc.running)  statsProc.running = false
-        }
-    }
+    // (The old 15s hung-process reaper is gone: every probe is a
+    // BoundedProcess now — the timeout IS the reaper, at 5s not 15s.)
 
     function _reset() {
         root.ipAddress = ""
@@ -322,7 +280,6 @@ Item {
     property string qrError: ""
 
     function generateQr() {
-        _qrProc.buffer = ""
         _qrProc.command = ["bash", "-c",
             "iface=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); " +
             "[ -z \"$iface\" ] && iface=$(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null | awk -F: '$2==\"wifi\" && $3 ~ /^connected/{print $1;exit}'); " +
@@ -340,17 +297,17 @@ Item {
             "payload=\"WIFI:T:$sec;S:$ssid;P:$pw;\"; " +
             "qrencode --type ASCII --margin 4 --output - <<< \"$payload\" | " +
             "awk '{r=\"\";for(c=1;c<=length($0);c+=2) r =r (substr($0,c,2) ~ /#/ ? 1 : 0); print r}'"]
-        _qrProc.running = true
+        _qrProc.run()
     }
 
-    property var _qrProc: Process {
+    // Carries Wi-Fi CREDENTIALS in stdout — bounded, stderr kept apart, and
+    // the buffer can never outlive the run.
+    BoundedProcess {
+        id: _qrProc
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { root._qrProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var raw = root._qrProc.buffer
-            root._qrProc.buffer = ""
+        maxBytes: 262144
+        onDone: function(out) {
+            var raw = out
             root.qrMatrix = []
             root.qrSsid = ""; root.qrSecurity = ""; root.qrBand = ""; root.qrPassword = ""
             if (raw.indexOf("No active Wi-Fi") !== -1 || raw.trim() === "") {
@@ -377,11 +334,14 @@ Item {
     function copyQrPassword() {
         if (qrPassword === "") { qrCopyDone(false); return }
         _copyProc.command = ["sh", "-c", "printf %s \"$1\" | wl-copy", "sh", qrPassword]
-        _copyProc.running = true
+        _copyProc.run()
     }
 
-    property var _copyProc: Process {
+    // The PSK travels as a positional parameter ($1) — never interpolated
+    // into the shell string (it can contain any character).
+    BoundedProcess {
+        id: _copyProc
         command: []
-        onExited: function(code) { root.qrCopyDone(code === 0) }
+        onDone: function(out, err, code) { root.qrCopyDone(code === 0) }
     }
 }

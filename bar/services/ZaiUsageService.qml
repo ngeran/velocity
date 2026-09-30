@@ -84,21 +84,17 @@ Item {
     // We only check existence here — the curl Process reads the file itself at
     // call time (see _pollCommand), so the secret stays out of QML/argv. This
     // just gives us a useful "not configured" error state.
-    Process {
+    BoundedProcess {
         id: keyCheck
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { keyCheck.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                root.keyConfigured = (keyCheck.buffer.trim() === "1")
-                keyCheck.buffer = ""
-                if (!root.keyConfigured) {
-                    root.hasError = true
-                    root.errorMessage = "No Z.ai API key. Put it at " + root.keyFile
-                } else {
-                    root.refresh()   // first poll immediately once we know we're configured
-                }
+        timeoutMs: 3000
+        onDone: function(out) {
+            root.keyConfigured = (out.trim() === "1")
+            if (!root.keyConfigured) {
+                root.hasError = true
+                root.errorMessage = "No Z.ai API key. Put it at " + root.keyFile
+            } else {
+                root.refresh()   // first poll immediately once we know we're configured
             }
         }
     }
@@ -106,28 +102,26 @@ Item {
     // =========================================================================
     // POLL (curl via sh -c; key read from file inside the shell)
     // =========================================================================
-    Process {
+    // External API — the hang risk BoundedProcess exists for: a stuck curl
+    // dies at the 8s timeout instead of stopping the poll cadence forever.
+    BoundedProcess {
         id: poll
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { poll.buffer += data } }
-        onRunningChanged: {
-            if (!running) {
-                root.loading = false
-                var raw = poll.buffer
-                poll.buffer = ""
-                var trimmed = (raw || "").trim()
-                if (trimmed.length === 0) return          // curl timeout / network blip → silent skip
-                try {
-                    root._handleJson(JSON.parse(trimmed))
-                } catch (e) {
-                    // don't clobber a real "unconfigured" error with a parse noise message
-                    if (root.keyConfigured) {
-                        root.hasError = true
-                        root.errorMessage = "Bad response from Z.ai"
-                    }
-                    console.warn("[ZaiUsageService] JSON parse error")
+        timeoutMs: 8000
+        maxBytes: 262144
+        onDone: function(out) {
+            root.loading = false
+            var trimmed = (out || "").trim()
+            if (trimmed.length === 0) return          // curl timeout / network blip → silent skip
+            try {
+                root._handleJson(JSON.parse(trimmed))
+            } catch (e) {
+                // don't clobber a real "unconfigured" error with a parse noise message
+                if (root.keyConfigured) {
+                    root.hasError = true
+                    root.errorMessage = "Bad response from Z.ai"
                 }
+                console.warn("[ZaiUsageService] JSON parse error")
             }
         }
     }
@@ -142,10 +136,10 @@ Item {
 
     // -------------------------------------------------------------------------
     function refresh() {
-        if (poll.running || !root.keyConfigured) return
+        if (!root.keyConfigured) return
         poll.command = root._pollCommand()
         root.loading = true
-        poll.running = true
+        poll.run()
     }
 
     // Read the key from the file (no secret in the sh -c argv), honour an env
@@ -312,6 +306,6 @@ Item {
     Component.onCompleted: {
         console.log("[ZaiUsageService] started")
         keyCheck.command = ["sh", "-c", "test -f " + root.keyFile + " && echo 1 || echo 0"]
-        keyCheck.running = true
+        keyCheck.run()
     }
 }
