@@ -56,4 +56,4 @@ for name in bar settings; do
         ok=0
     fi
 done
-[ "$ok" = 1 ] && echo "deploy-link: OK" || { echo "deploy-link: FAIL"; exit 1 }
+[ "$ok" = 1 ] && echo "deploy-link: OK" || { echo "deploy-link: FAIL"; exit 1; }
