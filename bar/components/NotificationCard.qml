@@ -63,6 +63,7 @@ Rectangle {
             border.color: card.urgencyColor
 
             Text {
+                textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                 anchors.centerIn: parent
                 text: model.glyph !== undefined && model.glyph !== ""
                       ? model.glyph : "󰂚"
@@ -91,6 +92,7 @@ Rectangle {
                 }
 
                 Text {
+                    textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: model.appName
                     color: Config.ThemeConfig.colors.textDim
                     font.pixelSize: 10
@@ -103,6 +105,7 @@ Rectangle {
                 }
 
                 Text {
+                    textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: relativeTime(model.timestamp, Services.NotificationService.now)
                     color: Config.ThemeConfig.colors.textDim
                     font.pixelSize: 10
@@ -112,6 +115,7 @@ Rectangle {
 
                 // Dismiss — revealed on card hover
                 Text {
+                    textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: "✕"
                     font.pixelSize: 11
                     font.family: Config.BarConfig.fontFamily
@@ -137,6 +141,7 @@ Rectangle {
 
             // --- summary ---
             Text {
+                textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                 visible: model.summary !== ""
                 Layout.fillWidth: true
                 text: model.summary
@@ -152,6 +157,7 @@ Rectangle {
 
             // --- body ---
             Text {
+                textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                 visible: model.body !== ""
                 Layout.fillWidth: true
                 text: model.body
