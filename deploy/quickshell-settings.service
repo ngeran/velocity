@@ -1,0 +1,16 @@
+# Velocity settings dashboard — systemd user unit.
+# See quickshell-bar.service for install + rationale. Long-lived: the settings
+# process hosts the dashboard, its IPC targets, and the theme-write stack.
+
+[Unit]
+Description=Velocity settings dashboard (Quickshell)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/quickshell -c settings
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

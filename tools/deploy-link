@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# deploy-link — put velocity at the deployed config path (idempotent).
+#
+# The whole service stack assumes velocity IS ~/.config/quickshell:
+#   • every config write lands there (settings-config.json, bar-config.json,
+#     theme cache, plugins-state.json, events.jsonl …)
+#   • `qs -c bar` / `qs -c settings` resolve to ~/.config/quickshell/{bar,settings}
+#     (PluginManagerService's plugin IPC, ThemeService's push nudge, HypridleService)
+#   • the repo doubles as the live config dir — that is the design, not a hack
+#
+# Dev mode stays available: `quickshell -p bar/shell.qml` from the repo works
+# either way; without the link the cross-process surfaces (plugin manager,
+# theme push, bar watch) degrade by design.
+#
+# Usage:
+#   tools/deploy-link            # create the symlink if absent, then verify
+#   tools/deploy-link --status   # report only, change nothing
+set -u
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TARGET="$HOME/.config/quickshell"
+status_only=0
+[[ "${1:-}" == "--status" ]] && status_only=1
+
+echo "repo:   $REPO"
+echo "target: $TARGET"
+
+if [ -L "$TARGET" ]; then
+    CUR=$(readlink -f "$TARGET")
+    if [ "$CUR" = "$REPO" ]; then
+        echo "link:   ✓ already → $CUR"
+    else
+        echo "link:   ✗ exists but → $CUR (not this repo — refusing to touch)"
+        exit 1
+    fi
+elif [ -e "$TARGET" ]; then
+    echo "link:   ✗ $TARGET is a REAL directory (not a symlink)"
+    echo "        velocity never clobbers an existing config dir."
+    echo "        Move it aside yourself if it is stale, then re-run."
+    ls -la "$TARGET" | head -8
+    exit 1
+else
+    if [ "$status_only" = 1 ]; then
+        echo "link:   ✗ absent (dev -p mode — cross-process surfaces degraded)"
+        exit 0
+    fi
+    ln -s "$REPO" "$TARGET" && echo "link:   ✓ created"
+fi
+
+# verify the two config names resolve (what -c and every `qs -c` caller use)
+ok=1
+for name in bar settings; do
+    if [ -f "$TARGET/$name/shell.qml" ]; then
+        echo "config: ✓ -c $name → $TARGET/$name/shell.qml"
+    else
+        echo "config: ✗ -c $name MISSING ($TARGET/$name/shell.qml)"
+        ok=0
+    fi
+done
+[ "$ok" = 1 ] && echo "deploy-link: OK" || { echo "deploy-link: FAIL"; exit 1 }

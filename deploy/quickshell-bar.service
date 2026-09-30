@@ -1,0 +1,25 @@
+# Velocity bar — systemd user unit.
+#
+# Install (deployed mode only — requires tools/deploy-link first):
+#   cp deploy/quickshell-*.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now quickshell-bar quickshell-settings
+#
+# What this buys: auto-restart on crash (RestartSec=3 — BarWatch's
+# "system is auto-restarting the bar" becomes literal), boot autostart with
+# the graphical session, and journal logs instead of nowhere.
+# In dev mode (`quickshell -p …`) do NOT install these — the dev-mode guard
+# in BarWatchService keeps the banner quiet instead.
+
+[Unit]
+Description=Velocity bar (Quickshell)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/quickshell -c bar
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

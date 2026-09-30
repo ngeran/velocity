@@ -126,6 +126,30 @@ Every directory has a `qmldir` file. Components/services are registered there an
 
 ---
 
+## Deployment — two modes
+
+**Deployed (the sanctioned mode):** `tools/deploy-link` symlinks
+`~/.config/quickshell` → this repo. Every service already assumes that path —
+config writes (settings-config.json, bar-config.json, theme cache,
+plugins-state.json, events.jsonl), `qs -c bar`/`-c settings` resolution
+(plugin-manager IPC, theme push nudge, hypridle), and the repo doubling as
+the live config dir. Launch with `-c`, not `-p`:
+
+    quickshell -c bar &        quickshell -c settings &
+
+Optional systemd units (`deploy/quickshell-*.service`) add crash-restart,
+boot autostart and journal logs; installing them makes BarWatch's
+systemd-unit probe real (it watches `quickshell-bar`'s MainPID).
+
+**Dev (`-p`):** `quickshell -p bar/shell.qml` from the repo works without the
+link, but the cross-process surfaces degrade BY DESIGN — the plugin manager's
+`qs -c bar` calls fail ("bad list output"), the theme push nudge can't find
+the bar, and BarWatch goes inert (devMode: no unit → no banner). Functional
+verification of those surfaces requires deployed mode.
+
+Moving between modes: stop the -p instances first (`quickshell -p` and `-c`
+instances of the same shell fight over IPC targets and layer space).
+
 ## Customisation
 
 All visual changes happen in `config/BarConfig.qml`:
