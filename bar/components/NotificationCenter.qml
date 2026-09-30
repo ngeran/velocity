@@ -250,7 +250,9 @@ PanelWindow {
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "No new notifications"
+                        text: Services.NotificationService.clearedCount > 0
+                              ? Services.NotificationService.clearedCount + " cleared — restore below"
+                              : "No new notifications"
                         color: Config.ThemeConfig.colors.textDim
                         font.pixelSize: 10
                         font.family: Config.BarConfig.fontFamily
@@ -324,11 +326,12 @@ PanelWindow {
                 }
             }
 
-            // ----- footer summary -----
+            // ----- footer summary + soft-clear restore -----
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
-                visible: Services.NotificationService.model.count > 0
+                visible: Services.NotificationService.model.count > 0 ||
+                         Services.NotificationService.clearedCount > 0
 
                 Rectangle {
                     anchors.left: parent.left; anchors.right: parent.right
@@ -341,6 +344,7 @@ PanelWindow {
                 Text {
                     anchors.left: parent.left; anchors.leftMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
+                    visible: Services.NotificationService.model.count > 0
                     text: root.unreadCount > 0
                           ? root.unreadCount + " unread · " + Services.NotificationService.model.count + " total"
                           : Services.NotificationService.model.count + " total"
@@ -348,6 +352,40 @@ PanelWindow {
                     font.pixelSize: 10
                     font.family: Config.BarConfig.fontFamily
                     opacity: 0.7
+                }
+
+                // Cleared rows are hidden, not gone — surface the undo here.
+                RowLayout {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 6
+                    visible: Services.NotificationService.clearedCount > 0
+
+                    Text {
+                        text: Services.NotificationService.clearedCount + " cleared"
+                        color: Config.ThemeConfig.colors.textDim
+                        font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily
+                        opacity: 0.7
+                    }
+                    Text {
+                        text: "RESTORE"
+                        color: restoreMa.containsMouse ? Config.ThemeConfig.colors.primary
+                                                       : Config.ThemeConfig.colors.textDim
+                        font.pixelSize: 10
+                        font.bold: true
+                        font.family: Config.BarConfig.fontFamily
+                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
+                        MouseArea {
+                            id: restoreMa
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Services.NotificationService.restoreCleared()
+                        }
+                    }
                 }
             }
         }

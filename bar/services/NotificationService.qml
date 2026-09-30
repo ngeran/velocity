@@ -41,6 +41,19 @@ Item {
 
     function clearHistory() { root.history.clear() }
 
+    // -------------------------------------------------------------------------
+    // SOFT CLEAR — clear-as-timestamp. `clear` HIDES rows (everything with
+    // timestamp <= clearedAt) instead of destroying them: rows move to
+    // clearedModel, stay on disk, keep their read-marks, and restore() brings
+    // them back. clearedAt persists in notifications.cleared (one number, ms;
+    // 0 = nothing hidden) so a cleared bar stays cleared across restarts —
+    // and a missing/garbage file fails safe: nothing hidden.
+    // -------------------------------------------------------------------------
+    property real clearedAt: 0
+    readonly property string clearedPath: "~/.config/quickshell/notifications.cleared"
+    property ListModel clearedModel: ListModel {}
+    readonly property int clearedCount: clearedModel.count
+
     // Per-app glyphs (nerd-font md icons), matched case-insensitively against
     // appName; an appIcon payload that is already a nerd glyph wins; the bell
     // is the fallback.
@@ -70,8 +83,12 @@ Item {
         onTriggered: root.now = Date.now()
     }
 
-    // Do-Not-Disturb: when on, new notifications arrive silently (read) so the
-    // badge never bumps. Persisted to ~/.config/quickshell/dnd.flag across restarts.
+    // Do-Not-Disturb: when on, new notifications arrive SILENTLY — no badge,
+    // no pulse — but the row PERSISTS (they are not marked read: read rows
+    // expire by tier, which used to destroy DnD arrivals within seconds, unseen).
+    // The silent mark is persisted per-row; rows stay badge-silent even after
+    // DnD turns off. Opening the panel marks them read like any other row.
+    // Persisted to ~/.config/quickshell/dnd.flag across restarts.
     property bool dnd: false
     property bool panelOpen: false   // set by NotificationCenter — suppresses reaping while open
     readonly property string _dndFlag: "~/.config/quickshell/dnd.flag"
@@ -83,22 +100,45 @@ Item {
     // still expire by tier once their clock ran out before the restart).
     // Restored rows get clickId=0 — the previous session's DBus action ids
     // died with it. Disk order is OLDEST-FIRST (the reader's contract).
+    // Soft-cleared rows persist on disk too — the reader routes them by
+    // timestamp vs clearedAt (see SOFT CLEAR above).
     // -------------------------------------------------------------------------
     readonly property string storePath: "~/.config/quickshell/notifications.jsonl"
     readonly property int storeMax: 200
     readonly property int storeMaxBytes: 262144   // reader input cap (256 KiB)
 
+    function _storeLine(r) {
+        return JSON.stringify({
+            id: r.id, appName: r.appName, summary: r.summary, body: r.body,
+            urgency: r.urgency, timestamp: r.timestamp,
+            read: r.read, readAt: r.readAt || 0, silent: r.silent || false
+        })
+    }
+
     function _persist() {
         var lines = []
-        for (var i = root.model.count - 1; i >= 0 && lines.length < root.storeMax; i--) {
-            var r = root.model.get(i)                       // oldest first on disk
-            lines.push(JSON.stringify({
-                id: r.id, appName: r.appName, summary: r.summary, body: r.body,
-                urgency: r.urgency, timestamp: r.timestamp,
-                read: r.read, readAt: r.readAt || 0
-            }))
-        }
+        for (var i = root.model.count - 1; i >= 0 && lines.length < root.storeMax; i--)
+            lines.push(root._storeLine(root.model.get(i)))         // oldest first on disk
+        for (var j = root.clearedModel.count - 1; j >= 0 && lines.length < root.storeMax; j--)
+            lines.push(root._storeLine(root.clearedModel.get(j)))  // visible rows win the cap
         EventService._atomicWrite(root.storePath, lines.join("\n") + "\n")
+    }
+
+    Process {   // unbounded-ok: one-shot 32-byte read, exits at EOF
+        id: _clearedReader
+        command: []
+        running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { _clearedReader.buffer += data + "\n" } }
+        onRunningChanged: if (!running) {
+            var v = parseFloat(_clearedReader.buffer.trim())
+            root.clearedAt = (isFinite(v) && v > 0) ? v : 0
+            _clearedReader.buffer = ""
+            // The store read ROUTES on clearedAt, so it starts here — not in
+            // Component.onCompleted — to keep the two async reads ordered.
+            _storeReader.command = ["sh", "-c", "head -c " + root.storeMaxBytes + " " + root.storePath + " 2>/dev/null || true"]
+            _storeReader.running = true
+        }
     }
 
     Process {   // unbounded-ok: one-shot byte-capped store read (head -c), exits at EOF
@@ -137,9 +177,13 @@ Item {
                     summary: String(d.summary || ""), body: String(d.body || ""),
                     urgency: Math.min(2, Math.max(0, Math.floor(d.urgency === undefined ? 1 : d.urgency))),
                     timestamp: d.timestamp,
-                    read: d.read === true, readAt: (typeof d.readAt === "number" && isFinite(d.readAt)) ? d.readAt : 0
+                    read: d.read === true, readAt: (typeof d.readAt === "number" && isFinite(d.readAt)) ? d.readAt : 0,
+                    silent: d.silent === true
                 }
-                root.model.insert(0, row)
+                if (row.timestamp <= root.clearedAt)
+                    root.clearedModel.insert(0, row)   // hidden by the soft clear
+                else
+                    root.model.insert(0, row)
                 restored++
                 if (row.id > maxId) maxId = row.id
             }
@@ -150,7 +194,8 @@ Item {
                              " corrupt line(s) dropped — rewriting a clean store")
                 root._persist()   // heal now, not on the next unrelated write
             }
-            console.log("[NotificationService] restored " + restored + " notifications")
+            console.log("[NotificationService] restored " + root.model.count + " notifications" +
+                        (root.clearedModel.count > 0 ? " (" + root.clearedModel.count + " cleared)" : ""))
         }
     }
 
@@ -215,7 +260,8 @@ Item {
     function _recount() {
         var n = 0
         for (var i = 0; i < root.model.count; i++) {
-            if (!root.model.get(i).read) n++
+            var r = root.model.get(i)
+            if (!r.read && !r.silent) n++   // DnD-silent arrivals never badge
         }
         root.unreadCount = n
     }
@@ -235,8 +281,9 @@ Item {
             body: body || "",
             urgency: (urgency === undefined ? 1 : urgency),
             timestamp: Date.now(),
-            read: root.dnd,   // silent (no badge bump) under Do-Not-Disturb
-            readAt: 0         // set when marked read — tier clock starts at READ
+            read: false,
+            silent: root.dnd,  // DnD arrival: badge stays quiet, row persists
+            readAt: 0          // set when marked read — tier clock starts at READ
         })
         root.nextId++
         root._recount()
@@ -293,10 +340,64 @@ Item {
         root._persist()
     }
 
+    // Soft clear: hide instead of destroy (see SOFT CLEAR above). Rows move to
+    // clearedModel with their read-marks intact; nothing is deleted, no DBus
+    // dismissal is sent (the rows may come back). A row stamped in the future
+    // (clock skew) stays visible — only pre-clear rows hide.
     function clearAll() {
-        root.model.clear()
-        root.unreadCount = 0
+        var nowMs = Date.now()
+        root.clearedAt = nowMs
+        for (var i = 0; i < root.model.count; ) {
+            var r = root.model.get(i)
+            if ((r.timestamp || 0) <= nowMs) {
+                root.clearedModel.append(root._rowCopy(r))  // copy: get() goes stale after remove
+                root.model.remove(i)
+            } else i++
+        }
+        root._recount()
         root._persist()
+        root._writeCleared()
+    }
+
+    // Undo the clear: every hidden row comes back, merged newest-first.
+    // Read-marks survive the round trip — a restored row resumes the tier
+    // clock it already had, so read rows past their tier expire again within
+    // one reaper tick, while unread and critical rows stay for good. Still-
+    // unread rows re-light the badge: the clear was soft, so is the undo.
+    // Rows are COPIED before the merge: ListModel.get() results go stale once
+    // their model is mutated (clear/removal), and a stale object appends as a
+    // row of role defaults.
+    function restoreCleared() {
+        if (root.clearedModel.count === 0) return
+        var rows = []
+        for (var i = 0; i < root.model.count; i++) rows.push(root._rowCopy(root.model.get(i)))
+        for (var j = 0; j < root.clearedModel.count; j++) rows.push(root._rowCopy(root.clearedModel.get(j)))
+        rows.sort(function(a, b) { return (b.timestamp || 0) - (a.timestamp || 0) })
+        root.model.clear()
+        for (var k = 0; k < rows.length; k++) root.model.append(rows[k])
+        root.clearedModel.clear()
+        root.clearedAt = 0
+        root._recount()
+        root._persist()
+        root._writeCleared()
+    }
+
+    function _rowCopy(r) {
+        return {
+            id: r.id, clickId: r.clickId || 0,
+            appName: String(r.appName || ""), appIcon: r.appIcon || "",
+            glyph: r.glyph || "",
+            summary: String(r.summary || ""), body: String(r.body || ""),
+            urgency: r.urgency, timestamp: r.timestamp || 0,
+            read: r.read === true, readAt: r.readAt || 0, silent: r.silent === true
+        }
+    }
+
+    function _writeCleared() {
+        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
+        w.command = ["sh", "-c", "printf '%s' '" + root.clearedAt + "' > " + root.clearedPath]
+        w.onExited.connect(function() { w.destroy() })
+        w.running = true
     }
 
     // -------------------------------------------------------------------------
@@ -315,7 +416,10 @@ Item {
             root.add(d.appName, d.summary, d.body, d.urgency, d.clickId, d.appIcon)
         }
 
-        function clear() { root.clearAll() }
+        function clear() { root.clearAll() }        // soft: hides, undo with restore()
+
+        // Bring cleared rows back (the panel footer's RESTORE does the same).
+        function restore() { root.restoreCleared() }
 
         // Inspection / scripting hooks: mark everything read and dump the model.
         function readAll() { root.markAllRead() }
@@ -329,7 +433,7 @@ Item {
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", "cat " + root._dndFlag + " 2>/dev/null || true"]
         _dndReader.running = true
-        _storeReader.command = ["sh", "-c", "head -c " + root.storeMaxBytes + " " + root.storePath + " 2>/dev/null || true"]
-        _storeReader.running = true
+        _clearedReader.command = ["sh", "-c", "cat " + root.clearedPath + " 2>/dev/null || true"]
+        _clearedReader.running = true   // chains the store read (routing needs clearedAt)
     }
 }
