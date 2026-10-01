@@ -254,6 +254,9 @@ ShellRoot {
         // `quickshell ipc` CLI subcommand, so it can't serve as a verb here.
         function open(q: string) { dashboard.searchIpcOpen(q) }
 
+        // run the query, activate the first hit (navigation end-to-end probe)
+        function activateFirst(q: string) { return dashboard.searchIpcActivateFirst(q) }
+
         function list(): string { return dashboard.searchIpcList() }
     }
 

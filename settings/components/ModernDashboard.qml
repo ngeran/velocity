@@ -72,6 +72,17 @@ Item {
         paletteInput.text = q
     }
 
+    // End-to-end search probe: run the query and activate the first hit —
+    // exercises navigation + scroll + flash without a mouse.
+    function searchIpcActivateFirst(q) {
+        var hits = Services.SearchIndex.search(q)
+        if (hits.length === 0) return "no hits"
+        searchPalette.openPalette()
+        paletteInput.text = q
+        searchPalette.activateIndex(0)
+        return "activated: " + hits[0].title
+    }
+
     function searchIpcList() {
         return "entries=" + Services.SearchIndex.entries.length + " " +
                JSON.stringify(Services.SearchIndex.entries.map(function(e) {
