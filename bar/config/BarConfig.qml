@@ -41,7 +41,7 @@ Item {
     // single "plugins" slot; their internal order comes from plugins-state.json.
     readonly property var defaultRightLayout: ["plugins", "network",
                                                "bluetooth", "volume",
-                                               "privacy", "logs",
+                                               "privacy", "logs", "settings",
                                                "notifications"]
     property var rightLayout: defaultRightLayout
     // Rail spacing that compensates for slot CONTENT: the 32px icon slots
@@ -92,7 +92,8 @@ Item {
             // unknown keys are dropped, empty falls back to the default.
             if (Array.isArray(data.rightLayout)) {
                 var legal = ["plugins", "network", "bluetooth",
-                             "volume", "privacy", "logs", "notifications"]
+                             "volume", "privacy", "logs", "settings",
+                             "notifications"]
                 var cleaned = data.rightLayout.filter(function(k) { return legal.indexOf(k) !== -1 })
                 rightLayout = cleaned.length > 0 ? cleaned : defaultRightLayout
             }

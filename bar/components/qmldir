@@ -23,3 +23,4 @@ ToggleSwitch 1.0 ToggleSwitch.qml
 StaggerIn 1.0 StaggerIn.qml
 Toggle 1.0 Toggle.qml
 Popover 1.0 Popover.qml
+SettingsIcon 1.0 SettingsIcon.qml

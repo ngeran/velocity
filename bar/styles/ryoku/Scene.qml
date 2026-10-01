@@ -237,6 +237,7 @@ Item {
                         if (modelData === "volume")        return volumeSlot
                         if (modelData === "privacy")       return privacySlot
                         if (modelData === "logs")          return logsSlot
+                        if (modelData === "settings")      return settingsSlot
                         if (modelData === "notifications") return notificationsSlot
                         return null
                     }
@@ -355,6 +356,13 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 isActive: host.ncShown
                 onCenterRequested: host.toggleNotificationCenter()
+            }
+        }
+
+        Component {
+            id: settingsSlot
+            Components.SettingsIcon {
+                Layout.alignment: Qt.AlignVCenter
             }
         }
 
