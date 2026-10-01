@@ -4,7 +4,7 @@
   "workspaceCount": 5,
   "clockCity": "Local",
   "clockOffset": 0,
-  "barStyle": "ryoku",
+  "barStyle": "vector",
   "rightLayout": [
     "plugins",
     "network",
