@@ -133,7 +133,7 @@ Item {
                 Text { visible: changed; text: "●"; color: Config.ThemeConfig.colors.warning
                     font.pixelSize: 10 }
                 Text { text: value; color: Config.ThemeConfig.colors.text
-                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 16; font.bold: true }
+                    font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 13; font.bold: true }
                 Rectangle {
                     visible: changed
                     width: resetLbl.implicitWidth + 14; height: 20
@@ -248,7 +248,9 @@ Item {
 
             ColumnLayout {
                 id: contentCol
-                width: scrollCol.width
+                // right gutter: the indicator lives there — flush-right values
+                // otherwise end UNDER it and read as clipped.
+                width: scrollCol.width - 14
                 spacing: Config.ControlConfig.space3
             }
 
