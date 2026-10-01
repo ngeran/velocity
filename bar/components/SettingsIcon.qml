@@ -53,11 +53,9 @@ Item {
             text: "\u{F0492}"   // nf-md-settings — the gear
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
-            color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.ThemeConfig.colors.primary
+            color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.BarConfig.colorText
             anchors.verticalCenter: parent.verticalCenter
-            scale: mouseArea.containsMouse ? 1.08 : 1.0
             Behavior on color { ColorAnimation { duration: 120 } }
-            Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
         Text {
             visible: root.expanded
