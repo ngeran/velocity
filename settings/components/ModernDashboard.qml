@@ -155,6 +155,12 @@ Item {
         anchors.fill: parent
         color: Config.ThemeConfig.colors.background
         radius: Config.SettingsConfig.radiusMd
+        // Border: on dark themes the card is background-on-backdrop (the dim
+        // layer is the SAME color at 0.6) — without an edge the top rounding
+        // reads as "cut off under the bar". Every inner card has a border;
+        // the shell card gets one too.
+        border.color: Config.ThemeConfig.colors.border
+        border.width: 1
         // No-op MouseArea: stops clicks on empty card areas from falling through
         // to the shell.qml dim backdrop (which would close the window).
         MouseArea { anchors.fill: parent }
