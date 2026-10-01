@@ -2,8 +2,11 @@
 // SettingsModule.qml — SETTINGS tab (rail + fixed panes, Shibumi viewport-fit)
 // =============================================================================
 // Same architecture as the Control and Core tabs: the shared SideNav (icon
-// chips, active dot, compact collapse) swaps one fixed pane per key — no
-// scrolling (§6.1). Extracted from ModernDashboard's inline ~730-line
+// chips, active dot, compact collapse) swaps one fixed pane per key. The
+// dense panes (DESKTOP, IDLE) scroll internally via ScrollColumn — they
+// hold more rows than the smallest viewport (480px card floor) can fit;
+// unclipped they used to paint outside the settings window. Extracted from
+// ModernDashboard's inline ~730-line
 // Flickable block; every write path is byte-identical:
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
 //   BAR        — bar height, workspace dots       (SettingsConfigService + saveSettings)
@@ -33,6 +36,17 @@ Item {
     }
 
     property string active: "appearance"
+
+    // Search navigation: after the pane switch, scroll the target row into
+    // view (panes wrapped in ScrollColumn). Walks ancestors for the wrapper —
+    // rows in unwrapped panes just no-op.
+    function scrollToItem(item) {
+        var p = item ? item.parent : null
+        while (p) {
+            if (p.revealItem !== undefined) { p.revealItem(item); return }
+            p = p.parent
+        }
+    }
 
     readonly property var navItems: [
         { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
@@ -210,6 +224,49 @@ Item {
             font.bold: true; font.letterSpacing: 1.5
         }
 
+        // ── ScrollColumn: clipped, wheel-scrollable card content ───────────
+        // The DESKTOP/IDLE panes hold more rows than the smallest viewport
+        // (480px card floor) can fit — unclipped, they used to PAINT OUTSIDE
+        // the settings window. The indicator is a hand-rolled 3px bar (no
+        // Controls import); revealItem() lets search navigation scroll the
+        // target row into view.
+        component ScrollColumn: Flickable {
+            id: scrollCol
+            default property alias content: contentCol.data
+            clip: true
+            contentWidth: width
+            contentHeight: contentCol.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+
+            ColumnLayout {
+                id: contentCol
+                width: scrollCol.width
+                spacing: Config.ControlConfig.space3
+            }
+
+            Rectangle {
+                visible: scrollCol.contentHeight > scrollCol.height + 1
+                anchors.right: parent.right
+                anchors.rightMargin: 2
+                width: 3
+                radius: 1.5
+                color: Config.ThemeConfig.colors.outlineVariant
+                opacity: 0.9
+                y: {
+                    var track = scrollCol.height - height - 4
+                    var frac = scrollCol.contentY / Math.max(1, scrollCol.contentHeight - scrollCol.height)
+                    return 2 + Math.max(0, Math.min(track, frac * track))
+                }
+                height: Math.max(24, scrollCol.height * (scrollCol.height / Math.max(1, scrollCol.contentHeight)) - 4)
+            }
+
+            function revealItem(item) {
+                if (!item) return
+                var y = item.mapToItem(contentCol, 0, 0).y
+                contentY = Math.max(0, Math.min(contentHeight - height, y - height / 2 + item.height / 2))
+            }
+        }
+
         // ── APPEARANCE ─────────────────────────────────────────────────
         ColumnLayout {
             anchors.fill: parent
@@ -345,8 +402,9 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ControlConfig.accent
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: Config.ControlConfig.space3
+                ScrollColumn {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
                     GroupHeader { title: "EFFECTS" }
                     HyprToggleRow { def: Services.HyprSettingsService.def("blur") }
@@ -362,8 +420,6 @@ Item {
                     HyprRow { def: Services.HyprSettingsService.def("rounding") }
                     HyprRow { def: Services.HyprSettingsService.def("activeOpacity") }
                     HyprRow { def: Services.HyprSettingsService.def("inactiveOpacity") }
-
-                    Item { Layout.fillHeight: true }
 
                     // Error footer — apply refusals surface verbatim.
                     Text {
@@ -496,8 +552,9 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ThemeConfig.colors.warning
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: Config.ControlConfig.space3
+                ScrollColumn {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
                     SettingRow {
                         label: "DIM AFTER"
@@ -567,7 +624,6 @@ Item {
                             }
                         }
                     }
-                    Item { Layout.fillHeight: true }
 
                     // Reset — one-click escape hatch
                     RowLayout {

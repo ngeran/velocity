@@ -85,6 +85,7 @@ Item {
             root.openSettingsTab()
             if (entry.section !== undefined && entry.section !== "")
                 settingsModule.active = entry.section
+            settingsModule.scrollToItem(entry.item)   // scrolled panes: bring the row into view
         } else if (tab === "control") {
             root.openControlTab(entry.section || "network")
         } else if (tab === "core") {
