@@ -112,16 +112,24 @@ Item {
             signal resetRow()
             default property alias options: optionRow.data
             spacing: Config.ControlConfig.space1
+            Layout.fillWidth: true   // span the pane; the label column is the shrinker
             Component.onCompleted: if (label !== "")
                 Services.SearchIndex.register({ title: label, tab: "settings",
                     section: section, keywords: keywords, item: this })
             Component.onDestruction: Services.SearchIndex.unregister(this)
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: label; color: Config.ThemeConfig.colors.textDim
+                // ControlRow doctrine: the text column is the ONLY party that
+                // shrinks — label elides before value/reset lose their place.
+                Text {
+                    text: label
+                    color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
-                    font.bold: true; font.letterSpacing: 1.0 }
-                Item { Layout.fillWidth: true }
+                    font.bold: true; font.letterSpacing: 1.0
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    elide: Text.ElideRight
+                }
                 Text { visible: changed; text: "●"; color: Config.ThemeConfig.colors.warning
                     font.pixelSize: 10 }
                 Text { text: value; color: Config.ThemeConfig.colors.text
