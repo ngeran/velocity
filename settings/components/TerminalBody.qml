@@ -17,6 +17,7 @@ import "../services" as Services
 Rectangle {
     id: body
     property string activeSection: "network"
+    property string netPage: "wifi"   // network section's inner page: wifi | engineer
 
     color: Config.ThemeConfig.colors.background
     radius: Config.ControlConfig.radiusCard
@@ -40,9 +41,57 @@ Rectangle {
                  : "Control"
         }
 
+        // --- NETWORK page tabs (WIFI | ENGINEER) — network section only ---
+        RowLayout {
+            visible: body.activeSection === "network"
+            Layout.fillWidth: true
+            spacing: Config.ControlConfig.space2
+
+            Repeater {
+                model: [{ key: "wifi", label: "WIFI" }, { key: "engineer", label: "ENGINEER" }]
+                delegate: Rectangle {
+                    required property var modelData
+                    required property int index
+                    Layout.preferredWidth: tabLbl.implicitWidth + 24
+                    Layout.preferredHeight: 24
+                    radius: height / 2
+                    readonly property bool on: body.netPage === modelData.key
+                    color: on ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.14) : "transparent"
+                    border.color: on ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.outlineVariant
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Text {
+                        id: tabLbl
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 9
+                        font.bold: true
+                        font.letterSpacing: 0.8
+                        color: parent.on ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: body.netPage = modelData.key
+                    }
+                }
+            }
+            Item { Layout.fillWidth: true }
+        }
+
         // --- Section views (exactly one visible; it fills the pane) ---
         WifiListView {
-            visible: body.activeSection === "network"
+            visible: body.activeSection === "network" && body.netPage === "wifi"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
+
+        NetworkEngineerView {
+            visible: body.activeSection === "network" && body.netPage === "engineer"
             Layout.fillWidth: true
             Layout.fillHeight: true
             opacity: visible ? 1 : 0

@@ -514,11 +514,174 @@ Item {
     }
 
     function refreshList(fromScan) { root._collectWifi() }
+    // -------------------------------------------------------------------------
+    // ENGINEER PANEL — link/PHY, full addressing, routes, counters, hosts
+    // (network-engineer section data; one aggregated section-gated probe)
+    // -------------------------------------------------------------------------
+    property var engLink: ({})      // {channel, freqMhz, signalDbm, chains, signalAvgDbm,
+                                    //  beaconAvgDbm, txBitrate, txMcs, rxBitrate, regDomain}
+    property var engAddr: ({})      // {v4: [], v6: [], dnsServers: [], dnsDomain: "",
+                                    //  dhcpServer: "", leaseHours: 0}
+    property var ifaceStats: ({})   // {mtu, rxBytes, rxErrors, rxDropped, txBytes, txErrors, txDropped}
+    property var engRoutes: []      // [{dst, via, dev, metric, proto}]
+    property var engNeighbors: []   // [{ip, mac, dev}]
+    property var engListeners: []   // [{proto, local}]
+    property real engRefreshedAt: 0
+
+    property bool _engBusy: false
+
+    Process {   // unbounded-ok: one-shot local probes — section-gated, 15s cadence
+        id: engProbe
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { engProbe.buffer += d + "\n" } }
+        onRunningChanged: if (!running) {
+            root._absorbEngineer(engProbe.buffer)
+            engProbe.buffer = ""
+            root._engBusy = false
+        }
+    }
+
+    function sampleEngineer() {
+        if (root._engBusy || !root._sectionVisible) return
+        var iface = root.connectionStatus.iface || ""
+        if (iface === "") return
+        root._engBusy = true
+        engProbe.command = ["sh", "-c",
+            "echo ==IW; iw dev " + iface + " link 2>/dev/null" +
+            "; echo ==STATION; iw dev " + iface + " station dump 2>/dev/null" +
+            "; echo ==REG; iw reg get 2>/dev/null | head -1" +
+            "; echo ==ADDR; ip -j addr show dev " + iface + " 2>/dev/null" +
+            "; echo ==ROUTE; ip -j route 2>/dev/null" +
+            "; echo ==STATS; ip -j -s link show dev " + iface + " 2>/dev/null" +
+            "; echo ==NEIGH; ip -j neigh 2>/dev/null" +
+            "; echo ==RESOLVE; resolvectl status " + iface + " 2>/dev/null" +
+            "; echo ==DHCP; nmcli -t -f DHCP4.OPTION device show " + iface + " 2>/dev/null" +
+            "; echo ==LISTEN; ss -H -tuln 2>/dev/null"]
+        engProbe.running = true
+    }
+
+    Timer {
+        interval: 15000
+        running: root._sectionVisible
+        repeat: true
+        onTriggered: root.sampleEngineer()
+    }
+
+    function _absorbEngineer(out) {
+        var sec = {}, order = []
+        var cur = ""
+        var lines = out.split("\n")
+        for (var i = 0; i < lines.length; i++) {
+            var L = lines[i]
+            if (L.indexOf("==") === 0) { cur = L.substring(2).trim(); sec[cur] = ""; order.push(cur); continue }
+            if (cur !== "") sec[cur] += L + "\n"
+        }
+        var link = {}, addr = {}
+        if (sec.IW !== undefined) {
+            var m
+            if ((m = /freq:\s*([\d.]+)/.exec(sec.IW))) {
+                link.freqMhz = parseFloat(m[1])
+                link.channel = Math.round(link.freqMhz < 3000 ? (link.freqMhz - 2407) / 5
+                                                              : (link.freqMhz - 5000) / 5)
+            }
+            if ((m = /signal:\s*(-?[\d.]+)\s*dBm(?:\s*\[([^\]]*)\])?/.exec(sec.IW))) {
+                link.signalDbm = parseFloat(m[1])
+                if (m[2] !== undefined) link.chains = m[2]
+            }
+            if ((m = /tx bitrate:\s*([\d.]+)\s*MBit\/s\s*(.*)/.exec(sec.IW))) {
+                link.txBitrate = m[1] + " MBit/s"
+                if (m[2] !== "") link.txMcs = m[2].trim()
+            }
+        }
+        if (sec.STATION !== undefined) {
+            if ((m = /signal avg:\s*(-?[\d.]+)\s*dBm/.exec(sec.STATION))) link.signalAvgDbm = parseFloat(m[1])
+            if ((m = /beacon signal avg:\s*(-?[\d.]+)\s*dBm/.exec(sec.STATION))) link.beaconAvgDbm = parseFloat(m[1])
+            if ((m = /rx bitrate:\s*([\d.]+)\s*MBit\/s/.exec(sec.STATION))) link.rxBitrate = m[1] + " MBit/s"
+        }
+        if (sec.REG !== undefined && sec.REG.trim() !== "") link.regDomain = sec.REG.trim()
+
+        var j = function(t) { try { return JSON.parse(sec[t]) } catch (e) { return null } }
+        if (sec.ADDR !== undefined) {
+            var aj = j("ADDR")
+            if (aj && aj[0] && aj[0].addr_info) {
+                var v4 = [], v6 = []
+                for (var a = 0; a < aj[0].addr_info.length; a++) {
+                    var ai = aj[0].addr_info[a]
+                    if (ai.scope !== "global" || !ai.local) continue
+                    var cidr = ai.local + "/" + ai.prefixlen
+                    if (ai.family === "inet6") v6.push(cidr); else v4.push(cidr)
+                }
+                addr.v4 = v4; addr.v6 = v6
+            }
+        }
+        if (sec.ROUTE !== undefined) {
+            var rj = j("ROUTE")
+            var rs = []
+            if (rj) for (var r = 0; r < rj.length; r++) {
+                var ro = rj[r]
+                rs.push({ dst: ro.dst || "default", via: ro.gateway || ro.prefsrc || "—",
+                          dev: ro.dev || "—", metric: ro.metric !== undefined ? ro.metric : "—",
+                          proto: ro.protocol || "—" })
+            }
+            rs.sort(function(a, b) { return (a.dst === "default" ? -1 : 1) - (b.dst === "default" ? -1 : 1) || a.metric - b.metric })
+            root.engRoutes = rs
+        }
+        if (sec.STATS !== undefined) {
+            var sj = j("STATS")
+            if (sj && sj[0]) {
+                var s64 = sj[0].stats64 || {}
+                root.ifaceStats = {
+                    mtu: sj[0].mtu || "—",
+                    rxBytes: (s64.rx && s64.rx.bytes) || 0, rxErrors: (s64.rx && s64.rx.errors) || 0,
+                    rxDropped: (s64.rx && s64.rx.dropped) || 0,
+                    txBytes: (s64.tx && s64.tx.bytes) || 0, txErrors: (s64.tx && s64.tx.errors) || 0,
+                    txDropped: (s64.tx && s64.tx.dropped) || 0
+                }
+            }
+        }
+        if (sec.NEIGH !== undefined) {
+            var nj = j("NEIGH")
+            var ns = []
+            if (nj) for (var n = 0; n < nj.length; n++)
+                if (nj[n].lladdr) ns.push({ ip: nj[n].dst, mac: nj[n].lladdr, dev: nj[n].dev || "—" })
+            root.engNeighbors = ns
+        }
+        if (sec.RESOLVE !== undefined) {
+            var ds = [], dm = /DNS Servers:(.*)/.exec(sec.RESOLVE)
+            if (dm) ds = dm[1].trim().split(/\s+/).filter(function(s) { return s !== "" })
+            if (ds.length === 0 && (m = /Current DNS Server:\s*(\S+)/.exec(sec.RESOLVE))) ds = [m[1]]
+            addr.dnsServers = ds
+            if ((m = /DNS Domain:\s*(.*)/.exec(sec.RESOLVE))) addr.dnsDomain = m[1].trim()
+        }
+        if (sec.DHCP !== undefined) {
+            if ((m = /dhcp_server_identifier\s*=\s*(\S+)/.exec(sec.DHCP))) addr.dhcpServer = m[1]
+            if ((m = /dhcp_lease_time\s*=\s*(\d+)/.exec(sec.DHCP))) {
+                var s = parseInt(m[1], 10)
+                addr.leaseHours = Math.round(s / 360) / 10   // hours, 1dp
+            }
+        }
+        if (sec.LISTEN !== undefined) {
+            var ls = []
+            var ll = sec.LISTEN.split("\n")
+            for (var p = 0; p < ll.length; p++) {
+                var parts = ll[p].trim().split(/\s+/)
+                if (parts.length >= 5 && (parts[0] === "tcp" || parts[0] === "udp"))
+                    ls.push({ proto: parts[0], local: parts[4] })
+            }
+            root.engListeners = ls
+        }
+        root.engLink = link
+        root.engAddr = addr
+        root.engRefreshedAt = Date.now()
+    }
+
     function refreshStatus() {
         root._syncNativeStatus()
         root._collectWifi()
         root._sampleLink()
         root.detectDns()
+        root.sampleEngineer()
     }
 
     // -------------------------------------------------------------------------
