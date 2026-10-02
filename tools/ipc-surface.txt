@@ -79,3 +79,4 @@ wallpaper-service.getTransition   manual    # transition style (scripting)
 wallpaper-service.getWallpaperDir manual    # wallpaper dir (scripting)
 wallpaper-service.refreshList     manual    # rescan the wallpaper dir
 wallpaper-service.setCyclingEnabled manual  # cycle on/off (scripting)
+display.selftest                  manual    # synthetic twin-EDID keying assertions

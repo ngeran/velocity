@@ -15,7 +15,10 @@
 // CABLE-PROOF RULES (verified 2026-09-30 live: desc-keyed eval → ok + readback):
 //   Every rule is keyed `output = 'desc:<EDID description>'`, not by connector
 //   name — the name (HDMI-A-1) changes when the cable moves ports; the desc
-//   follows the physical display. Reload reverts eval'd values to the config
+//   follows the physical display. EXCEPTION (twin-EDID guard): two live units
+//   sharing one desc would both be driven by the same rule — those fall back
+//   to port-name keys (unique but cable-fragile) and the UI warns.
+//   Reload reverts eval'd values to the config
 //   file → persistence goes through stageToNix(): it splices a velocity-managed
 //   block into ~/.config/hypr/monitors.lua (omarchy's file — everything outside
 //   the markers is untouched), one FULL desc-keyed rule per display. Rules for
@@ -116,14 +119,35 @@ Item {
         id: monProc
         command: ["hyprctl", "monitors", "-j"]
         property string buffer: ""
+        property bool stale: false   // an apply landed while this poll was in flight
         stdout: SplitParser { onRead: function(data) { monProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {
-                root.monitors = root._parseMonitors(monProc.buffer)
+                // Stale-poll guard (hyprmoncfg pattern): a poll that started
+                // BEFORE a rule applied carries pre-apply readback — discarding
+                // it and re-reading beats letting persistState/transiently lie.
+                if (monProc.stale) {
+                    monProc.stale = false
+                    monProc.buffer = ""   // discard wholesale — leftover JSON would concatenate into the next read
+                    root.refresh()
+                    return
+                }
+                var arr = root._parseMonitors(monProc.buffer)
                 monProc.buffer = ""
+                // Topology signature: an identical readback (the common 10s
+                // case) must not churn the model + every binding attached to it.
+                var sig = JSON.stringify(arr)
+                if (sig !== root._monSig) {
+                    root._monSig = sig
+                    root.monitors = arr
+                }
+                root._recomputeDescCollisions(arr)
             }
         }
     }
+
+    // JSON of the last parsed topology — the churn guard above.
+    property string _monSig: ""
 
     Timer {
         interval: 10000
@@ -144,7 +168,67 @@ Item {
         }
     }
 
-    function refresh() { if (!monProc.running) monProc.running = true }
+    function refresh() {
+        if (monProc.running) {
+            monProc.stale = true   // in-flight poll predates whatever just changed
+            return
+        }
+        monProc.running = true
+    }
+
+    // ── TWIN-EDID GUARD ─────────────────────────────────────────────────────
+    // Two identical displays share one EDID desc — a desc-keyed rule would
+    // drive BOTH units. Those fall back to the port name (unique, but
+    // cable-fragile); the UI warns. Unique descs stay desc-keyed.
+    property var _descCollision: ({})
+    readonly property bool identityCollided: Object.keys(_descCollision).length > 0
+
+    function _recomputeDescCollisions(arr) {
+        var counts = {}, dup = {}
+        for (var i = 0; i < arr.length; i++)
+            counts[arr[i].desc] = (counts[arr[i].desc] || 0) + 1
+        for (var d in counts) if (counts[d] > 1) dup[d] = true
+        root._descCollision = dup
+    }
+
+    // The store key a display is addressed by.
+    function _outputKeyFor(p) {
+        return root._descCollision[p.desc] ? p.name : "desc:" + p.desc
+    }
+
+    // Synthetic-data proof of the wiring (no dual-monitor hardware needed):
+    // display.selftest IPC asserts collision detection, keying, rule output
+    // and stored-rule matching against a fake topology.
+    function selfTest() {
+        var fails = []
+        var base = { scale: 1, format: "XRGB8888", refreshHz: 60, w: 1920, h: 1080,
+                     x: 0, y: 0, transform: 0, colorPreset: "", sdrBrightness: 1,
+                     sdrSaturation: 1, sdrMinLuminance: 0.2, sdrMaxLuminance: 80 }
+        var twin = function(name) {
+            var o = JSON.parse(JSON.stringify(base)); o.name = name
+            o.desc = "Same Corp SameScreen 111"; return o
+        }
+        var fake = [twin("DP-1"), twin("DP-2"),
+                    JSON.parse(JSON.stringify(base))]
+        fake[2].name = "HDMI-A-1"; fake[2].desc = "Other Corp OtherScreen 222"
+
+        root._recomputeDescCollisions(fake)
+        if (!root._descCollision["Same Corp SameScreen 111"]) fails.push("collision not detected")
+        if (root._descCollision["Other Corp OtherScreen 222"]) fails.push("false collision")
+        if (root._outputKeyFor(fake[0]) !== "DP-1") fails.push("twin not name-keyed")
+        if (root._outputKeyFor(fake[2]) !== "desc:Other Corp OtherScreen 222") fails.push("unique not desc-keyed")
+        if (root.ruleFor(fake[0], {}).indexOf("output = 'DP-1'") === -1) fails.push("twin rule not name-keyed")
+        if (root.ruleFor(fake[2], {}).indexOf("output = 'desc:Other Corp OtherScreen 222'") === -1) fails.push("unique rule not desc-keyed")
+        if (root._ruleOut(root.ruleFor(fake[0], {})) !== "DP-1") fails.push("_ruleOut name")
+        if (root._ruleOut(root.ruleFor(fake[2], {})) !== "desc:Other Corp OtherScreen 222") fails.push("_ruleOut desc")
+        // a stored twin rule must match its unit by NAME, not by desc
+        var storedLine = "hl.monitor({ output = 'DP-2', mode = '1920x1080@60', position = '0x0', scale = 1, bitdepth = 8, vrr = 2 })"
+        if (root._ruleOut(storedLine) !== "DP-2") fails.push("stored name rule unparsed")
+        if (root._ruleDesc(storedLine) !== "") fails.push("name rule misread as desc-keyed")
+
+        root._recomputeDescCollisions(root.monitors)   // restore the live topology
+        return fails.length === 0 ? "PASS" : "FAIL: " + fails.join("; ")
+    }
 
     // -------------------------------------------------------------------------
     // RULE BUILDER — full hl.monitor rule from live state + overrides
@@ -178,7 +262,7 @@ Item {
         var bd = o.bitdepth !== undefined ? o.bitdepth : _bitdepthOf(p)
         var vrr = o.vrr !== undefined ? o.vrr : vrrMode
         var pos = p.x + "x" + p.y
-        var s = "hl.monitor({ output = 'desc:" + p.desc + "', mode = '" + mode
+        var s = "hl.monitor({ output = '" + root._outputKeyFor(p) + "', mode = '" + mode
               + "', position = '" + pos + "', scale = " + scale
               + ", bitdepth = " + bd + ", vrr = " + vrr
         // transform only when rotated (or explicitly requested) — never emit
@@ -380,6 +464,13 @@ Item {
         return m ? m[1] : ""
     }
 
+    // The full output token a stored rule addresses: 'desc:…' or a port name
+    // (twin-EDID fallback). Matching is by token, never by desc alone.
+    function _ruleOut(ruleLine) {
+        var m = /output = '([^']*)'/.exec(ruleLine)
+        return m ? m[1] : ""
+    }
+
     function _storedAttr(ruleLine, name) {
         // attr values come in both quote styles (mode/cm single-quoted, the
         // omarchy template uses double quotes) — strip either.
@@ -392,9 +483,10 @@ Item {
     function _seedFromStore() {
         var inner = _managedInner(storeText)
         var stored = _storedRules(inner)
-        var desc = primary ? primary.desc : ""
+        var p = primary
+        var want = p ? root._outputKeyFor(p) : ""
         for (var i = 0; i < stored.length; i++) {
-            if (_ruleDesc(stored[i]) !== desc && desc !== "") continue
+            if (want !== "" && _ruleOut(stored[i]) !== want) continue
             var m = /vrr\s*=\s*(\d)/.exec(stored[i])
             if (m) { vrrMode = parseInt(m[1], 10); break }
         }
@@ -412,7 +504,7 @@ Item {
             var m = ms[i]
             var rule = ""
             for (var j = 0; j < stored.length; j++)
-                if (_ruleDesc(stored[j]) === m.desc) { rule = stored[j]; break }
+                if (_ruleOut(stored[j]) === root._outputKeyFor(m)) { rule = stored[j]; break }
             if (rule === "" || _storedAttr(rule, "mode") !== _trimModeHz(currentModeStringFor(m)) ||
                 _storedAttr(rule, "scale") !== String(m.scale) ||
                 _storedAttr(rule, "bitdepth") !== String(_bitdepthOf(m)) ||
@@ -505,15 +597,16 @@ Item {
         var stored = _storedRules(inner)
 
         // Fresh rules for every live display; keep stored rules for displays
-        // that are absent right now (remember-absent).
-        var liveDescs = {}
+        // that are absent right now (remember-absent — both desc-keyed and
+        // twin-fallback name-keyed rules preserve).
+        var liveKeys = {}
         var lines = []
         for (var i = 0; i < ms.length; i++) {
-            liveDescs[ms[i].desc] = true
+            liveKeys[root._outputKeyFor(ms[i])] = true
             lines.push("    " + ruleFor(ms[i], {}))
         }
         for (var j = 0; j < stored.length; j++)
-            if (!liveDescs[_ruleDesc(stored[j])]) lines.push("    " + stored[j])
+            if (!liveKeys[_ruleOut(stored[j])]) lines.push("    " + stored[j])
 
         var block = root.blockBegin + "\n" + lines.join("\n") + "\n" + root.blockEnd
         var newText

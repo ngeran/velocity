@@ -198,6 +198,11 @@ ColumnLayout {
                 out.push({ text: Services.MonitorService.monitors.length + " DISPLAY" +
                            (Services.MonitorService.monitors.length !== 1 ? "S" : "") + " ACTIVE",
                            color: Config.ThemeConfig.colors.success })
+            // Twin-EDID: identical units share a desc — their rules are keyed
+            // by port (unique but cable-fragile) and the user should know.
+            if (Services.MonitorService.identityCollided)
+                out.push({ text: "IDENTICAL DISPLAYS · KEYED BY PORT",
+                           color: Config.ThemeConfig.colors.warning })
             out.push(Services.MonitorService.persistState === "dirty"
                      ? { text: "UNSTAGED CHANGES", color: Config.ThemeConfig.colors.warning }
                      : { text: "STAGED · CABLE-PROOF", color: Config.ThemeConfig.colors.success })

@@ -23,6 +23,8 @@ IpcHandler {
             monitors: ms.length,
             "target": t ? t.name : "",   // quoted: a bare `target:` here re-triggers the ipc extractor
             targetDesc: t ? t.desc : "",
+            stagedKey: t ? Services.MonitorService._outputKeyFor(t) : "",
+            identityCollided: Services.MonitorService.identityCollided,
             persistState: Services.MonitorService.persistState,
             vrrMode: Services.MonitorService.vrrMode,
             live: t ? { mode: Services.MonitorService.currentModeString(),
@@ -38,5 +40,11 @@ IpcHandler {
     function refresh(): string {
         Services.MonitorService.refresh()
         return "polling"
+    }
+
+    // Synthetic-topology assertions for the twin-EDID keying (no dual-display
+    // hardware required). Returns PASS or the failing list.
+    function selftest(): string {
+        return Services.MonitorService.selfTest()
     }
 }
