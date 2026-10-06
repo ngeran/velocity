@@ -33,6 +33,7 @@ import "../config" as Config
 import "NetworkControlModel.js" as Model
 import "History.js" as History
 import "../lib/netparse.mjs" as Netparse
+import "../lib/netstats.mjs" as NetStats
 
 Item {
     id: root
@@ -146,13 +147,26 @@ Item {
         trafficProc.running = true
     }
 
-    // ── LINK QUALITY MONITOR — gated 1-of-1 ping (5s) while the section is on
-    // screen and a link is up. Gives the telemetry card latency / jitter (EMA
-    // of |Δ|) / loss (failures in the last 20 probes). -1 latency = unknown.
+    // ── LINK QUALITY MONITOR — TWO LEGS (math: ../lib/netstats.mjs, nexthop-
+    // derived). 5s cadence while the section is on screen and a link is up:
+    // one ping to the internet anchor, then one to the gateway. Each leg folds
+    // into percentiles + IPDV jitter + loss over the last 20 probes; gateway
+    // samples pair with internet samples of the same tick into the WAN leg
+    // (internet minus gateway, with the inversion refusal — a gateway
+    // answering slower than the internet behind it yields "unknown", never a
+    // clamped 0.0 ms). latencyMs/jitterMs/lossPct stay as the WAN-leg aliases
+    // WifiListView binds.
+    property var _wanSamples: []    // last 20 {ok, rtt} — internet anchor
+    property var _localSamples: []  // last 20 {ok, rtt} — gateway
+    property var _wanLegPoints: []  // last 20 valid paired WAN points (ms)
+    property var wanFold: null
+    property var localFold: null
+    property var wanLegFold: null
+    property real wanLegMs: -1      // latest paired WAN point
+    property string wanLegNote: ""  // why the WAN leg is unknown ("" = known)
     property real latencyMs: -1
     property real jitterMs: 0
     property real lossPct: 0
-    property var _pingResults: []   // last 20 booleans
 
     Timer {
         id: pingTimer
@@ -171,18 +185,63 @@ Item {
         onRunningChanged: {
             if (running) return
             var m = pingProc.buffer.match(/time=([\d.]+)/)
-            if (m) {
-                var v = parseFloat(m[1])
-                if (root.latencyMs >= 0)
-                    root.jitterMs = root.jitterMs * 0.7 + Math.abs(v - root.latencyMs) * 0.3
-                root.latencyMs = v
-            }
-            root._pingResults = root._pingResults.concat([m !== null]).slice(-20)
-            var fails = 0
-            for (var i = 0; i < root._pingResults.length; i++) if (!root._pingResults[i]) fails++
-            root.lossPct = root._pingResults.length ? fails / root._pingResults.length * 100 : 0
+            root._wanSamples = root._wanSamples.concat(
+                [{ ok: m !== null, rtt: m !== null ? parseFloat(m[1]) : null }]).slice(-20)
             pingProc.buffer = ""
+            var gw = root.connectionStatus.gateway
+            if (gw !== "") {
+                gwProc.command = ["ping", "-c", "1", "-W", "1", gw]
+                gwProc.running = true
+            } else {
+                root.wanLegNote = "gateway unknown"
+            }
+            root._refold()
         }
+    }
+
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+        id: gwProc
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { gwProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var m = gwProc.buffer.match(/time=([\d.]+)/)
+            root._localSamples = root._localSamples.concat(
+                [{ ok: m !== null, rtt: m !== null ? parseFloat(m[1]) : null }]).slice(-20)
+            gwProc.buffer = ""
+            root._refold()
+            root._pairLatest()   // gateway sample completes the tick's pair
+        }
+    }
+
+    function _refold() {
+        root.wanFold = NetStats.fold(root._wanSamples)
+        root.localFold = NetStats.fold(root._localSamples)
+        var last = root.wanFold && root.wanFold.ok > 0 ? root._wanSamples[root._wanSamples.length - 1] : null
+        root.latencyMs = last && last.ok ? last.rtt : -1
+        root.jitterMs = root.wanFold ? root.wanFold.jitter : 0
+        root.lossPct = root.wanFold ? root.wanFold.lossPct : 0
+    }
+
+    // Pair the newest tick: wan sample N with gateway sample N. Only the
+    // gateway completion pairs — the internet probe of a tick always lands
+    // first, so lengths align exactly there.
+    function _pairLatest() {
+        var n = Math.min(root._wanSamples.length, root._localSamples.length)
+        if (n === 0) { root.wanLegNote = "sampling…" ; return }
+        var t = root._wanSamples[n - 1], l = root._localSamples[n - 1]
+        if (!t.ok) { root.wanLegNote = "internet probe lost"; return }
+        if (!l.ok) { root.wanLegNote = "gateway unreachable"; return }
+        var pt = NetStats.wanPoint(t.rtt, l.rtt)
+        if (pt === null) {
+            root.wanLegNote = "unknown — gateway answers slower than the internet (routers often deprioritize ICMP)"
+            return
+        }
+        root.wanLegMs = pt
+        root.wanLegNote = ""
+        root._wanLegPoints = root._wanLegPoints.concat([pt]).slice(-20)
+        root.wanLegFold = NetStats.fold(root._wanLegPoints.map(function(v) { return { ok: true, rtt: v } }))
     }
 
     // -------------------------------------------------------------------------
@@ -598,6 +657,16 @@ Item {
             if ((m = /signal avg:\s*(-?[\d.]+)\s*dBm/.exec(sec.STATION))) link.signalAvgDbm = parseFloat(m[1])
             if ((m = /beacon signal avg:\s*(-?[\d.]+)\s*dBm/.exec(sec.STATION))) link.beaconAvgDbm = parseFloat(m[1])
             if ((m = /rx bitrate:\s*([\d.]+)\s*MBit\/s/.exec(sec.STATION))) link.rxBitrate = m[1] + " MBit/s"
+            // airtime-health counters (nexthop-derived): "full signal bar,
+            // slow Wi-Fi" usually lives here, not in the signal number
+            if ((m = /tx retries:\s*(\d+)/.exec(sec.STATION))) link.txRetries = parseInt(m[1], 10)
+            if ((m = /tx failed:\s*(\d+)/.exec(sec.STATION))) link.txFailed = parseInt(m[1], 10)
+            if ((m = /beacon loss:\s*(\d+)/.exec(sec.STATION))) link.beaconLoss = parseInt(m[1], 10)
+            if ((m = /rx drop(?:ped)? misc:\s*(\d+)/.exec(sec.STATION))) link.rxDropMisc = parseInt(m[1], 10)
+            if ((m = /tx packets:\s*(\d+)/.exec(sec.STATION))) link.txPackets = parseInt(m[1], 10)
+            if (link.txRetries !== undefined && link.txPackets !== undefined
+                && (link.txPackets + link.txRetries) > 0)
+                link.retryPct = Math.round(link.txRetries / (link.txPackets + link.txRetries) * 1000) / 10
         }
         if (sec.REG !== undefined && sec.REG.trim() !== "") link.regDomain = sec.REG.trim()
 

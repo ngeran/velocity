@@ -83,6 +83,46 @@ Item {
                 width: scroll.width - 14   // right gutter keeps rows clear of the indicator
                 spacing: Config.ControlConfig.space3
 
+                // ── LATENCY — TWO LEGS ─────────────────────────────────
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.ControlConfig.space1
+                    SectionHeader { Layout.fillWidth: true; title: "LATENCY — TWO LEGS (LAST 20 PROBES / LEG)" }
+                    InfoStatRow {
+                        Layout.fillWidth: true
+                        label: "INTERNET (1.1.1.1)"
+                        value: svc.wanFold && svc.wanFold.p75 !== null
+                               ? "typ " + svc.wanFold.p75 + " ms · best " + svc.wanFold.p50 + " / worst " + svc.wanFold.p95
+                               : "—"
+                    }
+                    InfoStatRow {
+                        Layout.fillWidth: true
+                        label: "LOSS · JITTER (WAN)"
+                        value: svc.wanFold ? svc.wanFold.lossPct + "%  ·  " + svc.wanFold.jitter + " ms IPDV" : "—"
+                        accentValue: svc.wanFold && svc.wanFold.lossPct > 0
+                    }
+                    InfoStatRow {
+                        Layout.fillWidth: true
+                        label: "GATEWAY (" + (svc.connectionStatus.gateway || "—") + ")"
+                        value: svc.localFold && svc.localFold.p75 !== null
+                               ? "typ " + svc.localFold.p75 + " ms · best " + svc.localFold.p50 + " / worst " + svc.localFold.p95
+                               : "—"
+                    }
+                    InfoStatRow {
+                        Layout.fillWidth: true
+                        label: "WAN LEG (PAST ROUTER)"
+                        value: svc.wanLegMs >= 0 ? "≈ " + svc.wanLegMs + " ms"
+                               : (svc.wanLegNote !== "" ? svc.wanLegNote : "—")
+                        accentValue: svc.wanLegMs >= 0
+                    }
+                    InfoStatRow {
+                        Layout.fillWidth: true
+                        label: "FELT LATENCY (WAN)"
+                        value: svc.wanFold && svc.wanFold.felt !== null ? svc.wanFold.felt + " ms" : "—"
+                        accentValue: true
+                    }
+                }
+
                 // ── LINK & PHY ─────────────────────────────────────────
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -100,6 +140,18 @@ Item {
                         value: svc.engLink.txBitrate ? svc.engLink.txBitrate + (svc.engLink.txMcs ? "  ·  " + svc.engLink.txMcs : "") : "—" }
                     InfoStatRow { Layout.fillWidth: true; label: "RX RATE"
                         value: svc.engLink.rxBitrate || "—" }
+                    InfoStatRow { Layout.fillWidth: true; label: "TX RETRIES"
+                        value: svc.engLink.txRetries !== undefined ? String(svc.engLink.txRetries) : "—"
+                        accentValue: svc.engLink.retryPct !== undefined && svc.engLink.retryPct > 5 }
+                    InfoStatRow { Layout.fillWidth: true; label: "TX FAILED"
+                        value: svc.engLink.txFailed !== undefined ? String(svc.engLink.txFailed) : "—"
+                        accentValue: svc.engLink.txFailed > 0 }
+                    InfoStatRow { Layout.fillWidth: true; label: "BEACON LOSS"
+                        value: svc.engLink.beaconLoss !== undefined ? String(svc.engLink.beaconLoss) : "—"
+                        accentValue: svc.engLink.beaconLoss > 0 }
+                    InfoStatRow { Layout.fillWidth: true; label: "RETRY RATE"
+                        value: svc.engLink.retryPct !== undefined ? svc.engLink.retryPct + "%" : "—"
+                        accentValue: svc.engLink.retryPct !== undefined && svc.engLink.retryPct > 5 }
                     InfoStatRow { Layout.fillWidth: true; label: "REG DOMAIN"; value: svc.engLink.regDomain || "—" }
                     InfoStatRow { Layout.fillWidth: true; label: "MTU"; value: svc.ifaceStats.mtu !== undefined ? String(svc.ifaceStats.mtu) : "—" }
                 }
