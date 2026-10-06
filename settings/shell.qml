@@ -115,6 +115,9 @@ ShellRoot {
     // the "../services" MonitorService instance, not this file's twin.
     Components.DisplayIpc { }
 
+    // Network-section IPC (latency/engineer probes) — same instance trap.
+    Components.NetworkIpc { }
+
     // =========================================================================
     // IPC HANDLER — toggle window visibility from other instances (e.g. bar)
     // =========================================================================

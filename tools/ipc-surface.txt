@@ -80,3 +80,5 @@ wallpaper-service.getWallpaperDir manual    # wallpaper dir (scripting)
 wallpaper-service.refreshList     manual    # rescan the wallpaper dir
 wallpaper-service.setCyclingEnabled manual  # cycle on/off (scripting)
 display.selftest                  manual    # synthetic twin-EDID keying assertions
+network.latency                  manual    # two-leg latency folds (scripting/truth probes)
+network.engineer                 manual    # engineer-pane snapshot (link/addr/routes/...)

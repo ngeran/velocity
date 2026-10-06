@@ -58,3 +58,4 @@ ToggleSwitch 1.0 ToggleSwitch.qml
 ConfirmDialog 1.0 ConfirmDialog.qml
 DisplayIpc 1.0 DisplayIpc.qml
 NetworkEngineerView 1.0 NetworkEngineerView.qml
+NetworkIpc 1.0 NetworkIpc.qml
