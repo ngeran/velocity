@@ -322,8 +322,12 @@ ShellRoot {
     // Repeater needs an Item parent to insert into (same reason the service
     // plugins block wraps its own) — a bare Repeater under ShellRoot is
     // silently inert.
+    // Zero-size non-visual parent (Repeater needs an Item). NO visible:false —
+    // Quickshell windows created in an invisible subtree stay unmapped, which
+    // hid xray-style overlay windows entirely.
     Item {
-        visible: false
+        width: 0
+        height: 0
         Repeater {
             model: Services.PluginHostService.overlayPlugins
 

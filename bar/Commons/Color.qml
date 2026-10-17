@@ -9,4 +9,11 @@ QtObject {
     readonly property color success: Theme.colors.success
     readonly property color warning: Theme.colors.warning
     readonly property color error: Theme.colors.error
+    readonly property color muted: Theme.colors.textDim
+    readonly property color urgent: Theme.colors.error
+    readonly property QtObject menu: QtObject {
+        readonly property color background: Theme.colors.surface
+        readonly property color text: Theme.colors.text
+        readonly property color selectedBackground: Theme.colors.surfaceVariant
+    }
 }

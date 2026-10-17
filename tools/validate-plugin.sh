@@ -38,7 +38,7 @@ if (m.id && m.id.startsWith("omarchy.")) errs.push("id omarchy.* is reserved");
 if (typeof m.name !== "string" || !m.name) errs.push("name missing");
 if (m.version === undefined) errs.push("version missing");
 if (!Array.isArray(m.kinds) || m.kinds.length === 0) errs.push("kinds missing");
-const legal = ["bar-widget", "service"];
+const legal = ["bar-widget", "service", "overlay"];
 for (const k of (m.kinds || [])) {
     if (!legal.includes(k)) { errs.push("unsupported kind: " + k); continue; }
     const key = k === "bar-widget" ? "barWidget" : k;
