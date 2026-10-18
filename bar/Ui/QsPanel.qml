@@ -3,7 +3,7 @@
 // =============================================================================
 // Full-screen transparent overlay window. Derived plugin files extend this
 // (`Panel { ... }` after the import rewrite) and place their own card
-// (usually compat KeyboardPanel) inside. Provides the API surface their
+// inside. Provides the API surface their
 // bodies reference: opened, open/close/toggle, controller{show,hide},
 // setting(key, default), fittedContentWidth/Height, bar identity.
 // The backdrop closes the panel on click-outside.

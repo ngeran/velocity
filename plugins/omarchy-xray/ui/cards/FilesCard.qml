@@ -55,11 +55,12 @@ Card {
         EvidenceTableHeader {
             width: parent.width
             theme: root.theme
+            // ACCESS needs ~54px for "DELETED"; at 0.14 of this card it elided.
             columns: [
-                {"text": "FD", "width": 0.08},
-                {"text": "PATH / ENDPOINT", "width": 0.64},
-                {"text": "KIND", "width": 0.14},
-                {"text": "ACCESS", "width": 0.14}
+                {"text": "FD", "width": 0.10},
+                {"text": "PATH / ENDPOINT", "width": 0.52},
+                {"text": "KIND", "width": 0.16},
+                {"text": "ACCESS", "width": 0.22}
             ]
         }
 
@@ -73,10 +74,10 @@ Card {
                 width: parent.width
                 theme: root.theme
                 cells: [
-                    {"width": 0.08, "text": modelData.fd === undefined || modelData.fd === null ? "" : String(modelData.fd), "color": root.theme.muted},
-                    {"width": 0.64, "text": modelData.target || "Descriptor", "color": modelData.deleted ? root.theme.danger : root.theme.text, "elide": Text.ElideMiddle},
-                    {"width": 0.14, "text": modelData.kind || "", "color": root.theme.muted},
-                    {"width": 0.14, "text": modelData.deleted ? "DELETED" : String(modelData.mode || ""), "color": modelData.deleted ? root.theme.danger : root.accentColor, "fontSize": root.theme.microFontSize}
+                    {"width": 0.10, "text": modelData.fd === undefined || modelData.fd === null ? "" : String(modelData.fd), "color": root.theme.muted},
+                    {"width": 0.52, "text": modelData.target || "Descriptor", "color": modelData.deleted ? root.theme.danger : root.theme.text, "elide": Text.ElideMiddle},
+                    {"width": 0.16, "text": modelData.kind || "", "color": root.theme.muted},
+                    {"width": 0.22, "text": modelData.deleted ? "DELETED" : String(modelData.mode || ""), "color": modelData.deleted ? root.theme.danger : root.accentColor, "fontSize": root.theme.microFontSize}
                 ]
             }
         }

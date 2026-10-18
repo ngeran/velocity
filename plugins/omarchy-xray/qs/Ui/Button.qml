@@ -23,7 +23,13 @@ Rectangle {
     border.width: (bordered || activeFocus || selected) ? 1 : 0
     border.color: selected ? accent : Qt.rgba(foreground.r, foreground.g, foreground.b, 0.16)
     Behavior on color { ColorAnimation { duration: 90 } }
+    // Report a real size: this is a plain Rectangle, and layouts size children
+    // by implicitWidth — without these every button in a RowLayout collapses
+    // to width 0 and its centered label spills over its neighbours.
+    implicitWidth: label.implicitWidth + 2 * horizontalPadding
+    implicitHeight: label.implicitHeight + 2 * verticalPadding
     Text {
+        id: label
         anchors.verticalCenter: parent.verticalCenter
         x: root.leftAlign ? root.horizontalPadding : (parent.width - width) / 2
         text: root.text !== "" ? root.text : root.iconText

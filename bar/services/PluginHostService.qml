@@ -65,6 +65,13 @@ Item {
     signal compatHideRequested(string id)
     function requestTogglePanel(id) { togglePanelRequested(id) }
     function requestRefreshPanel(id) { refreshPanelRequested(id) }
+    // Converted bar-widget compat verbs (vendored qs/Ui/BarWidget.qml shells
+    // call these): summon routes through compatSummonRequested → host
+    // _summonAny, which covers widget plugins AND overlay plugins with one
+    // verb (a widget without open() falls through to the overlay registry —
+    // the xray launcher contract).
+    function requestSummon(id, payload) { compatSummonRequested(id, payload || "{}") }
+    function requestHide(id) { compatHideRequested(id) }
 
     // Stable API surface injected into every plugin root as `api`.
     // hypr = the bar's ONE socket2 owner — plugins subscribe to its events

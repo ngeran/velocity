@@ -7,10 +7,10 @@ BarWidget {
     id: root
     objectName: "xrayBarWidget"
 
-    XRayContract { id: contract }
     XRayTheme { id: theme }
 
-    moduleName: contract.pluginId
+    // moduleName comes from the vendored base, which defaults it to the
+    // host-injected pluginId (manifest id) — see qs/Ui/BarWidget.qml.
     implicitWidth: launcher.implicitWidth
     implicitHeight: launcher.implicitHeight
 
@@ -21,7 +21,9 @@ BarWidget {
         anchors.fill: parent
         bar: root.bar
         text: Format.icon("xray")
+        label: "X-RAY"                     // hover-reveal, like NET / VOL / EN
         fontFamily: theme.dataFont
+        fontPixelSize: 14                  // = BarConfig.fontSizeIcon (house tray glyphs)
         tooltipText: "Trace system activity"
         onPressed: function(button) {
             if (!root.bar || !root.bar.shell)

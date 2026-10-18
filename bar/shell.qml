@@ -544,6 +544,27 @@ ShellRoot {
             if (it && it.cycle) it.cycle()
             else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
         }
+        function prev() {
+            var it = shellRoot.pluginItems["nikos.keyboard"]
+            if (it && it.prev) it.prev()
+            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
+        }
+        function set(argument: string): string {
+            // index ("1"), layout ("gr") or spec ("gr(polytonic)")
+            var it = shellRoot.pluginItems["nikos.keyboard"]
+            if (it && it.setLayout) { it.setLayout(argument); return "ok" }
+            console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
+            return "unavailable"
+        }
+        function status(): string {
+            var it = shellRoot.pluginItems["nikos.keyboard"]
+            return it && it.statusJson ? it.statusJson() : "{}"
+        }
+        function open() {
+            var it = shellRoot.pluginItems["nikos.keyboard"]
+            if (it && it.toggle) it.toggle()
+            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
+        }
     }
 
     // Timezone tray card toggle (IPC-verifiable; bindable to a key if wanted)

@@ -17,8 +17,8 @@ Card {
     readonly property var rows: ProcessEvidence.sort(sourceRows, sortKey, descending)
     readonly property int selectedPid: Number((snapshot.target || {}).ownerPid || 0)
     readonly property var columns: [
-        {"key": "tree", "text": "PROGRAM / ST", "width": 0.19},
-        {"key": "command", "text": "COMMAND", "width": 0.305},
+        {"key": "tree", "text": "PROGRAM / ST", "width": 0.21},
+        {"key": "command", "text": "COMMAND", "width": 0.285},
         {"key": "pid", "text": "PID", "width": 0.09, "right": true},
         {"key": "user", "text": "USER", "width": 0.09},
         {"key": "threads", "text": "THR", "width": 0.065, "right": true},

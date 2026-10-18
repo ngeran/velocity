@@ -7,12 +7,12 @@
 # requires zero runner changes. Exit 1 on the first failing suite (or run all
 # and report; here: run all, report, exit nonzero if any failed).
 #
-# Usage: tools/run-unit-tests [path...]   (default: bar settings)
+# Usage: tools/run-unit-tests [path...]   (default: bar settings plugins/nikos.keyboard)
 set -u
 
 cd "$(dirname "$0")/.."
 roots=("$@")
-(( ${#roots[@]} )) || roots=(bar settings)
+(( ${#roots[@]} )) || roots=(bar settings plugins/nikos.keyboard)
 
 mapfile -t tests < <(find "${roots[@]}" -name '*.test.mjs' -type f | sort)
 if (( ${#tests[@]} == 0 )); then

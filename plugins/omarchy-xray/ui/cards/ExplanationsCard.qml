@@ -31,7 +31,7 @@ Card {
                 width: parent.width
                 height: Math.min(
                     76,
-                    Math.max(48, (parent.height - 14) / Math.min(3, root.rows.length))
+                    Math.max(56, (parent.height - 14) / Math.min(3, root.rows.length))
                 )
                 radius: root.theme.controlRadius
                 color: modelData.tone === "attention"
@@ -80,6 +80,8 @@ Card {
                         color: root.theme.muted
                         font.family: root.theme.bodyFont
                         font.pixelSize: root.theme.captionFontSize
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
                         elide: Text.ElideRight
                     }
                 }

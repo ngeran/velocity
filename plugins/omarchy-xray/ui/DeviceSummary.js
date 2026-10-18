@@ -2,7 +2,9 @@
 .import "Format.js" as Format
 
 function unavailableRow(icon, title) {
-    return {"icon": icon, "title": title, "subtitle": "Information unavailable", "meta": "UNAVAILABLE", "active": false, "limited": true}
+    // Short subtitle: it sits beside the "UNAVAILABLE" meta in a half-card
+    // cell — anything longer elides mid-word ("Informatio…").
+    return {"icon": icon, "title": title, "subtitle": "No data", "meta": "UNAVAILABLE", "active": false, "limited": true}
 }
 
 function stateOf(availability, name) {

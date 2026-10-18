@@ -29,7 +29,11 @@ plugins.summon           manual    # (id, payload) — BOTH required (Quickshell
 plugins.hide             manual
 theme.reload             internal  # ThemeService push nudge after colors.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
-keyboard.next            bound     # SUPER+SHIFT+SPACE (US/GR cycle)
+keyboard.next            bound     # SUPER+SHIFT+SPACE (cycle; nikos.keyboard)
+keyboard.prev            manual    # cycle backwards
+keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polytonic)`
+keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
+keyboard.open            manual    # toggle the keyboard settings panel
 timezone.toggle          unused    # pill toggles in-process; IPC kept external
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
