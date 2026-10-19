@@ -9,5 +9,5 @@
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "BarWidget.qml" },
   "slot": "center",
-  "commands": []
+  "commands": ["sh", "curl"]
 }

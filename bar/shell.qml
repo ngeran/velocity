@@ -159,6 +159,12 @@ ShellRoot {
     // the fallback defers via callLater out of the evaluation cascade.
     property string effectiveStyle: "vector"
     onRequestedStyleChanged: effectiveStyle = requestedStyle
+    // A style swap tears the scene down with any open popover mounted inside
+    // it (plugin panels live in plugin subtrees the scene owns) — their
+    // popClosed never fires, so the one-at-a-time registry and the notch
+    // carve state would go stale. Covers the Error→vector rollback too:
+    // effectiveStyle changes on both paths.
+    onEffectiveStyleChanged: Services.PluginHostService.clearTransientPanels()
 
     Loader {
         id: styleLoader

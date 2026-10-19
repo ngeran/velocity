@@ -74,6 +74,9 @@ Item {
     // For host windows' fade-out tail: keep the window mapped while the card
     // is still fading (visible: opened || cardOpacity > 0).
     readonly property real cardOpacity: card.opacity
+    // Card center in SCREEN x — the notch lobe reads it to place its caret
+    // bite (popover windows share the bar's screen origin; see anchorCenterX).
+    readonly property real cardCenterX: card.x + card.width / 2
 
     property bool _hoverEntered: false
 
@@ -82,7 +85,23 @@ Item {
         close()
     }
 
-    function open() { if (!opened) { _hoverEntered = false; opened = true; popOpened() } }
+    function open() {
+        if (!opened) {
+            _hoverEntered = false
+            opened = true
+            settleBurst.shots = 0
+            settleBurst.restart()
+            popOpened()
+        }
+    }
+    // External-state hosts (TrayCard) flip `opened` by binding — burst for
+    // them too, so the anchor re-measures through their window's settle.
+    onOpenedChanged: {
+        if (opened && externalState) {
+            settleBurst.shots = 0
+            settleBurst.restart()
+        }
+    }
     function close() { if (opened) { _hoverEntered = false; opened = false; popClosed() } }
     function toggle() { opened ? close() : open() }
 
@@ -91,11 +110,41 @@ Item {
 
     // Trigger center in SCREEN x (bar window origin == screen origin; the
     // overlay spans the screen below the bar, so x coords are interchangeable).
+    //
+    // mapToItem() is NOT reactive — window/scene transforms don't notify QML
+    // bindings, so a value read mid-race sticks forever. Real race (found on
+    // the notch style): panel windows spawn at a placeholder 500×500 and size
+    // after layer attach, while the bar scene may still be running its lobe
+    // layout — the first measure can be wrong (even negative), and nothing
+    // re-measures. Fix: an explicit tick the binding depends on, bumped by
+    // the anchor's own geometry signals and a bounded settle burst after
+    // open (Shibumi's budgeted-recovery pattern: 5 × 60ms, no standing timer).
+    property int _anchorTick: 0
+    function _nudge() { _anchorTick++ }
     readonly property real anchorCenterX: {
+        _anchorTick   // dependency: re-measure on every nudge
         if (anchorItem)
             return anchorItem.mapToItem(null, anchorItem.width / 2, 0).x
         if (anchorFallback === "center") return parent ? parent.width / 2 : 0
         return parent ? parent.width : 0   // "right"
+    }
+    onAnchorItemChanged: _nudge()
+    onParentChanged: _nudge()
+    Connections {
+        target: pop.anchorItem
+        function onXChanged() { pop._nudge() }
+        function onWidthChanged() { pop._nudge() }
+        function onParentChanged() { pop._nudge() }
+    }
+    Timer {
+        id: settleBurst
+        property int shots: 0
+        interval: 60; repeat: true
+        onTriggered: {
+            pop._nudge()
+            shots++
+            if (shots >= 5) settleBurst.stop()
+        }
     }
 
 

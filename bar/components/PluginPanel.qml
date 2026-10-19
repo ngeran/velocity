@@ -58,11 +58,36 @@ PanelWindow {
     // plugin panel; a foreign panel registering closes us.
     Connections {
         target: popover
-        function onPopOpened() { Services.PluginHostService.openPanel = pluginId }
+        function onPopOpened() {
+            Services.PluginHostService.openPanel = pluginId
+            panelRoot._publishConnected()
+        }
         function onPopClosed() {
             if (Services.PluginHostService.openPanel === pluginId)
                 Services.PluginHostService.openPanel = ""
+            panelRoot._publishConnected()
         }
+        // Drag (offX) and clamp shifts move the card — the notch carve must
+        // track the caret while we are the open panel.
+        function onCardCenterXChanged() {
+            if (popover.opened) panelRoot._publishConnected()
+        }
+    }
+
+    // Notch-lobe plumbing: publish our caret geometry to the host service
+    // while open, retract on close. Owner-checked clear — a successor panel
+    // may have already published by the time our (scene-torn-down) close
+    // signal lands; overwriting its entry would ghost its carve.
+    function _publishConnected() {
+        var svc = Services.PluginHostService
+        if (!popover.opened) {
+            if (svc.connectedPanel && svc.connectedPanel.owner === pluginId)
+                svc.connectedPanel = null
+            return
+        }
+        svc.connectedPanel = { owner: pluginId,
+                               screen: panelRoot.screen ? panelRoot.screen.name : "",
+                               caretX: popover.cardCenterX }
     }
     Connections {
         target: Services.PluginHostService
@@ -114,6 +139,9 @@ PanelWindow {
         hoverClose: true
         offX: panelRoot.offX
         offY: panelRoot.offY
+        // Under the notch style the lobe's caret wedge meets the card — no
+        // gap (TrayCard already runs gap 0). Other styles keep the 8px drop.
+        gap: Config.BarConfig.barStyle === "notch" ? 0 : 8
 
         // ── HEADER (press-drag to move the card) ──
         Item {

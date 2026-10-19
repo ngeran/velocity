@@ -65,6 +65,33 @@ PanelWindow {
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
         Services.BluetoothService.popupOpen = activeTray === "bluetooth"
+        _publishConnected()
+    }
+
+    // Notch-lobe plumbing (mirrors PluginPanel): publish caret geometry while
+    // a tray card is open so the lobe carves under it. Keyed "tray.<id>" —
+    // plugin panels use their manifest id, so the two classes never collide.
+    // Owner-checked clear keeps a successor's publish safe. Host-owned window
+    // (mounted by shell.qml), so this survives style swaps — but clear anyway
+    // on close: the notch style may have changed while we were open.
+    function _publishConnected() {
+        var svc = Services.PluginHostService
+        if (activeTray === "") {
+            var owner = "tray." + lastTray
+            if (svc.connectedPanel && svc.connectedPanel.owner === owner)
+                svc.connectedPanel = null
+            return
+        }
+        svc.connectedPanel = { owner: "tray." + lastTray,
+                               screen: card.screen ? card.screen.name : "",
+                               caretX: dropdown.cardCenterX }
+    }
+    Connections {
+        target: dropdown
+        // Clamp/anchor shifts move the card — keep the carve under the caret.
+        function onCardCenterXChanged() {
+            if (card.activeTray !== "") card._publishConnected()
+        }
     }
 
     readonly property string headerIcon: {

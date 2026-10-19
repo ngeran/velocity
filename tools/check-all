@@ -12,6 +12,8 @@
 #                  to advisory for mid-rebuild workflows)
 #   check-bounded  every Process in services/ declares bounds or a waiver
 #                  (born from the TX/RX + hung-curl incident class)
+#   check-plugins  plugin QML may only run commands / open IpcHandler targets
+#                  its manifest declares (display-only lists → admission gate)
 #   check-splitparser  SplitParser handlers rejoin WITH the newline — the
 #                  glued-counter bug that killed the network TX/RX silently
 #
@@ -39,6 +41,7 @@ run_blocking "QML loadability (fatal subset)" tools/lint-qml
 run_blocking "IPC parity" tools/check-ipc
 run_blocking "unit tests" tools/run-unit-tests
 run_blocking "bounded processes" tools/check-bounded
+run_blocking "plugin static analysis" tools/check-plugins
 run_blocking "splitparser rejoin" tools/check-splitparser
 
 if (( tools_blocking )); then

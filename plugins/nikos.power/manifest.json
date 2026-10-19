@@ -6,8 +6,14 @@
   "version": "1.0.0",
   "description": "Battery glyph + power popup: state, charge %, source, charge bar and a POWER MENU deep-link (suspend/reboot/shutdown). Native UPower — zero forks.",
   "author": "nikos",
-  "kinds": ["bar-widget"],
-  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
   "slot": "right",
-  "commands": []
+  "commands": [
+    "qs"
+  ]
 }

@@ -13,7 +13,16 @@ import "../services" as Services
 //
 // The generation counter folds races: any source change bumps it, and a stale
 // async publish (slow file read, late statusChanged) discards itself instead
-// of mounting an object the slot has already moved past.
+// of mounting an object the slot has already moved past. That
+// {requestedSource, generation} tuple IS the provenance check — Shibumi's
+// WidgetSlot submission discipline: every completion revalidates against the
+// exact submitted handle before adoption.
+//
+// Failure recovery (Shibumi's bounded-budget diagnostics): a failed load
+// retries with backoff (interval min(400, 40·attempt), hard cap 10) riding a
+// Timer instead of a signal storm; exhaustion reports ONCE via reportError
+// (idempotent per plugin). A hot-plugged plugin file that lands a few ms
+// after its manifest now recovers itself.
 Item {
     id: slot
 
@@ -24,6 +33,33 @@ Item {
     property var configure: null
     property var item: null
     property int _generation: 0
+    property int _attempts: 0
+
+    // A fresh source is a fresh failure budget — without this, one flaky
+    // plugin file would exhaust the cap permanently for the slot.
+    onSourceChanged: {
+        _attempts = 0
+        retryTimer.stop()
+        rebuild()
+    }
+    Component.onCompleted: rebuild()
+
+    Timer {
+        id: retryTimer
+        interval: Math.min(400, 40 * Math.max(1, slot._attempts))
+        onTriggered: slot.rebuild()
+    }
+
+    function _scheduleRetry(why) {
+        if (slot._attempts >= 10) {
+            console.warn("PluginSlot: exhausted retries for", slot.source)
+            Services.PluginHostService.reportError(slot.pluginId,
+                "BarWidget failed after " + slot._attempts + " attempts: " + why)
+            return
+        }
+        slot._attempts++
+        retryTimer.restart()
+    }
 
     // Loader-identical sizing contract. Layouts size children by
     // implicitWidth/implicitHeight, and plugin widgets use the hover-reveal
@@ -37,9 +73,6 @@ Item {
     implicitHeight: item ? (item.implicitHeight || item.height || 0) : 0
     width: implicitWidth
     height: implicitHeight
-
-    onSourceChanged: rebuild()
-    Component.onCompleted: rebuild()
 
     function rebuild() {
         const generation = ++slot._generation
@@ -59,15 +92,17 @@ Item {
                 const next = component.createObject(slot)
                 if (!next) {
                     console.warn("PluginSlot: createObject failed for", requestedSource)
-                    Services.PluginHostService.reportError(slot.pluginId, "BarWidget failed to instantiate")
+                    slot._scheduleRetry("instantiate")
                     return
                 }
                 if (slot.configure) slot.configure(next)
                 slot.item = next
                 if (previous && previous !== next) previous.destroy()
+                slot._attempts = 0
+                retryTimer.stop()
             } else if (component.status === Component.Error) {
                 console.warn("PluginSlot:", component.errorString())
-                Services.PluginHostService.reportError(slot.pluginId, "BarWidget failed to load: " + component.errorString())
+                slot._scheduleRetry(component.errorString())
             }
         }
         if (component.status === Component.Loading)

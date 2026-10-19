@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+// check-plugins — plugin static analysis: QML may only run what its manifest
+// declares (Shibumi's check-plugin-integration discipline, scaled down).
+//
+// Plugins are unsandboxed user code; the `commands` list is the user-facing
+// admission contract shown in the plugin manager. Before this gate it was
+// display-only — a plugin could run anything while declaring nothing. Now:
+//
+//   • every `command: [...]` / `proc.command = [...]` argv literal in the
+//     plugin's QML must appear in manifest.json `commands`
+//   • `sh -c "<literal>"` first words count as commands too (curl behind a
+//     shell wrapper is NOT invisible) — clean-word heuristic: concatenated
+//     shell bodies (keyboard's "F=$(ls …" style) can't yield a clean first
+//     word and are skipped; that residual gap is documented, not enforced
+//   • every IpcHandler target must appear in manifest `ipcTargets`
+//   • `.run("<literal>")` (QsBarWidget.bar.run) is WARN-only — dynamic strings
+//     are invisible to static analysis by nature
+//
+// Waiver, check-bounded style: `// commands-ok: <why>` on the command line
+// or within the next 3 lines. `declared but unused` is a warning.
+//
+// Usage: tools/check-plugins [plugins dir]   (default: plugins)
+const fs = require("fs"), path = require("path")
+
+const pluginsDir = process.argv.length > 2 ? process.argv[2] : "plugins"
+const SHELL_FAMILY = new Set(["sh", "bash", "dash", "ash", "zsh"])
+const WRAPPERS = new Set(["timeout", "env", "nice", "sudo", "nohup"])
+const CLEAN_WORD = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/   // no "/" — paths aren't commands
+
+let bad = 0, warned = 0, waived = 0, checked = 0
+
+// ── comment stripping that keeps strings intact ─────────────────────────
+// Walk the source tracking code / line-comment / block-comment / string
+// states; comments become spaces (offsets preserved for line numbers). The
+// string-awareness is what stops `"https://…"` from opening a fake comment —
+// and strings survive intact because the literal extraction needs them.
+function stripComments(src) {
+    let out = "", i = 0, n = src.length
+    let state = "code"   // code | line | block | dq | sq
+    while (i < n) {
+        const c = src[i], c2 = src.substr(i, 2)
+        if (state === "code") {
+            if (c2 === "//") { state = "line"; out += "  "; i += 2; continue }
+            if (c2 === "/*") { state = "block"; out += "  "; i += 2; continue }
+            if (c === '"') { state = "dq"; out += c; i++; continue }
+            if (c === "'") { state = "sq"; out += c; i++; continue }
+            out += c; i++; continue
+        }
+        if (state === "line") {
+            if (c === "\n") { state = "code"; out += c } else out += " "
+            i++; continue
+        }
+        if (state === "block") {
+            if (c2 === "*/") { state = "code"; out += "  "; i += 2; continue }
+            out += (c === "\n" ? "\n" : " "); i++; continue
+        }
+        // string states: keep verbatim, honor escapes
+        if (c === "\\") { out += src.substr(i, 2); i += 2; continue }
+        if ((state === "dq" && c === '"') || (state === "sq" && c === "'")) state = "code"
+        out += c; i++
+    }
+    return out
+}
+
+// String literals inside a captured region (strings are intact post-strip).
+function literalsIn(text) {
+    const re = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'/g
+    const out = []
+    let m
+    while ((m = re.exec(text)) !== null)
+        out.push({ raw: m[0], value: (m[1] !== undefined ? m[1] : m[2]), index: m.index })
+    return out
+}
+
+// Capture the [ ] array literal starting at `at` (string-aware bracket walk).
+function captureArray(src, at) {
+    let depth = 0
+    for (let i = at; i < src.length; i++) {
+        const c = src[i]
+        if (c === '"' || c === "'") {   // skip the string body
+            const q = c; i++
+            while (i < src.length) {
+                if (src[i] === "\\") { i += 2; continue }
+                if (src[i] === q) break
+                i++
+            }
+            continue
+        }
+        if (c === "[") depth++
+        else if (c === "]") { depth--; if (depth === 0) return src.slice(at, i + 1) }
+    }
+    return null
+}
+
+function lineOf(src, index) { return src.slice(0, index).split("\n").length }
+
+for (const entry of fs.readdirSync(pluginsDir)) {
+    const dir = path.join(pluginsDir, entry)
+    const manifestPath = path.join(dir, "manifest.json")
+    if (!fs.existsSync(manifestPath)) continue   // dormant scaffolds stay silent
+    let manifest
+    try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) }
+    catch (e) { console.log(`check-plugins: FAIL ${manifestPath} — not valid JSON`); bad++; continue }
+
+    const declared = new Set((Array.isArray(manifest.commands) ? manifest.commands : []).map(String))
+    const ipcDeclared = new Set((Array.isArray(manifest.ipcTargets) ? manifest.ipcTargets : []).map(String))
+    const used = new Set()
+    const ipcUsed = new Set()
+    const runWarns = []
+
+    const qmlFiles = []
+    ;(function walk(d) {
+        for (const f of fs.readdirSync(d)) {
+            const p = path.join(d, f)
+            const st = fs.statSync(p)
+            if (st.isDirectory()) { if (f !== ".git") walk(p); continue }
+            if (f.endsWith(".qml")) qmlFiles.push(p)
+        }
+    })(dir)
+
+    for (const file of qmlFiles) {
+        const raw = fs.readFileSync(file, "utf8")
+        const src = stripComments(raw)
+        const rawLines = raw.split("\n")
+
+        // ── command argv scan ────────────────────────────────────────────
+        const cmdRe = /\bcommand\s*[:=]\s*/g
+        let m
+        while ((m = cmdRe.exec(src)) !== null) {
+            if (src[m.index + m[0].length] !== "[") continue
+            const arrText = captureArray(src, m.index + m[0].length - 1)
+            if (!arrText) continue
+            const line = lineOf(src, m.index)
+            const lits = literalsIn(arrText).map(l => l.value)
+            const found = []
+            if (lits.length > 0) {
+                const argv0 = lits[0]
+                found.push(argv0)
+                // shell wrapper: the -c body's first word is a real command
+                if (SHELL_FAMILY.has(argv0)) {
+                    const ci = lits.indexOf("-c")
+                    if (ci >= 0 && ci + 1 < lits.length) {
+                        const first = lits[ci + 1].trim().split(/\s+/)[0]
+                        if (CLEAN_WORD.test(first)) found.push(first)
+                    }
+                }
+                // interpreter wrappers (timeout 5 perl …): the wrapped command
+                // rides past duration/flag arguments — it IS a real command.
+                if (WRAPPERS.has(argv0)) {
+                    for (let li = 1; li < lits.length; li++) {
+                        const w = lits[li].trim()
+                        if (w === "" || /^-/.test(w) || /^\d+$/.test(w)) continue
+                        if (CLEAN_WORD.test(w)) { found.push(w) }
+                        break
+                    }
+                }
+            }
+            for (const cmd of found) {
+                if (declared.has(cmd)) { used.add(cmd); continue }
+                // waiver: on the command line or within the next 3 lines
+                const context = rawLines.slice(line - 1, line + 3).join("\n")
+                if (/\/\/\s*commands-ok:/.test(context)) { waived++; continue }
+                console.log(`check-plugins: FAIL ${file}:${line} — command "${cmd}" not in manifest.commands`)
+                bad++
+            }
+        }
+
+        // ── IpcHandler targets ───────────────────────────────────────────
+        const ipcRe = /\bIpcHandler\s*\{/g
+        while ((m = ipcRe.exec(src)) !== null) {
+            const window = src.slice(m.index, m.index + 400)
+            const t = /\btarget\s*:\s*(?:"([^"]*)"|'([^']*)')/.exec(window)
+            const target = t ? (t[1] !== undefined ? t[1] : t[2]) : ""
+            const line = lineOf(src, m.index)
+            if (target === "" || !ipcDeclared.has(target)) {
+                console.log(`check-plugins: FAIL ${file}:${line} — IpcHandler target "${target || "?"}" not in manifest.ipcTargets`)
+                bad++
+            } else {
+                ipcUsed.add(target)
+            }
+        }
+
+        // ── bar.run("…") — best-effort warning only ──────────────────────
+        const runRe = /\.\s*run\s*\(\s*(?:"([^"]*)"|'([^']*)')/g
+        while ((m = runRe.exec(src)) !== null) {
+            const cmd = m[1] !== undefined ? m[1] : m[2]
+            const first = cmd.trim().split(/\s+/)[0]
+            if (CLEAN_WORD.test(first))
+                runWarns.push(`${file}:${lineOf(src, m.index)} — bar.run("${cmd.slice(0, 40)}${cmd.length > 40 ? "…" : ""}")`)
+        }
+    }
+
+    for (const w of runWarns) {
+        console.log(`check-plugins: WARN ${w} (dynamic command — declare in manifest.commands)`)
+        warned++
+    }
+    for (const d of declared)
+        if (!used.has(d)) {
+            console.log(`check-plugins: WARN ${dir} — declares "${d}" but no QML runs it`)
+            warned++
+        }
+    for (const d of ipcDeclared)
+        if (!ipcUsed.has(d)) {
+            console.log(`check-plugins: WARN ${dir} — declares ipcTarget "${d}" but no QML uses it`)
+            warned++
+        }
+    checked++
+}
+
+console.log(`check-plugins: ${checked} plugins · ${waived} waived · ${warned} warnings`)
+if (bad > 0) { console.log(`check-plugins: FAIL (${bad} undeclared)`); process.exit(1) }
+console.log("check-plugins: OK")

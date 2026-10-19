@@ -54,6 +54,22 @@ Item {
     // one panel closes the others — same one-at-a-time contract as TrayCard.
     property string openPanel: ""
 
+    // Connected-panel geometry for the notch lobe carve: the open popover
+    // publishes { owner, screen, caretX } (screen-space caret x) while open.
+    // Lives HERE, not in the scene, because PluginPanels are mounted inside
+    // scene-owned plugin subtrees — a live style swap destroys them mid-open
+    // and their popClosed never fires. The host clears this on style change
+    // (clearTransientPanels below).
+    property var connectedPanel: null
+    // Style swap (user pick OR the Error→vector rollback) tears the scene
+    // down with any open panel — nothing will ever emit popClosed for it.
+    // Clear both transient popover registries so no ghost carve or stale
+    // one-at-a-time lock survives the swap.
+    function clearTransientPanels() {
+        if (root.openPanel !== "") root.openPanel = ""
+        if (root.connectedPanel !== null) root.connectedPanel = null
+    }
+
     // Cross-plugin panel bus: the clock anchor asks for the weather panel
     // toggle/refresh without knowing the weather plugin's internals.
     signal togglePanelRequested(string id)
@@ -246,6 +262,17 @@ Item {
         if (!m || typeof m !== "object") return _bad(dir, "manifest is not an object")
 
         if (m.schemaVersion !== 1) return _bad(dir, "schemaVersion must be 1")
+        // API gate: the manifest's `api` must match the surface this host
+        // injects (root.api.version). Refusing newer (or bogus) plugins at
+        // LOAD time keeps them out of every Loader slot instead of failing
+        // mid-mount. Mirrors tools/validate-plugin.sh — keep the two in sync.
+        var wanted = (m.api === undefined ? 1 : m.api)
+        if (typeof wanted !== "number" || !isFinite(wanted) || wanted !== root.api.version)
+            return _bad(dir, "unsupported plugin api " + wanted + " — this host provides api "
+                      + root.api.version
+                      + (wanted > root.api.version
+                         ? " (plugin newer than shell — update the quickshell config)"
+                         : ""))
         if (typeof m.id !== "string" || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_-]+)+$/.test(m.id))
             return _bad(dir, "id must be namespaced like 'author.name' or 'org.group.name'")
         if (m.id.indexOf("omarchy.") === 0) return _bad(dir, "id 'omarchy.*' is reserved")
