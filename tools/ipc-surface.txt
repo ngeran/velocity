@@ -50,6 +50,7 @@ logs.toggle              bound     # SUPER+T
 search.query                      manual    # scripting/truth probe (dashboard search index)
 search.open                       manual    # opens the palette pre-filled (deep-link)
 search.list                       manual    # index dump for probes
+search.activateFirst              manual    # probe/scripting: run the top hit for a query
 SettingsWindow.toggle             bound    # SUPER+A
 SettingsWindow.show               unused
 SettingsWindow.hide               unused
@@ -57,7 +58,7 @@ SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
 SettingsWindow.openControlAudio   unused   # deep-link surface, awaiting wiring
 SettingsWindow.openControlBluetooth unused
 SettingsWindow.openControlDisplay unused
-SettingsWindow.openControlPlugins unused
+SettingsWindow.openControlPlugins internal  # nikos.example pill deep-links the Plugins page (argv-array ctx.run)
 SettingsWindow.openControlPower   unused
 SettingsWindow.openControlSystem  unused
 SettingsWindow.openCore           unused

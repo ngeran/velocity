@@ -69,6 +69,14 @@ used_raw="$(
     # ^ </dev/null: when OMNI_DIR is missing the file list is empty and grep
     # would fall through to reading stdin — hanging the whole gate (flaky,
     # stdin-lottery; bit twice in one session)
+    # argv-array form: Process.command / ctx.run(["qs","-c",PROC,"ipc","call",
+    # TARGET,FN,...]) — one element per line, invisible to the string greps
+    # above. Both element orders occur (ipc before/after -c). Conditional fn
+    # names (`on ? "enable" : "disable"`) can't match — keep such pairs manual.
+    grep -rhoE '"-c", *"[a-zA-Z]+", *"ipc", *"call", *"[A-Za-z]+", *"[A-Za-z]+"' \
+      "$QS_DIR" --include='*.qml' 2>/dev/null | grep -v "$QS_DIR/\.claude" | sed 's/[",]//g' || true
+    grep -rhoE '"ipc", *"-c", *"[a-zA-Z]+", *"call", *"[A-Za-z]+", *"[A-Za-z]+"' \
+      "$QS_DIR" --include='*.qml' 2>/dev/null | grep -v "$QS_DIR/\.claude" | sed 's/[",]//g' || true
   } | awk '{
     # normalize: ... -c <proc> ... call <target> <fn>  ->  proc|target|fn
     for (i = 1; i <= NF; i++) if ($i == "-c") { proc = $(i+1) }
@@ -97,7 +105,12 @@ while read -r pair klass rest; do
         fail "'$pair' is marked bound but no keybind dispatches it in $KEYBINDS"
       fi ;;
     internal)
-      hit="$(grep -rl "call ${pair%%.*} ${pair#*.}" "$QS_DIR" --include='*.qml' 2>/dev/null | head -1 || true)"
+      # Call sites count in both spellings: the spawn-string form
+      # (`call Target fn`) and the argv-array form
+      # (`"call", "Target", "fn"` inside Process.command / ctx.run).
+      t="${pair%%.*}"; f="${pair#*.}"
+      hit="$( { grep -rl "call ${t} ${f}" "$QS_DIR" --include='*.qml' 2>/dev/null
+                grep -rl "\"call\", *\"${t}\", *\"${f}\"" "$QS_DIR" --include='*.qml' 2>/dev/null; } | head -1 || true)"
       [[ -n $hit ]] || fail "'$pair' is marked internal but no repo call site was found" ;;
     manual) : ;;
     unused) warn "'$pair' is declared but unused — wire, delete, or reclassify" ;;

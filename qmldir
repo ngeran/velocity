@@ -1,3 +1,3 @@
-# qmldir for top-level QuickShell components
-# (vestigial — each process is launched with -c <bar|settings|login> and imports
-#  its own submodules; nothing imports the root module. Kept as a marker.)
+# Vestigial marker qmldir — each process is launched with -c <bar|settings> and
+# imports its own submodules; nothing imports the root module. Kept so the
+# directory still reads as a Quickshell config root.
