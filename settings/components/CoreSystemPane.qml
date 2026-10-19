@@ -6,7 +6,8 @@
 //   header rail   SYSTEM / TELEMETRY · DIGITAL INSTRUMENT CLUSTER · ● LIVE
 //   load band     LED-matrix CPU history, 0–100 scale
 //   main row      GPU dial readout | dominant PROCESSOR digits | MEMORY banks
-//   aux row       CPU TEMP ticks · PER-CORE LEDs · STORAGE · ENGINE
+//   aux row       CPU TEMP ticks · PER-CORE LEDs · STORAGE · ENGINE (+ GPU
+//                 process rows, X-Ray inspect deep-links)
 //   footer rail   LOCAL TELEMETRY / sample · UPDATED Ns AGO
 // Every colour is a ThemeConfig token, so the cluster retints with the active
 // scheme. All instruments keep fixed locations — a missing sensor renders an
@@ -38,9 +39,14 @@ Rectangle {
         { k: "NVME", v: Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(0) + "°C" : "—",
           c: Services.ThermalService.nvmeTemp > 0 ? tempTier(Services.ThermalService.nvmeTemp) : Config.ThemeConfig.colors.textDim },
         { k: "CLOCK", v: Services.GpuService.clockMHz > 0 ? (Services.GpuService.clockMHz / 1000).toFixed(2) + " GHz" : "—",
-          c: Config.ThemeConfig.colors.info },
-        { k: "PROCS", v: "" + Services.GpuService.processes.length, c: Config.ThemeConfig.colors.text }
+          c: Config.ThemeConfig.colors.info }
     ]
+    // GPU process list (re-homed from the retired CoreGpuSection): rows
+    // deep-link into X-Ray when the plugin is present — hover lights up,
+    // click summons the overlay on this pid (PluginManagerService).
+    readonly property real procMaxMem: (Services.GpuService.processes.length > 0
+        ? Services.GpuService.processes[0].memMiB : 1) || 1
+    readonly property int procCap: 5
     function driveLabel(mount) {
         return mount === "/" ? "SYSTEM" : (mount.split("/").pop() || mount)
     }
@@ -376,10 +382,10 @@ Rectangle {
             }
             DashDivider { Layout.fillHeight: true; width: 1 }
 
-            // ── ENGINE: board sensors + housekeeping ──────────────────────
+            // ── ENGINE: board sensors + housekeeping + GPU processes ──────
             ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
-                Layout.minimumWidth: 120
+                Layout.minimumWidth: 150
                 spacing: 3
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "ENGINE" }
@@ -402,6 +408,66 @@ Rectangle {
                                     font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 11; font.bold: true }
                             }
                         }
+                    }
+                }
+                RowLayout { Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.fillWidth: true
+                    DashLabel { text: "GPU PROCESSES" }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "" + Services.GpuService.processes.length
+                        color: Config.ThemeConfig.colors.text
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
+                }
+                Item { Layout.fillWidth: true; Layout.fillHeight: true
+                    ColumnLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                        spacing: 2
+                        Repeater {
+                            model: Services.GpuService.processes
+                            delegate: Rectangle {
+                                id: procRow
+                                required property var modelData
+                                required property int index
+                                readonly property bool inspectable: Services.PluginManagerService.hasPlugin("randazraik.xray")
+                                Layout.fillWidth: true
+                                visible: index < root.procCap
+                                height: 22
+                                radius: Config.ControlConfig.radiusSmall
+                                color: rowMa.containsMouse
+                                       ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.08)
+                                       : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
+                                border.color: rowMa.containsMouse
+                                              ? Config.ThemeConfig.colors.primary
+                                              : Config.ThemeConfig.colors.outlineVariant; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; spacing: 6
+                                    Text { text: (index + 1).toString().padStart(2, "0"); color: Config.ThemeConfig.colors.primary
+                                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
+                                    Text { text: procRow.modelData.name; color: Config.ThemeConfig.colors.text
+                                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                                        elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { visible: rowMa.containsMouse; text: "X-RAY"; color: Config.ThemeConfig.colors.primary
+                                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
+                                    Text { text: procRow.modelData.memMiB.toFixed(0) + " MiB"; color: Config.ControlConfig.accent
+                                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
+                                }
+                                MouseArea {
+                                    id: rowMa
+                                    anchors.fill: parent
+                                    enabled: procRow.inspectable
+                                    hoverEnabled: procRow.inspectable
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Services.PluginManagerService.inspectExternal(
+                                        "randazraik.xray",
+                                        JSON.stringify({ query: "pid:" + procRow.modelData.pid }))
+                                }
+                            }
+                        }
+                        Text { visible: Services.GpuService.processes.length === 0
+                            text: "NO ACTIVE GPU PROCESSES"; color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
+                        Text { visible: Services.GpuService.processes.length > root.procCap
+                            text: "+ " + (Services.GpuService.processes.length - root.procCap) + " more — open X-Ray"
+                            color: Config.ThemeConfig.colors.textDim
+                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                     }
                 }
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
