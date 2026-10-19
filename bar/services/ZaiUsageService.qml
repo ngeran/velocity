@@ -2,8 +2,8 @@
 // ZaiUsageService.qml — Z.ai GLM Coding Plan quota monitor
 // =============================================================================
 // Polls the (undocumented) Z.ai subscription quota endpoint every 60s via curl
-// (python3 isn't on PATH under NixOS, so this is pure QML — same Process +
-// SplitParser idiom as BatteryService). Surfaced state is read directly by
+// (python3 isn't on PATH under NixOS, so this is pure QML — Process +
+// SplitParser). Surfaced state is read directly by
 // ZaiUsageOverlay; threshold crossings are emitted as `thresholdAlert`, which
 // shell.qml bridges into NotificationService (no notify-send/mako on this box —
 // the repo's own NotificationService is the single notification sink).

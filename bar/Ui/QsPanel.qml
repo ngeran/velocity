@@ -81,16 +81,14 @@ PanelWindow {
     property var settings: ({})
     // One file per module (qs-compat/<moduleName>.json, flat key → value):
     // the old shared qs-compat-store.json was rewritten whole from each
-    // panel's snapshot, so panels clobbered each other's keys. The legacy
-    // file is still read once as a fallback for values saved before.
+    // panel's snapshot, so panels clobbered each other's keys.
     readonly property string _cacheDir: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell"
     readonly property bool _storable: /^[A-Za-z0-9._-]+$/.test(moduleName)
     property var _store: ({})
-    property var _legacy: ({})
     function setting(key, def) {
         if (settings !== null && settings[key] !== undefined) return settings[key]
         if (_store[key] !== undefined) return _store[key]
-        return _legacy[key] !== undefined ? _legacy[key] : def
+        return def
     }
     function persistSetting(key, value) {
         if (!_storable) return
@@ -113,20 +111,8 @@ PanelWindow {
             try { panelRoot._store = JSON.parse(text() || "{}") } catch (e) { panelRoot._store = {} }
         }
     }
-    FileView {
-        id: legacyStoreFile
-        path: panelRoot._cacheDir + "/qs-compat-store.json"
-        watchChanges: false
-        printErrors: false
-        onLoaded: {
-            try {
-                var j = JSON.parse(text() || "{}")
-                panelRoot._legacy = (j && j[panelRoot.moduleName]) || {}
-            } catch (e) { panelRoot._legacy = {} }
-        }
-    }
-    onModuleNameChanged: { storeFile.reload(); legacyStoreFile.reload() }
-    Component.onCompleted: { storeFile.reload(); legacyStoreFile.reload() }
+    onModuleNameChanged: { storeFile.reload() }
+    Component.onCompleted: { storeFile.reload() }
     Process {
         id: storeWriter
         command: []; running: false
