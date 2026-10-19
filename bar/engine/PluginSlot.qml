@@ -29,6 +29,13 @@ Item {
     property var item: null
     property int _generation: 0
     property int _attempts: 0
+    // Last source actually handed to rebuild — onSourceChanged fires for the
+    // initial "" → url binding assignment too, so both it and
+    // Component.onCompleted ask for the same build; without this guard the
+    // slot builds twice and destroy()s the first instance as "previous",
+    // leaving a dead entry in PluginRegistry.instances that instance() then
+    // serves (summon/hide hit an item whose properties are already gone).
+    property string _builtSource: ""
 
     // A fresh source is a fresh failure budget — without this, one flaky
     // plugin file would exhaust the cap permanently for the slot.
@@ -67,14 +74,21 @@ Item {
     height: implicitHeight
 
     function rebuild() {
+        const requestedSource = source
+        if (requestedSource === slot._builtSource && slot.item) return
         const generation = ++slot._generation
-        if (!source || source.length === 0) {
+        slot._builtSource = requestedSource
+        if (!requestedSource || requestedSource.length === 0) {
             const prev = slot.item
             slot.item = null
-            if (prev) prev.destroy()
+            if (prev) {
+                // Ownership: whoever destroys an item unmounts it first, or
+                // the registry keeps a zombie entry instance() will serve.
+                if (slot.pluginId !== "") PluginRegistry.unmount(slot.pluginId, prev)
+                prev.destroy()
+            }
             return
         }
-        const requestedSource = source
         const previous = slot.item
         const component = Qt.createComponent(requestedSource)
         function publish() {
@@ -89,7 +103,11 @@ Item {
                 }
                 if (slot.configure) slot.configure(next)
                 slot.item = next
-                if (previous && previous !== next) previous.destroy()
+                if (previous && previous !== next) {
+                    // Same ownership rule: unmount before destroy.
+                    if (slot.pluginId !== "") PluginRegistry.unmount(slot.pluginId, previous)
+                    previous.destroy()
+                }
                 slot._attempts = 0
                 retryTimer.stop()
             } else if (component.status === Component.Error) {
