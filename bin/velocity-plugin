@@ -1,0 +1,423 @@
+#!/usr/bin/env node
+// velocity-plugin — create, validate, install, place and remove velocity
+// bar plugins. File operations happen here; anything touching
+// plugins-state.json (enable/disable/place/move) goes through the running
+// bar's `plugins` IPC, because the bar is the state file's only writer.
+//
+// Search path (highest precedence first), same as bar/engine/PluginRegistry:
+//   user     $XDG_CONFIG_HOME/velocity/plugins     ← new / clone / install
+//   system   $VELOCITY_PLUGIN_PATH dirs, then
+//            $XDG_DATA_DIRS/*/velocity/plugins     (read-only, symlinks OK)
+//   bundled  <repo>/plugins
+//   builtin  <repo>/bar/builtins                   (disable, never remove)
+// Removal moves a folder to $XDG_DATA_HOME/velocity/plugins-trash/<id>-<ts>.
+//
+// Env: VELOCITY_ROOT (repo, default: this file's ../), VELOCITY_QS (qs binary),
+//      VELOCITY_PLUGIN_PATH (extra read-only plugin dirs, colon-separated).
+"use strict"
+const fs = require("fs")
+const path = require("path")
+const os = require("os")
+const { spawnSync } = require("child_process")
+
+const ROOT = path.resolve(process.env.VELOCITY_ROOT || path.join(__dirname, ".."))
+const HOME = process.env.HOME || os.homedir()
+const env = (k, d) => (process.env[k] && process.env[k] !== "" ? process.env[k] : d)
+const CONFIG_HOME = env("XDG_CONFIG_HOME", path.join(HOME, ".config"))
+const DATA_HOME = env("XDG_DATA_HOME", path.join(HOME, ".local/share"))
+const STATE_HOME = env("XDG_STATE_HOME", path.join(HOME, ".local/state"))
+const USER_DIR = path.join(CONFIG_HOME, "velocity/plugins")
+const TRASH_DIR = path.join(DATA_HOME, "velocity/plugins-trash")
+const STATE_FILE = path.join(ROOT, "plugins-state.json")
+const TEMPLATES = path.join(ROOT, "tools/templates")
+const QS = env("VELOCITY_QS", "qs")
+const HOST_API = 2
+const ORIGIN_FILE = ".velocity-origin"
+
+const SEARCH = [{ source: "user", dir: USER_DIR, links: false }]
+    .concat(env("VELOCITY_PLUGIN_PATH", "").split(":").filter(Boolean)
+        .map(d => ({ source: "system", dir: d, links: true })))
+    .concat(env("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":").filter(Boolean)
+        .map(d => ({ source: "system", dir: path.join(d, "velocity/plugins"), links: true })))
+    .concat([{ source: "bundled", dir: path.join(ROOT, "plugins"), links: false },
+             { source: "builtin", dir: path.join(ROOT, "bar/builtins"), links: false }])
+
+let M, D, L   // manifest / discovery / layout libs (ES modules)
+async function loadLibs() {
+    const lib = p => import("file://" + path.join(ROOT, "bar/engine/lib", p))
+    ;[M, D, L] = await Promise.all([lib("manifest.mjs"), lib("discovery.mjs"), lib("layout.mjs")])
+}
+
+class UsageError extends Error {}
+const die = msg => { throw new Error(msg) }
+const say = msg => console.log(msg)
+
+// ── discovery (offline mirror of the registry's scan) ───────────────────────
+function symlinksUnder(dir) {
+    const out = []
+    const walk = d => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+            const p = path.join(d, e.name)
+            if (e.isSymbolicLink()) out.push(p)
+            else if (e.isDirectory()) walk(p)
+        }
+    }
+    try { walk(dir) } catch (e) { /* unreadable dir: nothing to report */ }
+    return out
+}
+
+function scan() {
+    const blocks = [], links = []
+    for (const s of SEARCH) {
+        let names
+        try { names = fs.readdirSync(s.dir).sort() } catch (e) { continue }
+        for (const n of names) {
+            const d = path.join(s.dir, n)
+            const mf = path.join(d, "manifest.json")
+            if (!fs.existsSync(mf) || !fs.statSync(d).isDirectory()) continue
+            blocks.push({ source: s.source, dir: d + "/", json: fs.readFileSync(mf, "utf8") })
+        }
+        if (!s.links) links.push(...symlinksUnder(s.dir))
+    }
+    const state = readState()
+    return D.resolvePlugins(blocks, links, HOST_API).map(p => {
+        if (p.status === "invalid" || p.status === "shadowed") return p
+        const v = state.enabled[p.id]
+        const enabled = v === true || (p.source === "builtin" && v !== false)
+        return Object.assign(p, { enabled, status: enabled ? "ready" : "disabled", section: L.sectionOf(state.layout, p.id) })
+    })
+}
+
+function readState() {
+    try {
+        const j = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"))
+        return { enabled: j.enabled || {}, layout: L.normalize(j.layout) }
+    } catch (e) { return { enabled: {}, layout: L.empty() } }
+}
+
+function find(id) {
+    return scan().find(p => p.id === id && p.status !== "shadowed" && p.status !== "invalid") || null
+}
+
+// ── bar IPC ──────────────────────────────────────────────────────────────────
+function ipc(fn, ...args) {
+    const r = spawnSync(QS, ["-c", "bar", "ipc", "call", "plugins", fn, ...args.map(String)], { encoding: "utf8" })
+    const out = ((r.stdout || "") + (r.stderr || "")).trim()
+    return { ok: !r.error && r.status === 0, out: r.error ? String(r.error.message) : out }
+}
+function ipcOrExplain(fn, ...args) {
+    const r = ipc(fn, ...args)
+    if (!r.ok) die("bar not reachable (" + QS + " -c bar ipc …): " + (r.out || "no output") +
+                   "\n  plugins-state.json is written only by the running bar — start it and retry")
+    say(r.out || "ok")
+    return r
+}
+// File ops land on disk regardless; telling the bar is a courtesy.
+function nudgeRescan() {
+    const r = ipc("rescan")
+    if (!r.ok) say("note: bar not reachable — it will pick this up on its next scan")
+    return r.ok
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function assertId(id) {
+    if (typeof id !== "string" || !M.ID_PATTERN.test(id)) die("id must be namespaced like 'author.name' (got '" + id + "')")
+    if (M.RESERVED_PREFIXES.some(p => id.indexOf(p) === 0)) die("id prefix '" + id.split(".")[0] + ".' is reserved")
+}
+
+function validateDir(dir) {
+    const mf = path.join(dir, "manifest.json")
+    if (!fs.existsSync(mf)) return { ok: false, errors: ["manifest.json not found in " + dir] }
+    const r = M.parseManifest(fs.readFileSync(mf, "utf8"), {
+        hostApi: HOST_API, fileExists: n => fs.existsSync(path.join(dir, n))
+    })
+    const errors = r.ok ? [] : r.errors.slice(0)
+    for (const l of symlinksUnder(dir)) errors.push("symlink inside plugin folder: " + l)
+    return { ok: errors.length === 0, errors, plugin: r.plugin }
+}
+
+function moveDir(from, to) {
+    fs.mkdirSync(path.dirname(to), { recursive: true })
+    try { fs.renameSync(from, to) }
+    catch (e) {
+        if (e.code !== "EXDEV") throw e
+        fs.cpSync(from, to, { recursive: true })
+        fs.rmSync(from, { recursive: true, force: true })
+    }
+}
+
+function titleCase(s) { return s.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()) }
+
+function parseFlags(argv, known) {
+    const flags = {}, rest = []
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i]
+        if (a.indexOf("--") === 0) {
+            const k = a.slice(2)
+            if (known[k] === undefined) throw new UsageError("unknown flag " + a)
+            flags[k] = known[k] === "bool" ? true : argv[++i]
+            if (flags[k] === undefined) throw new UsageError(a + " needs a value")
+        } else rest.push(a)
+    }
+    return { flags, rest }
+}
+
+function need(args, n, usage) { if (args.length < n) throw new UsageError("usage: velocity-plugin " + usage) }
+
+// ── commands ─────────────────────────────────────────────────────────────────
+const commands = {}
+
+commands.paths = () => {
+    say("repo     " + ROOT)
+    say("state    " + STATE_FILE)
+    for (const s of SEARCH) say(s.source.padEnd(8) + " " + s.dir)
+    say("trash    " + TRASH_DIR)
+    say("settings " + path.join(STATE_HOME, "velocity/plugins/<id>.json"))
+}
+
+commands.list = argv => {
+    const { flags } = parseFlags(argv, { json: "bool" })
+    const ps = scan()
+    if (flags.json) { say(JSON.stringify(ps, null, 1)); return }
+    const rows = ps.map(p => [p.id, p.status, p.source, p.section || "-", p.kinds.join(",")])
+    const w = [0, 1, 2, 3].map(i => Math.max(...rows.map(r => r[i].length), 4))
+    for (const r of rows) say(r.slice(0, 4).map((c, i) => c.padEnd(w[i])).join("  ") + "  " + r[4])
+    for (const p of ps) if (p.status === "invalid") say("invalid: " + p.dir + " — " + p.error)
+}
+
+commands.validate = argv => {
+    need(argv, 1, "validate <id|dir>")
+    let dir = argv[0]
+    if (!fs.existsSync(dir)) {
+        const p = scan().find(x => x.id === argv[0] && x.status !== "shadowed")
+        if (!p) die("no plugin dir or id '" + argv[0] + "'")
+        dir = p.dir
+    }
+    const r = validateDir(path.resolve(dir))
+    if (!r.ok) { for (const e of r.errors) say("✗ " + e); process.exitCode = 1; return }
+    say("✓ " + r.plugin.id + " valid (" + path.resolve(dir) + ")")
+}
+
+commands.new = argv => {
+    const { flags, rest } = parseFlags(argv, { kind: "str", name: "str" })
+    need(rest, 1, "new <id> [--kind bar-widget|overlay|service] [--name Name]")
+    const id = rest[0]
+    assertId(id)
+    const kind = flags.kind || "bar-widget"
+    const tdir = path.join(TEMPLATES, kind)
+    if (!fs.existsSync(tdir)) die("unknown kind '" + kind + "' (templates: " + fs.readdirSync(TEMPLATES).join(", ") + ")")
+    const dest = path.join(USER_DIR, id)
+    if (fs.existsSync(dest)) die(dest + " already exists")
+    const existing = find(id)
+    if (existing) die(id + " already exists (" + existing.source + ": " + existing.dir + ") — use `clone` to override it")
+    const vars = { ID: id, NAME: flags.name || titleCase(id.split(".").slice(1).join(" ")), AUTHOR: id.split(".")[0] }
+    fs.mkdirSync(dest, { recursive: true })
+    for (const f of fs.readdirSync(tdir)) {
+        const text = fs.readFileSync(path.join(tdir, f), "utf8").replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m))
+        fs.writeFileSync(path.join(dest, f), text)
+    }
+    const v = validateDir(dest)
+    if (!v.ok) { fs.rmSync(dest, { recursive: true, force: true }); die("template produced an invalid plugin: " + v.errors.join("; ")) }
+    say("created " + dest)
+    if (nudgeRescan()) {
+        const r = ipc("enable", id)
+        say(r.ok ? "enabled " + id : "enable failed: " + r.out)
+    } else {
+        say("then: velocity-plugin enable " + id)
+    }
+}
+
+commands.clone = argv => {
+    need(argv, 1, "clone <id> [new-id]")
+    const src = find(argv[0])
+    if (!src) die("no plugin '" + argv[0] + "'")
+    const newId = argv[1] || src.id
+    assertId(newId)
+    if (newId === src.id && src.source === "user") die(src.id + " is already a user plugin (" + src.dir + ")")
+    if (newId !== src.id && find(newId)) die(newId + " already exists")
+    const dest = path.join(USER_DIR, newId)
+    if (fs.existsSync(dest)) die(dest + " already exists")
+    // dereference: a Nix-store system plugin is symlinks; the user copy must be real files.
+    fs.cpSync(src.dir, dest, { recursive: true, dereference: true })
+    if (newId !== src.id) {
+        const mf = path.join(dest, "manifest.json")
+        const m = JSON.parse(fs.readFileSync(mf, "utf8"))
+        m.id = newId
+        fs.writeFileSync(mf, JSON.stringify(m, null, 2) + "\n")
+    }
+    say("cloned " + src.id + " (" + src.source + ") → " + dest +
+        (newId === src.id ? "\n  same id: this copy now overrides the " + src.source + " one" : ""))
+    nudgeRescan()
+}
+
+function isQuattro(dir) {
+    const has = (f, re) => { try { return re.test(fs.readFileSync(path.join(dir, f), "utf8")) } catch (e) { return false } }
+    return has("BarWidget.qml", /^BarWidget \{$/m) || has("Panel.qml", /^Panel \{$/m)
+}
+
+// Omarchy/Quattro plugin → velocity api 2: root types onto the qs.Ui compat
+// bases, manifest regenerated (theirs kept as manifest.quattro.json).
+function convertQuattro(dir) {
+    // The compat bases live in qs.Ui; add the import where the root moved.
+    const sub = (f, from, to) => {
+        const p = path.join(dir, f)
+        if (!fs.existsSync(p)) return
+        let t = fs.readFileSync(p, "utf8")
+        if (!from.test(t)) return
+        t = t.replace(from, to)
+        if (!/^import qs\.Ui\b/m.test(t)) t = "import qs.Ui\n" + t
+        fs.writeFileSync(p, t)
+    }
+    sub("BarWidget.qml", /^BarWidget \{$/m, "QsBarWidget {")
+    sub("Panel.qml", /^Panel \{$/m, "QsPanel {")
+    const mf = path.join(dir, "manifest.json")
+    const m = JSON.parse(fs.readFileSync(mf, "utf8"))
+    fs.renameSync(mf, path.join(dir, "manifest.quattro.json"))
+    const kinds = (m.kinds || ["bar-widget"]).filter(k => M.KINDS.indexOf(k) !== -1)
+    const defaults = { "bar-widget": "BarWidget.qml", service: "Service.qml", overlay: "Overlay.qml" }
+    const eps = {}
+    for (const k of kinds) eps[M.entryKey(k)] = (m.entryPoints && m.entryPoints[M.entryKey(k)]) || defaults[k]
+    fs.writeFileSync(mf, JSON.stringify({
+        schemaVersion: 2, api: 2, id: m.id, name: m.name || m.id, version: String(m.version || "0.1.0"),
+        description: String(m.description || "").slice(0, 200), author: m.author || "quattro",
+        kinds: kinds.length ? kinds : ["bar-widget"], entryPoints: kinds.length ? eps : { barWidget: "BarWidget.qml" },
+        commands: [], compat: "quattro"
+    }, null, 2) + "\n")
+}
+
+commands.install = argv => {
+    const { flags, rest } = parseFlags(argv, { quattro: "bool" })
+    need(rest, 1, "install <git-url|path> [--quattro]")
+    const url = rest[0]
+    if (url.indexOf("-") === 0 || /\s/.test(url)) die("invalid git url or path")
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "velocity-plugin."))
+    try {
+        const src = path.join(tmp, "src")
+        const g = spawnSync("git", ["clone", "--depth", "1", "--", url, src], { encoding: "utf8" })
+        if (g.status !== 0) die("clone failed: " + ((g.stderr || "").trim().split("\n").pop() || "git error"))
+        fs.rmSync(path.join(src, ".git"), { recursive: true, force: true })
+        if (!fs.existsSync(path.join(src, "manifest.json"))) die("repository has no manifest.json")
+        const quattro = flags.quattro || isQuattro(src)
+        if (quattro) convertQuattro(src)
+        const v = validateDir(src)
+        if (!v.ok) die("not a valid velocity plugin:\n  " + v.errors.join("\n  "))
+        const existing = find(v.plugin.id)
+        if (existing && existing.source !== "builtin") die(v.plugin.id + " is already installed (" + existing.dir + ") — remove it first")
+        const dest = path.join(USER_DIR, v.plugin.id)
+        if (fs.existsSync(dest)) die(dest + " already exists")
+        moveDir(src, dest)
+        say("installed " + v.plugin.id + (quattro ? " (converted from Quattro)" : "") + " → " + dest)
+        say("plugins are opt-in: velocity-plugin enable " + v.plugin.id)
+        nudgeRescan()
+    } finally {
+        fs.rmSync(tmp, { recursive: true, force: true })
+    }
+}
+
+commands.remove = argv => {
+    need(argv, 1, "remove <id>")
+    const p = find(argv[0])
+    if (!p) die("no plugin '" + argv[0] + "'")
+    if (p.source === "builtin") die(p.id + " is built in — disable it instead: velocity-plugin disable " + p.id)
+    if (p.source === "system") die(p.id + " is a system plugin (read-only: " + p.dir + ") — disable it, or remove it via your package manager")
+    const dir = p.dir.replace(/\/$/, "")
+    const entry = p.id + "-" + new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "")
+    const dest = path.join(TRASH_DIR, entry)
+    if (fs.existsSync(dest)) die(dest + " already exists — retry in a second")
+    moveDir(dir, dest)
+    fs.writeFileSync(path.join(dest, ORIGIN_FILE), dir + "\n")
+    say("moved " + p.id + " to trash: " + dest + "\n  undo: velocity-plugin restore " + p.id)
+    nudgeRescan()
+}
+
+function trashEntries() {
+    let names
+    try { names = fs.readdirSync(TRASH_DIR) } catch (e) { return [] }
+    return names.map(n => {
+        const d = path.join(TRASH_DIR, n)
+        let origin = "", id = n.replace(/-\d{8}T\d{6}$/, "")
+        try { origin = fs.readFileSync(path.join(d, ORIGIN_FILE), "utf8").trim() } catch (e) { /* hand-made entry */ }
+        try { id = JSON.parse(fs.readFileSync(path.join(d, "manifest.json"), "utf8")).id || id } catch (e) { /* keep name-derived id */ }
+        return { entry: n, dir: d, id, origin }
+    }).sort((a, b) => (a.entry < b.entry ? 1 : -1))   // newest first
+}
+
+commands.trash = argv => {
+    const { flags } = parseFlags(argv, { json: "bool" })
+    const es = trashEntries()
+    if (flags.json) { say(JSON.stringify(es.map(e => ({ entry: e.entry, id: e.id, origin: e.origin })))); return }
+    if (es.length === 0) { say("trash is empty (" + TRASH_DIR + ")"); return }
+    for (const e of es) say(e.entry.padEnd(48) + " " + (e.origin || "(origin unknown)"))
+}
+
+commands.restore = argv => {
+    need(argv, 1, "restore <id|trash-entry>")
+    const e = trashEntries().find(x => x.entry === argv[0]) || trashEntries().find(x => x.id === argv[0])
+    if (!e) die("nothing in trash for '" + argv[0] + "'")
+    const to = e.origin || path.join(USER_DIR, e.id)
+    if (fs.existsSync(to)) die(to + " exists — remove or move it first")
+    fs.rmSync(path.join(e.dir, ORIGIN_FILE), { force: true })
+    moveDir(e.dir, to)
+    say("restored " + e.id + " → " + to)
+    nudgeRescan()
+}
+
+commands.enable = argv => { need(argv, 1, "enable <id>"); ipcOrExplain("enable", argv[0]) }
+commands.disable = argv => { need(argv, 1, "disable <id>"); ipcOrExplain("disable", argv[0]) }
+commands.place = argv => {
+    need(argv, 2, "place <id> <left|center|right> [index]")
+    if (L.SECTIONS.indexOf(argv[1]) === -1) die("section must be one of " + L.SECTIONS.join(", "))
+    const index = argv[2] === undefined || argv[2] === "end" || argv[2] === "-1" ? "end" : argv[2]
+    if (index !== "end" && !/^[0-9]+$/.test(index)) die("index must be a number ≥ 0 or 'end'")
+    ipcOrExplain("place", argv[0], argv[1], index)
+}
+commands.move = argv => {
+    need(argv, 2, "move <id> <delta>")
+    const d = parseInt(argv[1], 10)
+    if (!Number.isInteger(d) || d === 0) die("delta must be a non-zero integer")
+    ipcOrExplain("move", argv[0], (d < 0 ? "up" : "down") + (Math.abs(d) === 1 ? "" : Math.abs(d)))
+}
+commands.layout = () => ipcOrExplain("layout")
+commands.settings = argv => { need(argv, 1, "settings <id>"); ipcOrExplain("settings", argv[0]) }
+commands.set = argv => {
+    need(argv, 3, "set <id> <key> <valueJson>")
+    try { JSON.parse(argv[2]) } catch (e) { die("value must be JSON — quote strings: '\"Tokyo\"'") }
+    ipcOrExplain("setSetting", argv[0], argv[1], argv[2])
+}
+commands.rescan = () => ipcOrExplain("rescan")
+commands.reload = argv => { need(argv, 1, "reload <id>"); ipcOrExplain("reload", argv[0]) }
+commands.summon = argv => { need(argv, 1, "summon <id> [payloadJson]"); ipcOrExplain("summon", argv[0], argv[1] || "{}") }
+commands.hide = argv => { need(argv, 1, "hide <id>"); ipcOrExplain("hide", argv[0]) }
+commands.call = argv => { need(argv, 2, "call <id> <verb> [arg]"); ipcOrExplain("call", argv[0], argv[1], argv[2] || "") }
+
+const HELP = `velocity-plugin — manage velocity bar plugins
+
+  list [--json]                     every plugin on the search path
+  paths                             search path, state, trash locations
+  new <id> [--kind K] [--name N]    scaffold into the user dir (K: bar-widget|overlay|service)
+  clone <id> [new-id]               copy into the user dir (same id = override)
+  validate <id|dir>                 manifest + entry files + no symlinks
+  install <git-url|path> [--quattro]  clone, validate, add to the user dir (disabled)
+  remove <id>                       move to trash (user/bundled only)
+  trash [--json]                    list trashed plugins
+  restore <id|entry>                put a trashed plugin back
+
+  needs the running bar (it owns plugins-state.json):
+  enable <id> · disable <id> · layout · rescan · reload <id>
+  settings <id> · set <id> <key> <valueJson>
+  place <id> <left|center|right> [index|end]   (omitted = end)
+  move <id> <delta>
+  summon <id> [payloadJson] · hide <id> · call <id> <verb> [arg]`
+
+async function main() {
+    const [cmd, ...argv] = process.argv.slice(2)
+    if (!cmd || cmd === "help" || cmd === "-h" || cmd === "--help") { say(HELP); return }
+    if (!commands[cmd]) throw new UsageError("unknown command '" + cmd + "' — see velocity-plugin help")
+    await loadLibs()
+    await commands[cmd](argv)
+}
+
+main().catch(e => {
+    console.error("velocity-plugin: " + e.message)
+    process.exitCode = e instanceof UsageError ? 2 : 1
+})

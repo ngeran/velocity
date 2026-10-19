@@ -1,8 +1,8 @@
 // =============================================================================
-// nikos.keyboard — panel body (placed inside the host PluginPanel)
+// nikos.keyboard — panel body (placed inside the PluginPopup)
 // =============================================================================
 // Port of Keyboard-Layout-for-Omarchy's Panel.qml (3 columns: LAYOUTS /
-// SWITCH KEY & DISPLAY / BACKUPS) onto house styling (api.theme tokens).
+// SWITCH KEY & DISPLAY / BACKUPS) onto house styling (ctx.theme tokens).
 // Edits are a DRAFT: seeded from the service's derived settings, only re-seeded
 // while clean (never clobber mid-edit — the wifi-list regression pattern),
 // applied by the service's write → git add → hyprctl eval pipeline.
@@ -16,21 +16,21 @@ ColumnLayout {
     id: panelRoot
 
     property var service: null     // the BarWidget root (state + verbs)
-    property var api: null
+    property var ctx: null
 
     width: parent.width
     spacing: 0
 
     function _c(tok, fallback) {
-        if (!api) return fallback || "#888"
-        var t = api.theme
+        if (!ctx) return fallback || "#888"
+        var t = ctx.theme
         // Derived fills (fillRest/fillHover/hairline/*Tint) live on the theme,
         // not inside .colors — check both before falling back.
         if (t.colors[tok] !== undefined) return t.colors[tok]
         if (t[tok] !== undefined) return t[tok]
         return fallback || "#888"
     }
-    function _font() { return api ? api.bar.fontFamily : "monospace" }
+    function _font() { return ctx ? ctx.bar.fontFamily : "monospace" }
 
     // ── draft state ─────────────────────────────────────────────────────────
     property var draft: []              // [{layout, variant}] — up to 4
@@ -222,7 +222,7 @@ ColumnLayout {
                     }
                     KB.LayoutSearch {
                         Layout.fillWidth: true
-                        theme: api ? api.theme : null
+                        theme: ctx ? ctx.theme : null
                         placeholder: "layout…"
                         options: layoutOptions
                         value: specOf(entry)
@@ -269,7 +269,7 @@ ColumnLayout {
             KB.LayoutSearch {
                 Layout.fillWidth: true
                 visible: draft.length < Logic.MAX_LAYOUTS
-                theme: api ? api.theme : null
+                theme: ctx ? ctx.theme : null
                 placeholder: "+ Add a layout…"
                 options: layoutOptions
                 value: ""
@@ -335,7 +335,7 @@ ColumnLayout {
             }
             KB.LayoutSearch {
                 Layout.fillWidth: true
-                theme: api ? api.theme : null
+                theme: ctx ? ctx.theme : null
                 placeholder: "switch key…"
                 options: hotkeyOptions
                 value: draftHotkey
@@ -344,7 +344,7 @@ ColumnLayout {
             PanelToggle {
                 Layout.fillWidth: true
                 label: "Caps LED off main"
-                theme: api ? api.theme : null
+                theme: ctx ? ctx.theme : null
                 font: _font()
                 checked: draftLed
                 enabled: draftHotkey === Logic.LED_HOTKEY
@@ -442,7 +442,7 @@ ColumnLayout {
             PanelToggle {
                 Layout.fillWidth: true
                 label: "OSD flash on switch"
-                theme: api ? api.theme : null
+                theme: ctx ? ctx.theme : null
                 font: _font()
                 checked: service ? service.prefOsd : false
                 onToggled: function(v) { if (service) { service.prefOsd = v; service.savePrefs() } }
@@ -450,7 +450,7 @@ ColumnLayout {
             PanelToggle {
                 Layout.fillWidth: true
                 label: "Accent while off main"
-                theme: api ? api.theme : null
+                theme: ctx ? ctx.theme : null
                 font: _font()
                 checked: service ? service.prefHighlight : false
                 onToggled: function(v) { if (service) { service.prefHighlight = v; service.savePrefs() } }

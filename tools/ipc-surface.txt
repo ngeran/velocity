@@ -20,21 +20,28 @@ osd.volume               manual    # external media-key/cli surface
 osd.mute                 manual
 osd.ping                 unused    # health probe, nothing calls it today
 plugins.rescan           manual    # qs -c bar ipc call plugins ... (host mgmt)
+plugins.reload           manual    # (id) — hot-remount one plugin from disk
 plugins.list             manual
 plugins.enable           manual
 plugins.disable          manual
-plugins.order            manual
+plugins.layout           manual
+plugins.place            manual    # (id, section, index|end)
+plugins.move             manual    # (id, up|down|upN|downN) — within the plugin's section
+plugins.settings         manual    # (id) → {schema, values}
+plugins.setSetting       manual    # (id, key, valueJson) — through the bar's SettingsStore
 plugins.summon           manual    # (id, payload) — BOTH required (Quickshell IPC has
                                    # no optional params; pass "{}"), payload = deep-link query
 plugins.hide             manual
+plugins.call             manual    # (id, verb, arg) — plugin-declared verbs (manifest.ipc); handler in bar/engine/PluginHost.qml
 theme.reload             internal  # ThemeService push nudge after colors.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
+# keyboard.* = TRANSITIONAL forwarders to `plugins call nikos.keyboard <verb>`;
+# remove with the handler once the keybind uses plugins.call.
 keyboard.next            bound     # SUPER+SHIFT+SPACE (cycle; nikos.keyboard)
 keyboard.prev            manual    # cycle backwards
 keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polytonic)`
 keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
 keyboard.open            manual    # toggle the keyboard settings panel
-timezone.toggle          unused    # pill toggles in-process; IPC kept external
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T

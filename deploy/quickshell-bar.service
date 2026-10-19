@@ -17,7 +17,13 @@ PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
-ExecStart=/usr/bin/quickshell -c bar
+# env: works wherever quickshell is on the user manager's PATH (Arch:
+# /usr/bin; NixOS: prefer the home-manager module in flake.nix, which writes
+# these units with store paths and a full PATH).
+ExecStart=/usr/bin/env quickshell -c bar
+# Extra read-only plugin dirs (symlinks allowed), searched after
+# ~/.config/velocity/plugins:
+#Environment=VELOCITY_PLUGIN_PATH=/opt/velocity/plugins
 Restart=on-failure
 RestartSec=3
 

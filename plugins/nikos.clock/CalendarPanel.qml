@@ -8,7 +8,7 @@
 //   • meta "WEEK 37 • DAY 255 OF 365" (ISO week + day-of-year)
 //   • adjacent-month ghost days, weekend dimming, per-cell hover
 //   • today = primary reticle box (1.5px border + primary tint fill)
-// All colours are live api tokens — re-tints on theme change.
+// All colours are live ctx tokens — re-tints on theme change.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
@@ -17,7 +17,7 @@ import Quickshell
 ColumnLayout {
     id: calRoot
 
-    property var api: null
+    property var ctx: null
 
     Layout.fillWidth: true
     spacing: 0
@@ -75,11 +75,11 @@ ColumnLayout {
 
     // TZ label for the eyebrow — the clock anchor's configured offset/city.
     readonly property string _tzLabel: {
-        if (!api) return "LOCAL"
-        var city = (api.bar.clockCity || "").trim()
+        if (!ctx) return "LOCAL"
+        var city = (ctx.bar.clockCity || "").trim()
         if (city.length > 0 && city.toLowerCase() !== "local")
             return city.toUpperCase()
-        var off = api.bar.clockOffset || 0
+        var off = ctx.bar.clockOffset || 0
         if (off === 0) return "LOCAL"
         return "UTC" + (off > 0 ? "+" : "") + off
     }
@@ -102,20 +102,20 @@ ColumnLayout {
                 spacing: 6
                 Text {
                     text: "TEMPORAL MAP"
-                    color: api ? api.theme.colors.primary : "#7aa2f7"
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    color: ctx ? ctx.theme.colors.primary : "#7aa2f7"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 9; font.bold: true; font.letterSpacing: 2.2
                 }
                 Text {
                     text: "::"
-                    color: api ? api.theme.withAlpha(api.theme.colors.text, 0.18) : "#243242"
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.text, 0.18) : "#243242"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 9; font.bold: true
                 }
                 Text {
                     text: "Q" + (Math.floor(calRoot.viewMonth / 3) + 1) + " // " + calRoot._tzLabel
-                    color: api ? api.theme.colors.textDim : "#666"
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    color: ctx ? ctx.theme.colors.textDim : "#666"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.2
                 }
             }
@@ -125,15 +125,15 @@ ColumnLayout {
                 spacing: 7
                 Text {
                     text: Qt.formatDateTime(calRoot._firstOfMonth, "MMMM").toUpperCase()
-                    color: api ? api.theme.colors.text : "#ddd"
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    color: ctx ? ctx.theme.colors.text : "#ddd"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 22; font.weight: Font.DemiBold
                     font.letterSpacing: 3
                 }
                 Text {
                     text: String(calRoot.viewYear)
-                    color: api ? api.theme.colors.textDim : "#888"
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    color: ctx ? ctx.theme.colors.textDim : "#888"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 21; font.weight: Font.Light
                 }
             }
@@ -146,8 +146,8 @@ ColumnLayout {
                            " • DAY " + calRoot._dayOfYear(d) +
                            " OF " + calRoot._daysInYear(d.getFullYear())
                 }
-                color: api ? api.theme.colors.textDim : "#666"
-                font.family: api ? api.bar.fontFamily : "monospace"
+                color: ctx ? ctx.theme.colors.textDim : "#666"
+                font.family: ctx ? ctx.bar.fontFamily : "monospace"
                 font.pixelSize: 9; font.letterSpacing: 0.8
             }
         }
@@ -164,11 +164,11 @@ ColumnLayout {
                 delegate: Rectangle {
                     width: 28; height: 28; radius: 6
                     color: navMa.containsMouse
-                           ? (api ? api.theme.withAlpha(api.theme.colors.primary, 0.10) : "#111")
-                           : (api ? api.theme.withAlpha(api.theme.colors.surface, 0.6) : "#07090d")
+                           ? (ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "#111")
+                           : (ctx ? ctx.theme.withAlpha(ctx.theme.colors.surface, 0.6) : "#07090d")
                     border.color: navMa.containsMouse
-                                  ? (api ? api.theme.colors.primary : "#7aa2f7")
-                                  : (api ? api.theme.colors.outlineVariant : "#222")
+                                  ? (ctx ? ctx.theme.colors.primary : "#7aa2f7")
+                                  : (ctx ? ctx.theme.colors.outlineVariant : "#222")
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 120 } }
                     Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -177,9 +177,9 @@ ColumnLayout {
                         anchors.centerIn: parent
                         text: modelData < 0 ? "‹" : "›"
                         color: navMa.containsMouse
-                               ? (api ? api.theme.colors.primary : "#7aa2f7")
-                               : (api ? api.theme.colors.textDim : "#999")
-                        font.family: api ? api.bar.fontFamily : "monospace"
+                               ? (ctx ? ctx.theme.colors.primary : "#7aa2f7")
+                               : (ctx ? ctx.theme.colors.textDim : "#999")
+                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
                         font.pixelSize: 15; font.bold: true
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -219,9 +219,9 @@ ColumnLayout {
                         text: modelData
                         // Weekends dim (mockup: S S in textDim), weekdays accent.
                         color: index < 5
-                               ? (api ? api.theme.withAlpha(api.theme.colors.primary, 0.8) : "#7aa2f7")
-                               : (api ? api.theme.colors.textDim : "#666")
-                        font.family: api ? api.bar.fontFamily : "monospace"
+                               ? (ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.8) : "#7aa2f7")
+                               : (ctx ? ctx.theme.colors.textDim : "#666")
+                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
                         font.pixelSize: 10; font.bold: true; font.letterSpacing: 1
                     }
                 }
@@ -231,7 +231,7 @@ ColumnLayout {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: api ? api.theme.withAlpha(api.theme.colors.text, 0.08) : "#141b24"
+            color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.text, 0.08) : "#141b24"
         }
     }
 
@@ -268,15 +268,15 @@ ColumnLayout {
                     visible: parent.isToday
                     color: "transparent"
                     border.width: 4
-                    border.color: api ? api.theme.withAlpha(api.theme.colors.primary, 0.10) : "transparent"
+                    border.color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "transparent"
                 }
                 Rectangle {
                     anchors.fill: parent
                     radius: 4
                     visible: parent.isToday
-                    color: api ? api.theme.withAlpha(api.theme.colors.primary, 0.10) : "#0a1220"
+                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "#0a1220"
                     border.width: 1.5
-                    border.color: api ? api.theme.colors.primary : "#7aa2f7"
+                    border.color: ctx ? ctx.theme.colors.primary : "#7aa2f7"
                     Behavior on border.color { ColorAnimation { duration: 160 } }
                 }
 
@@ -285,7 +285,7 @@ ColumnLayout {
                     anchors.fill: parent
                     radius: 4
                     visible: parent.isActualDay && !parent.isToday && cellMa.containsMouse
-                    color: api ? api.theme.withAlpha(api.theme.colors.primary, 0.07) : "#0d121a"
+                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.07) : "#0d121a"
                 }
 
                 Text {
@@ -296,11 +296,11 @@ ColumnLayout {
                     // neighbouring month on its own.
                     text: parent.isActualDay ? parent.dayNum
                         : new Date(calRoot.viewYear, calRoot.viewMonth, parent.dayNum).getDate()
-                    font.family: api ? api.bar.fontFamily : "monospace"
+                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
                     font.pixelSize: 13
                     font.bold: parent.isToday
                     color: {
-                        var th = api ? api.theme : null
+                        var th = ctx ? ctx.theme : null
                         if (!th) return "#888"
                         if (parent.isToday) return th.colors.primary
                         if (!parent.isActualDay) return th.withAlpha(th.colors.text, 0.16)   // ghost

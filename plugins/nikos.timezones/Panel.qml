@@ -1,7 +1,7 @@
 // =============================================================================
 // nikos.timezones — worldtimebuddy working-hours grid (plugin panel body)
 // =============================================================================
-// This file's children are placed inside the host PluginPanel's body slot.
+// This file's children are placed inside the PluginPopup's body slot.
 // One 24-cell strip per zone, columns aligned on the HOME day; each cell is
 // that moment's hour IN THE ZONE; tints = zone work(8-18)/day(6-23)/night;
 // accent line = now; hovering a column converts every header time.
@@ -18,7 +18,7 @@ Item {
     property var hostBar: null
     property var hostTheme: null
 
-    // Geometry (fits PluginPanel contentWidth 800: 150 + 12 + 24*24+23)
+    // Geometry (fits PluginPopup contentWidth 800: 150 + 12 + 24*24+23)
     readonly property real cellW: 24
     readonly property real cellH: 34
     readonly property real headerW: 150

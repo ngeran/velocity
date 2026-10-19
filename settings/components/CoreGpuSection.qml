@@ -163,7 +163,7 @@ ColumnLayout {
                                 radius: Config.ControlConfig.radiusSmall
                                 // xray present → rows deep-link: hover lights up,
                                 // click summons the overlay on this pid.
-                                readonly property bool inspectable: Services.PluginManagerService.hasPlugin("io.github.randazraik.xray")
+                                readonly property bool inspectable: Services.PluginManagerService.hasPlugin("randazraik.xray")
                                 color: rowMa.containsMouse
                                        ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.08)
                                        : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
@@ -192,7 +192,7 @@ ColumnLayout {
                                     hoverEnabled: parent.inspectable
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: Services.PluginManagerService.inspectExternal(
-                                        "io.github.randazraik.xray",
+                                        "randazraik.xray",
                                         JSON.stringify({ query: "pid:" + modelData.pid }))
                                 }
                             }

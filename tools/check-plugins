@@ -12,6 +12,10 @@
 //     shell wrapper is NOT invisible) — clean-word heuristic: concatenated
 //     shell bodies (keyboard's "F=$(ls …" style) can't yield a clean first
 //     word and are skipped; that residual gap is documented, not enforced
+//   • `ctx.run([...])` argv literals (plugin api 2): argv[0] must appear in
+//     `commands` — the same rule ctx.run enforces at runtime, caught earlier
+//   • every `manifest.ipc` verb must exist as `function <verb>(` in the
+//     plugin's QML (the engine's `plugins call` would answer "not loaded")
 //   • every IpcHandler target must appear in manifest `ipcTargets`
 //   • `.run("<literal>")` (QsBarWidget.bar.run) is WARN-only — dynamic strings
 //     are invisible to static analysis by nature
@@ -19,10 +23,11 @@
 // Waiver, check-bounded style: `// commands-ok: <why>` on the command line
 // or within the next 3 lines. `declared but unused` is a warning.
 //
-// Usage: tools/check-plugins [plugins dir]   (default: plugins)
+// Usage: tools/check-plugins [dir …]   (default: plugins bar/builtins)
 const fs = require("fs"), path = require("path")
 
-const pluginsDir = process.argv.length > 2 ? process.argv[2] : "plugins"
+const pluginDirs = process.argv.length > 2 ? process.argv.slice(2).map(d => path.resolve(d)) : ["plugins", "bar/builtins"]
+process.chdir(path.join(__dirname, ".."))
 const SHELL_FAMILY = new Set(["sh", "bash", "dash", "ash", "zsh"])
 const WRAPPERS = new Set(["timeout", "env", "nice", "sudo", "nohup"])
 const CLEAN_WORD = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/   // no "/" — paths aren't commands
@@ -94,8 +99,11 @@ function captureArray(src, at) {
 
 function lineOf(src, index) { return src.slice(0, index).split("\n").length }
 
-for (const entry of fs.readdirSync(pluginsDir)) {
-    const dir = path.join(pluginsDir, entry)
+const plugins = []
+for (const root of pluginDirs)
+    for (const entry of fs.readdirSync(root)) plugins.push(path.join(root, entry))
+
+for (const dir of plugins) {
     const manifestPath = path.join(dir, "manifest.json")
     if (!fs.existsSync(manifestPath)) continue   // dormant scaffolds stay silent
     let manifest
@@ -104,6 +112,8 @@ for (const entry of fs.readdirSync(pluginsDir)) {
 
     const declared = new Set((Array.isArray(manifest.commands) ? manifest.commands : []).map(String))
     const ipcDeclared = new Set((Array.isArray(manifest.ipcTargets) ? manifest.ipcTargets : []).map(String))
+    const verbs = (Array.isArray(manifest.ipc) ? manifest.ipc : []).map(String)
+    const verbsFound = new Set()
     const used = new Set()
     const ipcUsed = new Set()
     const runWarns = []
@@ -165,6 +175,27 @@ for (const entry of fs.readdirSync(pluginsDir)) {
             }
         }
 
+        // ── ctx.run([...]) argv (api 2) ──────────────────────────────────
+        const ctxRunRe = /\.\s*run\s*\(\s*\[/g
+        while ((m = ctxRunRe.exec(src)) !== null) {
+            const arrText = captureArray(src, m.index + m[0].length - 1)
+            if (!arrText) continue
+            const lits = literalsIn(arrText)
+            // first element must be a literal to be checkable
+            if (lits.length === 0 || arrText.slice(1).trimStart().indexOf(lits[0].raw) !== 0) continue
+            const cmd = lits[0].value
+            const line = lineOf(src, m.index)
+            if (declared.has(cmd)) { used.add(cmd); continue }
+            const context = rawLines.slice(line - 1, line + 3).join("\n")
+            if (/\/\/\s*commands-ok:/.test(context)) { waived++; continue }
+            console.log(`check-plugins: FAIL ${file}:${line} — ctx.run "${cmd}" not in manifest.commands`)
+            bad++
+        }
+
+        // ── manifest.ipc verbs exist ─────────────────────────────────────
+        for (const v of verbs)
+            if (new RegExp("\\bfunction\\s+" + v + "\\s*\\(").test(src)) verbsFound.add(v)
+
         // ── IpcHandler targets ───────────────────────────────────────────
         const ipcRe = /\bIpcHandler\s*\{/g
         while ((m = ipcRe.exec(src)) !== null) {
@@ -198,6 +229,11 @@ for (const entry of fs.readdirSync(pluginsDir)) {
         if (!used.has(d)) {
             console.log(`check-plugins: WARN ${dir} — declares "${d}" but no QML runs it`)
             warned++
+        }
+    for (const v of verbs)
+        if (!verbsFound.has(v)) {
+            console.log(`check-plugins: FAIL ${dir} — manifest.ipc verb "${v}" has no \`function ${v}(\` in its QML`)
+            bad++
         }
     for (const d of ipcDeclared)
         if (!ipcUsed.has(d)) {

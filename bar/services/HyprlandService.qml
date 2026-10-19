@@ -38,6 +38,9 @@ Item {
     // =========================================================================
 
     property int activeWorkspace: 1
+    // Output name of the focused monitor ("" until seeded) — summons and
+    // hotkeys route to the plugin instance on this screen.
+    property string focusedMonitor: ""
 
     // Raw socket2 line, re-emitted for subscriber services (KeyboardService).
     signal socketEvent(string line)
@@ -57,6 +60,7 @@ Item {
                 try {
                     var obj = JSON.parse(seedProc.buffer)
                     root.activeWorkspace = obj.id || 1
+                    if (typeof obj.monitor === "string") root.focusedMonitor = obj.monitor
                     console.log("[HyprlandService] Seeded active workspace:", root.activeWorkspace)
                 } catch(e) {
                     console.log("[HyprlandService] Seed parse error:", e, "buffer:", seedProc.buffer)
@@ -92,7 +96,9 @@ Item {
                     id = parseInt(ev.substring("workspace>>".length), 10)
                 } else if (ev.indexOf("focusedmon>>") === 0) {
                     // focusedmon>>monname,workspaceid
-                    id = parseInt(ev.substring("focusedmon>>".length).split(",")[1], 10)
+                    var mon = ev.substring("focusedmon>>".length).split(",")
+                    root.focusedMonitor = mon[0]
+                    id = parseInt(mon[1], 10)
                 }
                 if (id > 0 && id !== root.activeWorkspace) {
                     root.activeWorkspace = id

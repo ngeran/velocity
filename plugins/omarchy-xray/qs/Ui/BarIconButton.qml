@@ -6,15 +6,15 @@
 //                 (150ms OutCubic — the slot passes implicit size through, so
 //                 the rail shifts the glyph LEFT as the label unfolds)
 //   • no wash, no tooltip, no fixed widths — PluginSlot's T6 regression note.
-// Theme comes from the canonical bar/Commons reader (theme-reactive,
-// self-reads ~/.cache/theme/colors.json; vendored qs/Commons has no palette).
+// Theme comes from `bar.theme` (the engine's ctx.theme via qs/Ui/BarWidget):
+// live, no path import into the bar.
 import QtQuick
-import "file:///home/nikos/.config/quickshell/bar/Commons" as CT
 
 Item {
     id: root
 
-    property var bar: null              // accepted for source compat; theme is CT.Theme
+    property var bar: null              // { theme, shell } from qs/Ui/BarWidget
+    readonly property var _colors: bar && bar.theme ? bar.theme.colors : null
     property string text: ""
     property string label: ""           // hover-reveal text (e.g. "X-RAY"); "" = icon-only
     property string fontFamily: "monospace"
@@ -41,7 +41,7 @@ Item {
             text: root.text
             font.family: root.fontFamily
             font.pixelSize: root.fontPixelSize
-            color: root.hot ? CT.Theme.colors.accent : CT.Theme.colors.text
+            color: !root._colors ? "#cccccc" : root.hot ? root._colors.accent : root._colors.text
             anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 90 } }
         }
@@ -51,7 +51,7 @@ Item {
             text: root.label
             font.family: root.labelFontFamily
             font.pixelSize: 11
-            color: CT.Theme.colors.text
+            color: root._colors ? root._colors.text : "#cccccc"
             anchors.verticalCenter: parent.verticalCenter
         }
     }

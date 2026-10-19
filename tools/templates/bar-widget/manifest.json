@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "{{ID}}",
+  "name": "{{NAME}}",
+  "version": "0.1.0",
+  "description": "A bar widget. Edit BarWidget.qml.",
+  "author": "{{AUTHOR}}",
+  "license": "MIT",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "bar": { "defaultSection": "right" },
+  "settings": {
+    "label": { "type": "string", "default": "HELLO", "label": "Label" }
+  },
+  "commands": [],
+  "ipc": ["ping"]
+}

@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "api": 1,
+  "schemaVersion": 2,
+  "api": 2,
   "id": "nikos.example",
   "name": "Example",
   "version": "0.1.0",
@@ -12,7 +12,11 @@
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
+  "bar": {
+    "defaultSection": "right"
+  },
   "commands": [
     "quickshell"
-  ]
+  ],
+  "ipc": []
 }

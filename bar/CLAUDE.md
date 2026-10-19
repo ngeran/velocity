@@ -31,9 +31,20 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ## Architecture
 
 ### Entry point
-- **`shell.qml` — the HOST** (Phase-1 style architecture): IPC handlers, shared overlays (TrayCard, NotificationCenter, Logs/Keybinds/Zai/Fastfetch, OSD), headless plugin services, plugin OVERLAY roots (overlay-kind plugins: hidden until summoned via `plugins summon <id> [payloadJson]`, one-at-a-time with tray/NC/panels; see `plugins/nikos.example-overlay` for the contract), and the **style Loader** — it loads `styles/<barStyle>/Scene.qml` (barStyle from bar-config.json, default `vector`; Loader.Error auto-falls back to vector so a broken style never renders an empty bar).
-- **`styles/vector/Scene.qml` — THE VECTOR BAR** (default style): one `PanelWindow` per real output via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData`). The whole rail layout — workspaces, slots, tray icons, plugin pills — lives here. It receives the host as `host` (trayOwner, overlay toggles + ncShown/logsShown, pluginItems registry) and exposes `instances` for the barToggle IPC.
+- **`shell.qml` — the HOST**: IPC handlers, shared overlays (TrayCard, NotificationCenter, Logs/Keybinds/Zai/Fastfetch, OSD), the tray state (`trayOwner/trayAnchor/activeTray`, `toggleTray/closeTray`), the `hostApi` it injects into the plugin engine, `Engine.PluginHost` (service + overlay plugins, `plugins` IPC), and the **style Loader** — it loads `styles/<barStyle>/Scene.qml` (barStyle from bar-config.json, default `vector`; Loader.Error auto-falls back to vector so a broken style never renders an empty bar).
+- **`styles/<name>/Scene.qml` — a bar style**: one `PanelWindow` per real output via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData`). A style owns only window chrome; WHAT renders comes from three `Engine.BarSection`s (left/center/right, from the engine layout). A style may swap one widget's look via `overrides: { id: Component }` (ryoku's workspaces). It receives the host as `host` and exposes `instances` for the barToggle IPC.
 - **Adding a bar style** = new folder `styles/<name>/` with a `Scene.qml` honoring the same host contract (see vector's header). It appears automatically in Settings → Bar (styles are scanned) and swaps live — no restart.
+
+### Plugin engine (`engine/`)
+
+Everything on the bar is a plugin — logo, workspaces, tray icons are first-party built-ins in `builtins/velocity.*` (thin wrappers over `components/`). Developer guide + CLI: `../plugins/README.md`, `../bin/velocity-plugin`.
+
+- **Standalone (D1):** `engine/` imports nothing from config/services/components; the host injects `hostApi` (theme, bar, osd, hypr, focusedMonitor, shell, legacyBarConfigPath). Enforced by `tools/check-engine`.
+- **`PluginRegistry`** (singleton): discovery over the search path (user `~/.config/velocity/plugins` → `$VELOCITY_PLUGIN_PATH` / `$XDG_DATA_DIRS/*/velocity/plugins` → `<repo>/plugins` → `bar/builtins`; same id = higher wins), state, instances per window, `summon/hide/call`, hot reload (`revs`, entry-file watchers). Pure logic lives in `engine/lib/*.mjs` (manifest, discovery, layout, settings — node-tested, shared with the CLI).
+- **State:** `<repo>/plugins-state.json` schema 2 `{ enabled, layout: { left, center, right } }`. **The bar is its only writer** — settings app and CLI go through the `plugins` IPC. Same for each plugin's settings file (`$XDG_STATE_HOME/velocity/plugins/<id>.json`, `SettingsStore`). Plugins are opt-in; built-ins default on.
+- **`PluginContext` (`ctx`)**: the one object a plugin root gets (api 2) — no raw singletons. Built-ins alone also get `ctx.host` (the shell).
+- **`PopupCoordinator`** (singleton): one popup at a time across tray card (`tray`), notification center (`nc`), plugin panels (`<id>[.<sub>]`) and overlays (`overlay:<id>`). `request(key, closer)` closes the previous holder; `connected` is the notch-carve geometry. Never write cross-closing glue — claim the slot.
+- **`qs.Ui` (`Ui/`)**: stateless kit plugins import (BarPill, PluginPopup, …). It must never reference engine/service/config singletons (D13: a second instance via the qs path would split the registry); engine state only through `ctx`.
 
 ### Three-layer separation
 
@@ -46,23 +57,19 @@ exec-once = quickshell -c ~/.config/quickshell/bar
    - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
    - `BatteryService` — Native `Quickshell.Services.UPower` (daemon enabled in omni-nix; peripheral batteries filtered by `powerSupply`)
    - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
-   - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact) via `api.bar`
+   - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact) via `ctx.bar`
 
-3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`.
+3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`. Bar icons are mounted through their `builtins/velocity.*` wrappers, never placed by a scene directly.
 
-### Component structure
+### Default layout (plugins-state.json)
 
 ```
-shell.qml (root layout)
-├── WorkspaceWidget.qml → WorkspaceButton.qml (repeater)
-└── System tray icons (right-aligned)
-    ├── NetworkIcon.qml    (hover: live IP · click → TrayCard NETWORK popup)
-    ├── BluetoothIcon.qml  (click → TrayCard BLUETOOTH popup)
-    ├── VolumeIcon.qml     (scroll → volume · click → TrayCard VOLUME popup)
-    ├── [plugin pills — nikos.keyboard, nikos.timezones, nikos.power …]
-    ├── LogsIcon.qml       (click → system log overlay)
-    └── NotificationButton.qml (click → notification center; unread badge)
+left:   velocity.logo · velocity.workspaces
+center: nikos.clock
+right:  nikos.example · nikos.keyboard · nikos.power · nikos.timezones · randazraik.xray
+        velocity.network · bluetooth · volume · privacy · logs · settings · notifications
 ```
+Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <delta>`, or Settings ▸ Plugins.
 
 ### QML module registration
 
@@ -76,7 +83,7 @@ Every directory has a `qmldir` file. Components/services are registered there an
 - **Click dot**: Switch to that workspace
 
 ### Keyboard (US/GR)
-- **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by `KeyboardService` via socket2 `activelayout` events). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (via `quickshell ipc -c bar call keyboard next`).
+- **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by `KeyboardService` via socket2 `activelayout` events). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).
 
 ### Network (W)
 - **Click**: Open the TrayCard NETWORK popup (status, DNS picker, QR, networks)
@@ -94,24 +101,14 @@ Every directory has a `qmldir` file. Components/services are registered there an
 
 ---
 
-## Adding a new tray icon
+## Adding a new bar widget
 
-1. Create `components/MyIcon.qml`:
-   ```qml
-   import QtQuick
-   Item {
-       width: BarConfig.iconSize
-       height: BarConfig.iconSize
-       // Your icon implementation
-   }
-   ```
+Third-party / personal: `velocity-plugin new author.name` (see `../plugins/README.md`).
 
-2. Add to `shell.qml` inside the right-side Row.
-
-3. Register in `components/qmldir`:
-   ```
-   MyIcon 1.0 MyIcon.qml
-   ```
+First-party icon that needs bar services:
+1. `components/MyIcon.qml` + register it in `components/qmldir`.
+2. `builtins/velocity.myicon/{manifest.json,BarWidget.qml}` — wrapper with `property var ctx: null` (copy `velocity.network`; tray icons call `ctx.host.toggleTray(ctx.window, "<name>", root)`).
+3. `velocity-plugin place velocity.myicon right` (built-ins are on by default; unplaced ones append to `bar.defaultSection`).
 
 ---
 

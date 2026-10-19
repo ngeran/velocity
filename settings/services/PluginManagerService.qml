@@ -1,10 +1,11 @@
 // =============================================================================
-// PluginManagerService.qml — settings-side driver for the bar's plugin host
+// PluginManagerService.qml — settings-side driver for the bar's plugin engine
 // =============================================================================
-// The BAR process owns plugin loading (PluginHostService) and is the single
-// writer of plugins-state.json. This service is the management bridge:
-//   • list/rescan/enable/disable/order  → bar `plugins` IPC (cross-process)
-//   • scaffold / installGit / remove    → direct file ops in the plugins dir
+// The BAR process owns plugin loading (bar/engine/PluginRegistry) and is the
+// single writer of plugins-state.json and of every plugin's settings file.
+// This service is the management bridge:
+//   • list/rescan/enable/disable/place/move/settings → bar `plugins` IPC
+//   • new / install / remove (→ trash) / restore     → bin/velocity-plugin
 // sectionVisible gates the 5s refresh (popup-gated poll idiom).
 // =============================================================================
 
@@ -18,17 +19,19 @@ Item {
     id: root
     visible: false
 
-    readonly property string homeDir: (Quickshell.env("HOME") || "")
-    readonly property string pluginsDir: homeDir + "/.config/quickshell/plugins"
+    readonly property string cli: decodeURIComponent(String(Qt.resolvedUrl("../../bin/velocity-plugin")).replace(/^file:\/\//, ""))
+    readonly property string userDir: (Quickshell.env("XDG_CONFIG_HOME") || ((Quickshell.env("HOME") || "") + "/.config")) + "/velocity/plugins"
 
     // Validated list straight from the bar host (id, name, version, kinds,
-    // enabled, status, error, commands, dir…)
+    // enabled, status, error, commands, source, section, position, settings…)
     property var plugins: []
+    // Trashed plugins: [{ entry, id, origin }], newest first.
+    property var trash: []
     property bool busy: false
     property string lastError: ""
     property bool sectionVisible: false
 
-    onSectionVisibleChanged: if (sectionVisible) refresh()
+    onSectionVisibleChanged: if (sectionVisible) { refresh(); refreshTrash() }
 
     Timer {
         interval: 5000
@@ -122,172 +125,72 @@ Item {
         run(["qs", "-c", "bar", "ipc", "call", "plugins", on ? "enable" : "disable", id],
             function() { root.refresh() })
     }
+    // Shift within its bar section; the bar (single writer of the state
+    // file) clamps at the edges.
     function move(id, delta) {
-        // Reorder within the current bar-widget ordering, then hand the new
-        // id array to the bar (single writer of the state file).
-        var ids = []
-        var ps = root.plugins
-        var idx = -1
-        for (var i = 0; i < ps.length; i++) {
-            if (ps[i].kinds.indexOf("bar-widget") !== -1) ids.push(ps[i].id)
-            if (ps[i].id === id) idx = ids.length - 1
-        }
-        if (idx < 0) return
-        var to = idx + delta
-        if (to < 0 || to >= ids.length) return
-        var tmp = ids[idx]; ids[idx] = ids[to]; ids[to] = tmp
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "order", JSON.stringify(ids)],
+        run(["qs", "-c", "bar", "ipc", "call", "plugins", "move", id, delta < 0 ? "up" : "down"],
             function() { root.refresh() })
     }
 
-    // ── file operations ──────────────────────────────────────────────────────
-    // Multi-segment ids are valid (io.github.sspaeti.timezones) — same rule
-    // the bar's host applies. Only the omarchy.* namespace is reserved.
-    function _safeId(id) {
-        return /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_-]+)+$/.test(String(id || "")) &&
-               String(id).indexOf("omarchy.") !== 0
+    // ── file operations → bin/velocity-plugin ───────────────────────────────
+    // The CLI validates ids/urls/manifests itself; its stderr is folded into
+    // stdout and the exit code appended, so failures surface as lastError.
+    function _cli(args, cb) {
+        run(["sh", "-c", '"$0" "$@" 2>&1; echo "@EXIT $?"', root.cli].concat(args), function(out) {
+            var lines = String(out || "").trim().split("\n")
+            var code = -1
+            if (lines.length && lines[lines.length - 1].indexOf("@EXIT ") === 0)
+                code = parseInt(lines.pop().slice(6), 10)
+            var text = lines.join("\n")
+            root.lastError = code === 0 ? "" : (lines.pop() || "velocity-plugin failed").replace(/^velocity-plugin: /, "")
+            if (cb) cb(code === 0, text)
+        })
     }
 
-    // Scaffold a new plugin folder from the api-1 template.
-    function scaffold(id) {
-        if (!_safeId(id)) { root.lastError = "id must be namespaced like author.name"; return }
-        var dir = root.pluginsDir + "/" + id
-        run(["sh", "-c",
-             "mkdir -p '" + dir + "' && printf '%s' '" +
-             JSON.stringify({
-                 schemaVersion: 1, api: 1, id: id,
-                 name: id.split(".")[1].charAt(0).toUpperCase() + id.split(".")[1].slice(1),
-                 version: "0.1.0",
-                 description: "Scaffolded plugin — edit BarWidget.qml.",
-                 author: id.split(".")[0],
-                 kinds: ["bar-widget"],
-                 entryPoints: { barWidget: "BarWidget.qml" },
-                 commands: []
-             }).replace(/'/g, "'\\''") + "' > '" + dir + "/manifest.json' && printf '%s' '" +
-             _template().replace(/'/g, "'\\''") + "' > '" + dir + "/BarWidget.qml'"],
-             function() { root.lastError = ""; root.rescan() })
+    // `new` also asks the bar to enable it: a plugin you just scaffolded is
+    // meant to run.
+    function scaffold(id, kind) {
+        _cli(["new", String(id || ""), "--kind", kind || "bar-widget"], function() { root.refresh() })
     }
+    // Installs land disabled (opt-in); Quattro plugins are detected and
+    // converted by the CLI (force with installQuattro).
+    function installGit(url) { _cli(["install", String(url || "").trim()], function() { root.refresh() }) }
+    function installQuattro(url) { _cli(["install", String(url || "").trim(), "--quattro"], function() { root.refresh() }) }
 
-    // Clone a git repo into the plugins dir; the repo's manifest.json is
-    // validated by the host on rescan. AUTO-DETECT: a clone without our
-    // schemaVersion (i.e. a raw Quattro plugin) is converted in place first.
-    function installGit(url) {
-        var u = String(url || "").trim()
-        // Only https/ssh git URLs — no shell metacharacters survive the argv split.
-        if (!/(^[a-z]+:\/\/|^git@|^\/)[^\s';&|]+$/.test(u)) { root.lastError = "invalid git url"; return }
-        var name = u.split("/").pop().replace(/\.git$/, "")
-        if (name === "") { root.lastError = "cannot derive folder from url"; return }
-        var dir = root.pluginsDir + "/" + name
-        run(["sh", "-c", "rm -rf '" + dir + "'; git clone --depth 1 '" + u + "' '" + dir + "' 2>&1"],
-            function(out) {
-                if (out.indexOf("fatal") !== -1 || out.indexOf("error") !== -1) {
-                    root.lastError = out.trim().split("\n").pop()
-                    return
-                }
-                run(["sh", "-c", "node -e 'try{const m=JSON.parse(require(\"fs\").readFileSync(\"" + dir + "/manifest.json\",\"utf8\"));process.exit(m.compat===\"quattro\"?1:0)}catch(e){process.exit(0)}'"],
-                    function(needsConvert) {
-                        if (needsConvert.trim() === "0") convertQuattroInPlace(dir)
-                        root.lastError = ""
-                        root.rescan()
-                    })
-            })
-    }
-
-    // ── QUATTRO PIPELINE — clone an Omarchy/Quattro plugin and convert it ────
-    // Clone → copy the compat qs.* modules into the folder → rewrite their
-    // qs.Commons / qs.Ui imports to the vendored copies → regenerate our
-    // manifest (theirs preserved as manifest.quattro.json). Non-mechanical
-    // spots (panel internals referencing Omarchy-only APIs) surface as
-    // runtime errors in the manager rather than silent breakage.
-    function installQuattro(url) {
-        var u = String(url || "").trim()
-        if (!/^([a-z]+:\/\/|git@|\/)[^\s';&|]+$/.test(u) && !/^\/[^\s']+$/.test(u)) {
-            root.lastError = "invalid source url or path"; return
-        }
-        var name = u.split("/").filter(Boolean).pop().replace(/\.git$/, "")
-        if (name === "") { root.lastError = "cannot derive folder from url"; return }
-        busy = true
-        run(["sh", "-c", "rm -rf '" + root.pluginsDir + "/" + name + "'; git clone --depth 1 '" + u + "' '" + root.pluginsDir + "/" + name + "' 2>&1"],
-            function(out) {
-                if (out.indexOf("fatal") !== -1) { root.lastError = "clone failed"; busy = false; return }
-                convertQuattroInPlace(root.pluginsDir + "/" + name)
-                root.rescan()
-            })
-    }
-
-    // In-place conversion of an already-cloned Quattro plugin folder:
-    // manifest regen (ours from theirs) + root-type rewrites (BarWidget →
-    // QsBarWidget, Panel → QsPanel) so the derived roots resolve to the
-    // compat bases instead of recursively to their own filenames.
-    function convertQuattroInPlace(dir) {
-        run(["sh", "-c",
-             "cd '" + dir + "' && " +
-             "sed -i 's|^BarWidget {$|QsBarWidget {|' BarWidget.qml && " +
-             "sed -i 's|^Panel {$|QsPanel {|' Panel.qml 2>/dev/null; " +
-             "mv manifest.json manifest.quattro.json 2>/dev/null; " +
-             "node -e '"
-             + "const fs=require(\"fs\");"
-             + "try { const m=JSON.parse(fs.readFileSync(\"manifest.quattro.json\",\"utf8\"));"
-             // Kinds velocity actually hosts — bar-widget, service, overlay —
-             // carried over with their entries (an overlay plugin converts to
-             // an overlay, not into a rail pill).
-             + "const kinds=(m.kinds||[\"bar-widget\"]).filter(k=>[\"bar-widget\",\"service\",\"overlay\"].indexOf(k)!==-1);"
-             + "const eps={};"
-             + "if(kinds.indexOf(\"bar-widget\")!==-1)eps.barWidget=(m.entryPoints&&m.entryPoints.barWidget)||\"BarWidget.qml\";"
-             + "if(kinds.indexOf(\"service\")!==-1)eps.service=(m.entryPoints&&m.entryPoints.service)||\"Service.qml\";"
-             + "if(kinds.indexOf(\"overlay\")!==-1)eps.overlay=(m.entryPoints&&m.entryPoints.overlay)||\"XRay.qml\";"
-             + "const out={schemaVersion:1,api:2,id:m.id,name:m.name||m.id,version:String(m.version||\"0.1.0\"),"
-             + "description:(m.description||\"\").slice(0,200),author:m.author||\"quattro\","
-             + "kinds:kinds.length?kinds:[\"bar-widget\"],entryPoints:eps,"
-             + "commands:[],compat:\"quattro\"};"
-             + "fs.writeFileSync(\"manifest.json\",JSON.stringify(out,null,2)); } catch(e) { process.exit(1) }' "
-             + "&& echo CONVERTED"],
-            function(out) {
-                root.lastError = out.indexOf("CONVERTED") !== -1 ? "" : "quattro conversion failed: " + out.trim().split("\n").pop()
-                root.rescan()
-            })
-    }
-
-    // Two-step confirm lives in the UI; this nukes the folder + state refs.
-    // The folder name is NOT always the id (converted plugins live in e.g.
-    // omarchy-timezones-plugin/) — resolve the real dir from the host list.
+    // Moves the folder to the trash (undo: restore). Built-in and system
+    // plugins are refused by the CLI.
     function remove(id) {
-        if (!_safeId(id)) { root.lastError = "invalid id"; return }
-        var dir = ""
-        for (var i = 0; i < root.plugins.length; i++)
-            if (root.plugins[i].id === id) { dir = root.plugins[i].dir || ""; break }
-        var target = (dir !== "") ? dir : root.pluginsDir + "/" + id
-        // Paranoia: only ever delete INSIDE the plugins dir.
-        if (target.indexOf(root.pluginsDir + "/") !== 0) {
-            root.lastError = "refusing to delete outside plugins dir"
-            return
-        }
-        run(["sh", "-c", "rm -rf '" + target + "'"],
-            function() { root.rescan() })
+        _cli(["remove", String(id)], function() { root.refresh(); root.refreshTrash() })
+    }
+    function restore(entry) {
+        _cli(["restore", String(entry)], function() { root.refresh(); root.refreshTrash() })
+    }
+    function refreshTrash() {
+        _cli(["trash", "--json"], function(ok, text) {
+            if (!ok) return
+            try { root.trash = JSON.parse(text || "[]") } catch (e) { root.trash = [] }
+        })
     }
 
-    function _template() {
-        return [
-            "// Scaffolded by the plugin manager — plugin api 1.",
-            "import QtQuick",
-            "",
-            "Item {",
-            "    id: root",
-            "    property string pluginId: \"\"",
-            "    property var api: null",
-            "",
-            "    implicitWidth: label.implicitWidth + 12",
-            "    height: api ? api.bar.barHeight : 30",
-            "",
-            "    Text {",
-            "        id: label",
-            "        anchors.centerIn: parent",
-            "        text: \"7 NEW\"",
-            "        font.family: api ? api.bar.fontNerd : \"monospace\"",
-            "        font.pixelSize: api ? api.bar.fontSizeIcon : 13",
-            "        color: api ? api.theme.colors.success : \"#888\"",
-            "    }",
-            "}"
-        ].join("\n")
+    // ── placement + per-plugin settings (bar IPC) ────────────────────────────
+    function place(id, section) {
+        run(["qs", "-c", "bar", "ipc", "call", "plugins", "place", id, section, "end"],
+            function() { root.refresh() })
+    }
+    // cb({ schema, values }) — read through the bar's SettingsStore.
+    function loadSettings(id, cb) {
+        run(["qs", "-c", "bar", "ipc", "call", "plugins", "settings", id], function(out) {
+            var j = null
+            try { j = JSON.parse(String(out || "").trim()) } catch (e) { j = null }
+            if (!j || j.error) { root.lastError = j && j.error ? j.error : "bad settings output"; return }
+            if (cb) cb(j)
+        })
+    }
+    function setSetting(id, key, value, cb) {
+        run(["qs", "-c", "bar", "ipc", "call", "plugins", "setSetting", id, key, JSON.stringify(value)], function(out) {
+            var r = String(out || "").trim()
+            root.lastError = r === "ok" ? "" : (key + ": " + r)
+            if (cb) cb(r === "ok")
+        })
     }
 }

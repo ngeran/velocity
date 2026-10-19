@@ -1,21 +1,20 @@
 // =============================================================================
-// nikos.clock — CENTER-slot plugin (plugin api 1)
+// nikos.clock — CENTER-slot plugin (plugin ctx 2)
 // =============================================================================
 // Center anchor pill: date-time · live weather glyph · temperature.
 //   • time click    → this plugin's CALENDAR popup (TEMPORAL MAP styling)
 //   • weather click → force a refresh of the embedded WeatherSource fetcher
-// Colours ride api tokens. Hover-only accents; popups do not recolor the anchor.
+// Colours ride ctx tokens. Hover-only accents; popups do not recolor the anchor.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import "file:///home/nikos/.config/quickshell/bar/components" as Host
+import qs.Ui
 
 Item {
     id: root
 
-    property string pluginId: ""
-    property var api: null
+    property var ctx: null
 
     // Host IPC (plugins summon/hide) routes through these — same contract as
     // the weather plugin's root.
@@ -24,7 +23,7 @@ Item {
     function close()  { calPanel.close() }
 
     width: anchorRow.implicitWidth + 24
-    height: api ? api.bar.barHeight : 30
+    height: ctx ? ctx.bar.barHeight : 30
 
     // Minute-boundary exact (a 60s Timer drifts when created mid-minute).
     SystemClock {
@@ -43,7 +42,7 @@ Item {
                                     "JUL","AUG","SEP","OCT","NOV","DEC"]
 
     function _shifted(d) {
-        var off = api ? api.bar.clockOffset : 0
+        var off = ctx ? ctx.bar.clockOffset : 0
         if (off !== 0) {
             var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
             d = new Date(utc + (off * 3600000))
@@ -59,7 +58,7 @@ Item {
     function _formattedDate(d) {
         var s = root._shifted(d)
         var out = root._fullDays[s.getDay()] + " " + root._formattedTime(d)
-        var city = api ? (api.bar.clockCity || "").trim() : ""
+        var city = ctx ? (ctx.bar.clockCity || "").trim() : ""
         if (city.length > 0 && city.toLowerCase() !== "local")
             out += " · " + city.toUpperCase()
         return out
@@ -72,9 +71,9 @@ Item {
     Rectangle {
         anchors.centerIn: parent
         implicitWidth: anchorRow.implicitWidth + 24
-        height: api ? api.bar.barHeight - 6 : 20
+        height: ctx ? ctx.bar.barHeight - 6 : 20
         radius: 6
-        color: anchorHover.hovered ? api.theme.withAlpha(api.theme.colors.text, 0.06)
+        color: anchorHover.hovered ? ctx.theme.withAlpha(ctx.theme.colors.text, 0.06)
                                    : "transparent"
         HoverHandler { id: anchorHover }
 
@@ -86,10 +85,10 @@ Item {
             // Time text — click toggles the calendar popup
             Text {
                 text: root._formattedDate(clk.date)
-                font.family: api ? api.bar.fontFamily : "monospace"
+                font.family: ctx ? ctx.bar.fontFamily : "monospace"
                 font.pixelSize: 12
-                color: timeHover.hovered ? api.theme.colors.accent
-                                         : (api ? api.theme.colors.text : "#ddd")
+                color: timeHover.hovered ? ctx.theme.colors.accent
+                                         : (ctx ? ctx.theme.colors.text : "#ddd")
                 anchors.verticalCenter: parent.verticalCenter
                 Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -113,20 +112,20 @@ Item {
 
                     Text {
                         text: wxSource.glyph
-                        font.family: api ? api.bar.fontNerd : "monospace"
+                        font.family: ctx ? ctx.bar.fontNerd : "monospace"
                         font.pixelSize: 13
-                        color: wxHover.hovered ? api.theme.colors.accent
-                                               : (api ? api.theme.colors.success : "#888")
+                        color: wxHover.hovered ? ctx.theme.colors.accent
+                                               : (ctx ? ctx.theme.colors.success : "#888")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
                         visible: wxSource.hasData
                         text: wxSource.temp
-                        font.family: api ? api.bar.fontFamily : "monospace"
+                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
                         font.pixelSize: 11
-                        color: wxHover.hovered ? api.theme.colors.accent
-                                               : (api ? api.theme.colors.text : "#ddd")
+                        color: wxHover.hovered ? ctx.theme.colors.accent
+                                               : (ctx ? ctx.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -142,20 +141,11 @@ Item {
         }
     }
 
-    onApiChanged: {
-        if (calPanel.item) calPanel.item.api = api
-        if (wxPanel.item) {
-            wxPanel.item.hostBar = api ? api.bar : null
-            wxPanel.item.hostTheme = api ? api.theme : null
-            wxPanel.item.wx = wxSource
-        }
-    }
-
     // ── CALENDAR POPUP — centered under the anchor, TEMPORAL MAP styling ────
-    Host.PluginPanel {
-        anchorItem: root   // center the panel under this pill (Popover)
+    PluginPopup {
         id: calPanel
-        pluginId: "nikos.clock"
+        ctx: root.ctx
+        anchorItem: root
         title: "CALENDAR"
         icon: "󰃭"
         contentWidth: 336
@@ -163,25 +153,25 @@ Item {
         showHeader: false
 
         Loader {
-            // Defer until api lands — the body binds api tokens at creation.
+            // Defer until ctx lands — the body binds its tokens at creation.
             // NOTE: the LOADER is the layout child — a Layout.fillWidth set
             // inside the loaded file does nothing; stretch it here or the
             // body computes its grid from a stale intrinsic width.
             Layout.fillWidth: true
-            active: root.api !== null
+            active: root.ctx !== null
             source: Qt.resolvedUrl("CalendarPanel.qml")
-            onLoaded: item.api = root.api
+            onLoaded: item.ctx = root.ctx
         }
     }
 
     // ── WEATHER POPUP — ATMOSPHERE styling, fed by the embedded fetcher ─────
-    // The nikos.weather plugin was removed; its popup lives here now. The
-    // distinct pluginId keeps the host's one-at-a-time tracker working (a
-    // weather open closes the calendar and vice versa).
-    Host.PluginPanel {
-        anchorItem: root   // center the panel under this pill (Popover)
+    // Its own slot (subKey "wx" → "nikos.clock.wx"), so a weather open
+    // closes the calendar and vice versa.
+    PluginPopup {
         id: wxPanel
-        pluginId: "nikos.clock.wx"
+        ctx: root.ctx
+        anchorItem: root
+        subKey: "wx"
         title: "ATMOSPHERE"
         icon: wxSource.glyph
         contentWidth: 380
@@ -191,11 +181,11 @@ Item {
 
         Loader {
             Layout.fillWidth: true
-            active: root.api !== null
+            active: root.ctx !== null
             source: Qt.resolvedUrl("WeatherPanel.qml")
             onLoaded: {
-                item.hostBar = root.api ? root.api.bar : null
-                item.hostTheme = root.api ? root.api.theme : null
+                item.hostBar = root.ctx ? root.ctx.bar : null
+                item.hostTheme = root.ctx ? root.ctx.theme : null
                 item.wx = wxSource
             }
         }

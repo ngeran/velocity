@@ -37,18 +37,9 @@ Item {
     // falls back to "vector" when the folder/Scene is missing or broken.
     property string barStyle: "vector"
     property int clockOffset: 0
-    // Right-rail slot order (bar-config.json "rightLayout"). Plugins ride the
-    // single "plugins" slot; their internal order comes from plugins-state.json.
-    readonly property var defaultRightLayout: ["plugins", "network",
-                                               "bluetooth", "volume",
-                                               "privacy", "logs", "settings",
-                                               "notifications"]
-    property var rightLayout: defaultRightLayout
-    // Rail spacing that compensates for slot CONTENT: the 32px icon slots
-    // carry ~9px of glyph whitespace per side (visual gap ≈ 19px at margin 0),
-    // while text pills are tight (need margin 10 for the same ≈19px gap).
-    // Equal margins would look uneven — that was the "space does not look
-    // right" bug. Text = plugins slot; everything else is an icon.
+    // Gap between right-section widgets. What sits where is the engine's
+    // layout (plugins-state.json); bar-config.json's old "rightLayout" is
+    // read once by the engine's schema-2 migration and ignored after.
     readonly property int slotMargin: 8
 
     // =========================================================================
@@ -88,15 +79,6 @@ Item {
                 barStyle = data.barStyle
             if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
                 clockOffset = data.clockOffset
-            // Right-rail slot order — keys validated against the known set;
-            // unknown keys are dropped, empty falls back to the default.
-            if (Array.isArray(data.rightLayout)) {
-                var legal = ["plugins", "network", "bluetooth",
-                             "volume", "privacy", "logs", "settings",
-                             "notifications"]
-                var cleaned = data.rightLayout.filter(function(k) { return legal.indexOf(k) !== -1 })
-                rightLayout = cleaned.length > 0 ? cleaned : defaultRightLayout
-            }
             console.log("[BarConfig] Hot-reloaded bar-config.json")
         } catch (e) {
             console.log("[BarConfig] Failed to parse config:", e)

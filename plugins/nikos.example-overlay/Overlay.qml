@@ -10,9 +10,12 @@
 //   function close()
 //   function toggle(payloadJson)
 //
-// Anything else is yours: `api` (theme/bar/osd/hypr/host) and `manifest`
-// are injected as object references when the properties exist. Plugins never
-// import shell dirs — same-dir relative imports and injected `api` only.
+//   property var ctx                 — injected by the engine (plugin api 2):
+//                                      theme/bar tokens, settings, run(), log()…
+//
+// Plugin IPC: every verb listed in manifest.ipc is callable as
+//   qs -c bar ipc call plugins call nikos.example-overlay <verb> "<arg>"
+// (this sample declares "ping"). Plugins never import bar dirs by path.
 // =============================================================================
 
 import Quickshell
@@ -21,6 +24,8 @@ import QtQuick
 
 PanelWindow {
     id: root
+
+    property var ctx: null
 
     // ---- lifecycle contract (mirrors the built-in overlays) ----
     property bool shown: false
@@ -33,6 +38,12 @@ PanelWindow {
     }
     function close() { shown = false; visible = false }
     function toggle(payloadJson) { shown ? close() : open(payloadJson) }
+
+    // manifest.ipc verb — returns a string to the caller.
+    function ping(arg) {
+        if (ctx) ctx.log("ping " + arg)
+        return "pong " + arg
+    }
 
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"

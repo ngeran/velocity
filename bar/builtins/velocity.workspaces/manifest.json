@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.workspaces",
+  "name": "Workspaces",
+  "version": "1.0.0",
+  "description": "Built-in: workspace dots.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "left"
+  },
+  "commands": [],
+  "ipc": []
+}

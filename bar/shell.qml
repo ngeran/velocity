@@ -21,61 +21,51 @@ import QtQuick
 import QtQuick.Layouts
 import "components" as Components
 import "config" as Config
+import "engine" as Engine
 import "services" as Services
 
 ShellRoot {
     id: shellRoot
 
-    // Loaded plugin bar-widget roots, keyed by manifest id — the plugins IPC
-    // routes summon/hide through the plugin's own open/close/toggle.
-    property var pluginItems: ({})
-
-    // One bar popover at a time, across classes: a plugin panel registering
-    // itself open closes the tray card and the notification center. (The
-    // reverse directions live in the bar's onActiveTrayChanged and the NC's
-    // onShownChanged — all three funnel through the two registries:
-    // trayOwner.activeTray and PluginHostService.openPanel.)
-    Connections {
-        target: Services.PluginHostService
-        function onCompatSummonRequested(id, payload) { shellRoot._summonAny(id, payload) }
-        function onCompatHideRequested(id) {
-            var it = shellRoot.pluginItems[id]
-            if (it && it.close) { it.close(); return }
-            shellRoot.dismissOverlays()
-        }
-        function onOpenPanelChanged() {
-            if (Services.PluginHostService.openPanel === "") return
-            if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
-                shellRoot.trayOwner.activeTray = ""
-            if (ncLoader.item && ncLoader.item.shown)
-                ncLoader.item.close()
-            shellRoot.dismissOverlays()
-        }
+    // =========================================================================
+    // PLUGIN ENGINE — the host's side of the contract: hand the engine the
+    // bar surfaces it may expose to plugins (the engine imports nothing from
+    // the bar), and react to plugin popovers/overlays opening.
+    // =========================================================================
+    Binding {
+        target: Engine.PluginRegistry
+        property: "hostApi"
+        value: ({
+            theme: Config.ThemeConfig,
+            bar: Config.BarConfig,
+            osd: Services.OsdService,
+            hypr: Services.HyprlandService,
+            focusedMonitor: function() { return Services.HyprlandService.focusedMonitor },
+            shell: shellRoot,
+            legacyBarConfigPath: Config.BarConfig.configFilePath
+        })
     }
+
+    // Service + overlay plugins and the `plugins` IPC. Bar widgets are
+    // mounted by the style scenes (Engine.BarSection).
+    Engine.PluginHost { }
+
+    // One bar popup at a time across tray card, notification center, plugin
+    // panels and plugin overlays: each claims Engine.PopupCoordinator with a
+    // closer, and the coordinator closes the previous holder.
 
     // Border re-sync on compositor reload: any `hyprctl reload` reverts
     // Hyprland borders to the login-time Lua values (Tier-1 T1 experiment);
     // socket2 emits `configreloaded` when that happens, and the theme's
     // borders are re-evalled live from the current palette.
+    // Every line is also re-emitted to plugins (ctx.events) — the bar keeps
+    // the ONE socket2 consumer.
     Connections {
         target: Services.HyprlandService
         function onSocketEvent(line) {
             if (String(line).indexOf("configreloaded") === 0)
                 Config.ThemeConfig.applyHyprlandBorders()
-        }
-    }
-
-    // Cross-plugin panel bus: route toggle/refresh requests to the plugin
-    // whose root registered the matching id (e.g. clock sun → weather panel).
-    Connections {
-        target: Services.PluginHostService
-        function onTogglePanelRequested(id) {
-            var it = shellRoot.pluginItems[id]
-            if (it && it.toggle) it.toggle()
-        }
-        function onRefreshPanelRequested(id) {
-            var it = shellRoot.pluginItems[id]
-            if (it && it.refresh) it.refresh()
+            Engine.PluginRegistry.events.hyprEvent(line)
         }
     }
 
@@ -130,11 +120,29 @@ ShellRoot {
         console.log("[shell] EventService online:", Services.EventService.events.count, "events")
     }
 
-    // The bar window that most recently hosted a tray card — TrayCard follows
-    // it (screen + state). Per-output ownership WITHOUT the full popover
-    // system: each bar variant owns its activeTray; the ShellRoot tracks which
-    // one is showing so the single TrayCard renders on the right output.
+    // TRAY STATE — one tray card for all outputs. trayOwner = the bar window
+    // that opened it (the card follows its screen; kept after close so the
+    // fade-out stays put), trayAnchor = the icon it centers under. Driven by
+    // the velocity.* tray built-ins through ctx.host.
     property var trayOwner: null
+    property Item trayAnchor: null
+    property string activeTray: ""   // "network" | "bluetooth" | "volume" | "privacy" | ""
+
+    function trayOpenOn(window, name) {
+        return shellRoot.activeTray === name && shellRoot.trayOwner === window
+    }
+    function toggleTray(window, name, anchor) {
+        if (shellRoot.trayOpenOn(window, name)) { shellRoot.closeTray(); return }
+        shellRoot.trayOwner = window
+        shellRoot.trayAnchor = anchor || null
+        shellRoot.activeTray = name
+        Engine.PopupCoordinator.request("tray", shellRoot.closeTray)
+    }
+    function closeTray() {
+        if (shellRoot.activeTray === "") return
+        shellRoot.activeTray = ""
+        Engine.PopupCoordinator.release("tray")
+    }
 
     // Overlay-state feedback for the style scene (isActive on icons).
     readonly property bool ncShown: ncLoader.item ? ncLoader.item.shown : false
@@ -161,10 +169,14 @@ ShellRoot {
     onRequestedStyleChanged: effectiveStyle = requestedStyle
     // A style swap tears the scene down with any open popover mounted inside
     // it (plugin panels live in plugin subtrees the scene owns) — their
-    // popClosed never fires, so the one-at-a-time registry and the notch
-    // carve state would go stale. Covers the Error→vector rollback too:
-    // effectiveStyle changes on both paths.
-    onEffectiveStyleChanged: Services.PluginHostService.clearTransientPanels()
+    // popClosed never fires, so the popup slot and the notch carve state
+    // would go stale; the tray owner window dies too. Covers the
+    // Error→vector rollback: effectiveStyle changes on both paths.
+    onEffectiveStyleChanged: {
+        Engine.PopupCoordinator.clear()
+        shellRoot.trayOwner = null
+        shellRoot.trayAnchor = null
+    }
 
     Loader {
         id: styleLoader
@@ -185,29 +197,10 @@ ShellRoot {
     // Follows the tray OWNER (the bar that opened the card): state AND screen.
     // =========================================================================
     Components.TrayCard {
-        activeTray: shellRoot.trayOwner ? shellRoot.trayOwner.activeTray : ""
-        anchorItem: shellRoot.trayOwner ? shellRoot.trayOwner.trayAnchor : null
-        onCloseRequested: if (shellRoot.trayOwner) shellRoot.trayOwner.activeTray = ""
+        activeTray: shellRoot.activeTray
+        anchorItem: shellRoot.trayAnchor
+        onCloseRequested: shellRoot.closeTray()
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
-    }
-
-    // ── USER PLUGINS (service kind) — headless: timers/processes only. ──────
-    Item {
-        visible: false
-        Repeater {
-            model: Services.PluginHostService.servicePlugins
-            Loader {
-                source: "file://" + modelData.dir + modelData.entryPoints.service
-                onLoaded: {
-                    item.pluginId = modelData.id
-                    item.api = Services.PluginHostService.api
-                }
-                onStatusChanged: {
-                    if (status === Loader.Error)
-                        Services.PluginHostService.reportError(modelData.id, "Service failed to load (see journal)")
-                }
-            }
-        }
     }
 
     // =========================================================================
@@ -224,19 +217,15 @@ ShellRoot {
         Components.NotificationCenter { }
     }
 
-    // ...and opening the notification center closes the tray card, any
-    // plugin panel, and any plugin overlay. (target null-safe: no connection
-    // until the center has loaded)
+    // The notification center claims the popup slot while shown. (target
+    // null-safe: no connection until the center has loaded)
     Connections {
         target: ncLoader.item
         function onShownChanged() {
-            if (ncLoader.item && ncLoader.item.shown) {
-                if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
-                    shellRoot.trayOwner.activeTray = ""
-                if (Services.PluginHostService.openPanel !== "")
-                    Services.PluginHostService.openPanel = ""
-                shellRoot.dismissOverlays()
-            }
+            if (ncLoader.item && ncLoader.item.shown)
+                Engine.PopupCoordinator.request("nc", shellRoot.closeNotificationCenter)
+            else
+                Engine.PopupCoordinator.release("nc")
         }
     }
 
@@ -297,142 +286,6 @@ ShellRoot {
     }
 
     // =========================================================================
-    // PLUGIN OVERLAYS — overlay-kind plugin roots (xray-class full-screen
-    // inspectors), mounted by the HOST process so they survive style swaps.
-    // keepLoaded semantics: enabled overlays load once and stay warm, hidden
-    // until summoned through their own open(payload)/close()/toggle(payload).
-    // =========================================================================
-    property var overlayItems: ({})   // manifest id → mounted overlay root
-
-    function registerOverlay(id, item) {
-        var reg = shellRoot.overlayItems
-        reg[id] = item
-        shellRoot.overlayItems = reg
-    }
-    function unregisterOverlay(id) {
-        if (!shellRoot.overlayItems[id]) return
-        var reg = shellRoot.overlayItems
-        delete reg[id]
-        shellRoot.overlayItems = reg
-    }
-    // Dismiss every open overlay — the reverse direction of the tray/NC/panel
-    // exclusivity: those three close overlays before showing themselves.
-    function dismissOverlays() {
-        var reg = shellRoot.overlayItems
-        for (var id in reg) {
-            if (!Object.prototype.hasOwnProperty.call(reg, id)) continue
-            if (reg[id] && reg[id].shown) reg[id].close()
-        }
-    }
-
-    // Repeater needs an Item parent to insert into (same reason the service
-    // plugins block wraps its own) — a bare Repeater under ShellRoot is
-    // silently inert.
-    // Zero-size non-visual parent (Repeater needs an Item). NO visible:false —
-    // Quickshell windows created in an invisible subtree stay unmapped, which
-    // hid xray-style overlay windows entirely.
-    Item {
-        width: 0
-        height: 0
-        Repeater {
-            model: Services.PluginHostService.overlayPlugins
-
-            // Item wrapper: the Loader carries the overlay window; the
-            // Connections watches its shown so exclusivity fires on the
-            // FLIP, not just on registry reassignments.
-            Item {
-                id: overlaySlot
-                required property var modelData
-                readonly property string overlayId: modelData.id
-
-            Loader {
-                id: overlayLoader
-                source: "file://" + overlaySlot.modelData.dir + overlaySlot.modelData.entryPoints.overlay
-                onStatusChanged: {
-                    if (status === Loader.Error)
-                        Services.PluginHostService.reportError(overlaySlot.overlayId, "overlay failed to load")
-                }
-                onLoaded: {
-                    var it = item
-                    // Guarded injections — omarchy-shaped roots may not carry
-                    // the property (assigning a non-existent property throws).
-                    if (it.pluginId !== undefined) it.pluginId = overlaySlot.overlayId
-                    if (it.api !== undefined) it.api = Services.PluginHostService.api
-                    if (it.manifest !== undefined) it.manifest = overlaySlot.modelData
-                    // `shell` compat shim — the omarchy-shell surface overlay
-                    // plugins call into (xray: shell.toggle / shell.appLibrary).
-                    // Lifecycle verbs route through our registries; anything
-                    // the shim does not implement reports instead of throwing.
-                    if (it.shell !== undefined) {
-                        it.shell = {
-                            toggle: function(id, payload) { return shellRoot._summonAny(id, payload || "{}") },
-                            summon: function(id, payload) { return shellRoot._summonAny(id, payload || "{}") },
-                            hide: function(id) { shellRoot.dismissOverlays(); return "ok" },
-                            appLibrary: null   // omarchy app browser — not shimmed yet
-                        }
-                    }
-                    shellRoot.registerOverlay(overlaySlot.overlayId, it)
-                }
-            }
-            Component.onDestruction: shellRoot.unregisterOverlay(overlayId)
-
-            Connections {
-                target: overlayLoader.item
-                function onShownChanged() {
-                    if (overlayLoader.item && overlayLoader.item.shown)
-                        shellRoot.overlayOpened(overlaySlot.overlayId)
-                }
-            }
-        }
-    }
-    }
-
-    // One overlay opening closes every OTHER overlay plus tray/NC/panel —
-    // overlays are the fourth class in the one-popover-at-a-time contract.
-    // (The tray/NC/panel reverse direction lives in dismissOverlays().)
-    function overlayOpened(id) {
-        var reg = shellRoot.overlayItems
-        for (var other in reg) {
-            if (!Object.prototype.hasOwnProperty.call(reg, other) || other === id) continue
-            if (reg[other] && reg[other].shown) reg[other].close()
-        }
-        if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
-            shellRoot.trayOwner.activeTray = ""
-        if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
-        if (Services.PluginHostService.openPanel !== "")
-            Services.PluginHostService.openPanel = ""
-    }
-
-    // summon/hide across BOTH registries — widget plugins (open/close) and
-    // overlays (open(payload)/close). One verb for IPC and the shell shim.
-    // Overlay exclusivity fires from the shown flip (overlayOpened).
-    function _summonAny(id, payloadJson) {
-        // Dual-kind plugins (xray: overlay + bar-widget) register in BOTH
-        // registries — a widget without open() must not shadow the overlay.
-        var w = shellRoot.pluginItems[id]
-        if (w && w.open) { w.open(); return "ok" }
-        var ov = shellRoot.overlayItems[id]
-        if (ov) {
-            if (ov.open) { ov.open(payloadJson || "{}"); return "ok" }
-            if (ov.toggle) { ov.toggle(payloadJson || "{}"); return "ok" }
-            return "no open()"
-        }
-        return "not loaded"
-    }
-
-    // An overlay opening (its shown flip → overlayOpened) already closes the
-    // other classes; here the REVERSE: the tray card opening dismisses
-    // overlays. (The tray direction is hosted by the style Scene — trayOwner
-    // is the TrayCard.)
-    Connections {
-        target: shellRoot.trayOwner
-        function onActiveTrayChanged() {
-            if (shellRoot.trayOwner && shellRoot.trayOwner.activeTray !== "")
-                shellRoot.dismissOverlays()
-        }
-    }
-
-    // =========================================================================
     // OSD — volume / mute feedback card (renders OsdService state)
     // =========================================================================
     Components.Osd { }
@@ -453,56 +306,7 @@ ShellRoot {
         function ping(): string { return "ok" }
     }
 
-    // =========================================================================
-    // IPC HANDLER — plugin host: rescan / inspect / enable / disable.
-    // Lives in shell.qml, NOT in the singleton (IpcHandler doesn't resolve in
-    // qmldir-declared singletons on this build — same reason as the osd one).
-    // =========================================================================
-    IpcHandler {
-        target: "plugins"
-        function rescan(): string {
-            Services.PluginHostService.rescan()
-            return "ok"
-        }
-        function list(): string {
-            var out = []
-            var ps = Services.PluginHostService.plugins
-            for (var i = 0; i < ps.length; i++)
-                out.push({ id: ps[i].id, name: ps[i].name, version: ps[i].version,
-                           kinds: ps[i].kinds, enabled: ps[i].enabled,
-                           status: ps[i].status, error: ps[i].error,
-                           commands: ps[i].commands, dir: ps[i].dir })
-            return JSON.stringify(out, null, 1)
-        }
-        function enable(id: string): string {
-            Services.PluginHostService.setEnabled(id, true)
-            return "ok"
-        }
-        function disable(id: string): string {
-            Services.PluginHostService.setEnabled(id, false)
-            return "ok"
-        }
-        function order(json: string): string {
-            try { Services.PluginHostService.setOrder(JSON.parse(json)) } catch (e) { return "bad json" }
-            return "ok"
-        }
-        // Phase 3 lifecycle: route through the plugin's own open/close/toggle.
-        // Overlays take an optional JSON payload ({"query":"pid:4242"}-style
-        // deep links); widget plugins ignore it.
-        function summon(id: string, payload: string): string {
-            return shellRoot._summonAny(id, payload || "")
-        }
-        function hide(id: string): string {
-            var it = shellRoot.pluginItems[id]
-            if (it && it.close) { it.close(); return "ok" }
-            var ov = shellRoot.overlayItems[id]
-            if (ov) {
-                if (ov.close) { ov.close(); return "ok" }
-                return "no close()"
-            }
-            return "not loaded"
-        }
-    }
+    // (The `plugins` IPC lives in engine/PluginHost.qml.)
 
     // =========================================================================
     // IPC HANDLERS — External Control
@@ -539,49 +343,20 @@ ShellRoot {
         }
     }
 
-    // Keyboard layout cycle (for SUPER+SHIFT+SPACE — see configs/hypr/keybindings.lua)
+    // TRANSITIONAL — delete once SUPER+SHIFT+SPACE in ~/.omni-nix/configs/
+    // hypr/keybindings.lua calls the plugin directly:
+    //   qs -c bar ipc call plugins call nikos.keyboard next ""
+    // Until then the old `keyboard.*` targets just forward to the plugin's
+    // declared verbs (manifest.ipc), so the bind keeps working.
     IpcHandler {
         id: keyboardIpc
         target: "keyboard"
 
-        function next() {
-            // Layout cycling lives in the nikos.keyboard plugin now.
-            var it = shellRoot.pluginItems["nikos.keyboard"]
-            if (it && it.cycle) it.cycle()
-            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
-        }
-        function prev() {
-            var it = shellRoot.pluginItems["nikos.keyboard"]
-            if (it && it.prev) it.prev()
-            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
-        }
-        function set(argument: string): string {
-            // index ("1"), layout ("gr") or spec ("gr(polytonic)")
-            var it = shellRoot.pluginItems["nikos.keyboard"]
-            if (it && it.setLayout) { it.setLayout(argument); return "ok" }
-            console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
-            return "unavailable"
-        }
-        function status(): string {
-            var it = shellRoot.pluginItems["nikos.keyboard"]
-            return it && it.statusJson ? it.statusJson() : "{}"
-        }
-        function open() {
-            var it = shellRoot.pluginItems["nikos.keyboard"]
-            if (it && it.toggle) it.toggle()
-            else console.log("[keyboard] plugin not loaded — enable nikos.keyboard")
-        }
-    }
-
-    // Timezone tray card toggle (IPC-verifiable; bindable to a key if wanted)
-    IpcHandler {
-        id: timezoneIpc
-        target: "timezone"
-
-        function toggle() {
-            if (shellRoot.trayOwner)
-                shellRoot.trayOwner.activeTray = shellRoot.trayOwner.activeTray === "timezone" ? "" : "timezone"
-        }
+        function next(): string { return Engine.PluginRegistry.call("nikos.keyboard", "next", "") }
+        function prev(): string { return Engine.PluginRegistry.call("nikos.keyboard", "prev", "") }
+        function set(argument: string): string { return Engine.PluginRegistry.call("nikos.keyboard", "set", argument) }
+        function status(): string { return Engine.PluginRegistry.call("nikos.keyboard", "status", "") }
+        function open(): string { return Engine.PluginRegistry.call("nikos.keyboard", "toggle", "") }
     }
 
     // Keybinds overlay toggle (for SUPER+K — see configs/hypr/keybindings.lua)

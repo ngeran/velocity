@@ -1,5 +1,5 @@
 // =============================================================================
-// nikos.power — power panel body (placed inside the host PluginPanel)
+// nikos.power — power panel body (placed inside the PluginPopup)
 // =============================================================================
 // Mockup port: chips row (AC POWER · CHARGING · HEALTH) · CHARGE block with
 // gradient-tint bar + capacity/rate · SOURCE row · POWER PROFILE segmented

@@ -6,3 +6,5 @@ PanelKeyCatcher 1.0 PanelKeyCatcher.qml
 QsBarWidget 1.0 QsBarWidget.qml
 BarIconButton 1.0 BarIconButton.qml
 BorderSurface 1.0 BorderSurface.qml
+PluginPopup 1.0 PluginPopup.qml
+BarPill 1.0 BarPill.qml

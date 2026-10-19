@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "{{ID}}",
+  "name": "{{NAME}}",
+  "version": "0.1.0",
+  "description": "A headless service. Ask it: velocity-plugin call {{ID}} status \"\"",
+  "author": "{{AUTHOR}}",
+  "license": "MIT",
+  "kinds": ["service"],
+  "entryPoints": { "service": "Service.qml" },
+  "settings": {
+    "interval": { "type": "number", "default": 60, "min": 5, "max": 3600, "label": "Interval (s)" }
+  },
+  "commands": [],
+  "ipc": ["status"]
+}

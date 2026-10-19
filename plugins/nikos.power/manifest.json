@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "api": 1,
+  "schemaVersion": 2,
+  "api": 2,
   "id": "nikos.power",
   "name": "Power",
   "version": "1.0.0",
@@ -12,8 +12,13 @@
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
-  "slot": "right",
+  "bar": {
+    "defaultSection": "right"
+  },
   "commands": [
     "qs"
+  ],
+  "ipc": [
+    "toggle"
   ]
 }

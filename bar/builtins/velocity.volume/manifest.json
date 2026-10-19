@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.volume",
+  "name": "Volume",
+  "version": "1.0.0",
+  "description": "Built-in: volume glyph \u2014 scroll adjusts, click opens the VOLUME tray card.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [],
+  "ipc": []
+}

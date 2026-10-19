@@ -1,12 +1,12 @@
 // =============================================================================
-// nikos.keyboard — keyboard layout pill + layout service (plugin api 1)
+// nikos.keyboard — keyboard layout pill + layout service (plugin api 2)
 // =============================================================================
 // Full port of Keyboard-Layout-for-Omarchy v1.2.6 (MIT) onto this shell's
 // plugin contract. The pill root doubles as the service (single monitor here;
 // switching is idempotent across instances anyway — absolute-index batch).
 //
 //   state    hyprctl -j devices → typed keyboards, active keymap/index;
-//            `activelayout>>` events from api.hypr (the bar owns the ONE
+//            `activelayout>>` events from ctx.events (the bar owns the ONE
 //            socket2 consumer) name the keyboard being typed on
 //   file     ~/.omni-nix/configs/hypr/look-and-feel.lua — read/written ONLY
 //            through perl/InputLua.pl (Lua-aware scanner, surgical string
@@ -32,14 +32,13 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
-import "file:///home/nikos/.config/quickshell/bar/components" as Host
+import qs.Ui
 import "./lib/KeyboardLogic.mjs" as Logic
 
 Item {
     id: root
 
-    property string pluginId: ""
-    property var api: null
+    property var ctx: null
 
     readonly property string homeDir: Quickshell.env("HOME") || ""
     readonly property string luaPath: homeDir + "/.omni-nix/configs/hypr/look-and-feel.lua"
@@ -116,22 +115,27 @@ Item {
     readonly property bool accentOn: prefHighlight && !onMainLayout && ready
 
     implicitWidth: pillRow.implicitWidth
-    height: api ? api.bar.barHeight : 30
+    height: ctx ? ctx.bar.barHeight : 30
     clip: true
     Behavior on implicitWidth { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
     function toggle() { panel.toggle() }
     function open()   { panel.open() }
     function close()  { panel.close() }
-    function cycle()  { requestSwitch("next") }   // legacy `keyboard next` route
+    // manifest.ipc verbs: plugins call nikos.keyboard <next|prev|main|set|status|open|toggle> "<arg>"
     function next()   { requestSwitch("next") }
     function prev()   { requestSwitch("prev") }
     function mainLayout() { requestSwitch(0) }
+    function main()   { mainLayout() }
     function setLayout(argument) {
         var idx = Logic.resolveSetTarget(argument, layouts)
-        if (idx < 0) { lastError = "unknown layout: " + argument; return }
+        if (idx < 0) { lastError = "unknown layout: " + argument; return "unknown layout: " + argument }
         requestSwitch(idx)
+        return "ok"
     }
+    // index ("1"), layout ("gr") or spec ("gr(polytonic)")
+    function set(argument) { return setLayout(argument) }
+    function status() { return statusJson() }
 
     function statusJson() {
         return JSON.stringify({
@@ -159,21 +163,21 @@ Item {
 
         Text {
             text: "󰌌"   // nf-md-keyboard
-            font.family: api ? api.bar.fontNerd : "monospace"
-            font.pixelSize: api ? api.bar.fontSizeIcon : 13
-            color: root.accentOn ? api.theme.colors.accent
-                 : (root.hot ? api.theme.colors.accent
-                             : (api ? api.bar.colorText : "#888"))
+            font.family: ctx ? ctx.bar.fontNerd : "monospace"
+            font.pixelSize: ctx ? ctx.bar.fontSizeIcon : 13
+            color: root.accentOn ? ctx.theme.colors.accent
+                 : (root.hot ? ctx.theme.colors.accent
+                             : (ctx ? ctx.bar.colorText : "#888"))
             anchors.verticalCenter: parent.verticalCenter
             Behavior on color { ColorAnimation { duration: 120 } }
         }
         Text {
             visible: root.hot
             text: root.abbr
-            font.family: api ? api.bar.fontFamily : "monospace"
+            font.family: ctx ? ctx.bar.fontFamily : "monospace"
             font.pixelSize: 11
             font.weight: Font.Bold
-            color: api ? api.theme.colors.text : "#aaa"
+            color: ctx ? ctx.theme.colors.text : "#aaa"
             anchors.verticalCenter: parent.verticalCenter
         }
     }
@@ -205,16 +209,16 @@ Item {
     }
 
     // ── panel ────────────────────────────────────────────────────────────────
-    Host.PluginPanel {
+    PluginPopup {
         id: panel
+        ctx: root.ctx
         anchorItem: root
-        pluginId: "nikos.keyboard"
         title: "KEYBOARD"
         icon: "󰌌"
         contentWidth: 700
 
         Loader {
-            active: root.api !== null
+            active: root.ctx !== null
             // Stretch to the body slot — without this the loaded ColumnLayout
             // collapses to its implicit (~440px) width and the three columns
             // crush into overlapping text.
@@ -222,19 +226,15 @@ Item {
             source: Qt.resolvedUrl("Panel.qml")
             onLoaded: {
                 item.service = root
-                item.api = root.api
+                item.ctx = root.ctx
             }
         }
     }
-    onApiChanged: {
-        if (!panel.item) return
-        panel.item.api = api
-    }
 
-    // ── events (the host's single socket2 consumer; plugins subscribe) ──────
+    // ── events (the bar's single socket2 consumer, via ctx.events) ──────────
     Connections {
-        target: root.api ? root.api.hypr : null
-        function onSocketEvent(line) {
+        target: root.ctx ? root.ctx.events : null
+        function onHyprEvent(line) {
             var ev = "" + line
             if (ev.indexOf("activelayout>>") === 0) {
                 var parsed = Logic.parseLayoutEventData(ev.slice("activelayout>>".length))
@@ -247,8 +247,8 @@ Item {
                 if (parsed.name === root.keyboardName || root.keyboardName === "") {
                     if (root.currentKeymap !== parsed.keymap) {
                         root.currentKeymap = parsed.keymap
-                        if (root.prefOsd && root.api && root.api.osd)
-                            root.api.osd.showLayout(root.shortLabel(parsed.keymap))
+                        if (root.prefOsd && root.ctx && root.ctx.osd)
+                            root.ctx.osd.showLayout(root.shortLabel(parsed.keymap))
                     }
                 }
                 settleTimer.restart()
@@ -373,7 +373,7 @@ Item {
         if (currentIndex !== r.value.currentIndex) currentIndex = r.value.currentIndex
         if (currentKeymap !== r.value.currentKeymap) {
             currentKeymap = r.value.currentKeymap
-            if (ready && prefOsd && api && api.osd) api.osd.showLayout(abbr)
+            if (ready && prefOsd && ctx && ctx.osd) ctx.osd.showLayout(abbr)
         }
     }
 
@@ -410,8 +410,8 @@ Item {
         var target = Logic.targetIndex(currentIndex, layoutCount, action)
         if (target < 0) return
         currentIndex = target   // optimistic; activelayout events confirm
-        if (prefOsd && api && api.osd)
-            api.osd.showLayout(shortLabel(currentKeymapOf(target)))
+        if (prefOsd && ctx && ctx.osd)
+            ctx.osd.showLayout(shortLabel(currentKeymapOf(target)))
         var batch = Logic.switchBatch(keyboards, target)
         if (batch === "") return
         ownSwitchUntil = Date.now() + 500

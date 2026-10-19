@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.bluetooth",
+  "name": "Bluetooth",
+  "version": "1.0.0",
+  "description": "Built-in: bluetooth glyph \u2014 click opens the BLUETOOTH tray card.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [],
+  "ipc": []
+}

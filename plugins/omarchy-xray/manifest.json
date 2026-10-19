@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "api": 1,
+  "schemaVersion": 2,
+  "api": 2,
   "id": "randazraik.xray",
   "name": "Omarchy X-Ray",
   "version": "0.7.0",
@@ -15,7 +15,15 @@
     "overlay": "XRay.qml",
     "barWidget": "XRayBarWidget.qml"
   },
+  "bar": {
+    "defaultSection": "right"
+  },
   "commands": [
     "python3"
+  ],
+  "ipc": [
+    "toggle",
+    "browse",
+    "details"
   ]
 }
