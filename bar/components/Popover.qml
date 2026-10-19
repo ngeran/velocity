@@ -33,6 +33,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
+import "../lib/popover-geometry.mjs" as PopGeo
 
 Item {
     id: pop
@@ -105,7 +106,16 @@ Item {
     function close() { if (opened) { _hoverEntered = false; opened = false; popClosed() } }
     function toggle() { opened ? close() : open() }
 
-    width: cardWidth
+    // Screen-fit (UA 2.2): the card never exceeds the host window minus
+    // margins (width) and its vertical budget (height). PopGeo returns the
+    // request untouched until the parent reports real geometry — hosts spawn
+    // at placeholder sizes and the clamp re-applies when they settle.
+    width: PopGeo.clampCardWidth(cardWidth, parent ? parent.width : 0, edgeMargin)
+    // Vertical budget: parent height minus the drop gap and margins (-1 =
+    // unclamped). Host windows already exclude the bar strip (margins.top =
+    // barHeight), so no bar term here — see popover-geometry.mjs.
+    readonly property real maxHeight: PopGeo.clampMaxHeight(
+        parent ? parent.height : 0, gap, edgeMargin)
     height: card.implicitHeight
 
     // Trigger center in SCREEN x (bar window origin == screen origin; the
@@ -174,8 +184,10 @@ Item {
         }
         y: pop.gap + pop.offY - (pop.opened ? 0 : 6)   // settle-lift from -6
         implicitHeight: pop.cardHeight >= 0
-                        ? pop.cardHeight
-                        : cardBody.implicitHeight + 2 * pop.padding
+                        ? Math.min(pop.cardHeight, pop.maxHeight < 0 ? pop.cardHeight : pop.maxHeight)
+                        : pop.maxHeight < 0
+                          ? cardBody.implicitHeight + 2 * pop.padding
+                          : Math.min(cardBody.implicitHeight + 2 * pop.padding, pop.maxHeight)
         color: Config.BarConfig.colorBackground
         radius: 10
         border.width: pop.showBorder ? 1 : 0
@@ -206,12 +218,24 @@ Item {
             onTriggered: if (pop.opened) pop._dismiss()
         }
 
-        ColumnLayout {
-            id: cardBody
+        // Body scrolls only when the content is taller than the card's
+        // vertical budget (UA 2.2); an exact-fit body is inert (1px guard).
+        Flickable {
+            id: bodyScroll
             x: pop.padding
             y: pop.padding
             width: parent.width - 2 * pop.padding
-            spacing: 0
+            height: parent.height - 2 * pop.padding
+            contentWidth: width
+            contentHeight: cardBody.implicitHeight
+            interactive: PopGeo.scrollNeeded(contentHeight, height)
+            clip: true
+
+            ColumnLayout {
+                id: cardBody
+                width: bodyScroll.width
+                spacing: 0
+            }
         }
 
         // Fill-slot for hosts with custom internal geometry (anchor-fill).
