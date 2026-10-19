@@ -2,6 +2,7 @@
 // Imported by the bar host (QML ES-module import), tools/validate-plugin.sh
 // and the CLI, so the load-time and offline rules can't drift.
 import { validateSchema } from "./settings.mjs"
+import { DEFAULT_PRIORITY } from "./fit.mjs"
 
 export const ID_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_-]+)+$/
 export const RESERVED_PREFIXES = ["omarchy."]
@@ -58,6 +59,9 @@ export function validateManifest(m, opts) {
     const bar = m.bar && typeof m.bar === "object" ? m.bar : {}
     if (bar.defaultSection !== undefined && SECTIONS.indexOf(bar.defaultSection) === -1)
         errors.push("bar.defaultSection must be one of " + SECTIONS.join(", "))
+    if (bar.collapsePriority !== undefined
+            && (typeof bar.collapsePriority !== "number" || !Number.isInteger(bar.collapsePriority)))
+        errors.push("bar.collapsePriority must be an integer")
 
     if (m.commands !== undefined && (!Array.isArray(m.commands) || m.commands.some(c => typeof c !== "string")))
         errors.push("commands must be an array of strings")
@@ -82,6 +86,7 @@ export function validateManifest(m, opts) {
             kinds: kinds.slice(0),
             entryPoints: Object.assign({}, eps),
             defaultSection: defaultSection,
+            collapsePriority: typeof bar.collapsePriority === "number" ? bar.collapsePriority : DEFAULT_PRIORITY,
             commands: (m.commands || []).map(String),
             ipc: (m.ipc || []).slice(0),
             settings: m.settings ? Object.assign({}, m.settings) : {}

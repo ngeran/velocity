@@ -4,7 +4,7 @@
   "id": "velocity.logo",
   "name": "Logo",
   "version": "1.0.0",
-  "description": "Built-in: logo \u2014 click toggles the fastfetch overlay.",
+  "description": "Built-in: logo — click toggles the fastfetch overlay.",
   "author": "velocity",
   "license": "MIT",
   "kinds": [
@@ -14,7 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "bar": {
-    "defaultSection": "left"
+    "defaultSection": "left",
+    "collapsePriority": 90
   },
   "commands": [],
   "ipc": []

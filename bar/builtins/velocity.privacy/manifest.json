@@ -4,7 +4,7 @@
   "id": "velocity.privacy",
   "name": "Privacy",
   "version": "1.0.0",
-  "description": "Built-in: mic/camera privacy pill \u2014 click opens the PRIVACY tray card.",
+  "description": "Built-in: mic/camera privacy pill — click opens the PRIVACY tray card.",
   "author": "velocity",
   "license": "MIT",
   "kinds": [
@@ -14,7 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "bar": {
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "collapsePriority": 60
   },
   "commands": [],
   "ipc": []

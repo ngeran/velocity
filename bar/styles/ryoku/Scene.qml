@@ -112,19 +112,23 @@ Item {
             // Sections come from plugins-state.json `layout`; ryoku swaps in
             // its own workspaces (overrides) and keeps every other widget.
             Engine.BarSection {
+                id: leftSection
                 name: "left"
                 window: panelWindow
                 gap: 10
                 overrides: ({ "velocity.workspaces": ryokuWorkspaces })
+                fitMap: panelWindow.fitPlan.maps.left
                 Layout.fillHeight: true
             }
 
             Item { Layout.fillWidth: true; Layout.fillHeight: true }
 
             Engine.BarSection {
+                id: rightSection
                 name: "right"
                 window: panelWindow
                 gap: Config.BarConfig.slotMargin
+                fitMap: panelWindow.fitPlan.maps.right
                 Layout.fillHeight: true
             }
 
@@ -203,14 +207,29 @@ Item {
             color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)
         }
 
-        // Center section: anchored to the window, so it stays dead-center
-        // regardless of the rails. Empty center = nothing drawn.
+        // Overflow plan (engine lib/fit.mjs): measured cell widths + collapse
+        // priorities in; compact/collapse maps and the clamped center x out.
+        readonly property var fitPlan: Engine.PluginRegistry.planFit({
+            width: panelWindow.width,
+            pad: Config.BarConfig.barPadding,
+            gap: 10,
+            slack: 8,
+            left: leftSection.cellInfos,
+            center: centerSection.cellInfos,
+            right: rightSection.cellInfos
+        })
+
+        // Center section: x from the plan — dead-center ideal, clamped
+        // between the rails (anchors.centerIn used to overlap them on narrow
+        // windows). Empty center = nothing drawn.
         Engine.BarSection {
-            anchors.centerIn: parent
+            id: centerSection
+            x: panelWindow.fitPlan.centerX
             height: parent.height
             name: "center"
             window: panelWindow
             gap: 14
+            fitMap: panelWindow.fitPlan.maps.center
         }
     }
     }   // Variants (per-output bars)

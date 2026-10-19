@@ -69,6 +69,14 @@ ok("JSON errors are validation errors, not throws", () => {
     assert.match(r.errors[0], /not valid JSON/)
 })
 
+ok("bar.collapsePriority: optional int, defaults to 50", () => {
+    const m = () => ({ schemaVersion: 2, id: "a.bb", name: "n", version: "1", kinds: ["bar-widget"], entryPoints: { barWidget: "B.qml" } })
+    assert.equal(parseManifest(JSON.stringify(m())).plugin.collapsePriority, 50)
+    assert.equal(parseManifest(JSON.stringify({ ...m(), bar: { collapsePriority: 90 } })).plugin.collapsePriority, 90)
+    for (const bad of ["x", 2.5, null])
+        assert.match(errs({ ...m(), bar: { collapsePriority: bad } }), /collapsePriority must be an integer/)
+})
+
 ok("every in-repo plugin manifest validates offline", () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), "../../../plugins")
     for (const d of readdirSync(root)) {

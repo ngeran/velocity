@@ -31,6 +31,20 @@ Item {
         precision: SystemClock.Minutes
     }
 
+    // Overflow contract (engine fit plan): the width this root collapses to
+    // when ctx.fit === "compact" — time + weather glyph, no date/temperature.
+    // A hidden probe measures the compact string in the real font without
+    // waiting for the state to change, so the plan gets a true number.
+    Text {
+        id: compactProbe
+        visible: false
+        text: root._formattedTime(clk.date)
+        font.family: ctx ? ctx.bar.fontFamily : "monospace"
+        font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
+    }
+    readonly property real compactWidth: 24 + anchorRow.spacing
+                                         + compactProbe.implicitWidth + 4 + wxGlyph.implicitWidth
+
     // Embedded weather fetcher — self-contained (no cross-plugin import).
     WeatherSource {
         id: wxSource
@@ -82,9 +96,12 @@ Item {
             anchors.centerIn: parent
             spacing: 10
 
-            // Time text — click toggles the calendar popup
+            // Time text — click toggles the calendar popup. Compact (ctx.fit)
+            // drops the weekday and keeps "HH:MM" only.
             Text {
-                text: root._formattedDate(clk.date)
+                id: timeText
+                text: (ctx && ctx.fit === "compact") ? root._formattedTime(clk.date)
+                                                     : root._formattedDate(clk.date)
                 font.family: ctx ? ctx.bar.fontFamily : "monospace"
                 font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
                 color: timeHover.hovered ? ctx.theme.colors.accent
@@ -111,6 +128,7 @@ Item {
                     spacing: 4
 
                     Text {
+                        id: wxGlyph
                         text: wxSource.glyph
                         font.family: ctx ? ctx.bar.fontNerd : "monospace"
                         font.pixelSize: Math.max(10, Math.round(13 * (ctx ? ctx.bar.contentScale : 1)))
@@ -120,7 +138,7 @@ Item {
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
-                        visible: wxSource.hasData
+                        visible: wxSource.hasData && !(ctx && ctx.fit === "compact")
                         text: wxSource.temp
                         font.family: ctx ? ctx.bar.fontFamily : "monospace"
                         font.pixelSize: Math.max(9, Math.round(11 * (ctx ? ctx.bar.contentScale : 1)))

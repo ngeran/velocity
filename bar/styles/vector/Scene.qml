@@ -86,6 +86,20 @@ Item {
             onClicked: host.closeTray()
         }
 
+        // Overflow plan (engine lib/fit.mjs): the sections' measured cell
+        // widths + collapse priorities go in; compact/collapse maps and the
+        // clamped center x come out. The full stage demands slack headroom so
+        // a boundary-width window doesn't flap between full and compact.
+        readonly property var fitPlan: Engine.PluginRegistry.planFit({
+            width: panelWindow.width,
+            pad: Config.BarConfig.barPadding,
+            gap: Config.BarConfig.iconSpacing,
+            slack: 8,
+            left: leftRow.cellInfos,
+            center: centerRow.cellInfos,
+            right: rightRail.cellInfos
+        })
+
         RowLayout {
             anchors.fill: parent
             spacing: 0
@@ -95,32 +109,39 @@ Item {
             // Sections come from plugins-state.json `layout` (built-ins
             // included: logo, workspaces, tray icons are velocity.* plugins).
             Engine.BarSection {
+                id: leftRow
                 name: "left"
                 window: panelWindow
                 gap: Config.BarConfig.iconSpacing
+                fitMap: panelWindow.fitPlan.maps.left
                 Layout.fillHeight: true
             }
 
             Item { Layout.fillWidth: true; Layout.fillHeight: true }
 
             Engine.BarSection {
+                id: rightRail
                 name: "right"
                 window: panelWindow
                 gap: Config.BarConfig.slotMargin
+                fitMap: panelWindow.fitPlan.maps.right
                 Layout.fillHeight: true
             }
 
             Item { width: Config.BarConfig.barPadding; Layout.fillHeight: true }
         }
 
-        // Center section: anchored to the window, so it stays dead-center
-        // regardless of the rails. Empty center = nothing drawn.
+        // Center section: x from the plan — dead-center ideal, clamped
+        // between the rails (anchors.centerIn used to overlap them on narrow
+        // windows). Empty center = nothing drawn.
         Engine.BarSection {
-            anchors.centerIn: parent
+            id: centerRow
+            x: panelWindow.fitPlan.centerX
             height: parent.height
             name: "center"
             window: panelWindow
             gap: 14
+            fitMap: panelWindow.fitPlan.maps.center
         }
     }
     }   // Variants (per-output bars)

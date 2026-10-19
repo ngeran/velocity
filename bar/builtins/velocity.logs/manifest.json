@@ -4,7 +4,7 @@
   "id": "velocity.logs",
   "name": "Logs",
   "version": "1.0.0",
-  "description": "Built-in: logs icon \u2014 click toggles the system log overlay.",
+  "description": "Built-in: logs icon — click toggles the system log overlay.",
   "author": "velocity",
   "license": "MIT",
   "kinds": [
@@ -14,7 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "bar": {
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "collapsePriority": 30
   },
   "commands": [],
   "ipc": []

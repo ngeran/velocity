@@ -4,7 +4,7 @@
   "id": "velocity.settings",
   "name": "Settings",
   "version": "1.0.0",
-  "description": "Built-in: settings gear \u2014 opens the settings app.",
+  "description": "Built-in: settings gear — opens the settings app.",
   "author": "velocity",
   "license": "MIT",
   "kinds": [
@@ -14,7 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "bar": {
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "collapsePriority": 20
   },
   "commands": [],
   "ipc": []

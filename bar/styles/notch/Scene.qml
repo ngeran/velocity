@@ -124,6 +124,19 @@ Item {
                              (lastCaretX >= 0 ? lastCaretX : lobe.width / 2) - lobe.x))
 
             // Content-fitted lobe, screen-centered (Shibumi compactShell math).
+            // lobeW reads the sections' POST-collapse implicit widths: the fit
+            // plan below hides/shrinks cells, the sections shrink, the lobe
+            // follows. The plan's width budget is the content area the lobe
+            // can actually offer (window minus the lobe clamp and chrome).
+            readonly property var fitPlan: Engine.PluginRegistry.planFit({
+                width: Math.max(0, panelWindow.width - 10 - 2 * contentInset - 24),
+                pad: 0,
+                gap: Config.BarConfig.iconSpacing,
+                slack: 8,
+                left: leftRow.cellInfos,
+                center: centerRow.cellInfos,
+                right: rightRail.cellInfos
+            })
             readonly property real lobeW: Math.min(panelWindow.width - 10,
                     Math.max(80, leftRow.implicitWidth + centerRow.implicitWidth
                                  + rightRail.implicitWidth + 2 * contentInset + 24))
@@ -271,7 +284,10 @@ Item {
 
                 // ── SECTIONS — from plugins-state.json `layout` (built-ins
                 // included). Positioned absolutely inside the lobe; the lobe
-                // width fits their implicit widths. ──────────────────────────
+                // width fits their implicit widths. fitMap: the plan may
+                // compact or hide cells; the existing clamps below use the
+                // post-collapse implicit widths, so the lobe and center
+                // follow without their own overflow logic.
                 Engine.BarSection {
                     id: leftRow
                     x: panelWindow.contentInset
@@ -280,6 +296,7 @@ Item {
                     name: "left"
                     window: panelWindow
                     gap: Config.BarConfig.iconSpacing
+                    fitMap: panelWindow.fitPlan.maps.left
                 }
 
                 Engine.BarSection {
@@ -290,6 +307,7 @@ Item {
                     name: "right"
                     window: panelWindow
                     gap: Config.BarConfig.slotMargin
+                    fitMap: panelWindow.fitPlan.maps.right
                 }
 
                 // Center: screen-centered, clamped between the rails
@@ -301,6 +319,7 @@ Item {
                     name: "center"
                     window: panelWindow
                     gap: 14
+                    fitMap: panelWindow.fitPlan.maps.center
                     x: Math.max(panelWindow.contentInset + leftRow.implicitWidth + 12,
                             Math.min(lobe.width - panelWindow.contentInset
                                      - rightRail.implicitWidth - 12 - implicitWidth,

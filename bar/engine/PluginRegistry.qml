@@ -33,6 +33,7 @@ import Quickshell
 import Quickshell.Io
 import "lib/discovery.mjs" as Discovery
 import "lib/layout.mjs" as Layout
+import "lib/fit.mjs" as Fit
 
 Item {
     id: root
@@ -246,6 +247,11 @@ Item {
         return "ok"
     }
     function sectionOf(id) { return Layout.sectionOf(root.layout, id) }
+    // Pure overflow planning (lib/fit.mjs): scenes pass in the per-cell
+    // widths they measured + each cell's collapsePriority and get back the
+    // compact/collapse maps, effective section widths and the clamped center
+    // x. Passthrough here so styles never import engine internals by path.
+    function planFit(params) { return Fit.planFit(params) }
     function positionOf(id) {
         var s = Layout.sectionOf(root.layout, id)
         return s === "" ? -1 : root.layout[s].indexOf(id)

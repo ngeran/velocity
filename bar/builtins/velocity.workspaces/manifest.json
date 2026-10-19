@@ -14,7 +14,8 @@
     "barWidget": "BarWidget.qml"
   },
   "bar": {
-    "defaultSection": "left"
+    "defaultSection": "left",
+    "collapsePriority": 95
   },
   "commands": [],
   "ipc": []

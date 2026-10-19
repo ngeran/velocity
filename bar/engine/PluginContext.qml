@@ -48,6 +48,13 @@ QtObject {
     property var settings: null
     property var host: null
 
+    // Overflow state for THIS instance's window: "full" | "compact" |
+    // "collapsed". "compact" asks a widget to drop to its glyph/minimum form
+    // (the bar is tight); "collapsed" means the section already hid the cell.
+    // Bindings on this re-evaluate when the window resizes or the layout
+    // changes (BarSection drives it from the fit plan).
+    property string fit: "full"
+
     // One open popup at a time, bar-wide (PopupCoordinator). A plugin with
     // several panels (clock: calendar + weather) gives each a sub-key, so they
     // exclude each other too: slot keys are "<pluginId>" or "<pluginId>.<sub>".

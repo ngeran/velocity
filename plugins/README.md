@@ -107,6 +107,9 @@ Folders under user and bundled may not contain symlinks.
 - **kinds / entryPoints**: `bar-widget` → `barWidget`, `service` → `service`,
   `overlay` → `overlay`. A plugin may have several kinds.
 - **bar.defaultSection**: where the widget goes the first time it is enabled.
+- **bar.collapsePriority**: optional int (default 50) — when the bar runs out
+  of width, widgets hide lowest-priority first (settings 20 hides before
+  workspaces 95). Only matters on narrow windows.
 - **settings**: types `string`, `number` (`min`/`max`), `bool`, `enum`
   (`options`), `list` (of strings). Every key needs a valid `default`.
   Settings ▸ Plugins generates a form from this (⚙ on the row).
@@ -120,6 +123,10 @@ Folders under user and bundled may not contain symlinks.
 
 Declare `property var ctx: null` on each root; the engine injects it.
 
+A root may also expose `readonly property real compactWidth` — the width it
+shrinks to in `ctx.fit` `"compact"` — so the bar's overflow plan gets a real
+number instead of estimating (the built-in clock does this).
+
 | member | what |
 |--------|------|
 | `ctx.pluginId`, `ctx.dir`, `ctx.manifest` | identity |
@@ -127,6 +134,7 @@ Declare `property var ctx: null` on each root; the engine injects it.
 | `ctx.theme` | live theme tokens: `colors.accent`, `colors.text`, `colors.background`, `hairline`, … |
 | `ctx.bar` | bar tokens: `barHeight` (any int 18–64), `fontFamily`, `fontNerd`, `fontSizeIcon`, `fontSizeLabel` (pill/hover labels), `fontSizeBadge` (count badges), `contentScale` (barHeight/26 — scale your own one-off sizes off it), `colorText`, … |
 | `ctx.settings` | `values.<key>` (bindable), `get(key, fallback)`, `set(key, value)`, `onSettingChanged(key)` |
+| `ctx.fit` | `"full"` / `"compact"` / `"collapsed"`. On a narrow window the bar asks widgets to drop to their minimal form (`compact` — hide labels, keep the glyph); `collapsed` means the plan hid the cell entirely. React to it with bindings; do nothing and only wide widgets lose their labels. |
 | `ctx.run(argv)` | fire-and-forget command; `argv[0]` must be in `manifest.commands` |
 | `ctx.popup` | `open`, `request(sub)`, `release(sub)`: one popup at a time across the whole bar |
 | `ctx.events` | `onHyprEvent(line)`: the bar's Hyprland socket2 stream (don't open your own) |
