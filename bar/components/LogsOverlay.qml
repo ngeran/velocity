@@ -6,7 +6,7 @@
 // SUPER+T (`quickshell ipc -c bar call logs toggle`).
 //
 // SHELL mirrors KeybindsOverlay (two-phase show/hide, dim backdrop, Esc +
-// click-outside close, 900×680 sharp-corner card).
+// click-outside close, size-clamped (≤900×≤680) sharp-corner card).
 // INTERIOR mirrors FastfetchOverlay (pulsing header dot, live palette
 // swatches, dim grid + corner brackets, sub-header strip, footer status
 // dots + clock).
@@ -112,13 +112,13 @@ PanelWindow {
     }
 
     // =========================================================================
-    // CENTERED CARD (900×680 — same as FastfetchOverlay / KeybindsOverlay)
+    // CENTERED CARD (≤900×≤680 clamped — same as FastfetchOverlay / KeybindsOverlay)
     // =========================================================================
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 900
-        height: 680
+        width: Math.min(900, parent.width - 48)
+        height: Math.min(680, parent.height - 48)
         color: root.cBg
         border.color: root.cBorder
         border.width: 1

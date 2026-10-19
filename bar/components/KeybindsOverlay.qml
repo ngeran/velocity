@@ -45,8 +45,8 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 900
-        height: 680
+        width: Math.min(900, parent.width - 48)
+        height: Math.min(680, parent.height - 48)
         color: Config.ThemeConfig.colors.background
         border.color: Config.ThemeConfig.colors.border
         border.width: 1

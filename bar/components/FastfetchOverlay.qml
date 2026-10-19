@@ -3,7 +3,7 @@
 // =============================================================================
 // Opened from the Arch logo in the bar. Rebuilt from a plain fastfetch text
 // dump into a structured dashboard matching the NixOS System Info reference:
-// a 900×680 card (same size as ZaiUsageOverlay) with a grid of themed cards —
+// a size-clamped card (≤900×≤680, like ZaiUsageOverlay) with a grid of themed cards —
 // Hardware (CPU/GPU + RAM radial), Session, Storage, Network, Health, and a
 // full-width Software & OS strip.
 //
@@ -93,13 +93,13 @@ PanelWindow {
     }
 
     // =========================================================================
-    // CENTERED CARD (900×680 — same as ZaiUsageOverlay / KeybindsOverlay)
+    // CENTERED CARD (≤900×≤680 clamped — same as ZaiUsageOverlay / KeybindsOverlay)
     // =========================================================================
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 900
-        height: 680
+        width: Math.min(900, parent.width - 48)
+        height: Math.min(680, parent.height - 48)
         color: root.cBg
         border.color: root.cBorder
         border.width: 1

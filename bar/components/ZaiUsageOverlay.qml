@@ -1,7 +1,7 @@
 // =============================================================================
 // ZaiUsageOverlay.qml — HUD-style Z.ai usage analytics panel
 // =============================================================================
-// A 900×680 overlay that mirrors KeybindsOverlay's shell (full-screen
+// A size-clamped (≤900×≤680) overlay that mirrors KeybindsOverlay's shell (full-screen
 // transparent PanelWindow, dim backdrop, centered card, Esc / click-outside,
 // shown/visible + 220ms hide timer). Toggled via IPC:
 //   quickshell ipc -c bar call zaiUsage toggle    (bound to SUPER+Z)
@@ -181,13 +181,13 @@ PanelWindow {
     }
 
     // =========================================================================
-    // CENTERED CARD (900×680 — same as KeybindsOverlay)
+    // CENTERED CARD (≤900×≤680 clamped — same as KeybindsOverlay)
     // =========================================================================
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 900
-        height: 680
+        width: Math.min(900, parent.width - 48)
+        height: Math.min(680, parent.height - 48)
         color: root.cBg
         border.color: root.cBorder
         border.width: 1
