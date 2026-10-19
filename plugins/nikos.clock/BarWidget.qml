@@ -86,7 +86,7 @@ Item {
             Text {
                 text: root._formattedDate(clk.date)
                 font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                font.pixelSize: 12
+                font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
                 color: timeHover.hovered ? ctx.theme.colors.accent
                                          : (ctx ? ctx.theme.colors.text : "#ddd")
                 anchors.verticalCenter: parent.verticalCenter
@@ -113,7 +113,7 @@ Item {
                     Text {
                         text: wxSource.glyph
                         font.family: ctx ? ctx.bar.fontNerd : "monospace"
-                        font.pixelSize: 13
+                        font.pixelSize: Math.max(10, Math.round(13 * (ctx ? ctx.bar.contentScale : 1)))
                         color: wxHover.hovered ? ctx.theme.colors.accent
                                                : (ctx ? ctx.theme.colors.success : "#888")
                         anchors.verticalCenter: parent.verticalCenter
@@ -123,7 +123,7 @@ Item {
                         visible: wxSource.hasData
                         text: wxSource.temp
                         font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                        font.pixelSize: 11
+                        font.pixelSize: Math.max(9, Math.round(11 * (ctx ? ctx.bar.contentScale : 1)))
                         color: wxHover.hovered ? ctx.theme.colors.accent
                                                : (ctx ? ctx.theme.colors.text : "#ddd")
                         anchors.verticalCenter: parent.verticalCenter

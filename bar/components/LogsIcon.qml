@@ -32,7 +32,7 @@ Item {
             visible: root.expanded
             text: "LOGS"
             font.family: Config.BarConfig.fontFamily
-            font.pixelSize: 11
+            font.pixelSize: Config.BarConfig.fontSizeLabel
             color: Config.ThemeConfig.colors.text
             anchors.verticalCenter: parent.verticalCenter
         }

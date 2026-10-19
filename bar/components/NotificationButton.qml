@@ -86,7 +86,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: "ALERTS" + (root._count > 0 ? " " + (root._count > 9 ? "9+" : root._count) : "")
         font.family: Config.BarConfig.fontFamily
-        font.pixelSize: 11
+        font.pixelSize: Config.BarConfig.fontSizeLabel
         color: Config.ThemeConfig.colors.text
     }
 
@@ -124,7 +124,7 @@ Item {
             anchors.centerIn: parent
             text: root._count > 9 ? "9+" : root._count
             color: Config.ThemeConfig.colors.background
-            font.pixelSize: 8
+            font.pixelSize: Config.BarConfig.fontSizeBadge
             font.bold: true
             font.family: Config.BarConfig.fontFamily
         }

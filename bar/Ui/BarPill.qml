@@ -59,7 +59,7 @@ Item {
             visible: pill.expanded
             text: pill.label
             font.family: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontFamily : "monospace"
-            font.pixelSize: 11
+            font.pixelSize: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontSizeLabel : 11
             color: pill.ctx && pill.ctx.theme ? pill.ctx.theme.colors.text : "#aaaaaa"
             anchors.verticalCenter: parent.verticalCenter
         }

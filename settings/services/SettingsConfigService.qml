@@ -38,7 +38,7 @@ Item {
     }
 
     // Bar settings (cross-process - bar reads from config file)
-    property int barHeight: 26                  // 20, 26, 32, 40
+    property int barHeight: 26                  // any int 18–64 (mirrors bar-config.json)
     // Bar style (bar/styles/<name>/Scene.qml) — live-swappable; the bar
     // falls back to "vector" when a style is missing/broken.
     property string barStyle: "vector"
@@ -154,8 +154,8 @@ Item {
         if (data.cornerRadius !== undefined && [0, 4, 8, 12].indexOf(data.cornerRadius) !== -1) {
             root.cornerRadius = data.cornerRadius
         }
-        if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1) {
-            root.barHeight = data.barHeight
+        if (data.barHeight !== undefined) {
+            root.barHeight = Math.max(18, Math.min(64, Math.round(data.barHeight)))
         }
         if (typeof data.barStyle === "string" && data.barStyle.length > 0) {
             root.barStyle = data.barStyle

@@ -125,7 +125,7 @@ Declare `property var ctx: null` on each root; the engine injects it.
 | `ctx.pluginId`, `ctx.dir`, `ctx.manifest` | identity |
 | `ctx.window`, `ctx.screen` | the bar window / screen this instance lives on (one widget per monitor) |
 | `ctx.theme` | live theme tokens: `colors.accent`, `colors.text`, `colors.background`, `hairline`, … |
-| `ctx.bar` | bar tokens: `barHeight`, `fontFamily`, `fontNerd`, `fontSizeIcon`, `colorText`, … |
+| `ctx.bar` | bar tokens: `barHeight` (any int 18–64), `fontFamily`, `fontNerd`, `fontSizeIcon`, `fontSizeLabel` (pill/hover labels), `fontSizeBadge` (count badges), `contentScale` (barHeight/26 — scale your own one-off sizes off it), `colorText`, … |
 | `ctx.settings` | `values.<key>` (bindable), `get(key, fallback)`, `set(key, value)`, `onSettingChanged(key)` |
 | `ctx.run(argv)` | fire-and-forget command; `argv[0]` must be in `manifest.commands` |
 | `ctx.popup` | `open`, `request(sub)`, `release(sub)`: one popup at a time across the whole bar |

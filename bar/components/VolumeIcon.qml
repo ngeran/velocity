@@ -36,7 +36,7 @@ Item {
             text: Services.AudioService.muted ? "MUTED"
                   : "VOL " + Math.round(Services.AudioService.volume) + "%"
             font.family: Config.BarConfig.fontFamily
-            font.pixelSize: 11
+            font.pixelSize: Config.BarConfig.fontSizeLabel
             color: Config.ThemeConfig.colors.text
             anchors.verticalCenter: parent.verticalCenter
         }

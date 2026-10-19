@@ -69,7 +69,7 @@ Item {
         anchors.topMargin: 4
         text: "System Info"
         font.family: Config.BarConfig.fontFamily
-        font.pixelSize: 10
+        font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
         color: Config.ThemeConfig.colors.textDim
         visible: mouseArea.containsMouse
         opacity: mouseArea.containsMouse ? 1.0 : 0.0

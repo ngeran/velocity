@@ -18,6 +18,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import "../config" as Config
 import "../services" as Services
 
@@ -370,13 +371,15 @@ Item {
                     SettingRow {
                         label: "BAR HEIGHT"
                         section: "bar"
+                        keywords: "bar height size scale"
                         value: Services.SettingsConfigService.barHeight + "px"
-                        Repeater {
-                            model: [20, 26, 32, 40]
-                            delegate: OptSeg {
-                                text: modelData + "px"
-                                active: Services.SettingsConfigService.barHeight === modelData
-                                onPicked: { Services.SettingsConfigService.barHeight = modelData; Services.SettingsConfigService.saveSettings() }
+                        Slider {
+                            Layout.fillWidth: true
+                            from: 18; to: 64; stepSize: 1
+                            value: Services.SettingsConfigService.barHeight
+                            onMoved: {
+                                Services.SettingsConfigService.barHeight = Math.round(value)
+                                Services.SettingsConfigService.saveSettings()
                             }
                         }
                     }

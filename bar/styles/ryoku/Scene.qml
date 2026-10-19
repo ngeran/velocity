@@ -169,7 +169,7 @@ Item {
                             anchors.centerIn: parent
                             text: wsCell.ws < 10 ? "0" + wsCell.ws : "" + wsCell.ws
                             font.family: Config.BarConfig.fontFamily
-                            font.pixelSize: 10
+                            font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
                             font.letterSpacing: 1.2
                             color: wsCell.active
                                    ? (panelWindow.wsPlateBright

@@ -67,8 +67,8 @@ Item {
         _lastRaw = text
         try {
             var data = JSON.parse(text)
-            if (data.barHeight !== undefined && [20, 26, 32, 40].indexOf(data.barHeight) !== -1)
-                barHeight = data.barHeight
+            if (data.barHeight !== undefined)
+                barHeight = Math.max(18, Math.min(64, Math.round(data.barHeight)))
             if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
                 workspaceCount = data.workspaceCount
             if (data.clockCity !== undefined)
@@ -116,11 +116,12 @@ Item {
     // GEOMETRY
     // =========================================================================
 
-    // barHeight is configurable ([20, 26, 32, 40]). Every visible item in the
-    // bar scales off this baseline so the bar stays proportional at any height
-    // — icons, clock text, and workspace dots all grow/shrink together instead
-    // of floating unchanged inside a taller bar. Baseline = 26px (the default),
-    // so _contentScale is 1.0 at the default and the default look is preserved.
+    // barHeight is configurable — any int 18–64 (clamped on ingest). Every
+    // visible item in the bar scales off this baseline so the bar stays
+    // proportional at any height — icons, clock text, and workspace dots all
+    // grow/shrink together instead of floating unchanged inside a taller bar.
+    // Baseline = 26px (the default), so _contentScale is 1.0 at the default
+    // and the default look is preserved.
     readonly property real _contentScale: root.barHeight / 26.0
 
     readonly property int barPadding: 12
@@ -148,6 +149,11 @@ Item {
     readonly property int fontSizeClock: Math.max(10, Math.round(14 * _contentScale))
     readonly property int fontSizeDate: Math.max(7, Math.round(9 * _contentScale))
     readonly property int fontSizeIcon: Math.max(10, Math.round(14 * _contentScale))   // tray glyph
+    readonly property int fontSizeLabel: Math.max(9, Math.round(11 * _contentScale))   // pill/hover labels
+    readonly property int fontSizeBadge: Math.max(7, Math.round(8 * _contentScale))    // count badges
+    // Exposed for the few one-off sizes that have no token (logo wordmark,
+    // plugin pill text at their own baselines) — ctx.bar reaches this too.
+    readonly property real contentScale: _contentScale
 
     // =========================================================================
     // WORKSPACES

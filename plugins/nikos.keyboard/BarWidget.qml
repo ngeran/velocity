@@ -175,7 +175,7 @@ Item {
             visible: root.hot
             text: root.abbr
             font.family: ctx ? ctx.bar.fontFamily : "monospace"
-            font.pixelSize: 11
+            font.pixelSize: ctx ? ctx.bar.fontSizeLabel : 11
             font.weight: Font.Bold
             color: ctx ? ctx.theme.colors.text : "#aaa"
             anchors.verticalCenter: parent.verticalCenter
