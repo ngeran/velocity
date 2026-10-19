@@ -50,7 +50,7 @@ PanelWindow {
         onTriggered: if (!root.shown) root.visible = false
     }
 
-    readonly property int panelWidth: 380
+    readonly property int panelWidth: Config.PopupMetrics.px(380)
     readonly property int unreadCount: Services.NotificationService.unreadCount
 
     // ---- dim backdrop (click-outside = dismiss) ----
@@ -70,7 +70,7 @@ PanelWindow {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right      // pinned right, 5px in — same edge gap as the tray popups
-        anchors.rightMargin: 5
+        anchors.rightMargin: Config.PopupMetrics.px(5)
         width: root.panelWidth
         color: Config.ThemeConfig.colors.background          // pure black (OLED-safe)
         border.color: Config.ThemeConfig.colors.border       // subtle structure
@@ -106,7 +106,7 @@ PanelWindow {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 2
+            height: Config.PopupMetrics.px(2)
             color: Config.BarConfig.colorAccent
             visible: root.unreadCount > 0
         }
@@ -118,32 +118,32 @@ PanelWindow {
             // ----- header -----
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 52
+                Layout.preferredHeight: Config.PopupMetrics.px(52)
 
                 RowLayout {
-                    anchors.left: parent.left; anchors.leftMargin: 16
+                    anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(16)
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
+                    spacing: Config.PopupMetrics.px(8)
 
                     Text {
                         text: "󰂚"
                         font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: 14
+                        font.pixelSize: Config.PopupMetrics.px(14)
                         color: Config.BarConfig.colorAccent
                     }
                     Text {
                         text: "Notifications"
                         color: Config.ThemeConfig.colors.text
-                        font.pixelSize: 14
+                        font.pixelSize: Config.PopupMetrics.px(14)
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
                     }
 
                     // Do-Not-Disturb toggle (same-process; persisted by NotificationService)
                     Rectangle {
-                        Layout.preferredWidth: 48
-                        Layout.preferredHeight: 20
-                        radius: 10
+                        Layout.preferredWidth: Config.PopupMetrics.px(48)
+                        Layout.preferredHeight: Config.PopupMetrics.px(20)
+                        radius: Config.PopupMetrics.px(10)
                         color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : "transparent"
                         border.color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.border
                         border.width: 1
@@ -151,7 +151,7 @@ PanelWindow {
                             anchors.centerIn: parent
                             text: "DND"
                             color: Services.NotificationService.dnd ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 9; font.bold: true
+                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                             font.family: Config.BarConfig.fontFamily
                         }
                         MouseArea {
@@ -164,15 +164,15 @@ PanelWindow {
 
                 // Clear All — icon-first action button
                 RowLayout {
-                    anchors.right: parent.right; anchors.rightMargin: 14
+                    anchors.right: parent.right; anchors.rightMargin: Config.PopupMetrics.px(14)
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 5
+                    spacing: Config.PopupMetrics.px(5)
                     opacity: Services.NotificationService.model.count === 0 ? 0.35 : 1.0
 
                     Text {
                         text: "󰎟"
                         font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: 11
+                        font.pixelSize: Config.PopupMetrics.px(11)
                         color: clearMa.containsMouse
                                ? Config.ThemeConfig.colors.error
                                : Config.ThemeConfig.colors.textDim
@@ -184,7 +184,7 @@ PanelWindow {
                         color: clearMa.containsMouse
                                ? Config.ThemeConfig.colors.error
                                : Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 10
+                        font.pixelSize: Config.PopupMetrics.px(10)
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
                         Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
@@ -216,9 +216,9 @@ PanelWindow {
                 id: list
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 12
+                Layout.margins: Config.PopupMetrics.px(12)
                 clip: true
-                spacing: 8
+                spacing: Config.PopupMetrics.px(8)
                 model: Services.NotificationService.model
                 delegate: StaggerIn {
                     index: model.index
@@ -229,13 +229,13 @@ PanelWindow {
                 ColumnLayout {
                     anchors.centerIn: parent
                     visible: Services.NotificationService.model.count === 0
-                    spacing: 6
+                    spacing: Config.PopupMetrics.px(6)
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: "󰂛"
                         font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: 30
+                        font.pixelSize: Config.PopupMetrics.px(30)
                         color: Config.ThemeConfig.colors.textDim
                         opacity: 0.45
                     }
@@ -243,7 +243,7 @@ PanelWindow {
                         Layout.alignment: Qt.AlignHCenter
                         text: "All caught up"
                         color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 12
+                        font.pixelSize: Config.PopupMetrics.px(12)
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.7
@@ -254,7 +254,7 @@ PanelWindow {
                               ? Services.NotificationService.clearedCount + " cleared — restore below"
                               : "No new notifications"
                         color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 10
+                        font.pixelSize: Config.PopupMetrics.px(10)
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.45
                     }
@@ -264,8 +264,8 @@ PanelWindow {
             // ----- history: rows archived on expiry (in-memory, capped) -----
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.margins: 12
-                spacing: 6
+                Layout.margins: Config.PopupMetrics.px(12)
+                spacing: Config.PopupMetrics.px(6)
                 visible: Services.NotificationService.history.count > 0
 
                 Rectangle {
@@ -274,11 +274,11 @@ PanelWindow {
                 }
 
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 8
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
                     Text {
                         text: "RECENTLY EXPIRED · " + Services.NotificationService.history.count
                         color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 9; font.bold: true
+                        font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                         font.letterSpacing: 1.2
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.7
@@ -288,7 +288,7 @@ PanelWindow {
                         text: "CLEAR"
                         color: histClearMa.containsMouse ? Config.ThemeConfig.colors.error
                                                          : Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 9; font.bold: true
+                        font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.7
                         Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
@@ -304,11 +304,11 @@ PanelWindow {
                 Repeater {
                     model: Services.NotificationService.history
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 8
+                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
                         Text {
                             text: model.appName
                             color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 9; font.bold: true
+                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                             font.capitalization: Font.AllUppercase
                             font.family: Config.BarConfig.fontFamily
                             opacity: 0.6
@@ -317,7 +317,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             text: model.summary
                             color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: 10
+                            font.pixelSize: Config.PopupMetrics.px(10)
                             font.family: Config.BarConfig.fontFamily
                             elide: Text.ElideRight
                             opacity: 0.55
@@ -329,7 +329,7 @@ PanelWindow {
             // ----- footer summary + soft-clear restore -----
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 32
+                Layout.preferredHeight: Config.PopupMetrics.px(32)
                 visible: Services.NotificationService.model.count > 0 ||
                          Services.NotificationService.clearedCount > 0
 
@@ -342,14 +342,14 @@ PanelWindow {
                 }
 
                 Text {
-                    anchors.left: parent.left; anchors.leftMargin: 16
+                    anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(16)
                     anchors.verticalCenter: parent.verticalCenter
                     visible: Services.NotificationService.model.count > 0
                     text: root.unreadCount > 0
                           ? root.unreadCount + " unread · " + Services.NotificationService.model.count + " total"
                           : Services.NotificationService.model.count + " total"
                     color: Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Config.PopupMetrics.px(10)
                     font.family: Config.BarConfig.fontFamily
                     opacity: 0.7
                 }
@@ -357,15 +357,15 @@ PanelWindow {
                 // Cleared rows are hidden, not gone — surface the undo here.
                 RowLayout {
                     anchors.right: parent.right
-                    anchors.rightMargin: 16
+                    anchors.rightMargin: Config.PopupMetrics.px(16)
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
+                    spacing: Config.PopupMetrics.px(6)
                     visible: Services.NotificationService.clearedCount > 0
 
                     Text {
                         text: Services.NotificationService.clearedCount + " cleared"
                         color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 10
+                        font.pixelSize: Config.PopupMetrics.px(10)
                         font.family: Config.BarConfig.fontFamily
                         opacity: 0.7
                     }
@@ -373,7 +373,7 @@ PanelWindow {
                         text: "RESTORE"
                         color: restoreMa.containsMouse ? Config.ThemeConfig.colors.primary
                                                        : Config.ThemeConfig.colors.textDim
-                        font.pixelSize: 10
+                        font.pixelSize: Config.PopupMetrics.px(10)
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
                         Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }

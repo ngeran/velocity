@@ -149,30 +149,30 @@ PanelWindow {
     ColumnLayout {
         id: trayContent
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.margins: Config.PopupMetrics.px(12)
         spacing: 0
 
         // ── HEADER ──
         Item {
             Layout.fillWidth: true
-            height: 34
+            height: Config.PopupMetrics.px(34)
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: Config.PopupMetrics.px(12)
+                anchors.rightMargin: Config.PopupMetrics.px(10)
+                spacing: Config.PopupMetrics.px(8)
 
                 Text {
                     text: card.headerIcon
                     font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: 14
+                    font.pixelSize: Config.PopupMetrics.px(14)
                     color: Config.BarConfig.colorAccent
                 }
                 Text {
                     text: card.headerTitle
                     font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: Config.PopupMetrics.px(10)
                     font.bold: true
                     font.letterSpacing: 2.5
                     color: Config.BarConfig.colorText
@@ -183,7 +183,7 @@ PanelWindow {
                     visible: card.lastTray === "bluetooth" && Services.BluetoothService.hasBluetooth
                     text: "󰑐"
                     font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: 13
+                    font.pixelSize: Config.PopupMetrics.px(13)
                     color: hdrScanArea.containsMouse
                            ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -200,7 +200,7 @@ PanelWindow {
                     visible: card.lastTray === "network" && Services.NetworkService.isConnected
                     text: "󰀄"
                     font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: 13
+                    font.pixelSize: Config.PopupMetrics.px(13)
                     color: hdrQrArea.containsMouse || card.qrOpen
                            ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -219,14 +219,14 @@ PanelWindow {
                     // volume tray: node id label (mockup "hw:0,0" slot)
                     visible: card.lastTray === "volume" && Services.AudioService.hasAudio
                     text: Services.AudioService.hwLabel
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                     color: Config.BarConfig.colorTextDim
                     elide: Text.ElideMiddle
-                    Layout.maximumWidth: 110
+                    Layout.maximumWidth: Config.PopupMetrics.px(110)
                 }
                 Text {
                     text: "✕"
-                    font.pixelSize: 11
+                    font.pixelSize: Config.PopupMetrics.px(11)
                     color: closeArea.containsMouse
                            ? Config.BarConfig.colorAccent
                            : Config.BarConfig.colorTextDim
@@ -264,7 +264,7 @@ PanelWindow {
             ColumnLayout {
                 id: networkBody
                 Layout.fillWidth: true
-                Layout.margins: 16
+                Layout.margins: Config.PopupMetrics.px(16)
                 spacing: 0
 
                 // nmcli absent — dim dash instead of a misleading "DISCONNECTED" pill
@@ -276,40 +276,40 @@ PanelWindow {
                     verticalAlignment: Text.AlignVCenter
                     text: "—"
                     font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 28
+                    font.pixelSize: Config.PopupMetrics.px(28)
                     color: Config.BarConfig.colorTextDim
                 }
 
                 RowLayout {
                     visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; spacing: 6
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(6)
                     Rectangle {
-                        width: connLbl.implicitWidth + 18; height: 24
-                        radius: 5
+                        width: connLbl.implicitWidth + 18; height: Config.PopupMetrics.px(24)
+                        radius: Config.PopupMetrics.px(5)
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: connLbl; anchors.centerIn: parent
                             text: Services.NetworkService.isConnected ? "CONNECTED" : "DISCONNECTED"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5
                             color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Item { Layout.fillWidth: true }
                     // QR Connect — opens the NETWORK CREDENTIALS view
                     Rectangle {
                         visible: Services.NetworkService.isConnected
-                        width: qrConnRow.implicitWidth + 18; height: 24
-                        radius: 5
+                        width: qrConnRow.implicitWidth + 18; height: Config.PopupMetrics.px(24)
+                        radius: Config.PopupMetrics.px(5)
                         color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Row {
                             id: qrConnRow
                             anchors.centerIn: parent
-                            spacing: 6
-                            Text { text: "󰀄"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 10; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                            Text { text: "QR Connect"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            spacing: Config.PopupMetrics.px(6)
+                            Text { text: "󰀄"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: "QR Connect"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
                         }
                         MouseArea {
                             id: qrConnArea
@@ -330,7 +330,7 @@ PanelWindow {
                     visible: Services.NetworkService.hasNetwork && !Services.NetworkService.wifiRadio && !Services.NetworkService.isConnected
                     Layout.fillWidth: true
                     text: "Wi-Fi radio is off — enable it below"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.italic: true
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10); font.italic: true
                     color: Config.BarConfig.colorTextDim
                 }
                 // ── detail rows — label left · value RIGHT (mockup) ──
@@ -342,13 +342,13 @@ PanelWindow {
                     // content-based width: the card sizes itself from these
                     implicitWidth: lblTxt.implicitWidth + valTxt.implicitWidth + 16
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: Config.PopupMetrics.px(28)
                     Text {
                         id: lblTxt
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.label
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                     }
@@ -357,7 +357,7 @@ PanelWindow {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.value
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(13)
                         font.bold: parent.valueBold
                         color: parent.valueColor
                         elide: Text.ElideMiddle
@@ -380,11 +380,11 @@ PanelWindow {
                 RowLayout {
                     visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: Config.PopupMetrics.px(28)
                     spacing: 0
                     Text {
                         text: "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         font.letterSpacing: 1
                         color: Config.BarConfig.colorTextDim
                         Layout.alignment: Qt.AlignVCenter
@@ -392,24 +392,24 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                     Text {
                         text: Services.NetworkService.signalStrength + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 13; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(13); font.bold: true
                         color: Config.BarConfig.colorText
                         Layout.alignment: Qt.AlignVCenter
                     }
                     Item { width: 10 }
                     Item {
                         Layout.preferredWidth: sigBars.implicitWidth
-                        Layout.preferredHeight: 16
+                        Layout.preferredHeight: Config.PopupMetrics.px(16)
                         Layout.alignment: Qt.AlignVCenter
                         Row {
                             id: sigBars
                             anchors.bottom: parent.bottom
-                            spacing: 2
+                            spacing: Config.PopupMetrics.px(2)
                             Repeater {
                                 model: 4
                                 Rectangle {
-                                    width: 4
-                                    height: 5 + index * 3
+                                    width: Config.PopupMetrics.px(4)
+                                    height: Config.PopupMetrics.px(5) + index * 3
                                     color: Services.NetworkService.signalStrength > index * 25
                                            ? Config.ThemeConfig.colors.primary
                                            : Config.ThemeConfig.hairlineSoft
@@ -419,9 +419,9 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: 4; visible: Services.NetworkService.isConnected }
+                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 4; visible: Services.NetworkService.isConnected }
+                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
                     label: "GATEWAY"
@@ -454,14 +454,14 @@ PanelWindow {
                           : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
                     valueBold: false
                 }
-                Item { height: 4; visible: Services.NetworkService.isConnected }
+                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
                 Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 8; visible: Services.NetworkService.isConnected }
+                Item { height: Config.PopupMetrics.px(8); visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
                 Rectangle {
                     visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; height: 34; radius: 6
+                    Layout.fillWidth: true; height: Config.PopupMetrics.px(34); radius: Config.PopupMetrics.px(6)
                     color: {
                         if (wifiBtnArea.containsMouse)
                             return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
@@ -470,9 +470,9 @@ PanelWindow {
                     border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: 6
-                        Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
-                        Text { text: Services.NetworkService.wifiRadio ? "DISABLE WI-FI" : "ENABLE WI-FI"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
+                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
+                        Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
+                        Text { text: Services.NetworkService.wifiRadio ? "DISABLE WI-FI" : "ENABLE WI-FI"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
                     }
                     MouseArea { id: wifiBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
                 }
@@ -486,7 +486,7 @@ PanelWindow {
             // PAIRED & NEARBY list with CONNECT/PAIR, DISABLE footer.
             ColumnLayout {
                 id: btBody
-                Layout.fillWidth: true; Layout.margins: 16; spacing: 0
+                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
 
                 // bluetoothctl absent — dim dash instead of a misleading "OFF" pill
                 Text {
@@ -497,25 +497,25 @@ PanelWindow {
                     verticalAlignment: Text.AlignVCenter
                     text: "—"
                     font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 28
+                    font.pixelSize: Config.PopupMetrics.px(28)
                     color: Config.BarConfig.colorTextDim
                 }
 
                 // ── adapter row: ON pill · UP state · DISCOVERABLE chip ──
                 RowLayout {
                     visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true; spacing: 10
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(10)
 
                     Rectangle {
-                        width: btLbl.implicitWidth + 20; height: 26
-                        radius: 5
+                        width: btLbl.implicitWidth + 20; height: Config.PopupMetrics.px(26)
+                        radius: Config.PopupMetrics.px(5)
                         color: Services.BluetoothService.powered ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: btLbl; anchors.centerIn: parent
                             text: Services.BluetoothService.powered ? "ON" : "OFF"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1.5
                             color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                         MouseArea {
                             anchors.fill: parent
@@ -525,27 +525,27 @@ PanelWindow {
                     }
                     Text {
                         text: Services.BluetoothService.powered ? "adapter: UP" : "adapter: DOWN"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         color: Config.BarConfig.colorTextDim
                     }
                     Item { Layout.fillWidth: true }
                     Rectangle {
                         visible: Services.BluetoothService.hasBluetooth
-                        width: discRow.implicitWidth + 16; height: 24
-                        radius: 5
+                        width: discRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
+                        radius: Config.PopupMetrics.px(5)
                         color: "transparent"
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Row {
                             id: discRow
-                            anchors.centerIn: parent; spacing: 6
+                            anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
                             Rectangle {
-                                width: 5; height: 5; radius: 2.5
+                                width: Config.PopupMetrics.px(5); height: Config.PopupMetrics.px(5); radius: Config.PopupMetrics.px(2.5)
                                 color: Config.ThemeConfig.colors.primary
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
                                 text: "DISCOVERABLE"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                                 font.letterSpacing: 1.2
                                 color: Config.BarConfig.colorText
                                 anchors.verticalCenter: parent.verticalCenter
@@ -560,7 +560,7 @@ PanelWindow {
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
                 Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
-                Item { height: 8; visible: Services.BluetoothService.hasBluetooth }
+                Item { height: Config.PopupMetrics.px(8); visible: Services.BluetoothService.hasBluetooth }
 
                 // ── CONNECTED section header ──
                 RowLayout {
@@ -568,19 +568,19 @@ PanelWindow {
                     Layout.fillWidth: true
                     Text {
                         text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                         font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
                     Item { Layout.fillWidth: true }
                     Text {
                         text: "BATTERY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                         font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
                 }
-                Item { height: 6; visible: Services.BluetoothService.hasBluetooth }
+                Item { height: Config.PopupMetrics.px(6); visible: Services.BluetoothService.hasBluetooth }
 
                 // ── connected device cards ──
                 Repeater {
@@ -591,52 +591,52 @@ PanelWindow {
                         required property var modelData
                         readonly property var batt: Services.BluetoothService.deviceBatteries[modelData.address]
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 46
-                        Layout.bottomMargin: 8
-                        radius: 6
+                        Layout.preferredHeight: Config.PopupMetrics.px(46)
+                        Layout.bottomMargin: Config.PopupMetrics.px(8)
+                        radius: Config.PopupMetrics.px(6)
                         color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Behavior on color { ColorAnimation { duration: 100 } }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12; anchors.rightMargin: 12
-                            spacing: 10
+                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(12)
+                            spacing: Config.PopupMetrics.px(10)
 
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorAccent }
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorAccent }
                             ColumnLayout {
-                                spacing: 1
+                                spacing: Config.PopupMetrics.px(1)
                                 Layout.fillWidth: true
                                 Text {
                                     text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: 190
+                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(190)
                                 }
                                 Text {
                                     text: modelData.address
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                                     color: Config.BarConfig.colorTextDim
-                                    elide: Text.ElideMiddle; Layout.maximumWidth: 190
+                                    elide: Text.ElideMiddle; Layout.maximumWidth: Config.PopupMetrics.px(190)
                                 }
                             }
                             Item { Layout.fillWidth: true }
                             Text {
                                 visible: batt !== undefined
                                 text: batt + "%"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                 color: Config.BarConfig.colorText
                             }
                             // battery bar (mockup) — green when healthy
                             Rectangle {
                                 visible: batt !== undefined
-                                width: 22; height: 11; radius: 2
+                                width: Config.PopupMetrics.px(22); height: 11; radius: Config.PopupMetrics.px(2)
                                 color: Config.ThemeConfig.hairlineSoft
                                 border.color: Config.BarConfig.colorBorder; border.width: 1
                                 Rectangle {
                                     anchors.left: parent.left
                                     anchors.top: parent.top; anchors.bottom: parent.top
-                                    anchors.margins: 2
+                                    anchors.margins: Config.PopupMetrics.px(2)
                                     width: (parent.width - 4) * batt / 100
                                     height: parent.height - 4
                                     color: batt >= 50 ? Config.ThemeConfig.colors.success
@@ -648,7 +648,7 @@ PanelWindow {
                             Text {
                                 visible: rowHover.containsMouse
                                 text: "✕"
-                                font.pixelSize: 10
+                                font.pixelSize: Config.PopupMetrics.px(10)
                                 color: discArea.containsMouse ? Config.ThemeConfig.colors.error : Config.BarConfig.colorTextDim
                                 MouseArea {
                                     id: discArea
@@ -673,7 +673,7 @@ PanelWindow {
                     text: Services.BluetoothService.powered
                           ? "No devices connected — pairing lives in Settings ▸ Control"
                           : "Bluetooth is off"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; font.italic: true
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                     color: Config.BarConfig.colorTextDim
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
@@ -684,7 +684,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     Text {
                         text: "PAIRED & NEARBY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                         font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
@@ -692,13 +692,13 @@ PanelWindow {
                     Text {
                         text: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
                               ? "SCANNING…" : "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                         font.letterSpacing: 1.5
                         color: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
                                ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim
                     }
                 }
-                Item { height: 6; visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
+                Item { height: Config.PopupMetrics.px(6); visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
 
                 Repeater {
                     visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
@@ -707,40 +707,40 @@ PanelWindow {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 46
-                        Layout.bottomMargin: 8
-                        radius: 6
+                        Layout.preferredHeight: Config.PopupMetrics.px(46)
+                        Layout.bottomMargin: Config.PopupMetrics.px(8)
+                        radius: Config.PopupMetrics.px(6)
                         color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12; anchors.rightMargin: 10
-                            spacing: 10
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorTextDim }
+                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
+                            spacing: Config.PopupMetrics.px(10)
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorTextDim }
                             ColumnLayout {
-                                spacing: 1
+                                spacing: Config.PopupMetrics.px(1)
                                 Layout.fillWidth: true
                                 Text {
                                     text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: 180
+                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(180)
                                 }
                                 Text {
                                     text: "Paired"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                                     color: Config.BarConfig.colorTextDim
                                 }
                             }
                             Rectangle {
-                                width: pnLbl.implicitWidth + 16; height: 24
-                                radius: 5
+                                width: pnLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
+                                radius: Config.PopupMetrics.px(5)
                                 color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                                 border.color: Config.BarConfig.colorBorder; border.width: 1
                                 Text { id: pnLbl; anchors.centerIn: parent
                                     text: "CONNECT"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
                                     color: Config.BarConfig.colorText }
                                 MouseArea {
                                     id: pnArea
@@ -762,40 +762,40 @@ PanelWindow {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 46
-                        Layout.bottomMargin: 8
-                        radius: 6
+                        Layout.preferredHeight: Config.PopupMetrics.px(46)
+                        Layout.bottomMargin: Config.PopupMetrics.px(8)
+                        radius: Config.PopupMetrics.px(6)
                         color: nbRow.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
                         border.color: Config.BarConfig.colorBorder; border.width: 1
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12; anchors.rightMargin: 10
-                            spacing: 10
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: 14; color: Config.BarConfig.colorTextDim }
+                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
+                            spacing: Config.PopupMetrics.px(10)
+                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorTextDim }
                             ColumnLayout {
-                                spacing: 1
+                                spacing: Config.PopupMetrics.px(1)
                                 Layout.fillWidth: true
                                 Text {
                                     text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11)
                                     color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: 180
+                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(180)
                                 }
                                 Text {
                                     text: "New device"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                                     color: Config.BarConfig.colorTextDim
                                 }
                             }
                             Rectangle {
-                                width: nbLbl.implicitWidth + 16; height: 24
-                                radius: 5
+                                width: nbLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
+                                radius: Config.PopupMetrics.px(5)
                                 color: nbArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                                 border.color: Config.BarConfig.colorBorder; border.width: 1
                                 Text { id: nbLbl; anchors.centerIn: parent
                                     text: "PAIR"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
                                     color: Config.BarConfig.colorText }
                                 MouseArea {
                                     id: nbArea
@@ -814,14 +814,14 @@ PanelWindow {
                 // ── DISABLE / ENABLE BLUETOOTH footer (mockup full-width pill) ──
                 Rectangle {
                     visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true; height: 32
-                    radius: 6
+                    Layout.fillWidth: true; height: Config.PopupMetrics.px(32)
+                    radius: Config.PopupMetrics.px(6)
                     color: btBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                     border.color: Config.BarConfig.colorBorder; border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: 6
-                        Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Config.BarConfig.colorTextDim }
-                        Text { text: Services.BluetoothService.powered ? "DISABLE BLUETOOTH" : "ENABLE BLUETOOTH"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorText }
+                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
+                        Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Config.BarConfig.colorTextDim }
+                        Text { text: Services.BluetoothService.powered ? "DISABLE BLUETOOTH" : "ENABLE BLUETOOTH"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorText }
                     }
                     MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
                 }
@@ -831,7 +831,7 @@ PanelWindow {
             // INPUT SOURCE mic strip, MUTE footer.
             ColumnLayout {
                 id: volumeBody
-                Layout.fillWidth: true; Layout.margins: 16; spacing: 0
+                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
 
                 // wpctl absent — dim dash instead of a misleading "0%"
                 Text {
@@ -842,37 +842,37 @@ PanelWindow {
                     verticalAlignment: Text.AlignVCenter
                     text: "—"
                     font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: 28
+                    font.pixelSize: Config.PopupMetrics.px(28)
                     color: Config.BarConfig.colorTextDim
                 }
 
                 // ── HERO — big glyph + huge % ──
                 RowLayout {
                     visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: 12
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(12)
 
                     Text {
                         text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 30
+                        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
                         color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Text {
                         text: Math.round(Services.AudioService.volume) + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 52; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(52); font.bold: true
                         color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     Item { Layout.fillWidth: true }
                 }
-                Item { height: 6; visible: Services.AudioService.hasAudio }
+                Item { height: Config.PopupMetrics.px(6); visible: Services.AudioService.hasAudio }
 
                 // ── master slider ──
                 Slider {
                     id: volSlider
                     visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28        // generous vertical click band
+                    Layout.preferredHeight: Config.PopupMetrics.px(28)        // generous vertical click band
                     hoverEnabled: true
                     from: 0; to: 100
                     value: Services.AudioService.volume
@@ -883,7 +883,7 @@ PanelWindow {
                     background: Rectangle {
                         x: volSlider.leftPadding
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        implicitHeight: 6; width: volSlider.availableWidth; radius: 0
+                        implicitHeight: Config.PopupMetrics.px(6); width: volSlider.availableWidth; radius: 0
                         color: Config.ThemeConfig.hairlineSoft
                         Rectangle {
                             height: parent.height
@@ -896,10 +896,10 @@ PanelWindow {
                     handle: Rectangle {
                         x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
                         y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        width: 18; height: 20; radius: 4
+                        width: 18; height: Config.PopupMetrics.px(20); radius: Config.PopupMetrics.px(4)
                         color: Config.BarConfig.colorBackground
                         border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                        border.width: 2
+                        border.width: Config.PopupMetrics.px(2)
                         scale: volSlider.pressed ? 1.15 : (volSlider.hovered ? 1.1 : 1.0)
                         Behavior on scale { NumberAnimation { duration: 90 } }
                     }
@@ -908,11 +908,11 @@ PanelWindow {
                 RowLayout {
                     visible: Services.AudioService.hasAudio
                     Layout.fillWidth: true
-                    Text { text: "0 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                    Text { text: "0 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
                     Item { Layout.fillWidth: true }
-                    Text { text: "+6 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                    Text { text: "+6 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
                     Item { Layout.fillWidth: true }
-                    Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; color: Config.BarConfig.colorTextDim }
+                    Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
                 }
                 Item { height: 10; visible: Services.AudioService.hasAudio }
                 Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
@@ -921,23 +921,23 @@ PanelWindow {
                 // ── OUTPUT SINK (PIPEWIRE) picker ──
                 RowLayout {
                     visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: 8
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
                     Text {
                         text: "OUTPUT SINK (PIPEWIRE)"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                         font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
                     Item { Layout.fillWidth: true }
                     Text {
                         text: Services.AudioService.hwLabel
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                         color: Config.ThemeConfig.colors.primary
                         elide: Text.ElideMiddle
-                        Layout.maximumWidth: 130
+                        Layout.maximumWidth: Config.PopupMetrics.px(130)
                     }
                 }
-                Item { height: 8; visible: Services.AudioService.hasAudio }
+                Item { height: Config.PopupMetrics.px(8); visible: Services.AudioService.hasAudio }
 
                 Repeater {
                     visible: Services.AudioService.hasAudio
@@ -947,8 +947,8 @@ PanelWindow {
                         required property var modelData
                         readonly property bool isDefault: modelData === Services.AudioService.sink
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 44
-                        radius: 6
+                        Layout.preferredHeight: Config.PopupMetrics.px(44)
+                        radius: Config.PopupMetrics.px(6)
                         color: sinkMa.containsMouse || isDefault
                                ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: isDefault ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
@@ -957,28 +957,28 @@ PanelWindow {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12; anchors.rightMargin: 10
-                            spacing: 10
+                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
+                            spacing: Config.PopupMetrics.px(10)
 
                             // selected dot (mockup: ● vs ○)
                             Rectangle {
-                                width: 7; height: 7; radius: 3.5
+                                width: Config.PopupMetrics.px(7); height: Config.PopupMetrics.px(7); radius: Config.PopupMetrics.px(3.5)
                                 color: isDefault ? Config.ThemeConfig.colors.primary : "transparent"
                                 border.color: Config.ThemeConfig.colors.primary; border.width: 1
                             }
                             ColumnLayout {
-                                spacing: 1
+                                spacing: Config.PopupMetrics.px(1)
                                 Layout.fillWidth: true
                                 Text {
                                     text: modelData.description || modelData.nickname || modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     color: isDefault ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
                                     elide: Text.ElideRight
                                     Layout.maximumWidth: sinkRowWidth - 150
                                 }
                                 Text {
                                     text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                                     color: Config.BarConfig.colorTextDim
                                     elide: Text.ElideMiddle
                                     Layout.maximumWidth: sinkRowWidth - 150
@@ -988,24 +988,24 @@ PanelWindow {
                             Rectangle {
                                 visible: isDefault
                                 width: defLbl.implicitWidth + 12; height: 17
-                                radius: 3
+                                radius: Config.PopupMetrics.px(3)
                                 color: Config.ThemeConfig.accentTint
                                 border.color: Config.ThemeConfig.colors.primary; border.width: 1
                                 Text { id: defLbl; anchors.centerIn: parent
                                     text: "DEFAULT"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1
+                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7); font.bold: true; font.letterSpacing: 1
                                     color: Config.ThemeConfig.colors.primary }
                             }
                             Text {
                                 visible: isDefault
                                 text: "✓"
-                                font.pixelSize: 12
+                                font.pixelSize: Config.PopupMetrics.px(12)
                                 color: Config.ThemeConfig.colors.primary
                             }
                             Text {
                                 visible: !isDefault
                                 text: "Select"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                                 color: sinkMa.containsMouse ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
                             }
                         }
@@ -1025,30 +1025,30 @@ PanelWindow {
                 // ── INPUT SOURCE (microphone) ──
                 ColumnLayout {
                     visible: Services.AudioService.hasMic
-                    Layout.fillWidth: true; spacing: 6
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(6)
 
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 8
-                        Text { text: "󰍬"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 11; color: Config.BarConfig.colorTextDim }
+                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
+                        Text { text: "󰍬"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(11); color: Config.BarConfig.colorTextDim }
                         Text {
                             text: "INPUT SOURCE"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
                             font.letterSpacing: 1.5
                             color: Config.BarConfig.colorTextDim
                         }
                         Item { Layout.fillWidth: true }
                         Text {
                             text: Math.round(Services.AudioService.micVolume) + "%"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10; font.bold: true
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true
                             color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
                         }
                     }
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(10)
                         Slider {
                             id: micSlider
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 22
+                            Layout.preferredHeight: Config.PopupMetrics.px(22)
                             hoverEnabled: true
                             from: 0; to: 100
                             value: Services.AudioService.micVolume
@@ -1056,7 +1056,7 @@ PanelWindow {
                             background: Rectangle {
                                 x: micSlider.leftPadding
                                 y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                implicitHeight: 4; width: micSlider.availableWidth; radius: 0
+                                implicitHeight: Config.PopupMetrics.px(4); width: micSlider.availableWidth; radius: 0
                                 color: Config.ThemeConfig.hairlineSoft
                                 Rectangle {
                                     height: parent.height
@@ -1067,18 +1067,18 @@ PanelWindow {
                             handle: Rectangle {
                                 x: micSlider.leftPadding + micSlider.visualPosition * (micSlider.availableWidth - width)
                                 y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                width: 14; height: 14; radius: 7
+                                width: 14; height: 14; radius: Config.PopupMetrics.px(7)
                                 color: Config.BarConfig.colorText
                             }
                         }
                         Rectangle {
-                            width: micLbl.implicitWidth + 16; height: 24
-                            radius: 6
+                            width: micLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
+                            radius: Config.PopupMetrics.px(6)
                             color: micBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                             border.color: Config.BarConfig.colorBorder; border.width: 1
                             Text { id: micLbl; anchors.centerIn: parent
                                 text: Services.AudioService.micMuted ? "UNMUTE MIC" : "MUTE MIC"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
                                 color: Services.AudioService.micMuted ? Config.ThemeConfig.colors.error : Config.BarConfig.colorText }
                             MouseArea { id: micBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMicMute() }
                         }
@@ -1089,8 +1089,8 @@ PanelWindow {
                 // ── MUTE footer ──
                 Rectangle {
                     visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; height: 32
-                    radius: 6
+                    Layout.fillWidth: true; height: Config.PopupMetrics.px(32)
+                    radius: Config.PopupMetrics.px(6)
                     color: {
                         if (muteBtnArea.containsMouse)
                             return Services.AudioService.muted ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillHover
@@ -1099,9 +1099,9 @@ PanelWindow {
                     border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: 6
-                        Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 12; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
-                        Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
+                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
+                        Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
+                        Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
                     }
                     MouseArea { id: muteBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {
                         Services.AudioService.toggleMute()
@@ -1118,7 +1118,7 @@ PanelWindow {
         ColumnLayout {
             id: privacyBody
             visible: card.lastTray === "privacy"
-            Layout.fillWidth: true; Layout.margins: 16; spacing: 0
+            Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
 
             readonly property var kindRows: {
                 var defs = [
@@ -1140,7 +1140,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: "Nothing is watching or listening."
-                font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
                 color: Config.BarConfig.colorTextDim
             }
 
@@ -1148,18 +1148,18 @@ PanelWindow {
             ColumnLayout {
                 visible: Services.PrivacyService.hasInhibitors
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: Config.PopupMetrics.px(6)
 
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 8
+                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
                     Text {
                         text: "󰌾"
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: 13
+                        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(13)
                         color: Config.ThemeConfig.colors.warning
                     }
                     Text {
                         text: "KEPT AWAKE"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                         font.bold: true; font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
@@ -1171,10 +1171,10 @@ PanelWindow {
 
                     delegate: RowLayout {
                         required property var modelData
-                        Layout.fillWidth: true; Layout.leftMargin: 21; spacing: 8
+                        Layout.fillWidth: true; Layout.leftMargin: Config.PopupMetrics.px(21); spacing: Config.PopupMetrics.px(8)
                         Text {
                             text: modelData.who
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
                             color: Config.BarConfig.colorText
                             Layout.fillWidth: true
                             elide: Text.ElideRight
@@ -1182,10 +1182,10 @@ PanelWindow {
                         Text {
                             visible: modelData.why !== ""
                             text: modelData.why
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                             color: Config.BarConfig.colorTextDim
                             elide: Text.ElideRight
-                            Layout.maximumWidth: 140
+                            Layout.maximumWidth: Config.PopupMetrics.px(140)
                         }
                     }
                 }
@@ -1200,23 +1200,23 @@ PanelWindow {
                     id: kindSection
                     required property var modelData
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: Config.PopupMetrics.px(6)
 
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 8
+                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
                         Text {
                             text: kindSection.modelData.glyph
-                            font.family: Config.BarConfig.fontNerd; font.pixelSize: 13
+                            font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(13)
                             color: Config.ThemeConfig.colors.error
                         }
                         Text {
                             text: kindSection.modelData.label
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                             font.bold: true; font.letterSpacing: 1.5
                             color: Config.BarConfig.colorTextDim
                         }
                         Item { Layout.fillWidth: true }
-                        Rectangle { width: 6; height: 6; radius: 3; color: Config.ThemeConfig.colors.error }
+                        Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: Config.ThemeConfig.colors.error }
                     }
 
                     Repeater {
@@ -1224,17 +1224,17 @@ PanelWindow {
 
                         delegate: RowLayout {
                             required property var modelData
-                            Layout.fillWidth: true; Layout.leftMargin: 21; spacing: 8
+                            Layout.fillWidth: true; Layout.leftMargin: Config.PopupMetrics.px(21); spacing: Config.PopupMetrics.px(8)
                             Text {
                                 text: modelData.app || "Unknown app"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 12
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
                                 color: Config.BarConfig.colorText
                                 Layout.fillWidth: true; elide: Text.ElideRight
                             }
                             Text {
                                 visible: modelData.pid !== null
                                 text: "pid " + modelData.pid
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                                 color: Config.BarConfig.colorTextDim
                             }
                         }
@@ -1263,27 +1263,27 @@ PanelWindow {
             ColumnLayout {
                 id: qrCol
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: Config.PopupMetrics.px(12)
                 spacing: 0
 
                 // ── header: dot · NETWORK CREDENTIALS · ✕ ──
                 Item {
                     Layout.fillWidth: true
-                    height: 30
+                    height: Config.PopupMetrics.px(30)
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 8
-                        Rectangle { width: 6; height: 6; radius: 3; color: Config.BarConfig.colorAccent; Layout.alignment: Qt.AlignVCenter }
+                        spacing: Config.PopupMetrics.px(8)
+                        Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: Config.BarConfig.colorAccent; Layout.alignment: Qt.AlignVCenter }
                         Text {
                             text: "NETWORK CREDENTIALS"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                             font.bold: true; font.letterSpacing: 2.5
                             color: Config.BarConfig.colorText
                             Layout.fillWidth: true
                         }
                         Text {
                             text: "✕"
-                            font.pixelSize: 11
+                            font.pixelSize: Config.PopupMetrics.px(11)
                             color: qrCloseArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
                             Behavior on color { ColorAnimation { duration: 100 } }
                             MouseArea {
@@ -1304,7 +1304,7 @@ PanelWindow {
                     width: qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 200
                     height: qrGrid.matrix.length > 0 ? qrGrid.matrix.length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 120
                     color: "#f2f2f2"
-                    radius: 12
+                    radius: Config.PopupMetrics.px(12)
 
                     Grid {
                         id: qrGrid
@@ -1337,7 +1337,7 @@ PanelWindow {
                         width: parent.width - 20
                         visible: Services.NetworkService.qrMatrix.length === 0
                         text: Services.NetworkService.qrError !== "" ? Services.NetworkService.qrError : "generating…"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                         color: "#141414"
                         wrapMode: Text.Wrap
                         horizontalAlignment: Text.AlignHCenter
@@ -1348,23 +1348,23 @@ PanelWindow {
                 // ── ssid • security • band ──
                 Row {
                     Layout.alignment: Qt.AlignHCenter
-                    spacing: 6
+                    spacing: Config.PopupMetrics.px(6)
                     Text {
                         text: Services.NetworkService.qrSsid !== "" ? Services.NetworkService.qrSsid : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                         color: Config.BarConfig.colorText
                     }
-                    Text { text: "•"; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: "•"; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
                     Text {
                         text: Services.NetworkService.qrSecurity !== "" ? Services.NetworkService.qrSecurity : "OPEN"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         color: Config.ThemeConfig.colors.primary
                         anchors.verticalCenter: parent.verticalCenter
                     }
-                    Text { text: "•"; font.pixelSize: 10; color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: "•"; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
                     Text {
                         text: Services.NetworkService.qrBand !== "" ? Services.NetworkService.qrBand : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 10
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         color: Config.BarConfig.colorTextDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
@@ -1374,39 +1374,39 @@ PanelWindow {
                 // ── NETWORK KEY chip + Copy ──
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 40
-                    radius: 8
+                    Layout.preferredHeight: Config.PopupMetrics.px(40)
+                    radius: Config.PopupMetrics.px(8)
                     color: Config.ThemeConfig.fillRest
                     border.color: Config.BarConfig.colorBorder; border.width: 1
 
                     Text {
-                        anchors.left: parent.left; anchors.leftMargin: 12
-                        anchors.top: parent.top; anchors.topMargin: 6
+                        anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(12)
+                        anchors.top: parent.top; anchors.topMargin: Config.PopupMetrics.px(6)
                         text: "NETWORK KEY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 7
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7)
                         font.bold: true; font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                     }
                     Text {
-                        anchors.left: parent.left; anchors.leftMargin: 12
-                        anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                        anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(12)
+                        anchors.bottom: parent.bottom; anchors.bottomMargin: Config.PopupMetrics.px(6)
                         text: Services.NetworkService.qrPassword !== "" ? Services.NetworkService.qrPassword : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 11; font.bold: true
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                         color: Config.BarConfig.colorText
                     }
                     Rectangle {
-                        anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.right: parent.right; anchors.rightMargin: Config.PopupMetrics.px(8)
                         anchors.verticalCenter: parent.verticalCenter
-                        width: copyRow.implicitWidth + 16; height: 24
-                        radius: 6
+                        width: copyRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
+                        radius: Config.PopupMetrics.px(6)
                         color: copyArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Row {
                             id: copyRow
                             anchors.centerIn: parent
-                            spacing: 5
-                            Text { text: card.copied ? "✓" : "󰆏"; font.family: Config.BarConfig.fontNerd; font.pixelSize: 10; color: card.copied ? Config.ThemeConfig.colors.success : Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                            Text { text: card.copied ? "Copied" : "Copy"; font.family: Config.BarConfig.fontFamily; font.pixelSize: 9; color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            spacing: Config.PopupMetrics.px(5)
+                            Text { text: card.copied ? "✓" : "󰆏"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(10); color: card.copied ? Config.ThemeConfig.colors.success : Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: card.copied ? "Copied" : "Copy"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
                         }
                         MouseArea {
                             id: copyArea
@@ -1420,31 +1420,31 @@ PanelWindow {
                 Text {
                     visible: card.copyFailed
                     text: "copy failed — wl-copy is not installed"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: 8
+                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
                     color: Config.ThemeConfig.colors.error
                 }
-                Item { height: 8 }
+                Item { height: Config.PopupMetrics.px(8) }
 
                 // ── footer: hint · Close ──
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Config.PopupMetrics.px(8)
                     Text {
                         text: "SCAN CAMERA OR QR READER"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: 7
+                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7)
                         font.bold: true; font.letterSpacing: 1.5
                         color: Config.BarConfig.colorTextDim
                         Layout.fillWidth: true
                     }
                     Rectangle {
-                        width: closeLbl.implicitWidth + 18; height: 24
-                        radius: 6
+                        width: closeLbl.implicitWidth + 18; height: Config.PopupMetrics.px(24)
+                        radius: Config.PopupMetrics.px(6)
                         color: footerCloseArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: Config.BarConfig.colorBorder; border.width: 1
                         Text {
                             id: closeLbl; anchors.centerIn: parent
                             text: "Close"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 9
+                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
                             color: Config.BarConfig.colorText
                         }
                         MouseArea {
