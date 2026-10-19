@@ -6,7 +6,7 @@ Item {
     id: root
     objectName: "xrayEntry"
 
-    property var shell: null
+    property var ctx: null
     property var manifest: null
     property alias opened: overlay.opened
     property alias shown: overlay.opened   // host exclusivity contract
@@ -33,6 +33,8 @@ Item {
 
     XRayOverlay {
         id: overlay
-        appLibrary: root.shell ? root.shell.appLibrary : null
+        // Omarchy's app browser has no velocity equivalent; IdentityBar
+        // falls back to plain names without it.
+        appLibrary: null
     }
 }

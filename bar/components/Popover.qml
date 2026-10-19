@@ -21,7 +21,7 @@
 //
 // Host responsibilities: parent the Popover to the overlay window's content
 // item, keep `visible: opened || card.opacity > 0` on the WINDOW, and wire
-// open/close exclusivity (PluginHostService.openPanel or the tray's
+// open/close exclusivity (Engine.PopupCoordinator via ctx.popup or the tray's
 // activeTray). The card surface (bg/radius/border + padding) is ours; the
 // body content is the consumer's via the default slot.
 //

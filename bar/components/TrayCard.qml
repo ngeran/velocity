@@ -11,6 +11,7 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import "../services" as Services
+import "../engine" as Engine
 import "../config" as Config
 
 PanelWindow {
@@ -68,23 +69,15 @@ PanelWindow {
         _publishConnected()
     }
 
-    // Notch-lobe plumbing (mirrors PluginPanel): publish caret geometry while
+    // Notch-lobe plumbing (mirrors PluginPopup): publish caret geometry while
     // a tray card is open so the lobe carves under it. Keyed "tray.<id>" —
     // plugin panels use their manifest id, so the two classes never collide.
     // Owner-checked clear keeps a successor's publish safe. Host-owned window
     // (mounted by shell.qml), so this survives style swaps — but clear anyway
     // on close: the notch style may have changed while we were open.
     function _publishConnected() {
-        var svc = Services.PluginHostService
-        if (activeTray === "") {
-            var owner = "tray." + lastTray
-            if (svc.connectedPanel && svc.connectedPanel.owner === owner)
-                svc.connectedPanel = null
-            return
-        }
-        svc.connectedPanel = { owner: "tray." + lastTray,
-                               screen: card.screen ? card.screen.name : "",
-                               caretX: dropdown.cardCenterX }
+        Engine.PopupCoordinator.publish("tray." + lastTray, activeTray === "" ? null
+            : { screen: card.screen ? card.screen.name : "", caretX: dropdown.cardCenterX })
     }
     Connections {
         target: dropdown

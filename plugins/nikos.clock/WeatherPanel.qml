@@ -20,7 +20,7 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: 12
 
-    // Shared token shorthands (hostTheme may be null until api lands).
+    // Shared token shorthands (hostTheme may be null until ctx lands).
     function _c(tok)      { return hostTheme ? hostTheme.colors[tok] : "#888" }
     function _a(tok, a)   { return hostTheme ? hostTheme.withAlpha(hostTheme.colors[tok], a) : "#222" }
     function _mono()      { return hostBar ? hostBar.fontFamily : "monospace" }

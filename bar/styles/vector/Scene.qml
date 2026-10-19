@@ -3,15 +3,16 @@
 // =============================================================================
 // Moved verbatim from shell.qml's bar strip (Phase-1 style architecture): this
 // style owns its windows (one PanelWindow per output via Variants) and the
-// whole rail layout — workspaces, layout slots, tray icons, plugin pills.
+// window chrome; WHAT renders in its left/center/right comes from the engine
+// layout (Engine.BarSection — built-ins and plugins alike).
 // The HOST (shell.qml) owns IPC handlers, shared overlays (TrayCard,
 // notification center, logs/keybinds/zai/fastfetch, OSD), and services.
 //
 // Contract with the host (injected as `host`):
-//   host.trayOwner                — set to this window when a tray opens
-//   host.closeNotificationCenter()/toggleLogs()/toggleFastfetch()/toggleNotificationCenter()
-//   host.ncShown / host.logsShown — overlay state for isActive feedback
-//   host.pluginItems              — plugin registry (summon/hide IPC routing)
+//   host.trayOwner / activeTray / closeTray() — empty-bar click closes the
+//                                   tray card this window opened
+//   Engine.BarSection ×3          — left/center/right; widgets reach the host
+//                                   through ctx (built-ins: ctx.host)
 //   sceneRoot.instances           — per-output windows (barToggle IPC)
 // Fallback: a style whose Scene.qml fails to load rolls the host back to
 // vector, so the bar never renders empty.
@@ -20,32 +21,13 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import "../../components" as Components
 import "../../config" as Config
-import "../../services" as Services
+import "../../engine" as Engine
 
 Item {
     id: sceneRoot
 
     property var host: null
-    // Registry helper with live-swap race guard: plugin delegates construct
-    // DURING scene build, before the host injection lands (Loader.onLoaded) —
-    // on a live style swap that order inverts (plugins list already warm).
-    // callLater defers the write one frame, by which time host is set.
-    function registerPlugin(id, item) {
-        if (!host) { Qt.callLater(function() { sceneRoot.registerPlugin(id, item) }); return }
-        var reg = host.pluginItems
-        reg[id] = item
-        host.pluginItems = reg
-    }
-    // Scene teardown (style swap) destroys plugin items — drop their registry
-    // entries so the host's summon/hide IPC never routes to dead objects.
-    function unregisterPlugin(id) {
-        if (!host || !host.pluginItems[id]) return
-        let reg = host.pluginItems
-        delete reg[id]
-        host.pluginItems = reg
-    }
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
@@ -67,10 +49,6 @@ Item {
             property var modelData: null
             screen: modelData
 
-            property string activeTray: ""   // "network" | "bluetooth" | "volume" | "power" | "" (closed)
-            // The icon that opened the tray — TrayCard's Popover centers
-            // under it. Set by the icon slots' trayRequested handlers.
-            property Item trayAnchor: null
 
             // Placeholder/zero-sized screens (connector hotplug churn) must
             // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
@@ -79,18 +57,6 @@ Item {
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
             property bool userHidden: false
             visible: validScreen && !userHidden
-
-            // A bar showing a tray card becomes the tray owner (its output
-            // hosts the TrayCard until closed). Opening a tray also closes
-            // any open plugin panel — one bar popover at a time, all classes.
-            onActiveTrayChanged: {
-                if (activeTray !== "") {
-                    host.trayOwner = panelWindow
-                    host.closeNotificationCenter()
-                    if (Services.PluginHostService.openPanel !== "")
-                        Services.PluginHostService.openPanel = ""
-                }
-            }
 
             // =========================================================================
             // POSITIONING
@@ -110,207 +76,51 @@ Item {
         color: Config.BarConfig.colorBackground
 
         // =========================================================================
-        // MAIN LAYOUT (Left and Right Sections)
+        // MAIN LAYOUT — three engine sections
         // =========================================================================
 
-        // Click on empty bar area closes the open tray card.
+        // Click on empty bar area closes the tray card this bar opened.
         MouseArea {
             anchors.fill: parent
-            enabled: panelWindow.activeTray !== ""
-            onClicked: panelWindow.activeTray = ""
+            enabled: !!host && host.trayOwner === panelWindow && host.activeTray !== ""
+            onClicked: host.closeTray()
         }
-
-        // (one-popup-at-a-time + tray-owner registration live in the
-        //  onActiveTrayChanged at the top of this window)
 
         RowLayout {
             anchors.fill: parent
             spacing: 0
 
-            // --- LEFT SIDE ---
+            Item { width: Config.BarConfig.barPadding; Layout.fillHeight: true }
 
-            Components.ArchLogo {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.barPadding
-                onTriggered: host.toggleFastfetch()
-            }
-
-            Components.WorkspaceWidget {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.BarConfig.iconSpacing
-            }
-
-            // --- HUGE MIDDLE GAP ---
-            // This spacer now pushes everything else all the way to the right side
-            Item {
-                Layout.fillWidth: true
+            // Sections come from plugins-state.json `layout` (built-ins
+            // included: logo, workspaces, tray icons are velocity.* plugins).
+            Engine.BarSection {
+                name: "left"
+                window: panelWindow
+                gap: Config.BarConfig.iconSpacing
                 Layout.fillHeight: true
             }
 
-            // --- RIGHT SIDE — order-driven rail (bar-config.json "rightLayout")
-            // Each slot keeps its exact hand-tuned wiring; the ORDER comes from
-            // config and hot-reloads with the 2s bar-config.json watcher.
-            Repeater {
-                model: Config.BarConfig.rightLayout
+            Item { Layout.fillWidth: true; Layout.fillHeight: true }
 
-                Loader {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 0
-                    // Auto-empty slots (privacy pill hides when idle) collapse
-                    // their margin too — no dead gap between neighbours.
-                    Layout.rightMargin: item && item.implicitWidth > 0 ? Config.BarConfig.slotMargin : 0
-                    sourceComponent: {
-                        if (modelData === "plugins")       return pluginsSlot
-                        if (modelData === "network")       return networkSlot
-                        if (modelData === "bluetooth")     return bluetoothSlot
-                        if (modelData === "volume")        return volumeSlot
-                        if (modelData === "privacy")       return privacySlot
-                        if (modelData === "logs")          return logsSlot
-                        if (modelData === "settings")      return settingsSlot
-                        if (modelData === "notifications") return notificationsSlot
-                        return null
-                    }
-                }
-            }
-
-            Item {
-                width: Config.BarConfig.barPadding
+            Engine.BarSection {
+                name: "right"
+                window: panelWindow
+                gap: Config.BarConfig.slotMargin
                 Layout.fillHeight: true
             }
+
+            Item { width: Config.BarConfig.barPadding; Layout.fillHeight: true }
         }
 
-        // ── slot components (order-independent definitions) ──────────────────
-        // keyboard converted → plugins/nikos.keyboard (lives in the plugins
-        // slot); "keyboard" as a rail key is no longer legal.
-        Component {
-            id: pluginsSlot
-            RowLayout {
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 8
-                // --- USER PLUGINS (bar-widget kind) ---
-                // One generation-guarded slot per enabled, validated plugin
-                // (PluginSlot = ryoku PluginObjectSlot port): a broken plugin
-                // keeps the previous instance mounted and reports into
-                // PluginHostService instead of tearing the rail down. api/theme
-                // come from the host as injected object references (never
-                // imports) so plugins share the process-wide singletons.
-                Repeater {
-                    model: Services.PluginHostService.barWidgetPlugins
-
-                    Components.PluginSlot {
-                        Layout.alignment: Qt.AlignVCenter
-                        pluginId: modelData.id
-                        Component.onDestruction: sceneRoot.unregisterPlugin(modelData.id)
-                        source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                        configure: function(item) {
-                            // Our nikos.* roots expose pluginId; omarchy-shaped
-                            // roots (QsBarWidget) carry moduleName instead —
-                            // assigning a non-existent property throws.
-                            if (item.pluginId !== undefined) item.pluginId = modelData.id
-                            if (item.api !== undefined) item.api = Services.PluginHostService.api
-                            // Registry for the plugins IPC (summon/hide route
-                            // through the plugin's own open/close/toggle).
-                            sceneRoot.registerPlugin(modelData.id, item)
-                        }
-                    }
-                }
-            }
-        }
-        Component {
-            id: networkSlot
-            Components.NetworkIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "network"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
-                }
-            }
-        }
-        Component {
-            id: bluetoothSlot
-            Components.BluetoothIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "bluetooth"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
-                }
-            }
-        }
-        Component {
-            id: volumeSlot
-            Components.VolumeIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "volume"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
-                }
-            }
-        }
-        Component {
-            id: privacySlot
-            Components.PrivacyIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: panelWindow.activeTray === "privacy"
-                onTrayRequested: {
-                    panelWindow.trayAnchor = this
-                    panelWindow.activeTray = panelWindow.activeTray === "privacy" ? "" : "privacy"
-                }
-            }
-        }
-        Component {
-            id: logsSlot
-            Components.LogsIcon {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: host.logsShown
-                onTriggered: host.toggleLogs()
-            }
-        }
-        Component {
-            id: notificationsSlot
-            Components.NotificationButton {
-                Layout.alignment: Qt.AlignVCenter
-                isActive: host.ncShown
-                onCenterRequested: host.toggleNotificationCenter()
-            }
-        }
-
-        Component {
-            id: settingsSlot
-            Components.SettingsIcon {
-                Layout.alignment: Qt.AlignVCenter
-            }
-        }
-
-        // =========================================================================
-        // PERFECTLY CENTERED — center-slot plugins
-        // =========================================================================
-        // Anchored to the panel window, so it stays dead-center regardless of
-        // the rails. The clock is a plugin (nikos.clock) — the built-in
-        // ClockWidget fallback was removed; disabling every center plugin
-        // leaves the center empty by design.
-
-        Row {
+        // Center section: anchored to the window, so it stays dead-center
+        // regardless of the rails. Empty center = nothing drawn.
+        Engine.BarSection {
             anchors.centerIn: parent
-            spacing: 14
-            Repeater {
-                model: Services.PluginHostService.centerWidgetPlugins
-
-                Loader {
-                    source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                    onLoaded: {
-                        if (item.pluginId !== undefined) item.pluginId = modelData.id
-                        if (item.api !== undefined) item.api = Services.PluginHostService.api
-                        sceneRoot.registerPlugin(modelData.id, item)
-                    }
-                    onStatusChanged: {
-                        if (status === Loader.Error)
-                            Services.PluginHostService.reportError(modelData.id, "Center plugin failed to load (see journal)")
-                    }
-                }
-            }
+            height: parent.height
+            name: "center"
+            window: panelWindow
+            gap: 14
         }
     }
     }   // Variants (per-output bars)

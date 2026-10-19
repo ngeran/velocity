@@ -12,34 +12,55 @@ import Qt.labs.platform
 import Quickshell
 import Quickshell.Io
 import "../Commons" as CT
-import "../services" as Services
 
 Item {
     id: root
 
     property string moduleName: ""
+    // Injected by the engine (api 2); shell verbs route through it.
+    property var ctx: null
     property var settings: ({})
     property bool vertical: false
 
     readonly property var bar: barObj
+    // Same per-module store QsPanel writes (qs-compat/<moduleName>.json);
+    // the legacy shared file is a read-only fallback, keyed by module.
+    readonly property string _cacheDir: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell"
+    readonly property bool _storable: /^[A-Za-z0-9._-]+$/.test(moduleName)
     property var _store: ({})
+    property var _legacy: ({})
     property bool _storeReady: false
 
     function setting(key, def) {
-        return root._store[key] !== undefined ? root._store[key] : def
+        if (root._store[key] !== undefined) return root._store[key]
+        return root._legacy[key] !== undefined ? root._legacy[key] : def
     }
 
     FileView {
         id: storeFile
-        path: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell/qs-compat-store.json"
-        watchChanges: false
+        path: root._storable ? root._cacheDir + "/qs-compat/" + root.moduleName + ".json" : ""
+        watchChanges: true
         printErrors: false
         onLoaded: {
             try { root._store = JSON.parse(text() || "{}") } catch (e) { root._store = {} }
             root._storeReady = true
         }
+        onFileChanged: reload()
     }
-    Component.onCompleted: storeFile.reload()
+    FileView {
+        id: legacyStoreFile
+        path: root._cacheDir + "/qs-compat-store.json"
+        watchChanges: false
+        printErrors: false
+        onLoaded: {
+            try {
+                var j = JSON.parse(text() || "{}")
+                root._legacy = (j && j[root.moduleName]) || {}
+            } catch (e) { root._legacy = {} }
+        }
+    }
+    onModuleNameChanged: { storeFile.reload(); legacyStoreFile.reload() }
+    Component.onCompleted: { storeFile.reload(); legacyStoreFile.reload() }
 
     QtObject {
         id: barObj
@@ -61,11 +82,10 @@ Item {
 
     QtObject {
         id: shellObj
-        // Routed via PluginHostService — the host (bar/shell.qml) owns the
-        // registries and connects to these signals once.
-        function toggle(id, payload) { Services.PluginHostService.compatSummonRequested(id, payload || "{}") }
-        function summon(id, payload) { Services.PluginHostService.compatSummonRequested(id, payload || "{}") }
-        function hide(id) { Services.PluginHostService.compatHideRequested(id) }
+        // Routed through ctx (engine state is never touched from qs.Ui).
+        function toggle(id, payload) { return root.ctx ? root.ctx.summon(id, payload || "{}") : "no ctx" }
+        function summon(id, payload) { return root.ctx ? root.ctx.summon(id, payload || "{}") : "no ctx" }
+        function hide(id) { return root.ctx ? root.ctx.hide(id) : "no ctx" }
     }
 
     Process {

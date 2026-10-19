@@ -1,29 +1,19 @@
 import QtQuick
+// Vendored Quattro-shaped base for the X-Ray launcher, on velocity plugin
+// api 2: the engine injects `ctx`; identity comes from the manifest id.
 Item {
     id: root
-    // pluginId is INJECTED by the host (PluginSlot configure — Scene.qml) from
-    // the manifest, so identity can never drift from the manifest again.
-    property string pluginId: ""
-    property string moduleName: root.pluginId
-    property var api: null
-    property var bar: root.api ? ({
+    property var ctx: null
+    property string moduleName: root.ctx ? root.ctx.pluginId : ""
+    // The `bar` surface Quattro widgets expect: lifecycle verbs + theme.
+    // summon/hide cover widget plugins AND overlays (the registry tries the
+    // bar widget first, then the overlay — xray's launcher → its overlay).
+    property var bar: root.ctx ? ({
+        theme: root.ctx.theme,
         shell: {
-            // Lifecycle verbs MUST go through the compatSummon bus — the host
-            // connects it to _summonAny, which covers widget plugins AND
-            // overlay plugins (xray: the overlay registry). The panel bus
-            // (requestTogglePanel) only reaches bar-widget toggle() fns.
-            toggle: function(name, payload) {
-                if (root.api.host) root.api.host.requestSummon(name || root.pluginId, payload || "{}")
-                return "ok"
-            },
-            summon: function(name, payload) {
-                if (root.api.host) root.api.host.requestSummon(name || root.pluginId, payload || "{}")
-                return "ok"
-            },
-            hide: function(name) {
-                if (root.api.host) root.api.host.requestHide(name || root.pluginId)
-                return "ok"
-            }
+            toggle: function(name, payload) { return root.ctx.summon(name || root.moduleName, payload || "{}") },
+            summon: function(name, payload) { return root.ctx.summon(name || root.moduleName, payload || "{}") },
+            hide: function(name) { return root.ctx.hide(name || root.moduleName) }
         }
     }) : null
     implicitWidth: 10

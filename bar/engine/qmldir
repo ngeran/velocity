@@ -1,0 +1,10 @@
+# qmldir for the plugin engine (standalone: imports nothing from the bar)
+
+module engine
+singleton PluginRegistry 1.0 PluginRegistry.qml
+singleton PopupCoordinator 1.0 PopupCoordinator.qml
+PluginSlot 1.0 PluginSlot.qml
+BarSection 1.0 BarSection.qml
+PluginHost 1.0 PluginHost.qml
+PluginContext 1.0 PluginContext.qml
+SettingsStore 1.0 SettingsStore.qml

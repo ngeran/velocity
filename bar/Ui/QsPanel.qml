@@ -79,35 +79,54 @@ PanelWindow {
     // (their persist functions write it); setting() prefers it over the JSON
     // store so toggles take effect immediately in the live binding.
     property var settings: ({})
-    property string _storeRaw: "{}"
+    // One file per module (qs-compat/<moduleName>.json, flat key → value):
+    // the old shared qs-compat-store.json was rewritten whole from each
+    // panel's snapshot, so panels clobbered each other's keys. The legacy
+    // file is still read once as a fallback for values saved before.
+    readonly property string _cacheDir: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell"
+    readonly property bool _storable: /^[A-Za-z0-9._-]+$/.test(moduleName)
+    property var _store: ({})
+    property var _legacy: ({})
     function setting(key, def) {
         if (settings !== null && settings[key] !== undefined) return settings[key]
-        try {
-            var j = JSON.parse(_storeRaw)
-            var v = j && j[moduleName] ? j[moduleName][key] : undefined
-            return v === undefined ? def : v
-        } catch (e) { return def }
+        if (_store[key] !== undefined) return _store[key]
+        return _legacy[key] !== undefined ? _legacy[key] : def
     }
     function persistSetting(key, value) {
-        try {
-            var j = JSON.parse(_storeRaw || "{}")
-            if (!j[moduleName]) j[moduleName] = {}
-            j[moduleName][key] = value
-            _storeRaw = JSON.stringify(j)
-            storeWriter.command = ["sh", "-c",
-                "mkdir -p ~/.cache/quickshell && printf '%s' '" + _storeRaw.replace(/'/g, "'\\''") +
-                "' > ~/.cache/quickshell/qs-compat-store.json"]
-            storeWriter.running = true
-        } catch (e) { /* ignore */ }
+        if (!_storable) return
+        var next = Object.assign({}, _store)
+        next[key] = value
+        _store = next
+        var path = _cacheDir + "/qs-compat/" + moduleName + ".json"
+        // Path + JSON ride as argv (no quoting); tmp + mv = atomic replace.
+        storeWriter.command = ["sh", "-c",
+            'mkdir -p "$(dirname "$1")" && printf "%s" "$2" > "$1.tmp" && mv "$1.tmp" "$1"',
+            "sh", path, JSON.stringify(next)]
+        storeWriter.running = true
     }
     FileView {
         id: storeFile
-        path: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell/qs-compat-store.json"
+        path: panelRoot._storable ? panelRoot._cacheDir + "/qs-compat/" + panelRoot.moduleName + ".json" : ""
         watchChanges: false
         printErrors: false
-        onLoaded: panelRoot._storeRaw = text() || "{}"
+        onLoaded: {
+            try { panelRoot._store = JSON.parse(text() || "{}") } catch (e) { panelRoot._store = {} }
+        }
     }
-    Component.onCompleted: storeFile.reload()
+    FileView {
+        id: legacyStoreFile
+        path: panelRoot._cacheDir + "/qs-compat-store.json"
+        watchChanges: false
+        printErrors: false
+        onLoaded: {
+            try {
+                var j = JSON.parse(text() || "{}")
+                panelRoot._legacy = (j && j[panelRoot.moduleName]) || {}
+            } catch (e) { panelRoot._legacy = {} }
+        }
+    }
+    onModuleNameChanged: { storeFile.reload(); legacyStoreFile.reload() }
+    Component.onCompleted: { storeFile.reload(); legacyStoreFile.reload() }
     Process {
         id: storeWriter
         command: []; running: false

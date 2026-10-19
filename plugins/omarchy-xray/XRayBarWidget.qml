@@ -9,8 +9,8 @@ BarWidget {
 
     XRayTheme { id: theme }
 
-    // moduleName comes from the vendored base, which defaults it to the
-    // host-injected pluginId (manifest id) — see qs/Ui/BarWidget.qml.
+    // moduleName comes from the vendored base: the engine-injected
+    // ctx.pluginId (manifest id) — see qs/Ui/BarWidget.qml.
     implicitWidth: launcher.implicitWidth
     implicitHeight: launcher.implicitHeight
 

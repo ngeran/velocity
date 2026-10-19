@@ -9,7 +9,7 @@
 // (Logic.searchTyped / searchBackspace), with a fake caret. No paste, no IME.
 //
 // Expands INLINE below the trigger (no floating popup: this lives inside the
-// host PluginPanel popover, where a nested layer window is wrong). Emits
+// PluginPopup popover, where a nested layer window is wrong). Emits
 // popupOpen so the panel can suspend its Esc/Enter handling while the list
 // owns the keyboard.
 // =============================================================================
@@ -22,7 +22,7 @@ Rectangle {
     property var options: []            // [{value, label, description}]
     property string value: ""
     property string placeholder: "Search…"
-    property var theme: null            // api.theme (colors + derived fills)
+    property var theme: null            // ctx.theme (colors + derived fills)
     property int listHeight: 190
 
     signal changed(string value)

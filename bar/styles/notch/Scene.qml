@@ -6,16 +6,16 @@
 // The screen-facing side is OPEN — no shadow, no top border; a 1px hairline
 // strokes only the shoulders + desktop-facing edge.
 //
-// ACTIVE NOTCH: when a popover opens under the bar (PluginPanel or TrayCard),
+// ACTIVE NOTCH: when a popover opens under the bar (PluginPopup or TrayCard),
 // the lobe's bottom edge carves an animated caret bite at the card's center
 // x, and an opaque card-colored wedge fills the bite — the lobe and the card
 // read as one connected shape (Shibumi's connectedPanel contract, ported:
-// geometry lives in PluginHostService.connectedPanel because panels are
+// geometry lives in Engine.PopupCoordinator.connected because panels are
 // mounted inside scene-owned plugin subtrees and die on style swap).
 //
-// Contract with the host (injected as `host`): IDENTICAL to vector —
-//   host.trayOwner / closeNotificationCenter()/toggleLogs()/... /ncShown/
-//   logsShown / pluginItems / sceneRoot.instances (see vector/Scene.qml).
+// Contract with the host (injected as `host`): IDENTICAL to vector (see
+// vector/Scene.qml) — tray close on lobe click, three Engine.BarSections,
+// sceneRoot.instances.
 // Fallback: a style whose Scene.qml fails to load rolls the host back to
 // vector, so the bar never renders empty.
 //
@@ -34,29 +34,13 @@ import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
-import "../../components" as Components
 import "../../config" as Config
-import "../../services" as Services
+import "../../engine" as Engine
 
 Item {
     id: sceneRoot
 
     property var host: null
-    // Registry helper with live-swap race guard (verbatim from vector):
-    // plugin delegates construct DURING scene build, before the host
-    // injection lands — callLater defers the write one frame.
-    function registerPlugin(id, item) {
-        if (!host) { Qt.callLater(function() { sceneRoot.registerPlugin(id, item) }); return }
-        var reg = host.pluginItems
-        reg[id] = item
-        host.pluginItems = reg
-    }
-    function unregisterPlugin(id) {
-        if (!host || !host.pluginItems[id]) return
-        let reg = host.pluginItems
-        delete reg[id]
-        host.pluginItems = reg
-    }
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
@@ -74,20 +58,9 @@ Item {
             property var modelData: null
             screen: modelData
 
-            property string activeTray: ""
-            property Item trayAnchor: null
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
             property bool userHidden: false
             visible: validScreen && !userHidden
-
-            onActiveTrayChanged: {
-                if (activeTray !== "") {
-                    host.trayOwner = panelWindow
-                    host.closeNotificationCenter()
-                    if (Services.PluginHostService.openPanel !== "")
-                        Services.PluginHostService.openPanel = ""
-                }
-            }
 
             // ── NOTCH GEOMETRY (tunables; Shibumi baseline barH=33) ────────────
             readonly property int barH: Config.BarConfig.barHeight
@@ -105,7 +78,7 @@ Item {
             readonly property color lobeFill: Qt.rgba(bg.r, bg.g, bg.b, 0.94)
 
             // ── ACTIVE NOTCH state (per output) ─────────────────────────────
-            // fed by PluginHostService.connectedPanel {owner, screen, caretX}
+            // fed by PopupCoordinator.connected {owner, screen, caretX}
             property bool cutOpening: true
             property real cutReveal: 0
             property real lastCaretX: -1                  // frozen while retracting
@@ -121,9 +94,9 @@ Item {
             readonly property real wedgeCtlV: 1.77 * cutReveal
 
             Connections {
-                target: Services.PluginHostService
-                function onConnectedPanelChanged() {
-                    var c = Services.PluginHostService.connectedPanel
+                target: Engine.PopupCoordinator
+                function onConnectedChanged() {
+                    var c = Engine.PopupCoordinator.connected
                     if (c && c.screen === panelWindow.screen.name) {
                         panelWindow.cutOpening = true
                         panelWindow.lastCaretX = c.caretX
@@ -168,11 +141,12 @@ Item {
             // the breathing slit pass clicks through to the desktop.
             mask: Region { item: lobe }
 
-            // Click on the lobe (outside content) closes an open tray card.
+            // Click on the lobe (outside content) closes the tray card this
+            // bar opened.
             MouseArea {
                 anchors.fill: parent
-                enabled: panelWindow.activeTray !== ""
-                onClicked: panelWindow.activeTray = ""
+                enabled: !!host && host.trayOwner === panelWindow && host.activeTray !== ""
+                onClicked: host.closeTray()
             }
 
             // =========================================================================
@@ -295,176 +269,42 @@ Item {
                     }
                 }
 
-                // ── LEFT — logo + workspaces (vector composition verbatim) ──
-                RowLayout {
+                // ── SECTIONS — from plugins-state.json `layout` (built-ins
+                // included). Positioned absolutely inside the lobe; the lobe
+                // width fits their implicit widths. ──────────────────────────
+                Engine.BarSection {
                     id: leftRow
                     x: panelWindow.contentInset
                     y: 0
                     height: panelWindow.barH
-                    spacing: 0
-
-                    Components.ArchLogo {
-                        Layout.alignment: Qt.AlignVCenter
-                        onTriggered: host.toggleFastfetch()
-                    }
-                    Components.WorkspaceWidget {
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.leftMargin: Config.BarConfig.iconSpacing
-                    }
+                    name: "left"
+                    window: panelWindow
+                    gap: Config.BarConfig.iconSpacing
                 }
 
-                // ── RIGHT — order-driven rail (vector verbatim; RowLayout is
-                // positioned absolutely and right-aligned inside the lobe) ──
-                RowLayout {
+                Engine.BarSection {
                     id: rightRail
                     y: 0
                     height: panelWindow.barH
                     x: lobe.width - panelWindow.contentInset - width
-                    spacing: 0
-
-                    Repeater {
-                        model: Config.BarConfig.rightLayout
-
-                        Loader {
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.leftMargin: 0
-                            // Auto-empty slots (privacy pill hides when idle)
-                            // collapse their margin too — no dead gap.
-                            Layout.rightMargin: item && item.implicitWidth > 0 ? Config.BarConfig.slotMargin : 0
-                            sourceComponent: {
-                                if (modelData === "plugins")       return pluginsSlot
-                                if (modelData === "network")       return networkSlot
-                                if (modelData === "bluetooth")     return bluetoothSlot
-                                if (modelData === "volume")        return volumeSlot
-                                if (modelData === "privacy")       return privacySlot
-                                if (modelData === "logs")          return logsSlot
-                                if (modelData === "settings")      return settingsSlot
-                                if (modelData === "notifications") return notificationsSlot
-                                return null
-                            }
-                        }
-                    }
+                    name: "right"
+                    window: panelWindow
+                    gap: Config.BarConfig.slotMargin
                 }
 
-                // ── CENTER — screen-centered, clamped between the rails
-                // (Shibumi centerTargetX) ────────────────────────────────────
-                Row {
+                // Center: screen-centered, clamped between the rails
+                // (Shibumi centerTargetX).
+                Engine.BarSection {
                     id: centerRow
                     y: 0
                     height: panelWindow.barH
-                    spacing: 14
+                    name: "center"
+                    window: panelWindow
+                    gap: 14
                     x: Math.max(panelWindow.contentInset + leftRow.implicitWidth + 12,
                             Math.min(lobe.width - panelWindow.contentInset
                                      - rightRail.implicitWidth - 12 - implicitWidth,
                                      panelWindow.width / 2 - lobe.x - implicitWidth / 2))
-
-                    Repeater {
-                        model: Services.PluginHostService.centerWidgetPlugins
-
-                        Loader {
-                            source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                            onLoaded: {
-                                if (item.pluginId !== undefined) item.pluginId = modelData.id
-                                if (item.api !== undefined) item.api = Services.PluginHostService.api
-                                sceneRoot.registerPlugin(modelData.id, item)
-                            }
-                            onStatusChanged: {
-                                if (status === Loader.Error)
-                                    Services.PluginHostService.reportError(modelData.id, "Center plugin failed to load (see journal)")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── slot components (verbatim from vector — order-independent
-            // definitions; keyboard converted → plugins/nikos.keyboard) ─────
-            Component {
-                id: pluginsSlot
-                RowLayout {
-                    Layout.alignment: Qt.AlignVCenter
-                    spacing: 8
-                    Repeater {
-                        model: Services.PluginHostService.barWidgetPlugins
-
-                        Components.PluginSlot {
-                            Layout.alignment: Qt.AlignVCenter
-                            pluginId: modelData.id
-                            Component.onDestruction: sceneRoot.unregisterPlugin(modelData.id)
-                            source: "file://" + modelData.dir + modelData.entryPoints.barWidget
-                            configure: function(item) {
-                                if (item.pluginId !== undefined) item.pluginId = modelData.id
-                                if (item.api !== undefined) item.api = Services.PluginHostService.api
-                                sceneRoot.registerPlugin(modelData.id, item)
-                            }
-                        }
-                    }
-                }
-            }
-            Component {
-                id: networkSlot
-                Components.NetworkIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: panelWindow.activeTray === "network"
-                    onTrayRequested: {
-                        panelWindow.trayAnchor = this
-                        panelWindow.activeTray = panelWindow.activeTray === "network" ? "" : "network"
-                    }
-                }
-            }
-            Component {
-                id: bluetoothSlot
-                Components.BluetoothIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: panelWindow.activeTray === "bluetooth"
-                    onTrayRequested: {
-                        panelWindow.trayAnchor = this
-                        panelWindow.activeTray = panelWindow.activeTray === "bluetooth" ? "" : "bluetooth"
-                    }
-                }
-            }
-            Component {
-                id: volumeSlot
-                Components.VolumeIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: panelWindow.activeTray === "volume"
-                    onTrayRequested: {
-                        panelWindow.trayAnchor = this
-                        panelWindow.activeTray = panelWindow.activeTray === "volume" ? "" : "volume"
-                    }
-                }
-            }
-            Component {
-                id: privacySlot
-                Components.PrivacyIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: panelWindow.activeTray === "privacy"
-                    onTrayRequested: {
-                        panelWindow.trayAnchor = this
-                        panelWindow.activeTray = panelWindow.activeTray === "privacy" ? "" : "privacy"
-                    }
-                }
-            }
-            Component {
-                id: logsSlot
-                Components.LogsIcon {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: host.logsShown
-                    onTriggered: host.toggleLogs()
-                }
-            }
-            Component {
-                id: notificationsSlot
-                Components.NotificationButton {
-                    Layout.alignment: Qt.AlignVCenter
-                    isActive: host.ncShown
-                    onCenterRequested: host.toggleNotificationCenter()
-                }
-            }
-            Component {
-                id: settingsSlot
-                Components.SettingsIcon {
-                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }

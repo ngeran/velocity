@@ -1,7 +1,7 @@
 // =============================================================================
 // SettingsIcon.qml — bar trigger for the settings dashboard (gear glyph)
 // =============================================================================
-// Sits in the right-side rail (bar-config.json "rightLayout": "settings").
+// Mounted by the velocity.settings built-in (bar/builtins).
 // Click: if the settings instance is running, IPC-toggle its window; if not,
 // spawn it detached. One sh line covers both — ipc exits non-zero with
 // "Target not found" when nothing owns the target, and the || branch spawns.

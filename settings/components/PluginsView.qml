@@ -1,10 +1,14 @@
 // =============================================================================
 // PluginsView.qml — CONTROL ▸ PLUGINS: plugin manager (theme-aware)
 // =============================================================================
-// Compact one-line rows, search-as-you-type, status filter, and per-row
-// lifecycle: enable/disable (ToggleSwitch), reorder (▲▼), delete (two-step
-// ConfirmDialog). Data comes from PluginManagerService, which drives the BAR
-// process over its plugins IPC; the bar is the single writer of state.
+// Compact rows ordered like the bar (left → center → right, then headless
+// plugins), search-as-you-type, and per-row lifecycle: enable/disable,
+// section chip (bar widgets: click cycles LEFT → CENTER → RIGHT), reorder
+// within the section (▲▼), a settings form generated from the manifest
+// schema (⚙), and DEL → trash (user/bundled plugins only) with RESTORE
+// below. Data comes from PluginManagerService: state and settings through
+// the BAR's plugins IPC (the bar is their single writer), file ops through
+// bin/velocity-plugin.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
@@ -16,7 +20,11 @@ ColumnLayout {
     spacing: Config.ControlConfig.space3
 
     readonly property var mgr: Services.PluginManagerService
-    property string deleteArmed: ""
+    // The one row whose settings form is open ("" = none).
+    property string settingsOpen: ""
+    property string newKind: "bar-widget"
+    readonly property var kinds: ["bar-widget", "overlay", "service"]
+    readonly property var sections: ["left", "center", "right"]
 
     Component.onCompleted: mgr.sectionVisible = true
     Component.onDestruction: mgr.sectionVisible = false
@@ -35,10 +43,126 @@ ColumnLayout {
             if (view.statusFilter === "enabled" && !p.enabled) continue
             if (view.statusFilter === "disabled" && p.enabled) continue
             if (view.statusFilter === "error" && p.status !== "error") continue
-            if (q !== "" && (p.id + " " + p.name + " " + p.description).toLowerCase().indexOf(q) === -1) continue
+            if (q !== "" && (p.id + " " + p.name + " " + (p.description || "")).toLowerCase().indexOf(q) === -1) continue
             out.push(p)
         }
-        return out
+        // Bar order: sections left → center → right, then unplaced/headless.
+        var rank = function(p) {
+            var s = view.sections.indexOf(p.section || "")
+            return (s === -1 ? 3 : s) * 1000 + (p.position >= 0 ? p.position : 999)
+        }
+        return out.sort(function(a, b) { return rank(a) - rank(b) || (a.id < b.id ? -1 : 1) })
+    }
+
+    function isBarWidget(p) { return p.kinds.indexOf("bar-widget") !== -1 }
+    function hasSettings(p) { return p.settings && Object.keys(p.settings).length > 0 }
+    function removable(p) { return p.source === "user" || p.source === "bundled" }
+    function nextSection(p) {
+        var i = view.sections.indexOf(p.section || p.defaultSection || "right")
+        return view.sections[(i + 1) % view.sections.length]
+    }
+
+    // ── schema-driven settings form (one per open row) ───────────────────────
+    // Reads and writes through the bar's SettingsStore (mgr.loadSettings /
+    // setSetting), so values are coerced by the same schema the plugin sees.
+    component SettingsForm: ColumnLayout {
+        id: form
+        property string pluginId: ""
+        property var schema: ({})
+        property var values: ({})
+        property bool loaded: false
+        spacing: 4
+
+        function reload() {
+            view.mgr.loadSettings(form.pluginId, function(j) {
+                if (!form) return
+                form.schema = j.schema || {}
+                form.values = j.values || {}
+                form.loaded = true
+            })
+        }
+        function commit(key, value) { view.mgr.setSetting(form.pluginId, key, value, function() { if (form) form.reload() }) }
+        Component.onCompleted: reload()
+
+        Text {
+            visible: !form.loaded
+            text: "loading settings…"
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            color: Config.ThemeConfig.colors.textDim
+        }
+
+        Repeater {
+            model: form.loaded ? Object.keys(form.schema) : []
+
+            RowLayout {
+                id: field
+                readonly property string key: modelData
+                readonly property var spec: form.schema[modelData] || {}
+                readonly property var value: form.values[modelData]
+                readonly property bool textual: spec.type === "string" || spec.type === "number" || spec.type === "list"
+                Layout.fillWidth: true
+                spacing: 10
+
+                Text {
+                    text: (field.spec.label || field.key).toUpperCase()
+                    Layout.preferredWidth: 160
+                    elide: Text.ElideRight
+                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 9; font.bold: true
+                    color: Config.ThemeConfig.colors.textDim
+                }
+
+                Rectangle {
+                    visible: field.textual
+                    Layout.preferredWidth: 240; Layout.preferredHeight: 22
+                    radius: Config.ControlConfig.radiusSmall
+                    color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
+                    border.color: fieldInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
+                    border.width: 1
+                    TextInput {
+                        id: fieldInput
+                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        selectByMouse: true
+                        color: Config.ThemeConfig.colors.text
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                        text: field.value === undefined ? ""
+                              : (field.spec.type === "list" ? field.value.join(", ") : String(field.value))
+                        onEditingFinished: {
+                            if (field.spec.type === "number") form.commit(field.key, Number(text))
+                            else if (field.spec.type === "list")
+                                form.commit(field.key, text.split(",").map(function(x) { return x.trim() }).filter(function(x) { return x !== "" }))
+                            else form.commit(field.key, text)
+                        }
+                    }
+                }
+
+                ToggleSwitch {
+                    visible: field.spec.type === "bool"
+                    checked: field.value === true
+                    onToggled: form.commit(field.key, !(field.value === true))
+                }
+
+                // enum: click cycles the declared options
+                Pill {
+                    visible: field.spec.type === "enum"
+                    text: String(field.value === undefined ? "" : field.value).toUpperCase()
+                    onActivated: {
+                        var opts = field.spec.options || []
+                        if (opts.length === 0) return
+                        form.commit(field.key, opts[(opts.indexOf(field.value) + 1) % opts.length])
+                    }
+                }
+
+                Text {
+                    visible: field.spec.type === "number" && (field.spec.min !== undefined || field.spec.max !== undefined)
+                    text: (field.spec.min !== undefined ? field.spec.min : "…") + " – " + (field.spec.max !== undefined ? field.spec.max : "…")
+                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                    color: Config.ThemeConfig.colors.textDim
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
     }
 
     // ── reusable pill ─────────────────────────────────────────────────────────
@@ -137,7 +261,12 @@ ColumnLayout {
                 selectByMouse: true
             }
         }
-        Pill { text: "NEW PLUGIN"; accentStyle: true; onActivated: view.mgr.scaffold(scaffoldInput.text) }
+        // kind: click cycles bar-widget → overlay → service
+        Pill {
+            text: view.newKind.toUpperCase()
+            onActivated: view.newKind = view.kinds[(view.kinds.indexOf(view.newKind) + 1) % view.kinds.length]
+        }
+        Pill { text: "NEW PLUGIN"; accentStyle: true; onActivated: view.mgr.scaffold(scaffoldInput.text, view.newKind) }
         Item { Layout.fillWidth: true }
         Text { text: "INSTALL FROM GIT"
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 9
@@ -195,7 +324,7 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // PLUGIN ROWS — one compact line per plugin
+    // PLUGIN ROWS — one compact line per plugin (+ its settings form if open)
     // ═════════════════════════════════════════════════════════════════════════
     Rectangle {
         Layout.fillWidth: true
@@ -206,95 +335,131 @@ ColumnLayout {
         border.width: 1
         clip: true
 
-        Column {
+        Flickable {
             anchors.fill: parent
             anchors.margins: 6
-            spacing: 2
+            contentHeight: rows.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
 
-            Repeater {
-                model: view.visiblePlugins
+            Column {
+                id: rows
+                width: parent.width
+                spacing: 2
 
-                Rectangle {
-                    width: parent ? parent.width : 200
-                    height: 34
-                    radius: Config.ControlConfig.radiusSmall
-                    color: rowMa.containsMouse
-                           ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
-                           : "transparent"
+                Repeater {
+                    model: view.visiblePlugins
 
-                    readonly property bool isErr: modelData.status === "error" || modelData.status === "invalid"
+                    Rectangle {
+                        id: row
+                        readonly property var p: modelData
+                        readonly property bool isErr: p.status === "error" || p.status === "invalid"
+                        readonly property bool formOpen: view.settingsOpen === p.id
+                        width: rows.width
+                        height: 34 + (formOpen ? formLoader.implicitHeight + 10 : 0)
+                        radius: Config.ControlConfig.radiusSmall
+                        color: rowMa.containsMouse || formOpen
+                               ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
+                               : "transparent"
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 10
-                        spacing: 10
-
-                        Rectangle {
-                            width: 7; height: 7; radius: 3.5
-                            color: modelData.enabled
-                                   ? (isErr ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.success)
-                                   : Config.ThemeConfig.colors.textDim
+                        MouseArea {
+                            id: rowMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
                         }
 
-                        Text {
-                            text: modelData.name + "  " + modelData.version
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                            font.bold: modelData.enabled
-                            color: modelData.enabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
-                            elide: Text.ElideRight
-                            Layout.maximumWidth: 180
-                        }
-                        Text {
-                            text: modelData.id
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-                            color: Config.ThemeConfig.colors.textDim
-                            elide: Text.ElideRight
-                            Layout.maximumWidth: 220
-                        }
-                        Text {
-                            visible: modelData.commands.length > 0
-                            text: "⌗ " + modelData.commands.join(" ")
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-                            color: Config.ThemeConfig.colors.warning
-                            elide: Text.ElideRight
-                            Layout.maximumWidth: 120
-                        }
-                        Text {
-                            visible: isErr
-                            text: modelData.error
-                            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-                            color: Config.ThemeConfig.colors.error
-                            elide: Text.ElideMiddle
-                            Layout.maximumWidth: 160
+                        RowLayout {
+                            x: 10; width: parent.width - 20; height: 34
+                            spacing: 10
+
+                            Rectangle {
+                                width: 7; height: 7; radius: 3.5
+                                color: row.p.enabled
+                                       ? (row.isErr ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.success)
+                                       : Config.ThemeConfig.colors.textDim
+                            }
+
+                            Text {
+                                text: row.p.name + "  " + row.p.version
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                                font.bold: row.p.enabled
+                                color: row.p.enabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: 180
+                            }
+                            Text {
+                                text: row.p.id
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                                color: Config.ThemeConfig.colors.textDim
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: 200
+                            }
+                            // where it comes from: user / system / bundled / builtin
+                            Text {
+                                text: (row.p.source || "").toUpperCase()
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
+                                font.letterSpacing: 0.8
+                                color: row.p.source === "builtin" ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                            }
+                            Text {
+                                visible: row.p.commands.length > 0
+                                text: "⌗ " + row.p.commands.join(" ")
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                                color: Config.ThemeConfig.colors.warning
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: 120
+                            }
+                            Text {
+                                visible: row.isErr
+                                text: row.p.error
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                                color: Config.ThemeConfig.colors.error
+                                elide: Text.ElideMiddle
+                                Layout.maximumWidth: 160
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // bar section — click moves it to the next one (appended)
+                            Pill {
+                                visible: view.isBarWidget(row.p)
+                                text: (row.p.section || row.p.defaultSection || "right").toUpperCase()
+                                onActivated: view.mgr.place(row.p.id, view.nextSection(row.p))
+                            }
+                            // reorder within the section (the bar clamps at the edges)
+                            Pill { visible: view.isBarWidget(row.p) && !!row.p.section; text: "▲"; onActivated: view.mgr.move(row.p.id, -1) }
+                            Pill { visible: view.isBarWidget(row.p) && !!row.p.section; text: "▼"; onActivated: view.mgr.move(row.p.id, 1) }
+
+                            Pill {
+                                visible: view.hasSettings(row.p)
+                                text: "⚙"
+                                accentStyle: row.formOpen
+                                onActivated: view.settingsOpen = row.formOpen ? "" : row.p.id
+                            }
+
+                            ToggleSwitch {
+                                checked: row.p.enabled
+                                Layout.alignment: Qt.AlignVCenter
+                                onToggled: view.mgr.setEnabled(row.p.id, !row.p.enabled)
+                            }
+
+                            // DEL → trash (two-step confirm); built-in/system can't be removed
+                            ConfirmDialog {
+                                visible: view.removable(row.p)
+                                label: "DEL"
+                                confirmLabel: "SURE?"
+                                Layout.alignment: Qt.AlignVCenter
+                                onConfirmed: view.mgr.remove(row.p.id)
+                            }
                         }
 
-                        Item { Layout.fillWidth: true }
-
-                            // enable / disable — themed kit switch
-                        ToggleSwitch {
-                            checked: modelData.enabled
-                            Layout.alignment: Qt.AlignVCenter
-                            onToggled: view.mgr.setEnabled(modelData.id, !modelData.enabled)
+                        Loader {
+                            id: formLoader
+                            x: 28; y: 38
+                            width: parent.width - 40
+                            active: row.formOpen
+                            sourceComponent: SettingsForm { pluginId: row.p.id }
                         }
-
-                        // reorder (service is a safe no-op at the edges)
-                        Pill { text: "▲"; onActivated: view.mgr.move(modelData.id, -1) }
-                        Pill { text: "▼"; onActivated: view.mgr.move(modelData.id, 1) }
-
-                        // delete (two-step confirm chip)
-                        ConfirmDialog {
-                            label: "DEL"
-                            confirmLabel: "SURE?"
-                            Layout.alignment: Qt.AlignVCenter
-                            onConfirmed: view.mgr.remove(modelData.id)
-                        }
-                    }
-
-                    MouseArea {
-                        id: rowMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
                     }
                 }
             }
@@ -304,10 +469,56 @@ ColumnLayout {
             anchors.centerIn: parent
             visible: view.visiblePlugins.length === 0 && !view.mgr.busy
             text: view.mgr.plugins.length === 0
-                  ? "// no plugins — scaffold one or install from git"
+                  ? "// no plugins — is the bar running? (qs -c bar)"
                   : "// no match for this filter"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TRASH — removed plugins, restorable
+    // ═════════════════════════════════════════════════════════════════════════
+    Rectangle {
+        visible: view.mgr.trash.length > 0
+        Layout.fillWidth: true
+        Layout.preferredHeight: trashCol.implicitHeight + 12
+        radius: Config.ControlConfig.radiusSmall
+        color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
+        border.color: Config.ThemeConfig.colors.outlineVariant
+        border.width: 1
+
+        Column {
+            id: trashCol
+            x: 12; y: 6
+            width: parent.width - 24
+            spacing: 2
+
+            Text {
+                text: "TRASH"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 9; font.bold: true
+                color: Config.ThemeConfig.colors.textDim
+            }
+            Repeater {
+                model: view.mgr.trash.slice(0, 5)
+                RowLayout {
+                    width: trashCol.width
+                    spacing: 10
+                    Text {
+                        text: modelData.id
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.text
+                    }
+                    Text {
+                        text: modelData.entry
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+                        color: Config.ThemeConfig.colors.textDim
+                    }
+                    Pill { text: "RESTORE"; onActivated: view.mgr.restore(modelData.entry) }
+                }
+            }
         }
     }
 
@@ -324,13 +535,12 @@ ColumnLayout {
 
         Text {
             anchors.left: parent.left; anchors.leftMargin: 12
-            Layout.alignment: Qt.AlignVCenter
-            text: "Plugins live in ~/.config/quickshell/plugins/<author.name>/ — each folder is self-contained; deleting it removes the plugin."
+            anchors.right: parent.right; anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            text: "New and installed plugins go to " + view.mgr.userDir + "/<author.name>/ · terminal: velocity-plugin help"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight
-            anchors.right: parent.right
-            anchors.rightMargin: 12
         }
     }
 }

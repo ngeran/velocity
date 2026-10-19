@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.notifications",
+  "name": "Notifications",
+  "version": "1.0.0",
+  "description": "Built-in: notification bell \u2014 click toggles the notification center.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [],
+  "ipc": []
+}

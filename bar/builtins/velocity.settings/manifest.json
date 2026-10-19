@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.settings",
+  "name": "Settings",
+  "version": "1.0.0",
+  "description": "Built-in: settings gear \u2014 opens the settings app.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [],
+  "ipc": []
+}
