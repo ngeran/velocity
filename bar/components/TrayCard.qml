@@ -284,18 +284,6 @@ PanelWindow {
                     visible: Services.NetworkService.hasNetwork
                     Layout.fillWidth: true; spacing: 6
                     Rectangle {
-                        width: typeLbl.implicitWidth + 18; height: 24
-                        radius: 5
-                        color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
-                        border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: 1
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        Text { id: typeLbl; anchors.centerIn: parent
-                            text: !Services.NetworkService.isConnected ? "NONE" : (Services.NetworkService.connectionType === "wifi" ? "WIFI" : "ETH")
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.5
-                            color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
-                    }
-                    Rectangle {
                         width: connLbl.implicitWidth + 18; height: 24
                         radius: 5
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
