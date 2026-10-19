@@ -14,6 +14,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../lib/cmdqueue.mjs" as CmdQueue
 
 Item {
     id: root
@@ -40,11 +41,12 @@ Item {
         onTriggered: root.refresh()
     }
 
-    // ── single-flight process runner with a one-slot pending queue ───────────
-    // A dropped request silently swallowed installs (the runner was often
-    // busy with the 5s refresh) — so the latest request waits and runs next.
-    property var _pendingCmd: null
-    property var _pendingCb: null
+    // ── single-flight process runner over a FIFO queue ────────────────────────
+    // The old runner kept ONE pending slot: the latest busy-time request
+    // replaced the queued one, silently swallowing commands (enable(A) then
+    // enable(B) → A never ran). Policy lives in lib/cmdqueue.mjs (tested):
+    // plain FIFO; refreshes coalesce to ≤1 queued (replaced in position).
+    property var _queue: CmdQueue.create()
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: opProc
         command: []; running: false
@@ -60,20 +62,21 @@ Item {
             opProc.onDone = null
             root.busy = false
             if (cb) cb(out)
-            if (root._pendingCmd) {
-                var c = root._pendingCmd, w = root._pendingCb
-                root._pendingCmd = null; root._pendingCb = null
-                run(c, w)
-            }
+            var nxt = CmdQueue.dequeue(root._queue)
+            if (nxt) root._start(nxt.cmd, nxt.cb)
         }
     }
 
     function run(cmd, cb) {
-        if (opProc.running) {
-            root._pendingCmd = cmd
-            root._pendingCb = cb
-            return
-        }
+        if (opProc.running) { CmdQueue.push(root._queue, cmd, cb); return }
+        root._start(cmd, cb)
+    }
+    // refresh()-shaped calls coalesce: ≤1 queued refresh, replaced in position.
+    function runCoalesced(cmd, cb) {
+        if (opProc.running) { CmdQueue.pushRefresh(root._queue, cmd, cb); return }
+        root._start(cmd, cb)
+    }
+    function _start(cmd, cb) {
         root.busy = true
         opProc.onDone = cb
         opProc.command = cmd
@@ -83,7 +86,7 @@ Item {
     // ── bar IPC ──────────────────────────────────────────────────────────────
     property string _lastListJson: ""
     function refresh() {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "list"], function(out) {
+        runCoalesced(["qs", "-c", "bar", "ipc", "call", "plugins", "list"], function(out) {
             var trimmed = (out || "").trim()
             if (trimmed === root._lastListJson) return   // no churn — keep row hover states
             root._lastListJson = trimmed

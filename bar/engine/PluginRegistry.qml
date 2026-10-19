@@ -288,8 +288,14 @@ Item {
         if (!root._stateReady) return
         // A scan already in flight may predate the change that asked for this one.
         if (scanProc.running) { root._rescanQueued = true; return }
-        // External writers may have changed the state file — re-read it.
-        stateFile.reload()
+        // No stateFile.reload() here: the BAR is the single writer of
+        // plugins-state.json (docs contract), so re-reading on every rescan
+        // just raced the bar's own writes — a reload landing between an
+        // in-memory apply and its persist resurrected the stale file over the
+        // fresh state. The state loads exactly once (Component.onCompleted);
+        // from then on the registry owns it. (External clobbers — e.g. a
+        // deploy sync — are healed by the next _persistState(), which writes
+        // the bar's authoritative in-memory state back.)
         scanProc.buffer = ""
         var args = root.searchPath.map(function(s) { return s.source + "|" + (s.links ? 1 : 0) + "|" + s.path })
         scanProc.command = ["sh", "-c", root._scanScript, "sh"].concat(args)
