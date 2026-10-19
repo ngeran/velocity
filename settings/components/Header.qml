@@ -24,6 +24,7 @@ import QtQuick.Layouts
 import Quickshell.Io
 import "../config" as Config
 import "../services" as Services
+import "../lib/tz.mjs" as Tz
 
 Rectangle {
     id: headerRoot
@@ -50,12 +51,38 @@ Rectangle {
 
     readonly property string localTime: Qt.formatTime(headerRoot._now, "hh:mm:ss")
 
-    // Athens = local + 7h (manual offset, same approach as the nikos.clock
-    // bar plugin — avoids relying on QML JS timeZone support for toLocaleTimeString).
-    readonly property string athensTime: {
-        var a = new Date(headerRoot._now.getTime())
-        a.setHours(a.getHours() + 7)
-        return Qt.formatTime(a, "hh:mm:ss")
+    // ── second clock: world zone from the nikos.timezones plugin settings ────
+    // The old fixed-offset hardcode was Athens-only AND wrong half the year:
+    // Athens is UTC+2 (EET) in winter, +3 (EEST) in summer, so a fixed +7 from
+    // a US-eastern local clock drifts an hour at every EU DST flip. The real
+    // math lives in settings/lib/tz.mjs (node-tested EU+US rules); the zone
+    // itself follows the timezones popup's plugin settings file
+    // ($XDG_STATE_HOME/velocity/plugins/nikos.timezones.json, flat values —
+    // key "zone") so the header and the bar pill can't disagree. The plugin
+    // writes no settings yet → fallback Europe/Athens.
+    readonly property string zone: headerRoot._pluginZone !== "" && Tz.isKnownZone(headerRoot._pluginZone)
+        ? headerRoot._pluginZone : "Europe/Athens"
+    property string _pluginZone: ""
+
+    readonly property string zoneTime: Tz.formatInZone(headerRoot._now, headerRoot.zone)
+    readonly property string zoneLabel: {
+        var city = (headerRoot.zone.split("/").pop() || headerRoot.zone).replace(/_/g, " ")
+        var abbr = Tz.zoneAbbr(headerRoot.zone, headerRoot._now)
+        return city.toUpperCase() + (abbr !== "" ? " (" + abbr + ")" : "")
+    }
+
+    FileView {
+        path: Services.ThemeService.homeDir + "/.local/state/velocity/plugins/nikos.timezones.json"
+        watchChanges: true
+        printErrors: false
+        onLoaded: {
+            try {
+                var v = JSON.parse(text() || "{}")
+                headerRoot._pluginZone = typeof v.zone === "string" ? v.zone : ""
+            } catch (e) { headerRoot._pluginZone = "" }
+        }
+        onLoadFailed: headerRoot._pluginZone = ""
+        onFileChanged: reload()
     }
 
     readonly property string utcTime: {
@@ -254,7 +281,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         spacing: 28
-        Stat { label: "ATHENS (EET)";    value: headerRoot.athensTime }
+        Stat { label: headerRoot.zoneLabel; value: headerRoot.zoneTime }
         Divider {}
         Stat { label: "LOCAL (LCT)";     value: headerRoot.localTime; accent: true; big: true }
         Divider {}
