@@ -59,7 +59,20 @@ Item {
     readonly property string dataHome: _envOr("XDG_DATA_HOME", homeDir + "/.local/share")
     readonly property string stateHome: _envOr("XDG_STATE_HOME", homeDir + "/.local/state")
     // Resolved from this file, not from $HOME: the repo can live anywhere.
-    readonly property string repoDir: _localPath(Qt.resolvedUrl("../.."))
+    // Quickshell 0.3 loads configs out of an internal VFS (Qt.resolvedUrl then
+    // yields "qrc:/qs-<id>", not a file:// path) — under it every repo-relative
+    // path (state file, builtins, bundled plugins) silently points into an
+    // empty virtual root and the scan finds nothing. A file:// URL still means
+    // a real checkout (dev -p mode); anything else resolves to the deployed
+    // repo (~/.config/quickshell, the deploy-link contract) or VELOCITY_REPO_DIR.
+    readonly property string _rawRootUrl: Qt.resolvedUrl("../..")
+    readonly property string repoDir: {
+        var u = String(_rawRootUrl)
+        if (u.indexOf("file://") === 0) return _localPath(u)
+        var viaEnv = _envOr("VELOCITY_REPO_DIR", "")
+        if (viaEnv !== "") return viaEnv.replace(/\/$/, "")
+        return (configHome + "/quickshell").replace(/\/$/, "")
+    }
     readonly property string userDir: configHome + "/velocity/plugins"
     readonly property string bundledDir: repoDir + "/plugins"
     readonly property string builtinDir: repoDir + "/bar/builtins"
