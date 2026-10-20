@@ -1,9 +1,8 @@
 // =============================================================================
 // nikos.clock — CENTER-slot plugin (plugin ctx 2)
 // =============================================================================
-// Center anchor pill: date-time · live weather glyph · temperature.
-//   • time click    → this plugin's CALENDAR popup (TEMPORAL MAP styling)
-//   • weather click → force a refresh of the embedded WeatherSource fetcher
+// Center anchor pill: date-time only.
+//   • time click → this plugin's CALENDAR popup (TEMPORAL MAP styling)
 // Colours ride ctx tokens. Hover-only accents; popups do not recolor the anchor.
 // =============================================================================
 import QtQuick
@@ -32,7 +31,7 @@ Item {
     }
 
     // Overflow contract (engine fit plan): the width this root collapses to
-    // when ctx.fit === "compact" — time + weather glyph, no date/temperature.
+    // when ctx.fit === "compact" — the "HH:MM" string.
     // A hidden probe measures the compact string in the real font without
     // waiting for the state to change, so the plan gets a true number.
     Text {
@@ -43,12 +42,7 @@ Item {
         font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
     }
     readonly property real compactWidth: 24 + anchorRow.spacing
-                                         + compactProbe.implicitWidth + 4 + wxGlyph.implicitWidth
-
-    // Embedded weather fetcher — self-contained (no cross-plugin import).
-    WeatherSource {
-        id: wxSource
-    }
+                                         + compactProbe.implicitWidth
 
     readonly property var _days:   ["SUN","MON","TUE","WED","THU","FRI","SAT"]
     readonly property var _fullDays: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
@@ -78,7 +72,7 @@ Item {
         return out
     }
 
-    // Anchor cluster — borderless: "Saturday 15:41" · live weather glyph ·°C
+    // Anchor cluster — borderless: "Saturday 15:41"
     // PASSIVE handlers only (HoverHandler/TapHandler): a sibling MouseArea's
     // hover-steal made containsMouse never fire on hover, then stick true
     // after a click (accent frozen). Passive handlers coexist cleanly.
@@ -112,50 +106,6 @@ Item {
                 HoverHandler { id: timeHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: calPanel.toggle() }
             }
-
-            // Live weather — condition glyph + temperature from the EMBEDDED
-            // WeatherSource (self-contained; the nikos.weather plugin was
-            // removed). Left click toggles the popup, right click refreshes.
-            // Glyph matches the temperature's color.
-            Item {
-                width: wxRow.implicitWidth
-                height: parent.height
-                anchors.verticalCenter: parent.verticalCenter
-
-                Row {
-                    id: wxRow
-                    anchors.centerIn: parent
-                    spacing: 4
-
-                    Text {
-                        id: wxGlyph
-                        text: wxSource.glyph
-                        font.family: ctx ? ctx.bar.fontNerd : "monospace"
-                        font.pixelSize: Math.max(10, Math.round(13 * (ctx ? ctx.bar.contentScale : 1)))
-                        color: wxHover.hovered ? ctx.theme.colors.accent
-                                               : (ctx ? ctx.theme.colors.success : "#888")
-                        anchors.verticalCenter: parent.verticalCenter
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Text {
-                        visible: wxSource.hasData && !(ctx && ctx.fit === "compact")
-                        text: wxSource.temp
-                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                        font.pixelSize: Math.max(9, Math.round(11 * (ctx ? ctx.bar.contentScale : 1)))
-                        color: wxHover.hovered ? ctx.theme.colors.accent
-                                               : (ctx ? ctx.theme.colors.text : "#ddd")
-                        anchors.verticalCenter: parent.verticalCenter
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                }
-
-                HoverHandler { id: wxHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: wxPanel.toggle() }
-                TapHandler {
-                    acceptedButtons: Qt.RightButton
-                    onTapped: wxSource.refresh()
-                }
-            }
         }
     }
 
@@ -179,33 +129,6 @@ Item {
             active: root.ctx !== null
             source: Qt.resolvedUrl("CalendarPanel.qml")
             onLoaded: item.ctx = root.ctx
-        }
-    }
-
-    // ── WEATHER POPUP — ATMOSPHERE styling, fed by the embedded fetcher ─────
-    // Its own slot (subKey "wx" → "nikos.clock.wx"), so a weather open
-    // closes the calendar and vice versa.
-    PluginPopup {
-        id: wxPanel
-        ctx: root.ctx
-        anchorItem: root
-        subKey: "wx"
-        title: "ATMOSPHERE"
-        icon: wxSource.glyph
-        contentWidth: 380
-        anchorX: "center"
-        showHeader: false
-        onOpen: wxSource.refresh()
-
-        Loader {
-            Layout.fillWidth: true
-            active: root.ctx !== null
-            source: Qt.resolvedUrl("WeatherPanel.qml")
-            onLoaded: {
-                item.hostBar = root.ctx ? root.ctx.bar : null
-                item.hostTheme = root.ctx ? root.ctx.theme : null
-                item.wx = wxSource
-            }
         }
     }
 }

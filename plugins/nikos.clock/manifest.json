@@ -15,10 +15,7 @@
   "bar": {
     "defaultSection": "center"
   },
-  "commands": [
-    "sh",
-    "curl"
-  ],
+  "commands": [],
   "ipc": [
     "toggle"
   ]
