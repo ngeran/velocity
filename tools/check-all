@@ -19,6 +19,8 @@
 #                  glued-counter bug that killed the network TX/RX silently
 #   check-engine   plugin-engine architecture: engine standalone (D1), qs.Ui
 #                  stateless (D13), plugins import no bar paths (D3)
+#   check-shared   shared/ canonical files match their synced root copies
+#                  (the VFS blocks cross-root imports; drift = hand-edited copy)
 #
 # The T2 incident is why this exists: a duplicate-method crash shipped to a
 # live bar because gates ran only when remembered. ~4s total — cheap enough
@@ -47,6 +49,7 @@ run_blocking "bounded processes" tools/check-bounded
 run_blocking "plugin static analysis" tools/check-plugins
 run_blocking "splitparser rejoin" tools/check-splitparser
 run_blocking "engine architecture" tools/check-engine
+run_blocking "shared sync" tools/check-shared
 
 if (( tools_blocking )); then
     run_blocking "tool availability" tools/check-tools

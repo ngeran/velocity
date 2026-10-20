@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+// check-shared — the shared/ sync gate: every registered per-root copy must
+// be byte-identical to its canonical file (see shared/README.md). Drift means
+// someone edited a root copy directly; fix is `tools/sync-shared`, never a
+// hand-edit of the copy.
+'use strict'
+const fs = require('fs')
+const path = require('path')
+const crypto = require('crypto')
+
+const root = path.resolve(__dirname, '..')
+
+const TARGETS = {
+  'shared/MotionConfig.qml': ['bar/config/MotionConfig.qml', 'settings/config/MotionConfig.qml'],
+  'shared/DebugConfig.qml': ['bar/config/DebugConfig.qml', 'settings/config/DebugConfig.qml'],
+}
+
+let failures = 0
+for (const [src, dsts] of Object.entries(TARGETS)) {
+  const srcPath = path.join(root, src)
+  if (!fs.existsSync(srcPath)) {
+    console.error(`check-shared: missing canonical file ${src}`)
+    failures++
+    continue
+  }
+  const canon = crypto.createHash('sha256').update(fs.readFileSync(srcPath)).digest('hex')
+  for (const dst of dsts) {
+    const dstPath = path.join(root, dst)
+    if (!fs.existsSync(dstPath)) {
+      console.error(`check-shared: ${dst} missing — run tools/sync-shared`)
+      failures++
+      continue
+    }
+    const hash = crypto.createHash('sha256').update(fs.readFileSync(dstPath)).digest('hex')
+    if (hash !== canon) {
+      console.error(`check-shared: DRIFT ${dst} differs from ${src} — run tools/sync-shared`)
+      failures++
+    }
+  }
+}
+
+if (failures) {
+  console.error(`check-shared: FAIL (${failures})`)
+  process.exit(1)
+}
+console.log('check-shared: OK')

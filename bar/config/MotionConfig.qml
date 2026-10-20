@@ -1,9 +1,15 @@
 // =============================================================================
-// bar/config/MotionConfig.qml — Motion token singleton
+// shared/MotionConfig.qml — Motion token singleton (canonical, synced copy)
 // =============================================================================
 //
+// CANONICAL SOURCE: this file is the source of truth; bar/config/ and
+// settings/config/ hold byte-identical copies (tools/sync-shared). The two
+// shells are separate `-c` roots and Quickshell's VFS blocks imports that
+// escape the root, so the file is SYNCED, not imported across — editing a
+// root copy directly will fail tools/check-shared.
+//
 // Port of ryoku-arch's ui/Singletons/Tokens.qml motion section (trimmed to
-// what a bar needs). Four durations, two curves, one global scale — nothing
+// what a shell needs). Four durations, two curves, one global scale — nothing
 // else. Rule (ryoku docs/ui-ux.md): read the token, never write a literal,
 // never wrap a token in dur() again (double-scaling).
 //
@@ -14,12 +20,10 @@
 //
 // dur(ms) applies motionScale and collapses to 0 under reduceMotion, so every
 // adopter gets global speed control + accessibility for free. Optional keys
-// "reduceMotion" (bool) and "motionScale" (0..2) are read from bar-config.json
-// through the same zero-fork FileView intake BarConfig uses.
+// "reduceMotion" (bool) and "motionScale" (0..2) are read from the ROOT's
+// config json (bar-config.json in the bar shell, settings-config.json in the
+// settings shell) through the same zero-fork FileView intake the configs use.
 //
-// SYNC WITH: settings/config/MotionConfig.qml — token values, dur(), and the
-// intake mechanism MUST stay identical (separate processes; only the watched
-// file name differs: bar-config.json vs settings-config.json).
 // =============================================================================
 
 pragma Singleton
@@ -52,8 +56,17 @@ Item {
         return Math.max(0, Math.round(ms * s))
     }
 
-    // ── optional user keys from bar-config.json (zero-fork intake) ──────────
-    readonly property string configPath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.config/quickshell/bar-config.json").replace("file://", "")
+    // ── which root's config json to watch ───────────────────────────────────
+    // Derived from where THIS copy lives ("…/quickshell/<root>/config/"), so
+    // every synced copy is byte-identical yet watches its own shell's file.
+    // Falls back to "bar" for exotic layouts.
+    readonly property string _rootName: {
+        var here = Qt.resolvedUrl("MotionConfig.qml").toString()
+        var cut = here.indexOf("/config/")
+        var start = cut > 0 ? here.lastIndexOf("/", cut - 1) : -1
+        return (cut > 0 && start > 0) ? here.substring(start + 1, cut) : "bar"
+    }
+    readonly property string configPath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.config/quickshell/" + root._rootName + "-config.json").replace("file://", "")
     property string _lastRaw: ""
 
     function ingestMotionText(raw) {

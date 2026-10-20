@@ -1,9 +1,16 @@
 // =============================================================================
-// settings/config/DebugConfig.qml — Debug Logging Configuration
+// shared/DebugConfig.qml — Debug Logging Configuration (canonical, synced copy)
 // =============================================================================
 //
-// Central debug flag for gating console.log statements across the settings
-// shell. Set debugEnabled to true for development, false for production.
+// CANONICAL SOURCE: this file is the source of truth; bar/config/ and
+// settings/config/ hold byte-identical copies (tools/sync-shared). The two
+// shells are separate `-c` roots and Quickshell's VFS blocks imports that
+// escape the root, so the file is SYNCED, not imported across — editing a
+// root copy directly will fail tools/check-shared.
+//
+// Central debug flag for gating console.log statements across whichever
+// shell this copy is synced into. Set debugEnabled to true for development,
+// false for production.
 //
 // Usage:
 //   if (Config.DebugConfig.debugEnabled) {

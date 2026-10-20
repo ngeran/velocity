@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+// sync-shared — copy canonical shared/*.qml into every registered per-root
+// target. See shared/README.md for the model (VFS blocks cross-root imports;
+// the roots hold byte-identical synced copies).
+//
+// Registering a new canonical file: add rows to TARGETS below (canonical
+// relative path → per-root relative paths), then run this script once.
+'use strict'
+const fs = require('fs')
+const path = require('path')
+
+const root = path.resolve(__dirname, '..')
+
+// canonical file → target paths (repo-relative, one per shell root)
+const TARGETS = {
+  'shared/MotionConfig.qml': ['bar/config/MotionConfig.qml', 'settings/config/MotionConfig.qml'],
+  'shared/DebugConfig.qml': ['bar/config/DebugConfig.qml', 'settings/config/DebugConfig.qml'],
+}
+
+let failures = 0
+for (const [src, dsts] of Object.entries(TARGETS)) {
+  const srcPath = path.join(root, src)
+  if (!fs.existsSync(srcPath)) {
+    console.error(`sync-shared: missing canonical file ${src}`)
+    failures++
+    continue
+  }
+  const body = fs.readFileSync(srcPath)
+  for (const dst of dsts) {
+    const dstPath = path.join(root, dst)
+    const dir = path.dirname(dstPath)
+    if (!fs.existsSync(dir)) {
+      console.error(`sync-shared: target dir missing: ${dir}`)
+      failures++
+      continue
+    }
+    fs.writeFileSync(dstPath, body)
+    console.log(`sync-shared: ${src} -> ${dst}`)
+  }
+}
+
+if (failures) {
+  console.error(`sync-shared: ${failures} failure(s)`)
+  process.exit(1)
+}
+console.log('sync-shared: OK')
