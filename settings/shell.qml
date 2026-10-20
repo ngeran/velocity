@@ -63,7 +63,7 @@ ShellRoot {
     // =========================================================================
     Timer {
         id: hideTimer
-        interval: Config.SettingsConfig.animDurationSlow
+        interval: Config.MotionConfig.animDurationSlow
 
         onTriggered: {
             if (!root.shown) {
@@ -303,7 +303,7 @@ ShellRoot {
             opacity: root.shown ? 0.6 : 0.0
             visible: opacity > 0.01
             Behavior on opacity {
-                NumberAnimation { duration: Config.SettingsConfig.animDurationSlow }
+                NumberAnimation { duration: Config.MotionConfig.animDurationSlow }
             }
             MouseArea {
                 anchors.fill: parent
@@ -340,7 +340,7 @@ ShellRoot {
             // Smooth slide animation
             Behavior on y {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationSlow
+                    duration: Config.MotionConfig.animDurationSlow
                     easing.type: Easing.OutCubic
                 }
             }

@@ -38,6 +38,10 @@ Item {
 
     property bool reduceMotion: false
     property real motionScale: 1.0
+    // Settings animation tier ("fast" | "normal" | "slow" in the root's
+    // config json → 0.5 / 1.0 / 1.7). Only the settings shell models that
+    // key; the bar root has no animationSpeed and stays at 1.0.
+    property real animMultiplier: 1.0
 
     readonly property int snap: root.dur(90)
     readonly property int flap: root.dur(110)
@@ -55,6 +59,23 @@ Item {
         if (!isFinite(s) || s < 0) s = 1.0
         return Math.max(0, Math.round(ms * s))
     }
+
+    // Settings-shell duration tokens (C1c unification): the four bases
+    // SettingsConfig used to carry (100/150/250/350 × animMultiplier), now
+    // also honoring motionScale/reduceMotion. At defaults they reproduce the
+    // old numbers exactly (round-trip), and the bar root never reads them.
+    function _animDur(base) {
+        if (root.reduceMotion) return 0
+        var s = root.motionScale
+        if (!isFinite(s) || s < 0) s = 1.0
+        var m = root.animMultiplier
+        if (!isFinite(m) || m <= 0) m = 1.0
+        return Math.max(0, Math.round(base * s * m))
+    }
+    readonly property int animDurationFast: root._animDur(100)
+    readonly property int animDurationNormal: root._animDur(150)
+    readonly property int animDurationSlow: root._animDur(250)
+    readonly property int animDurationSlower: root._animDur(350)
 
     // ── which root's config json to watch ───────────────────────────────────
     // Derived from where THIS copy lives ("…/quickshell/<root>/config/"), so
@@ -81,6 +102,9 @@ Item {
                 var s = Number(data.motionScale)
                 if (isFinite(s) && s >= 0 && s <= 2) root.motionScale = s
             }
+            if (data.animationSpeed === "fast") root.animMultiplier = 0.5
+            else if (data.animationSpeed === "slow") root.animMultiplier = 1.7
+            else if (data.animationSpeed === "normal") root.animMultiplier = 1.0
         } catch (e) {
             // mid-write or foreign JSON — keep current values
         }

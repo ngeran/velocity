@@ -181,7 +181,7 @@ Rectangle {
         radius:       0
 
         Behavior on opacity {
-            NumberAnimation { duration: Config.SettingsConfig.animDurationFast; easing.type: Easing.OutQuad }
+            NumberAnimation { duration: Config.MotionConfig.animDurationFast; easing.type: Easing.OutQuad }
         }
     }
 

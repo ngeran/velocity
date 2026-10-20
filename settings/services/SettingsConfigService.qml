@@ -28,12 +28,12 @@ Item {
     onAnimationSpeedChanged: applyAppearance()
     onCornerRadiusChanged: applyAppearance()
 
-    // Map the user's Animation Speed + Corner Radius into the live design tokens
-    // consumed across the dashboard (SettingsConfig.qml). Called on change and on
-    // load (applyLoadedSettings re-sets the props, firing the handlers above).
+    // Map the user's Corner Radius into the live design token consumed across
+    // the dashboard (SettingsConfig.qml). Called on change and on load
+    // (applyLoadedSettings re-sets the prop, firing the handler above).
+    // Animation durations: Config.MotionConfig intakes animationSpeed from
+    // settings-config.json itself (C1c) — no push needed here.
     function applyAppearance() {
-        var m = root.animationSpeed === "fast" ? 0.5 : (root.animationSpeed === "slow" ? 1.7 : 1.0)
-        Config.SettingsConfig.animMultiplier = m
         Config.SettingsConfig.cornerRadius = root.cornerRadius
     }
 

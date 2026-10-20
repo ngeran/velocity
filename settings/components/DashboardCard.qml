@@ -31,8 +31,8 @@ Rectangle {
 
     property bool isHovered: false
 
-    Behavior on color { ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
-    Behavior on border.color { ColorAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
+    Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationSlow; easing.type: Easing.OutQuad } }
+    Behavior on border.color { ColorAnimation { duration: Config.MotionConfig.animDurationSlow; easing.type: Easing.OutQuad } }
 
     Item {
         id: contentItem
@@ -50,7 +50,7 @@ Rectangle {
         height: 1
         color: root.accent
         opacity: root.isHovered ? 0.55 : 0.12
-        Behavior on opacity { NumberAnimation { duration: Config.SettingsConfig.animDurationSlow; easing.type: Easing.OutQuad } }
+        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.animDurationSlow; easing.type: Easing.OutQuad } }
     }
 
     // Tactical corner brackets (only when showBrackets). index 0=TL 1=TR 2=BL 3=BR.

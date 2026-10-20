@@ -151,15 +151,7 @@ QtObject {
     readonly property int shadowLg: 8
     readonly property int shadowXl: 16
 
-    // =========================================================================
-    // ANIMATION
-    // =========================================================================
-
-    // Animation durations (ms) — scaled by animMultiplier, set by
-    // SettingsConfigService from the Animation Speed preference (fast/normal/slow).
-    property real animMultiplier: 1.0   // 0.5 fast · 1.0 normal · 1.7 slow
-    property int animDurationFast: Math.round(100 * animMultiplier)
-    property int animDurationNormal: Math.round(150 * animMultiplier)
-    property int animDurationSlow: Math.round(250 * animMultiplier)
-    property int animDurationSlower: Math.round(350 * animMultiplier)
+    // ANIMATION durations moved to Config.MotionConfig (C1c unification) —
+    // same bases, same tier mapping (fast 0.5 · normal 1.0 · slow 1.7), read
+    // from settings-config.json's animationSpeed by MotionConfig's own intake.
 }

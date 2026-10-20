@@ -241,14 +241,14 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
 
             Behavior on x {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
@@ -269,14 +269,14 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
 
             Behavior on x {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
@@ -296,14 +296,14 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
 
             Behavior on x {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
@@ -326,14 +326,14 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
 
             Behavior on x {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
@@ -356,14 +356,14 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
 
             Behavior on x {
                 NumberAnimation {
-                    duration: Config.SettingsConfig.animDurationNormal
+                    duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
             }
@@ -394,10 +394,10 @@ Item {
             x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
 
             Behavior on opacity {
-                NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: Config.MotionConfig.animDurationNormal; easing.type: Easing.OutCubic }
             }
             Behavior on x {
-                NumberAnimation { duration: Config.SettingsConfig.animDurationNormal; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: Config.MotionConfig.animDurationNormal; easing.type: Easing.OutCubic }
             }
 
             sourceComponent: Component {
@@ -595,7 +595,7 @@ Item {
     // ---- row highlight flash (search navigation lands here) ----
     Timer {
         id: flashTimer
-        interval: Config.SettingsConfig.animDurationNormal + 170   // tab slide settles
+        interval: Config.MotionConfig.animDurationNormal + 170   // tab slide settles
         property var target: null
         onTriggered: root._flashItem(target)
     }
