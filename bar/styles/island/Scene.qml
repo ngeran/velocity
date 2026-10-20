@@ -639,10 +639,20 @@ Item {
                             }
                         }
 
+                        // Hug-then-pin: in the first frames of the bloom the
+                        // island is still pill-sized, so a statically pinned
+                        // wing would sit ON TOP of the clock — the whole row
+                        // piles up and reads as a flicker. Each wing instead
+                        // starts ADJACENT to the clock (clipped, emerging as
+                        // the island grows — the unmask the old layout had)
+                        // and crosses into its pinned slot once the spring
+                        // makes room. The cross is continuous: when a wing
+                        // is the wider one, hug and pin coincide exactly at
+                        // the settled frame.
                         Engine.BarSection {
                             id: leftRow
                             height: win.barH
-                            x: win.padX
+                            x: Math.min(win.padX, centerRow.x - win.sectionGap - implicitWidth)
                             name: "left"
                             window: win
                             gap: Config.BarConfig.iconSpacing
@@ -662,7 +672,8 @@ Item {
                         Engine.BarSection {
                             id: rightRail
                             height: win.barH
-                            x: row.width - win.padX - implicitWidth
+                            x: Math.max(row.width - win.padX - implicitWidth,
+                                        centerRow.x + centerRow.implicitWidth + win.sectionGap)
                             name: "right"
                             window: win
                             gap: Config.BarConfig.slotMargin
