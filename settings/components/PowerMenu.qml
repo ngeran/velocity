@@ -16,6 +16,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import "../config" as Config
+import "../services" as Services
 import "." as Components
 
 PanelWindow {
@@ -257,11 +258,13 @@ PanelWindow {
     }
 
     // ---- deferred executor: set .command then run ----
-    Process {
+    // BoundedProcess (shared/synced): a power action can never hang the
+    // overlay — timeout + byte cap are structural, not caller discipline.
+    Services.BoundedProcess {
         id: systemCmd
         function execute(cmd) {
             systemCmd.command = ["bash", "-c", cmd]
-            systemCmd.running = true
+            systemCmd.run()
             root.showing = false
         }
     }

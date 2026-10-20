@@ -1,4 +1,5 @@
 singleton ThemeService 1.0 ThemeService.qml
+BoundedProcess 1.0 BoundedProcess.qml
 singleton SysInfoService 1.0 SysInfoService.qml
 singleton NetworkControlService 1.0 NetworkControlService.qml
 singleton BluetoothControlService 1.0 BluetoothControlService.qml

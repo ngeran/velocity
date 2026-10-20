@@ -8,7 +8,8 @@ roots** (only file://-loaded plugin code can cross roots).
 - `MotionConfig.qml`, `DebugConfig.qml` → synced to `bar/config/` and
   `settings/config/` (byte-identical; the root whose config json gets watched
   is derived from the copy's own location).
-- More canonical files may join (`BoundedProcess.qml` → `services/` dirs).
+- `BoundedProcess.qml` → synced to `bar/services/` and `settings/services/`
+  (no per-root divergence — pure primitive).
 
 ## Workflow
 
