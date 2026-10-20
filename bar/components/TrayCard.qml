@@ -133,20 +133,28 @@ PanelWindow {
         edgeMargin: 5
         anchorItem: card.anchorItem
         // CONTENT-FITTED: width and height derive from the ACTIVE body's
-        // implicit size + shared chrome (12px content margins ×2 + 34 header
-        // + 1 separator ≈ 59). The 300 floor keeps tiny bodies usable.
+        // implicit size + chrome. A layout's implicit size EXCLUDES its own
+        // Layout.margins (the parent reserves that space), so the bodies'
+        // px(16) margins are added explicitly on top of the trayContent
+        // chrome (12px content margins ×2 + 34 header + 1 hairline = 59).
+        // Without the body term every card ran 32px short — the footer pill
+        // (DISABLE BLUETOOTH / MUTE / DISABLE WI-FI) clipped exactly — and
+        // 12px narrow, squeezing every row. qrBody carries no margins (its
+        // +66 budgets its own padding) so it stays out of the bodyPad math.
+        readonly property real bodyPad: 2 * Config.PopupMetrics.px(16)
         cardWidth: Math.max(300, networkBody.implicitWidth,
                              btBody.implicitWidth,
                              volumeBody.implicitWidth,
-                             privacyBody.implicitWidth) + 44
+                             privacyBody.implicitWidth) + 24 + bodyPad
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
         cardHeight: card.lastTray === "network"
-                ? (card.qrOpen ? qrBody.implicitHeight + 66 : networkBody.implicitHeight + 59)
-              : card.lastTray === "volume" ? volumeBody.implicitHeight + 59
-              : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59
-              : card.lastTray === "privacy" ? privacyBody.implicitHeight + 59
+                ? (card.qrOpen ? qrBody.implicitHeight + 66
+                               : networkBody.implicitHeight + 59 + bodyPad)
+              : card.lastTray === "volume" ? volumeBody.implicitHeight + 59 + bodyPad
+              : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59 + bodyPad
+              : card.lastTray === "privacy" ? privacyBody.implicitHeight + 59 + bodyPad
               : 220
 
         // Tray geometry is card-internal (per-body sizing) — flow through the
