@@ -384,6 +384,23 @@ Item {
                         }
                     }
                     SettingRow {
+                        label: "BAR POSITION"
+                        section: "bar"
+                        keywords: "bar position top bottom edge screen"
+                        value: Services.SettingsConfigService.barPosition.toUpperCase()
+                        Repeater {
+                            model: ["top", "bottom"]
+                            delegate: OptSeg {
+                                text: modelData.toUpperCase()
+                                active: Services.SettingsConfigService.barPosition === modelData
+                                onPicked: {
+                                    Services.SettingsConfigService.barPosition = modelData
+                                    Services.SettingsConfigService.saveSettings()
+                                }
+                            }
+                        }
+                    }
+                    SettingRow {
                         label: "WORKSPACE DOTS"
                         section: "bar"
                         value: Services.SettingsConfigService.workspaceCount + " dots"

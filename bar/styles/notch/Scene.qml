@@ -60,7 +60,19 @@ Item {
 
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
             property bool userHidden: false
-            visible: validScreen && !userHidden
+            // B5: layer-shell anchors only re-read on (re)map — when the
+            // configured edge changes, cycle the window (brief flicker) so
+            // the lobe lands on the new edge live, no restart. The cycle
+            // flag is written imperatively; `visible` stays a binding.
+            property bool edgeApplied: true
+            readonly property string edgeKey: Config.BarConfig.barPosition
+            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
+            Timer {
+                id: edgeRemap
+                interval: 150
+                onTriggered: panelWindow.edgeApplied = true
+            }
+            visible: validScreen && !userHidden && edgeApplied
 
             // ── NOTCH GEOMETRY (tunables; Shibumi baseline barH=33) ────────────
             readonly property int barH: Config.BarConfig.barHeight
@@ -145,9 +157,18 @@ Item {
             // =========================================================================
             // WINDOW — full-width strip reservation, transparent; the lobe is
             // painted by the Shape below. The extra 3px are breathing only —
-            // popovers anchor at margins.top = barH, the wedge tip overlaps 1px.
+            // popovers anchor at the bar strip's desktop-facing margin
+            // (margins.top on a top bar, margins.bottom on a bottom one) and
+            // the wedge tip overlaps 1px into that band.
             // =========================================================================
-            anchors { top: true; left: true; right: true }
+            // B5: the lobe hangs off the configured edge — top (screen-edge
+            // side up) or bottom (mirrored shape, breathing slit above).
+            anchors {
+                top: !Config.BarConfig.barAtBottom
+                bottom: Config.BarConfig.barAtBottom
+                left: true
+                right: true
+            }
             implicitHeight: barH + breathing
             color: "transparent"
             // Input confined to the lobe bbox — the transparent side bands and
@@ -168,7 +189,9 @@ Item {
             Item {
                 id: lobe
                 x: shellX
-                y: 0
+                // Bottom bar: the breathing slit sits above the lobe (toward
+                // the popovers) instead of below it.
+                y: Config.BarConfig.barAtBottom ? panelWindow.breathing : 0
                 width: lobeW
                 height: barH
 
@@ -178,6 +201,16 @@ Item {
                 Shape {
                     anchors.fill: parent
                     preferredRendererType: Shape.CurveRenderer
+                    // B5: bottom bar mirrors the whole path block vertically
+                    // around the lobe's midline — open edge lands on the screen
+                    // edge, shoulders/bite/caret face the desktop. The paths
+                    // themselves stay written in top-bar coordinates (y=0 open,
+                    // y=barH content edge); only the paint is flipped. Text and
+                    // sections live OUTSIDE the Shape and never mirror.
+                    transform: Scale {
+                        yScale: Config.BarConfig.barAtBottom ? -1 : 1
+                        origin.y: lobe.height / 2
+                    }
                     // Path heights reach barH+1 (wedge seam) — inside the window's
                     // breathing band; the Shape itself clips nothing (no clip).
 
@@ -259,11 +292,12 @@ Item {
                     }
 
                     // 3 — CARET WEDGE. Card-colored plug inside the bite — the
-                    // popover windows start BELOW the bar (margins.top = barH),
-                    // so (unlike Shibumi) the caret is drawn bar-side. Opaque
-                    // background token = identical to the Popover card fill →
-                    // seamless junction; 1px overlap into the card (barH+1) seals
-                    // the seam.
+                    // popover windows start at the strip's desktop-facing
+                    // margin (margins.top = barH on a top bar; mirrored by the
+                    // same transform on a bottom one), so (unlike Shibumi) the
+                    // caret is drawn bar-side. Opaque background token =
+                    // identical to the Popover card fill → seamless junction;
+                    // 1px overlap into the card (barH+1) seals the seam.
                     ShapePath {
                         fillColor: Config.BarConfig.colorBackground
                         strokeColor: "transparent"

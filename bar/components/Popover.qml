@@ -44,7 +44,7 @@ Item {
     property real cardWidth: 320
     property real cardHeight: -1            // -1 = auto (content + 2*padding)
     property real edgeMargin: 5
-    property real gap: 8                    // drop below the host's top edge
+    property real gap: 8                    // strip-side offset: drop below the host's top edge (top bar) / rise above its bottom edge (bottom bar)
     property real padding: 10               // card inner padding
     property real offX: 0                   // drag offsets (applied post-clamp)
     property real offY: 0
@@ -182,7 +182,15 @@ Item {
             var base = Math.max(lo, Math.min(hi, pop.anchorCenterX - width / 2))
             return base - pop.offX
         }
-        y: pop.gap + pop.offY - (pop.opened ? 0 : 6)   // settle-lift from -6
+        // B5: orientation follows barPosition. Top bar: the host window
+        // excludes the strip via margins.top, the card drops from its top
+        // edge and settle-lifts from -6. Bottom bar: margins.bottom excludes
+        // the strip, the card rises from the bottom edge (gap faces the bar)
+        // and settle-drops from +6 — mirrored motion, same tokens.
+        y: Config.BarConfig.barAtBottom
+          ? (pop.parent ? pop.parent.height - pop.height - pop.gap : pop.gap)
+            + pop.offY + (pop.opened ? 0 : 6)
+          : pop.gap + pop.offY - (pop.opened ? 0 : 6)
         implicitHeight: pop.cardHeight >= 0
                         ? Math.min(pop.cardHeight, pop.maxHeight < 0 ? pop.cardHeight : pop.maxHeight)
                         : pop.maxHeight < 0

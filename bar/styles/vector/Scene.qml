@@ -56,14 +56,27 @@ Item {
             // would break it).
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
             property bool userHidden: false
-            visible: validScreen && !userHidden
+            // B5: layer-shell anchors only re-read on (re)map — when the
+            // configured edge changes, cycle the window (brief flicker) so
+            // the strip lands on the new edge live, no restart. The cycle
+            // flag is written imperatively; `visible` stays a binding.
+            property bool edgeApplied: true
+            readonly property string edgeKey: Config.BarConfig.barPosition
+            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
+            Timer {
+                id: edgeRemap
+                interval: 150
+                onTriggered: panelWindow.edgeApplied = true
+            }
+            visible: validScreen && !userHidden && edgeApplied
 
             // =========================================================================
             // POSITIONING
             // =========================================================================
 
             anchors {
-                top: true
+                top: !Config.BarConfig.barAtBottom
+                bottom: Config.BarConfig.barAtBottom
                 left: true
                 right: true
             }

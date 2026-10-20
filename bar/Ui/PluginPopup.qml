@@ -57,7 +57,12 @@ PanelWindow {
     }
 
     anchors { top: true; bottom: true; left: true; right: true }
-    margins.top: _bar ? _bar.barHeight : 26
+    // B5: the content area excludes the bar strip on its desktop-facing
+    // side — margins.top on a top bar, margins.bottom on a bottom one (the
+    // Popover primitive reads barAtBottom and rises from the bottom edge).
+    readonly property bool _atBottom: _bar ? _bar.barAtBottom === true : false
+    margins.top: !_atBottom ? (_bar ? _bar.barHeight : 26) : 0
+    margins.bottom: _atBottom ? (_bar ? _bar.barHeight : 26) : 0
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     aboveWindows: true

@@ -79,8 +79,23 @@ Item {
             // POSITIONING
             // =========================================================================
 
+            // B5: layer-shell anchors only re-read on (re)map — when the
+            // configured edge changes, cycle the window (brief flicker) so
+            // the strip lands on the new edge live, no restart. The cycle
+            // flag is written imperatively; `visible` stays a binding.
+            property bool edgeApplied: true
+            readonly property string edgeKey: Config.BarConfig.barPosition
+            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
+            Timer {
+                id: edgeRemap
+                interval: 150
+                onTriggered: panelWindow.edgeApplied = true
+            }
+            visible: validScreen && !userHidden && edgeApplied
+
             anchors {
-                top: true
+                top: !Config.BarConfig.barAtBottom
+                bottom: Config.BarConfig.barAtBottom
                 left: true
                 right: true
             }
@@ -201,7 +216,9 @@ Item {
         // ≈ a couple of nits on QD-OLED — dimmer than the rounding-AA it
         // replaces). ────────────────────────────────────────────────────────
         Rectangle {
-            anchors.bottom: parent.bottom
+            // Edge tint line rides the desktop-facing edge — flips with the bar.
+            anchors.bottom: Config.BarConfig.barAtBottom ? null : parent.bottom
+            anchors.top: Config.BarConfig.barAtBottom ? parent.top : null
             width: parent.width
             height: 1
             color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)

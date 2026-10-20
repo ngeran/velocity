@@ -24,7 +24,9 @@ PanelWindow {
     // Fastfetch/ZaiUsage/Keybinds overlays use. The card itself is drawn above
     // the backdrop and swallows clicks so interacting with it stays put.
     anchors { top: true; bottom: true; left: true; right: true }
-    margins.top: Config.BarConfig.barHeight   // leave the bar itself interactive
+    // Leave the bar strip itself interactive — excluded on the bar's edge.
+    margins.top: Config.BarConfig.barAtBottom ? 0 : Config.BarConfig.barHeight
+    margins.bottom: Config.BarConfig.barAtBottom ? Config.BarConfig.barHeight : 0
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     aboveWindows: true

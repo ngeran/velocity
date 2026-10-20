@@ -42,6 +42,9 @@ Item {
     // Bar style (bar/styles/<name>/Scene.qml) — live-swappable; the bar
     // falls back to "vector" when a style is missing/broken.
     property string barStyle: "vector"
+    // Bar edge (UA 2.6 stage 1): "top" | "bottom" — mirrors bar-config.json;
+    // the bar flips scenes/popovers live via BarConfig's ingest.
+    property string barPosition: "top"
     property var barStyles: ["vector"]          // scanned from bar/styles/
     property int workspaceCount: 5             // 3, 5, 7, 9
 
@@ -109,6 +112,7 @@ Item {
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
             barStyle: root.barStyle,
+            barPosition: root.barPosition,
             matugenOnWallpaperChange: root.matugenOnWallpaperChange
         }
 
@@ -130,6 +134,7 @@ Item {
         root.animationSpeed = "normal"
         root.cornerRadius = 0
         root.barHeight = 26
+        root.barPosition = "top"
         root.workspaceCount = 5
         root.clockCity = "Local"
         root.clockOffset = 0
@@ -160,6 +165,9 @@ Item {
         if (typeof data.barStyle === "string" && data.barStyle.length > 0) {
             root.barStyle = data.barStyle
         }
+        if (data.barPosition === "top" || data.barPosition === "bottom") {
+            root.barPosition = data.barPosition
+        }
         if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1) {
             root.workspaceCount = data.workspaceCount
         }
@@ -185,7 +193,8 @@ Item {
             workspaceCount: root.workspaceCount,
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
-            barStyle: root.barStyle
+            barStyle: root.barStyle,
+            barPosition: root.barPosition
         }
         // Preserve bar-owned keys this service does not model (rightLayout,
         // motionScale, reduceMotion, …) — captured from bar-config.json at
@@ -214,7 +223,7 @@ Item {
                 try {
                     var data = JSON.parse(barConfigRead.buffer)
                     var modeled = ["schemaVersion", "barHeight", "workspaceCount",
-                                   "clockCity", "clockOffset", "barStyle"]
+                                   "clockCity", "clockOffset", "barStyle", "barPosition"]
                     var extras = {}
                     for (var k in data) {
                         if (Object.prototype.hasOwnProperty.call(data, k)

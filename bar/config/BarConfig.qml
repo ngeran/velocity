@@ -36,6 +36,11 @@ Item {
     // separators — anything else keeps the current style; the host's Loader
     // falls back to "vector" when the folder/Scene is missing or broken.
     property string barStyle: "vector"
+    // Bar edge (UA 2.6 stage 1): "top" | "bottom". Scenes flip their window
+    // anchors, popovers rise from the host's bottom edge, the notch mirrors
+    // its lobe. Left/right placement is a follow-up, not modeled here.
+    property string barPosition: "top"
+    readonly property bool barAtBottom: root.barPosition === "bottom"
     property int clockOffset: 0
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
@@ -77,6 +82,8 @@ Item {
                 && data.barStyle.length > 0
                 && data.barStyle.indexOf("/") === -1)
                 barStyle = data.barStyle
+            if (data.barPosition === "top" || data.barPosition === "bottom")
+                barPosition = data.barPosition
             if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
                 clockOffset = data.clockOffset
             console.log("[BarConfig] Hot-reloaded bar-config.json")
