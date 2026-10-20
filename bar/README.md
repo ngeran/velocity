@@ -1,7 +1,8 @@
 # bar — the top-bar process
 
 One Quickshell process (`quickshell -c bar`) rendering the Hyprland top bar.
-Everything on it is a plugin; the styles swap live.
+Everything on it is a plugin; the styles (`vector`, `notch`, `ryoku`,
+`island`) swap live from Settings → Bar.
 
 **Real docs live one level up — start here:**
 

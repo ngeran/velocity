@@ -355,15 +355,43 @@ Item {
                         section: "bar"
                         keywords: "theme vector look"
                         value: Services.SettingsConfigService.barStyle.toUpperCase()
+                        // Bar form cards (Shibumi pattern): every scanned
+                        // style, live preview, swaps the bar live on pick.
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            rowSpacing: Config.ControlConfig.space2
+                            columnSpacing: Config.ControlConfig.space2
+                            Repeater {
+                                model: Services.SettingsConfigService.barStyles
+                                delegate: BarFormCard {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    styleName: modelData
+                                    active: Services.SettingsConfigService.barStyle === modelData
+                                    onPicked: {
+                                        Services.SettingsConfigService.barStyle = modelData
+                                        Services.SettingsConfigService.saveSettings()
+                                        Services.SettingsConfigService.scanBarStyles()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    SettingRow {
+                        visible: Services.SettingsConfigService.barStyle === "island"
+                        label: "OLED BURN GUARD"
+                        section: "bar"
+                        keywords: "island oled burn in pixel shift dim qd-oled"
+                        value: Services.SettingsConfigService.islandBurnGuard ? "ON" : "OFF"
                         Repeater {
-                            model: Services.SettingsConfigService.barStyles
+                            model: [true, false]
                             delegate: OptSeg {
-                                text: modelData.toUpperCase()
-                                active: Services.SettingsConfigService.barStyle === modelData
+                                text: modelData ? "ON" : "OFF"
+                                active: Services.SettingsConfigService.islandBurnGuard === modelData
                                 onPicked: {
-                                    Services.SettingsConfigService.barStyle = modelData
+                                    Services.SettingsConfigService.islandBurnGuard = modelData
                                     Services.SettingsConfigService.saveSettings()
-                                    Services.SettingsConfigService.scanBarStyles()
                                 }
                             }
                         }

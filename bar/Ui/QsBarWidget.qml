@@ -23,17 +23,14 @@ Item {
     property bool vertical: false
 
     readonly property var bar: barObj
-    // Same per-module store QsPanel writes (qs-compat/<moduleName>.json);
-    // the legacy shared file is a read-only fallback, keyed by module.
+    // Same per-module store QsPanel writes (qs-compat/<moduleName>.json).
     readonly property string _cacheDir: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell"
     readonly property bool _storable: /^[A-Za-z0-9._-]+$/.test(moduleName)
     property var _store: ({})
-    property var _legacy: ({})
     property bool _storeReady: false
 
     function setting(key, def) {
-        if (root._store[key] !== undefined) return root._store[key]
-        return root._legacy[key] !== undefined ? root._legacy[key] : def
+        return root._store[key] !== undefined ? root._store[key] : def
     }
 
     FileView {
@@ -47,20 +44,8 @@ Item {
         }
         onFileChanged: reload()
     }
-    FileView {
-        id: legacyStoreFile
-        path: root._cacheDir + "/qs-compat-store.json"
-        watchChanges: false
-        printErrors: false
-        onLoaded: {
-            try {
-                var j = JSON.parse(text() || "{}")
-                root._legacy = (j && j[root.moduleName]) || {}
-            } catch (e) { root._legacy = {} }
-        }
-    }
-    onModuleNameChanged: { storeFile.reload(); legacyStoreFile.reload() }
-    Component.onCompleted: { storeFile.reload(); legacyStoreFile.reload() }
+    onModuleNameChanged: storeFile.reload()
+    Component.onCompleted: storeFile.reload()
 
     QtObject {
         id: barObj

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# smoke-styles — runtime smoke test of every bar style on the live bar (NixOS).
+#
+# For each style folder in bar/styles/: switch bar-config.json's barStyle
+# (atomic tmp+mv, same as the settings writer), let the bar hot-swap, poke
+# the popup + OSD paths over IPC, and collect QML errors/warnings the bar
+# logged while that style was active. Restores the original bar-config.json
+# on exit (also on Ctrl+C).
+#
+# Needs: the deployed bar (`tools/deploy-link`, `quickshell-bar` user unit
+# for journal capture), `qs` on PATH. Visual checks stay with the human —
+# this only proves "loads, swaps, opens, logs nothing alarming".
+#
+# Usage: tools/smoke-styles [style...]      (default: every style folder)
+#        SMOKE_DWELL=4 tools/smoke-styles island
+# Exit:  0 no findings · 1 findings (see report) · 2 environment error
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar-config.json"
+DWELL="${SMOKE_DWELL:-3}"
+UNIT="quickshell-bar"
+PATTERN='error|warning|TypeError|ReferenceError|Cannot (read|assign)|is not a function|binding loop|failed|Unable to assign|non-existent'
+
+command -v qs >/dev/null || { echo "smoke-styles: qs not on PATH" >&2; exit 2; }
+[[ -f $CFG ]] || { echo "smoke-styles: $CFG missing (deploy-link first)" >&2; exit 2; }
+grep -q '"barStyle"' "$CFG" || { echo "smoke-styles: no barStyle key in $CFG — pick a style in Settings → Bar once" >&2; exit 2; }
+qs -c bar ipc call osd ping >/dev/null 2>&1 || { echo "smoke-styles: bar not answering IPC (is quickshell-bar running?)" >&2; exit 2; }
+
+have_journal=0
+systemctl --user is-active --quiet "$UNIT" && have_journal=1
+
+if (( $# > 0 )); then styles=("$@"); else
+  mapfile -t styles < <(find "$ROOT/bar/styles" -mindepth 2 -maxdepth 2 -name Scene.qml -printf '%h\n' | xargs -n1 basename | sort)
+fi
+
+backup="$(mktemp)"
+cp "$CFG" "$backup"
+restore() { cp "$backup" "$CFG.smoke.tmp" && mv "$CFG.smoke.tmp" "$CFG"; rm -f "$backup"; }
+trap restore EXIT
+
+set_style() {
+  sed -E "s/(\"barStyle\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"$1\"/" "$CFG" > "$CFG.smoke.tmp"
+  mv "$CFG.smoke.tmp" "$CFG"
+}
+
+ipc() { qs -c bar ipc call "$@" >/dev/null 2>&1 || echo "  ipc failed: $*"; }
+
+status=0
+for s in "${styles[@]}"; do
+  echo "== $s"
+  since="$(date '+%Y-%m-%d %H:%M:%S')"
+  set_style "$s"
+  sleep "$DWELL"                                  # config poll ≤2s + scene load
+  # popup path (island: presented inside the island), then the OSD path
+  ipc plugins summon nikos.clock "{}";  sleep 1.5
+  ipc plugins hide nikos.clock;         sleep 1
+  ipc osd volume 42 false;              sleep 1.8
+  ipc osd mute true;                    sleep 1.8
+  ipc osd mute false;                   sleep 1
+  if (( have_journal )); then
+    hits="$(journalctl --user -u "$UNIT" --since "$since" --no-pager -o cat 2>/dev/null | grep -iE "$PATTERN" || true)"
+    if [[ -n $hits ]]; then
+      status=1
+      echo "$hits" | sed 's/^/  ! /' | head -40
+    else
+      echo "  ok (no QML errors/warnings logged)"
+    fi
+  else
+    echo "  (no $UNIT unit — journal capture skipped; watch the terminal running the bar)"
+  fi
+done
+
+echo "== restored original bar-config.json"
+exit "$status"

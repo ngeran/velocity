@@ -72,7 +72,8 @@ used_raw="$(
     # argv-array form: Process.command / ctx.run(["qs","-c",PROC,"ipc","call",
     # TARGET,FN,...]) — one element per line, invisible to the string greps
     # above. Both element orders occur (ipc before/after -c). Conditional fn
-    # names (`on ? "enable" : "disable"`) can't match — keep such pairs manual.
+    # names (`on ? "enable" : "disable"`) cannot match — keep such pairs manual.
+    # (No apostrophes in comments inside $( ): bash 3.2 parses them as quotes.)
     grep -rhoE '"-c", *"[a-zA-Z]+", *"ipc", *"call", *"[A-Za-z]+", *"[A-Za-z]+"' \
       "$QS_DIR" --include='*.qml' 2>/dev/null | grep -v "$QS_DIR/\.claude" | sed 's/[",]//g' || true
     grep -rhoE '"ipc", *"-c", *"[a-zA-Z]+", *"call", *"[A-Za-z]+", *"[A-Za-z]+"' \

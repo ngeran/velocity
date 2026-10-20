@@ -41,6 +41,8 @@ Item {
     // its lobe. Left/right placement is a follow-up, not modeled here.
     property string barPosition: "top"
     readonly property bool barAtBottom: root.barPosition === "bottom"
+    // Island style QD-OLED guard (orbit drift + idle dim of the rest clock).
+    property bool islandBurnGuard: true
     property int clockOffset: 0
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
@@ -84,6 +86,8 @@ Item {
                 barStyle = data.barStyle
             if (data.barPosition === "top" || data.barPosition === "bottom")
                 barPosition = data.barPosition
+            if (typeof data.islandBurnGuard === "boolean")
+                islandBurnGuard = data.islandBurnGuard
             if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
                 clockOffset = data.clockOffset
             console.log("[BarConfig] Hot-reloaded bar-config.json")

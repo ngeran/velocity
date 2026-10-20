@@ -201,6 +201,8 @@ ShellRoot {
         anchorItem: shellRoot.trayAnchor
         onCloseRequested: shellRoot.closeTray()
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
+        embedHost: shellRoot.trayOwner && shellRoot.trayOwner.screen
+            ? (Engine.PopupCoordinator.islands[shellRoot.trayOwner.screen.name] || null) : null
     }
 
     // =========================================================================

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This is a **quickshell-bar** — a minimal top bar for Hyprland on NixOS, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, plugin widgets (center clock), and system tray icons (Bluetooth, Network, Volume, Battery).
+This is a **quickshell-bar** — a minimal top bar for Hyprland on NixOS, built with [Quickshell](https://quickshell.outfoxxed.me/). It's a QML-based Wayland layer-shell that displays workspace buttons, plugin widgets (center clock), and system tray icons (Network, Bluetooth, Volume, Privacy); battery/power is the `nikos.power` plugin.
 
 **Design language:** Pure black background (`#000000`) · Obsidian Teal accent (`#00dce5`) · JetBrains Mono font
 
@@ -33,7 +33,9 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 ### Entry point
 - **`shell.qml` — the HOST**: IPC handlers, shared overlays (TrayCard, NotificationCenter, Logs/Keybinds/Zai/Fastfetch, OSD), the tray state (`trayOwner/trayAnchor/activeTray`, `toggleTray/closeTray`), the `hostApi` it injects into the plugin engine, `Engine.PluginHost` (service + overlay plugins, `plugins` IPC), and the **style Loader** — it loads `styles/<barStyle>/Scene.qml` (barStyle from bar-config.json, default `vector`; Loader.Error auto-falls back to vector so a broken style never renders an empty bar).
 - **`styles/<name>/Scene.qml` — a bar style**: one `PanelWindow` per real output via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData`). A style owns only window chrome; WHAT renders comes from three `Engine.BarSection`s (left/center/right, from the engine layout). A style may swap one widget's look via `overrides: { id: Component }` (ryoku's workspaces). It receives the host as `host` and exposes `instances` for the barToggle IPC.
-- **Adding a bar style** = new folder `styles/<name>/` with a `Scene.qml` honoring the same host contract (see vector's header). It appears automatically in Settings → Bar (styles are scanned) and swaps live — no restart.
+- **Adding a bar style** = new folder `styles/<name>/` with a `Scene.qml` honoring the same host contract (see vector's header). It appears automatically in Settings → Bar (styles are scanned, shown as "Bar form" preview cards — add a silhouette + copy for it in `settings/components/BarFormCard.qml`) and swaps live — no restart.
+- **Styles today:** `vector` (default, full strip), `notch` (lobe + caret carve), `ryoku` (paper-and-ink strip), `island` (Dynamic Island).
+- **`island`** (`styles/island/`, math in `lib/island.mjs`, node-tested): clock-only pill at rest → hover blooms a one-row glance with the left/right sections → any plugin panel or tray card opens *inside* the island, which springs to the content's size. Each island window registers in `Engine.PopupCoordinator.islands[screen]`; `Popover.embedHost` (PluginPopup via `ctx.popup.island`, TrayCard via the shell) makes the card's content get adopted (`present/withdraw`) instead of mapping its own window. OSD feedback renders as an island live activity (Osd.qml stands down while an island exists). QD-OLED guard (`bar-config.json` `islandBurnGuard`, default on): opaque black fill, no stroke, dimmed rest clock, idle dim, 1–2px orbit every 3 min. NotificationCenter and overlays keep their own windows.
 
 ### Plugin engine (`engine/`)
 
@@ -55,7 +57,6 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
    - `BluetoothService` — Native `Quickshell.Bluetooth` (BlueZ): powered/devices/battery as bindings; toggle + disconnect are property writes
    - `NetworkService` — Native `Quickshell.Networking` for bar state (type/SSID/connected); wifi scanner leased to `popupOpen`; diagnostics (IP/gateway/DNS/ping/throughput) are popup-gated one-shot probes
    - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
-   - `BatteryService` — Native `Quickshell.Services.UPower` (daemon enabled in omni-nix; peripheral batteries filtered by `powerSupply`)
    - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
    - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact) via `ctx.bar`
 
@@ -83,7 +84,7 @@ Every directory has a `qmldir` file. Components/services are registered there an
 - **Click dot**: Switch to that workspace
 
 ### Keyboard (US/GR)
-- **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by `KeyboardService` via socket2 `activelayout` events). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).
+- **Click**: Cycle to the next XKB layout (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).
 
 ### Network (W)
 - **Click**: Open the TrayCard NETWORK popup (status, DNS picker, QR, networks)
@@ -153,17 +154,14 @@ All visual changes happen in `config/BarConfig.qml`:
 - Bar height → `barHeight`
 - Workspace count → `workspaceCount`
 - Colours → `colorBackground`, `colorAccent`, etc.
-- Animation duration → `animDuration` (set to 0 to disable globally)
+- Animation speed → `motionScale` (0..2) / `reduceMotion` (bool) in `bar-config.json`, read by `config/MotionConfig.qml`
 
-To move the bar to the bottom, edit `shell.qml` and change `anchors.top` → `anchors.bottom`.
+To move the bar to the bottom: Settings → Bar → BAR POSITION (`barPosition` in `bar-config.json`); every style mirrors live.
 
 ---
 
 ## Dependencies
 
-| Tool | Used by |
-|------|---------|
-| `quickshell` | Runtime framework |
 | Tool | Used by |
 |------|---------|
 | `quickshell` | Runtime framework (0.3.0: Pipewire, UPower, Bluetooth, Networking native clients) |

@@ -11,6 +11,7 @@ import Quickshell
 import Quickshell.Wayland
 import "../services" as Services
 import "../config" as Config
+import "../engine" as Engine
 
 PanelWindow {
     id: osdWindow
@@ -26,7 +27,9 @@ PanelWindow {
     mask: Region {}
 
     // Keep the window alive through the fade-out (opacity > 0 while closing).
-    visible: Services.OsdService.active || card.opacity > 0
+    // Island style: the feedback renders inside the island instead.
+    readonly property bool islandOwnsOsd: Object.keys(Engine.PopupCoordinator.islands).length > 0
+    visible: !islandOwnsOsd && (Services.OsdService.active || card.opacity > 0)
 
     // Card metrics ride the popup uiScale token (B3/B4): every literal below
     // is px(n), so uiScale 1.0 reproduces the old numbers exactly.

@@ -136,7 +136,7 @@ number instead of estimating (the built-in clock does this).
 | `ctx.settings` | `values.<key>` (bindable), `get(key, fallback)`, `set(key, value)`, `onSettingChanged(key)` |
 | `ctx.fit` | `"full"` / `"compact"` / `"collapsed"`. On a narrow window the bar asks widgets to drop to their minimal form (`compact` — hide labels, keep the glyph); `collapsed` means the plan hid the cell entirely. React to it with bindings; do nothing and only wide widgets lose their labels. |
 | `ctx.run(argv)` | fire-and-forget command; `argv[0]` must be in `manifest.commands` |
-| `ctx.popup` | `open`, `request(sub)`, `release(sub)`: one popup at a time across the whole bar |
+| `ctx.popup` | `open`, `request(sub)`, `release(sub)`: one popup at a time across the whole bar; `island`: the island host on this screen (island style only, else null — PluginPopup uses it, plugins don't need to) |
 | `ctx.events` | `onHyprEvent(line)`: the bar's Hyprland socket2 stream (don't open your own) |
 | `ctx.osd` | `showVolume(v, muted)`, `showMute(m)` |
 | `ctx.summon(id, payloadJson)`, `ctx.hide(id)` | open/close another plugin |
@@ -153,6 +153,10 @@ import bar folders by path (`tools/check-engine` enforces this).
   `onClicked(button)`, `onScrolled(delta)`.
 - `PluginPopup`: the card a widget opens, anchored under it, on its screen.
   Excludes other popups via `ctx.popup`; give a second panel a `subKey`.
+  Under the island bar style the same panel opens *inside* the island, which
+  morphs to the body's size: keep the body's `implicitHeight` honest and
+  `contentWidth` realistic, and don't rely on the drag header there (the island
+  hides it).
 - `BarIconButton`, `WidgetButton`, `BorderSurface`, `PanelKeyCatcher`, `Util`.
 - `QsBarWidget`, `QsPanel`: compat bases for converted Quattro plugins.
 

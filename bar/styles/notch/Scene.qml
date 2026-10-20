@@ -9,7 +9,7 @@
 // ACTIVE NOTCH: when a popover opens under the bar (PluginPopup or TrayCard),
 // the lobe's bottom edge carves an animated caret bite at the card's center
 // x, and an opaque card-colored wedge fills the bite — the lobe and the card
-// read as one connected shape (Shibumi's connectedPanel contract, ported:
+// read as one connected shape (idea ported from Shibumi's connected panel;
 // geometry lives in Engine.PopupCoordinator.connected because panels are
 // mounted inside scene-owned plugin subtrees and die on style swap).
 //

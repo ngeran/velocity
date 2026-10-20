@@ -80,7 +80,7 @@ PanelWindow {
     // store so toggles take effect immediately in the live binding.
     property var settings: ({})
     // One file per module (qs-compat/<moduleName>.json, flat key → value):
-    // the old shared qs-compat-store.json was rewritten whole from each
+    // the old single shared store file was rewritten whole from each
     // panel's snapshot, so panels clobbered each other's keys.
     readonly property string _cacheDir: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "") + "/.cache/quickshell"
     readonly property bool _storable: /^[A-Za-z0-9._-]+$/.test(moduleName)

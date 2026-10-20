@@ -42,6 +42,8 @@ Item {
     // Bar style (bar/styles/<name>/Scene.qml) — live-swappable; the bar
     // falls back to "vector" when a style is missing/broken.
     property string barStyle: "vector"
+    // Island style QD-OLED guard (bar-config.json islandBurnGuard).
+    property bool islandBurnGuard: true
     // Bar edge (UA 2.6 stage 1): "top" | "bottom" — mirrors bar-config.json;
     // the bar flips scenes/popovers live via BarConfig's ingest.
     property string barPosition: "top"
@@ -194,7 +196,8 @@ Item {
             clockCity: root.clockCity,
             clockOffset: root.clockOffset,
             barStyle: root.barStyle,
-            barPosition: root.barPosition
+            barPosition: root.barPosition,
+            islandBurnGuard: root.islandBurnGuard
         }
         // Preserve bar-owned keys this service does not model (rightLayout,
         // motionScale, reduceMotion, …) — captured from bar-config.json at
@@ -223,7 +226,8 @@ Item {
                 try {
                     var data = JSON.parse(barConfigRead.buffer)
                     var modeled = ["schemaVersion", "barHeight", "workspaceCount",
-                                   "clockCity", "clockOffset", "barStyle", "barPosition"]
+                                   "clockCity", "clockOffset", "barStyle", "barPosition",
+                                   "islandBurnGuard"]
                     var extras = {}
                     for (var k in data) {
                         if (Object.prototype.hasOwnProperty.call(data, k)
@@ -231,6 +235,9 @@ Item {
                             extras[k] = data[k]
                     }
                     root.barConfigExtras = extras
+                    // Bar-only key: bar-config.json is its sole home.
+                    if (typeof data.islandBurnGuard === "boolean")
+                        root.islandBurnGuard = data.islandBurnGuard
                 } catch (e) { /* keep empty extras */ }
             }
             barConfigRead.buffer = ""

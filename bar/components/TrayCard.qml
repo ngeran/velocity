@@ -17,7 +17,11 @@ import "../config" as Config
 PanelWindow {
     id: card
     // Keep the window alive through the fade-out (opacity > 0 while closing).
-    visible: activeTray !== "" || dropdown.cardOpacity > 0
+    // Island style: the body is presented inside the island (embedHost set
+    // by the shell for the owner's screen) and this window never maps.
+    visible: !dropdown.embedHost && !dropdown.embedded
+             && (activeTray !== "" || dropdown.cardOpacity > 0)
+    property var embedHost: null
 
     // Full-screen transparent overlay. A click landing anywhere outside the
     // dropdown closes it — the same click-outside dismissal the
@@ -119,6 +123,7 @@ PanelWindow {
         id: dropdown
         externalState: true
         opened: card.activeTray !== ""
+        embedHost: card.embedHost
         onDismissRequested: card.closeRequested()
         hoverClose: true
         hoverCloseNeedsEntry: true

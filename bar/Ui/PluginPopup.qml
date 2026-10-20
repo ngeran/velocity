@@ -43,6 +43,8 @@ PanelWindow {
     property Item anchorItem: null
     // Cards that draw their own header (calendar/weather) hide this one.
     property bool showHeader: true
+    // The island has no drag/✕ chrome: it dismisses on hover-out like iOS.
+    readonly property bool _headerShown: showHeader && !popover.embedHost
     // Called after open() — plugins refresh their data here.
     property var onOpen: null
 
@@ -71,7 +73,10 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     // No `mask`: the panel must RECEIVE input (✕, hover-out, drag).
 
-    visible: popover.opened || popover.cardOpacity > 0
+    // Island style: the card content lives inside the island instead — this
+    // window never maps (embedHost is known before open, so no 1-frame flash).
+    visible: !popover.embedHost && !popover.embedded
+             && (popover.opened || popover.cardOpacity > 0)
     readonly property bool opened: popover.opened
 
     function open() {
@@ -138,6 +143,7 @@ PanelWindow {
         anchorFallback: panelRoot.anchorX
         anchorItem: panelRoot.anchorItem
         hoverClose: true
+        embedHost: panelRoot.ctx ? panelRoot.ctx.popup.island : null
         offX: panelRoot.offX
         offY: panelRoot.offY
         // Under the notch style the lobe's caret wedge meets the card.
@@ -146,8 +152,8 @@ PanelWindow {
         // ── header (press-drag to move the card) ──
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: panelRoot.showHeader ? panelRoot.headerH : 0
-            visible: panelRoot.showHeader
+            Layout.preferredHeight: panelRoot._headerShown ? panelRoot.headerH : 0
+            visible: panelRoot._headerShown
 
             MouseArea {
                 anchors.fill: parent
@@ -194,7 +200,7 @@ PanelWindow {
         }
         Rectangle {
             Layout.fillWidth: true; height: 1
-            visible: panelRoot.showHeader
+            visible: panelRoot._headerShown
             color: panelRoot._theme ? panelRoot._theme.hairline : "#22ffffff"
         }
 

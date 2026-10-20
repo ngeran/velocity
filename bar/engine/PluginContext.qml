@@ -12,8 +12,9 @@
 //   ctx.osd         OSD (showVolume / showMute / showLayout …)
 //   ctx.events      onHyprEvent(line) — the bar's socket2 stream
 //   ctx.settings    SettingsStore: values / get / set / onSettingChanged
-//   ctx.popup       open (bool) · request() · release() · publish(geom) —
-//                   one-at-a-time panels + notch carve geometry
+//   ctx.popup       open (bool) · request() · release() · publish(geom) ·
+//                   island — one-at-a-time panels, notch carve geometry, and
+//                   the island host on this screen (null unless island style)
 //
 // qs.Ui components reach engine state ONLY through ctx: a plugin loads qs.Ui
 // through the qs module path, and a singleton touched from there could be a
@@ -71,6 +72,11 @@ QtObject {
         // Notch-lobe carve geometry while open ({ screen, caretX }), or null
         // to retract.
         function publish(geom, sub) { PopupCoordinator.publish(keyFor(sub), geom) }
+        // The island host on this instance's screen (island style), or null.
+        // PluginPopup hands it to its Popover, which then presents inside the
+        // island; plugins never call into it directly.
+        readonly property var island: ctx.screen
+            ? (PopupCoordinator.islands[ctx.screen.name] || null) : null
     }
 
     function run(argv) {

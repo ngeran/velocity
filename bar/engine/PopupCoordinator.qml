@@ -16,6 +16,11 @@
 // `connected` is the notch-lobe carve geometry { owner, screen, caretX }
 // published by whichever card is open. It lives here, not in a scene: a style
 // swap destroys panels mid-open and their close handlers never fire.
+//
+// `islands` maps a screen name to the island host a style registered for that
+// output (styles/island). A popover whose screen has one presents its content
+// inside the island instead of opening its own window; the host object is
+// opaque here (the engine never calls into it).
 // =============================================================================
 
 pragma Singleton
@@ -28,6 +33,29 @@ QtObject {
     property string current: ""
     property var connected: null
     property var _closer: null
+    // Reassigned (never mutated) so bindings on islands[...] re-evaluate.
+    property var islands: ({})
+
+    function registerIsland(screenName, host) {
+        var name = String(screenName || "")
+        if (name === "" || !host) return
+        var m = Object.assign({}, root.islands)
+        m[name] = host
+        root.islands = m
+    }
+
+    // Owner-checked: a successor window that registered first is kept.
+    function unregisterIsland(screenName, host) {
+        var name = String(screenName || "")
+        if (root.islands[name] !== host) return
+        var m = Object.assign({}, root.islands)
+        delete m[name]
+        root.islands = m
+    }
+
+    function islandFor(screenName) {
+        return root.islands[String(screenName || "")] || null
+    }
 
     function request(key, closer) {
         key = String(key || "")

@@ -31,13 +31,12 @@
 # Usage: tools/lint-qml [config-root...]    (default: bar settings)
 # Exit:  0 clean · 1 fatal findings · 2 environment error
 #
-# Why plugins/ is opt-in, not a default root: omarchy-pocket declares module
-# qs.Ui TWICE (qs/Ui/qmldir and qs/Ui/Ui/qmldir) — the runtime importer picks
-# the inner one, qmllint the outer, so QsBarWidget and every member of it are
-# false "was not found" hits under lint (its tests/qml also import the Pk.
-# alias that only the test rig registers). The plugin host already isolates
-# load failures (reportError), so: `tools/lint-qml plugins` to review it
-# knowingly, and read its output as divergence-unless-proven-otherwise.
+# Why plugins/ is opt-in, not a default root: plugins import the kit as
+# `qs.Ui` through the qs module path the runtime registers, which qmllint
+# does not resolve the same way — their imports read as false "was not
+# found" hits. The plugin host already isolates load failures (reportError),
+# so: `tools/lint-qml plugins` to review it knowingly, and read its output as
+# divergence-unless-proven-otherwise.
 set -euo pipefail
 
 # --- locate qmllint ----------------------------------------------------------

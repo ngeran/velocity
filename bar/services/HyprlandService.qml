@@ -18,7 +18,7 @@
 //   - socat is NOT installed on this system, so nc -U is used instead
 //   - THE socket2 owner for the bar: every raw event line is re-emitted on
 //     socketEvent(line) so other services subscribe instead of opening their
-//     own nc consumer (KeyboardService held a second stream before).
+//     own nc consumer (a keyboard service held a second stream before).
 //
 // NOTE: switchTo uses the Lua dispatcher `hl.dsp.focus({ workspace = N })` —
 // Hyprland 0.55+ with Lua config dropped the classic `dispatch workspace N`.
@@ -42,7 +42,7 @@ Item {
     // hotkeys route to the plugin instance on this screen.
     property string focusedMonitor: ""
 
-    // Raw socket2 line, re-emitted for subscriber services (KeyboardService).
+    // Raw socket2 line, re-emitted for subscribers (plugins via ctx.events).
     signal socketEvent(string line)
 
     // =========================================================================

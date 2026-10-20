@@ -61,6 +61,18 @@ Item {
     property bool hoverCloseNeedsEntry: false
     // Tray-style cards are a seamless extension of the bar — no border.
     property bool showBorder: true
+    // Island style: an island host for this screen (ctx.popup.island / the
+    // shell's lookup). While set at open time the card CONTENT is presented
+    // inside the island (host.present(pop) / host.withdraw(pop)) and the
+    // host window should stay unmapped (`embedded`). null = classic card.
+    property var embedHost: null
+    readonly property bool embedded: _embedHost !== null
+    // What the island adopts and how big it wants to be (card box incl.
+    // padding; the card's own geometry keeps computing while hidden).
+    readonly property Item embedItem: cardContent
+    readonly property real embedW: card.width
+    readonly property real embedH: card.implicitHeight
+    property var _embedHost: null
 
     default property alias content: cardBody.data
     // Hosts with their own internal geometry (TrayCard's per-body sizing):
@@ -102,20 +114,61 @@ Item {
             settleBurst.shots = 0
             settleBurst.restart()
         }
+        _syncEmbed()
     }
     function close() { if (opened) { _hoverEntered = false; opened = false; popClosed() } }
     function toggle() { opened ? close() : open() }
+
+    // ── island embedding ────────────────────────────────────────────────────
+    // Present on open, withdraw on close; one code path for both open styles
+    // (open() and external-state bindings) because it keys off `opened`.
+    function _syncEmbed() {
+        if (opened && embedHost && _embedHost === null) {
+            _embedHost = embedHost
+            _embedHost.present(pop)
+        } else if ((!opened || embedHost !== _embedHost) && _embedHost !== null) {
+            var h = _embedHost
+            _embedHost = null
+            // true = the island animates the content out and calls
+            // restoreEmbed() itself when done; anything else = restore now.
+            // Moving to another island while open: cancel the old one's
+            // fade (it would otherwise hand the content back from under the
+            // new host).
+            var immediate = opened && !!embedHost
+            var deferred = !!h.withdraw && h.withdraw(pop, immediate) === true
+            if (!deferred) restoreEmbed()
+            if (opened && embedHost) _syncEmbed()
+        }
+    }
+    // The island hands the content back (or dies, style swap): home again.
+    function restoreEmbed() {
+        if (_embedHost !== null) return   // presented elsewhere since
+        cardContent.parent = card
+        cardContent.x = 0
+        cardContent.y = 0
+        cardContent.opacity = 1
+        cardContent.scale = 1
+    }
+    onEmbedHostChanged: _syncEmbed()
+    Component.onDestruction: {
+        if (_embedHost !== null && _embedHost.withdraw) _embedHost.withdraw(pop, true)
+    }
 
     // Screen-fit (UA 2.2): the card never exceeds the host window minus
     // margins (width) and its vertical budget (height). PopGeo returns the
     // request untouched until the parent reports real geometry — hosts spawn
     // at placeholder sizes and the clamp re-applies when they settle.
-    width: PopGeo.clampCardWidth(cardWidth, parent ? parent.width : 0, edgeMargin)
+    // Embedded: the host window never maps (it may sit at a placeholder
+    // size), so the island's budget replaces the window clamp.
+    width: embedHost
+           ? (embedHost.maxContentW > 0 ? Math.min(cardWidth, embedHost.maxContentW) : cardWidth)
+           : PopGeo.clampCardWidth(cardWidth, parent ? parent.width : 0, edgeMargin)
     // Vertical budget: parent height minus the drop gap and margins (-1 =
     // unclamped). Host windows already exclude the bar strip (margins.top =
     // barHeight), so no bar term here — see popover-geometry.mjs.
-    readonly property real maxHeight: PopGeo.clampMaxHeight(
-        parent ? parent.height : 0, gap, edgeMargin)
+    readonly property real maxHeight: embedHost
+        ? (embedHost.maxContentH > 0 ? embedHost.maxContentH : -1)
+        : PopGeo.clampMaxHeight(parent ? parent.height : 0, gap, edgeMargin)
     height: card.implicitHeight
 
     // Trigger center in SCREEN x (bar window origin == screen origin; the
@@ -226,32 +279,41 @@ Item {
             onTriggered: if (pop.opened) pop._dismiss()
         }
 
-        // Body scrolls only when the content is taller than the card's
-        // vertical budget (UA 2.2); an exact-fit body is inert (1px guard).
-        Flickable {
-            id: bodyScroll
-            x: pop.padding
-            y: pop.padding
-            width: parent.width - 2 * pop.padding
-            height: parent.height - 2 * pop.padding
-            contentWidth: width
-            contentHeight: cardBody.implicitHeight
-            interactive: PopGeo.scrollNeeded(contentHeight, height)
-            clip: true
-
-            ColumnLayout {
-                id: cardBody
-                width: bodyScroll.width
-                spacing: 0
-            }
-        }
-
-        // Fill-slot for hosts with custom internal geometry (anchor-fill).
-        // Declared AFTER the column so tray content stacks above the
-        // click-swallower.
+        // Everything inside the card surface. Sized explicitly (no anchors)
+        // so the island can adopt it as-is: the body keeps the card's
+        // geometry while the island's shell morphs around it.
         Item {
-            id: cardAreaHost
-            anchors.fill: parent
+            id: cardContent
+            width: card.width
+            height: card.height
+
+            // Body scrolls only when the content is taller than the card's
+            // vertical budget (UA 2.2); an exact-fit body is inert (1px guard).
+            Flickable {
+                id: bodyScroll
+                x: pop.padding
+                y: pop.padding
+                width: parent.width - 2 * pop.padding
+                height: parent.height - 2 * pop.padding
+                contentWidth: width
+                contentHeight: cardBody.implicitHeight
+                interactive: PopGeo.scrollNeeded(contentHeight, height)
+                clip: true
+
+                ColumnLayout {
+                    id: cardBody
+                    width: bodyScroll.width
+                    spacing: 0
+                }
+            }
+
+            // Fill-slot for hosts with custom internal geometry (anchor-fill).
+            // Declared AFTER the column so tray content stacks above the
+            // click-swallower.
+            Item {
+                id: cardAreaHost
+                anchors.fill: parent
+            }
         }
     }
 }
