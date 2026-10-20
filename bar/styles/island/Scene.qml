@@ -405,14 +405,39 @@ Item {
             readonly property real glanceW: centerRow.implicitWidth
                 + (wingW > 0 ? 2 * (wingW + sectionGap) : 0)
 
-            readonly property var target: Isl.targetSize(islandState, {
+            // Panel sizes settle-gate: a freshly presented popover lays out
+            // in steps (loaders, async probes) — committing each step would
+            // spring the island in stutters, and the pre-layout 0-size first
+            // read collapses to the min-width pill. Adopt the presented size
+            // only after it holds still for a beat; later settles (a probe
+            // returning seconds into the visit) re-gate the same way and
+            // reach the island as one smooth spring.
+            readonly property real rawPanelW: client ? client.embedW : 0
+            readonly property real rawPanelH: client ? client.embedH + dockOffset : 0
+            property real settledPanelW: 0
+            property real settledPanelH: 0
+            onRawPanelWChanged: panelQuiet.restart()
+            onRawPanelHChanged: panelQuiet.restart()
+            Timer {
+                id: panelQuiet
+                interval: 70
+                onTriggered: {
+                    win.settledPanelW = win.rawPanelW
+                    win.settledPanelH = win.rawPanelH
+                }
+            }
+            // A panel whose size has not settled yet (first 70ms) holds the
+            // glance silhouette instead of collapsing to the min pill.
+            readonly property string sizeState: islandState === Isl.PANEL && settledPanelH <= 0
+                ? Isl.GLANCE : islandState
+            readonly property var target: Isl.targetSize(sizeState, {
                 barH: barH, padX: padX, panelPad: panelPad, margin: margin,
                 restW: centerRow.implicitWidth,
                 glanceW: glanceW,
                 activityW: activityRow.implicitWidth,
                 activityH: barH,
-                panelW: client ? client.embedW : 0,
-                panelH: client ? client.embedH + dockOffset : 0,
+                panelW: settledPanelW,
+                panelH: settledPanelH,
                 screenW: win.width,
                 screenH: win.screen ? win.screen.height : 0
             })
@@ -421,22 +446,45 @@ Item {
             // overshoot past the target must not flip the spring mid-flight.
             property bool growing: false
 
-            // Window height: grow at the start of a morph (with overshoot
-            // headroom), trim once the spring settles.
-            property real frameH: barH
+            // Window-height policy — the layer surface must never resize
+            // while content is drawn past the new buffer's edge: a realloc
+            // that clips (or blits into a fresh buffer mid-motion) reads as
+            // a one-frame flicker. So the window only moves where motion
+            // hides it:
+            //   · base overshoot headroom from launch — rest/glance/
+            //     activity are one barH row and never touch the window;
+            //   · presenting reserves the full legal panel height ONCE, at
+            //     motion onset (the island is still small, nothing clips).
+            //     Whatever settles later — loaders, probes returning
+            //     seconds into the visit — then only springs the island
+            //     box, never the window;
+            //   · after a dismiss the reservation drops back the moment the
+            //     collapsed island fits inside base again (island's
+            //     onHeightChanged) — a resize whose buffer fully contains
+            //     the drawn content is invisible. The transient cost is one
+            //     screen-fraction-tall buffer while a panel is open.
+            readonly property real baseH: Math.ceil(barH * (1 + Isl.OVERSHOOT_PAD)) + 2
+            readonly property real panelFrameH: win.screen
+                ? Math.ceil(win.screen.height * Isl.PANEL_MAX_H_FRAC) + 2 : baseH
+            property real frameH: baseH
+            property bool _frameShrinkPending: false
+            onIslandStateChanged: {
+                if (islandState === Isl.PANEL) {
+                    _frameShrinkPending = false
+                    if (panelFrameH > frameH) frameH = panelFrameH
+                } else if (frameH !== baseH) {
+                    _frameShrinkPending = true
+                    // reduceMotion snaps island.height in the same cascade —
+                    // catch the already-small case here.
+                    if (island.height <= baseH) {
+                        _frameShrinkPending = false
+                        frameH = baseH
+                    }
+                }
+            }
             onTargetChanged: {
                 // area, not per-axis: a wide-but-shorter panel still "grows"
                 growing = target.w * target.h > island.width * island.height + 0.5
-                var want = Math.ceil(target.h * (1 + Isl.OVERSHOOT_PAD)) + 2
-                if (want > frameH) frameH = want
-                frameTrim.restart()
-            }
-            // Trim only after the spring has been quiet for a moment — an
-            // underdamped spring crosses its target before it settles.
-            Timer {
-                id: frameTrim
-                interval: 220
-                onTriggered: win.frameH = Math.ceil(win.target.h) + 2
             }
 
             anchors {
@@ -499,7 +547,13 @@ Item {
                     enabled: !win.reduceMotion
                     NumberAnimation { duration: 2400; easing.type: Easing.InOutSine }   // motion-ok: burn-in glide, not UI motion
                 }
-                onHeightChanged: frameTrim.restart()
+                // Collapse follow-up: once the island fits inside the base
+                // window again, drop the panel reservation (see the
+                // window-height policy on win).
+                onHeightChanged: if (win._frameShrinkPending && height <= win.baseH) {
+                    win._frameShrinkPending = false
+                    win.frameH = win.baseH
+                }
 
                 HoverHandler {
                     onHoveredChanged: win._setRawHover(hovered)

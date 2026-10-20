@@ -24,6 +24,11 @@ export const SPRING_OPEN = { spring: 4.0, damping: 0.72, mass: 1.0, epsilon: 0.4
 export const SPRING_CLOSE = { spring: 4.6, damping: 0.82, mass: 1.0, epsilon: 0.4 }
 // Window headroom while a spring is in flight (overshoot must not clip).
 export const OVERSHOOT_PAD = 0.12
+// Panel height ceiling as a fraction of the screen — both the island's own
+// size cap (targetSize) and the window reservation Scene.qml makes when a
+// panel presents, so the layer surface never has to resize again while the
+// panel is open.
+export const PANEL_MAX_H_FRAC = 0.8
 
 // Content choreography — scale-led (user preference: resize, not fade).
 // Presented content is scaled to fit the island's LIVE size (fitScale), so
@@ -71,7 +76,7 @@ export function targetSize(state, m) {
     var margin = num(m.margin, 12)
     var screenW = num(m.screenW, 0)
     var screenH = num(m.screenH, 0)
-    var maxHFrac = num(m.maxHFrac, 0.8)
+    var maxHFrac = num(m.maxHFrac, PANEL_MAX_H_FRAC)
     var minW = Math.round(barH * 3.2)
     var w, h
     switch (state) {
@@ -114,7 +119,7 @@ export function filletRadius(barH) {
 export function panelBudget(m) {
     var panelPad = num(m.panelPad, 14)
     var margin = num(m.margin, 12)
-    var maxHFrac = num(m.maxHFrac, 0.8)
+    var maxHFrac = num(m.maxHFrac, PANEL_MAX_H_FRAC)
     var screenW = num(m.screenW, 0)
     var screenH = num(m.screenH, 0)
     return {
