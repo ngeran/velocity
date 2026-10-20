@@ -17,10 +17,11 @@ export const HOVER_IN_MS = 90
 export const HOVER_OUT_MS = 380
 export const PANEL_OUT_MS = 450
 
-// Morph spring (QML SpringAnimation): just under-damped — one soft
-// overshoot, no wobble. Collapse is stiffer so retracting feels decisive.
-export const SPRING_OPEN = { spring: 4.2, damping: 0.42, mass: 1.0, epsilon: 0.4 }
-export const SPRING_CLOSE = { spring: 5.4, damping: 0.55, mass: 1.0, epsilon: 0.4 }
+// Morph spring (QML SpringAnimation): softly under-damped — a whisper of
+// overshoot, no wobble. Collapse is a touch stiffer so retracting feels
+// decisive but still glides to a stop instead of bouncing shut.
+export const SPRING_OPEN = { spring: 4.0, damping: 0.72, mass: 1.0, epsilon: 0.4 }
+export const SPRING_CLOSE = { spring: 4.6, damping: 0.82, mass: 1.0, epsilon: 0.4 }
 // Window headroom while a spring is in flight (overshoot must not clip).
 export const OVERSHOOT_PAD = 0.12
 
@@ -29,8 +30,8 @@ export const OVERSHOOT_PAD = 0.12
 // it grows and shrinks with the spring; opacity only snaps (no crossfade
 // look) so two panels never read as overlapping. Outgoing content shrinks
 // toward the screen edge while it snaps out.
-export const CONTENT_OUT_MS = 120
-export const CONTENT_IN_MS = 90
+export const CONTENT_OUT_MS = 140
+export const CONTENT_IN_MS = 150
 export const CONTENT_OUT_SCALE = 0.82
 export const FIT_SCALE_MIN = 0.6
 

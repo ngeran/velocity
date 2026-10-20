@@ -394,11 +394,20 @@ Item {
                 for (var i = 0; i < ids.length; i++) m[ids[i]] = "compact"
                 return m
             }
-            // Glance keeps the clock dead-centre: both wings get the wider
-            // side's width so nothing shifts when the island blooms.
+            // Glance keeps the clock dead-centre with the wings hugging it
+            // (equal sectionGap each way), and the island packs to the REAL
+            // content width: pad · left — clock — right · pad. Both clusters
+            // sit equidistant from the clock, so the bloom reads as a mirror
+            // image, not a lopsided row with dead space on the narrow side.
+            // A missing wing falls back to the wider-side slot so the clock
+            // stays centred even with one section empty.
             readonly property real wingW: Math.max(leftRow.implicitWidth, rightRail.implicitWidth)
-            readonly property real glanceW: centerRow.implicitWidth
-                + (wingW > 0 ? 2 * (wingW + sectionGap) : 0)
+            readonly property real glanceW: {
+                if (leftRow.implicitWidth <= 0 || rightRail.implicitWidth <= 0)
+                    return centerRow.implicitWidth + (wingW > 0 ? 2 * (wingW + sectionGap) : 0)
+                return centerRow.implicitWidth + leftRow.implicitWidth
+                     + rightRail.implicitWidth + 2 * sectionGap
+            }
 
             readonly property var target: Isl.targetSize(islandState, {
                 barH: barH, padX: padX, panelPad: panelPad, margin: margin,
@@ -480,7 +489,12 @@ Item {
                 }
                 Behavior on r {
                     enabled: !win.reduceMotion
-                    SpringAnimation { spring: 5.0; damping: 0.6; epsilon: 0.25 }
+                    SpringAnimation {
+                        spring: win.growing ? Isl.SPRING_OPEN.spring : Isl.SPRING_CLOSE.spring
+                        damping: win.growing ? Isl.SPRING_OPEN.damping : Isl.SPRING_CLOSE.damping
+                        mass: Isl.SPRING_OPEN.mass
+                        epsilon: 0.25
+                    }
                 }
                 // The orbit is a 1–2px step every few minutes: glide only the
                 // offset (never x itself — width/screen changes must snap).
