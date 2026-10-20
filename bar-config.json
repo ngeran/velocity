@@ -4,7 +4,7 @@
   "workspaceCount": 5,
   "clockCity": "Local",
   "clockOffset": 0,
-  "barStyle": "vector",
+  "barStyle": "notch",
   "rightLayout": [
     "plugins",
     "network",
@@ -15,5 +15,6 @@
     "logs",
     "settings",
     "notifications"
-  ]
+  ],
+  "barPosition": "top"
 }
