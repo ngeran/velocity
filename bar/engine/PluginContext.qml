@@ -57,7 +57,7 @@ QtObject {
     property string fit: "full"
 
     // One open popup at a time, bar-wide (PopupCoordinator). A plugin with
-    // several panels (clock: calendar + weather) gives each a sub-key, so they
+    // several panels (clock: calendar) gives each a sub-key, so they
     // exclude each other too: slot keys are "<pluginId>" or "<pluginId>.<sub>".
     readonly property QtObject popup: QtObject {
         // The slot key currently open anywhere in the bar ("" = none).

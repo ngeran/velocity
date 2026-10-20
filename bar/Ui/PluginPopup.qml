@@ -41,7 +41,7 @@ PanelWindow {
     property string anchorX: "right"
     // The bar pill to centre the card under (preferred over anchorX).
     property Item anchorItem: null
-    // Cards that draw their own header (calendar/weather) hide this one.
+    // Cards that draw their own header (calendar) hide this one.
     property bool showHeader: true
     // The island has no drag/✕ chrome: it dismisses on hover-out like iOS.
     readonly property bool _headerShown: showHeader && !popover.embedHost

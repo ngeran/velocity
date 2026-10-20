@@ -15,8 +15,7 @@ Item {
 
     property var ctx: null
 
-    // Host IPC (plugins summon/hide) routes through these — same contract as
-    // the weather plugin's root.
+    // Host IPC (plugins summon/hide) routes through these.
     function toggle() { calPanel.toggle() }
     function open()   { calPanel.open() }
     function close()  { calPanel.close() }
