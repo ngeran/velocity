@@ -2,9 +2,14 @@
 // SysInfoService.qml — System Information Service
 // =============================================================================
 //
-// Gathers real host info (OS, kernel, hostname, uptime, user) using the same
-// Process + SplitParser + Timer pattern as NetworkService. Static values (OS,
-// kernel, hostname, user) are read once on load; uptime refreshes every 30s.
+// Host identity the dashboard shows: hostname, user, uptime. Static values
+// (hostname, user) are read once on load; uptime refreshes every 30s while
+// the dashboard is open (and on CoreSystemPane open).
+//
+// C2 trim: the live cpu/mem/gpu/disk metrics and the DMI board fields had
+// ZERO consumers (CoreEngineService owns live metrics; the bar's
+// SystemInfoService owns board identity for FastfetchOverlay) — removed with
+// per-property proofs. osName/osPrettyName/kernel were equally unread.
 //
 // =============================================================================
 
@@ -17,27 +22,9 @@ import "../config" as Config
 Item {
     id: root
 
-    property string osName: "Linux"
-    property string osPrettyName: "Linux"
     property string hostname: "unknown"
-    property string kernel: "unknown"
     property string uptime: "—"
     property string userName: "user"
-
-    // Motherboard / chipset identity (static, read once from DMI sysfs)
-    property string boardVendor: "—"   // system vendor, e.g. "ASUS"
-    property string boardName: "—"     // board model, e.g. "TUF GAMING B650-E WIFI"
-    property string chipset: "—"       // parsed chipset code, e.g. "X870E", "B650E"
-
-    // Live metrics (Step 3) - CPU, MEM, GPU, Disk usage percentages
-    property real cpuPercent: 0
-    property real memPercent: 0
-    property real gpuPercent: 0
-    property real diskPercent: 0
-
-    // CPU delta tracking (two-sample approach, avoids broken single-pass awk)
-    property real _cpuPrevBusy: 0
-    property real _cpuPrevTotal: 0
 
     Component.onCompleted: {
         root.refreshStatic()
@@ -45,47 +32,14 @@ Item {
         console.log("[SysInfo] Service loaded")
     }
 
-    // ── Refresh static values (OS, kernel, hostname, user) ───────────────────
+    // ── Refresh static values ────────────────────────────────────────────────
     function refreshStatic() {
-        osProc.running = true
-        kernelProc.running = true
         hostnameProc.running = true
         userProc.running = true
-        boardProc.running = true
     }
 
     function refreshUptime() {
         uptimeProc.running = true
-    }
-
-    // ── OS pretty name: PRETTY_NAME="Arch Linux" ─────────────────────────────
-    Process {   // unbounded-ok: trivial local check — no hang risk
-        id: osProc
-        command: ["sh", "-c", ". /etc/os-release 2>/dev/null && echo \"$PRETTY_NAME|$NAME\""]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { osProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && osProc.buffer.length > 0) {
-                var parts = osProc.buffer.trim().split("|")
-                root.osPrettyName = parts[0] || root.osPrettyName
-                root.osName = parts[1] || root.osName
-                osProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Kernel: uname -r ─────────────────────────────────────────────────────
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
-        id: kernelProc
-        command: ["uname", "-r"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { kernelProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && kernelProc.buffer.length > 0) {
-                root.kernel = kernelProc.buffer.trim()
-                kernelProc.buffer = ""
-            }
-        }
     }
 
     // ── Hostname ─────────────────────────────────────────────────────────────
@@ -116,50 +70,6 @@ Item {
                 userProc.buffer = ""
             }
         }
-    }
-
-    // ── Motherboard / chipset: DMI sysfs (sys_vendor | board_name) ──────────
-    // Chipset (X870E/B650E/Z790/…) is parsed out of the board model string,
-    // which reliably embeds it (e.g. "TUF GAMING B650-E WIFI" → "B650E").
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
-        id: boardProc
-        command: ["sh", "-c",
-            "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && boardProc.buffer.length > 0) {
-                var parts = boardProc.buffer.split("|")
-                var sysv = (parts[0] || "").trim()
-                var name = root._cleanBoardName(parts[1] || "")
-                if (sysv.length > 0) root.boardVendor = sysv
-                if (name.length > 0) root.boardName = name
-                var cs = root._parseChipset(name)
-                if (cs.length > 0) root.chipset = cs
-                boardProc.buffer = ""
-            }
-        }
-    }
-
-    // Filter out generic placeholder board names that SMBIOS leaves when unset.
-    function _cleanBoardName(s) {
-        if (!s) return ""
-        var low = s.toLowerCase().trim()
-        var junk = ["default string", "to be filled by o.e.m.",
-                    "to be filled by o.e.m", "base board product name",
-                    "system product name", "system board product name",
-                    "not specified", "unknown", "none"]
-        if (junk.indexOf(low) >= 0) return ""
-        return s.trim()
-    }
-
-    // Extract a chipset code: optional A/B/X/H/Z prefix, 3 digits, optional -?E
-    // suffix. Covers AMD (X870E, B650E, A620, X670, B550…) and Intel (Z790, B760…).
-    function _parseChipset(s) {
-        if (!s) return ""
-        var m = s.match(/[ABXHZ]\d{3}-?E?/i)
-        if (!m) return ""
-        return m[0].replace("-", "").toUpperCase()
     }
 
     // ── Uptime: "up 2 hours, 15 minutes" ────────────────────────────────────
@@ -202,99 +112,5 @@ Item {
         repeat: true
         triggeredOnStart: false
         onTriggered: root.refreshUptime()
-    }
-
-    // ── Live metrics: CPU (delta-based, two-sample) ───────────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: cpuProc
-        command: ["sh", "-c", "grep '^cpu ' /proc/stat"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { cpuProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && cpuProc.buffer.length > 0) {
-                var f = cpuProc.buffer.trim().split(/\s+/)
-                var user = +f[1], nice = +f[2], sys = +f[3], idle = +f[4]
-                var iowait = +f[5], irq = +f[6], softirq = +f[7], steal = +f[8]
-                var busy = user + nice + sys + irq + softirq
-                var total = busy + idle + iowait + steal
-                var db = busy - root._cpuPrevBusy
-                var dt = total - root._cpuPrevTotal
-                if (dt > 0 && root._cpuPrevTotal > 0) {
-                    root.cpuPercent = Math.max(0, Math.min(100, Math.round((db / dt) * 100)))
-                }
-                root._cpuPrevBusy = busy
-                root._cpuPrevTotal = total
-                cpuProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Live metrics: Memory (free command, proven pattern) ────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: memProc
-        command: ["bash", "-c", "free | awk '/^Mem:/{printf \"%.2f\", $3/$2}'"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { memProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && memProc.buffer.length > 0) {
-                var v = parseFloat(memProc.buffer.trim())
-                if (!isNaN(v)) root.memPercent = Math.round(v * 100)
-                memProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Live metrics: GPU (amdgpu sysfs, fallback 0) ───────────────────────────────────
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
-        id: gpuProc
-        command: ["sh", "-c", "cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null | head -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                var v = parseInt(gpuProc.buffer.trim(), 10)
-                root.gpuPercent = (!isNaN(v)) ? Math.max(0, Math.min(100, v)) : 0
-                gpuProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Live metrics: Disk usage (root filesystem, df) ───────────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: diskProc
-        command: ["bash", "-c", "df / | awk 'NR==2{gsub(/%/,\"\",$5); print $5}'"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && diskProc.buffer.length > 0) {
-                var v = parseInt(diskProc.buffer, 10)
-                if (!isNaN(v)) root.diskPercent = v
-                diskProc.buffer = ""
-            }
-        }
-    }
-
-    // ── Live metrics poll timer (5s) ─────────────────────────────────────────────────
-    Timer {
-        interval: 5000
-        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            // Skip-while-running guards: a hung proc must not silently stop
-            // its feed forever (guards skip every refresh while a Process
-            // reports running — the reaper idiom used across the services).
-            if (!memProc.running)  memProc.running = true
-            if (!cpuProc.running)  cpuProc.running = true
-            if (!gpuProc.running)  gpuProc.running = true
-            if (!diskProc.running) diskProc.running = true
-        }
-    }
-
-    function refreshLive() {
-        if (!memProc.running) memProc.running = true
-        if (!cpuProc.running) cpuProc.running = true
-        if (!gpuProc.running) gpuProc.running = true
-        if (!diskProc.running) diskProc.running = true
     }
 }

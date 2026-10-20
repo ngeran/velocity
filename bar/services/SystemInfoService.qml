@@ -84,7 +84,7 @@ Item {
         if (!shellProc.running) shellProc.running = true
         if (!boardProc.running) boardProc.running = true
         root.pollLive()
-        if (!root.geoDone && !geoProc.running) geoProc.running = true
+        if (!root.geoDone) geoProc.run()   // run() no-ops while busy — never drops the call
     }
 
     function pollLive() {
@@ -344,17 +344,17 @@ Item {
     // =========================================================================
     // GEO — curl ip-api.com once per session; "—" on any failure
     // =========================================================================
-    Process {   // unbounded-ok: external fetch — TODO migrate to BoundedProcess (hang risk)
+    // BoundedProcess (C2: the TODO migration) — curl self-bounds at 6s but a
+    // wedged resolver is exactly the hang class the kill timer exists for.
+    // onLimit resolves geoDone so the once-per-session gate never retries.
+    BoundedProcess {
         id: geoProc
-        property string buffer: ""
+        timeoutMs: 10000   // curl --max-time 6 + margin; the timer is the backstop
         command: ["sh", "-c", "curl -s --max-time 6 'http://ip-api.com/json/?fields=city,country,countryCode' || true"]
-        stdout: SplitParser { onRead: function(data) { geoProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var raw = geoProc.buffer.trim()
-            geoProc.buffer = ""
+        onDone: function(out, err, code) {
             root.geoDone = true
             try {
-                var j = JSON.parse(raw)
+                var j = JSON.parse(out.trim())
                 if (j && !j.error && j.city) {
                     root.geoCity = j.city
                     root.geoCountry = j.country || ""
@@ -363,6 +363,7 @@ Item {
                 // offline / rate-limited / blocked — keep "—"
             }
         }
+        onLimit: function(reason) { root.geoDone = true }
     }
 
     // =========================================================================
