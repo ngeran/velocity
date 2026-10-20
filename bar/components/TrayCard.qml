@@ -30,6 +30,9 @@ PanelWindow {
     aboveWindows: true
 
     property string activeTray: ""
+    // Hairline width, snapped to device pixels (PopupMetrics.hairline) — one
+    // read for the whole card: every item inside shares the window's screen.
+    readonly property real hair: Config.PopupMetrics.hairline(dropdown)
     // The tray icon that opened this card (set by shell.qml on the owning
     // bar) — the Popover centers the card under it.
     property Item anchorItem: null
@@ -246,7 +249,7 @@ PanelWindow {
         // Subtle separator
         Rectangle {
             Layout.fillWidth: true
-            height: 1
+            height: card.hair
             color: Config.ThemeConfig.hairline
         }
 
@@ -288,7 +291,7 @@ PanelWindow {
                         radius: Config.PopupMetrics.px(5)
                         color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: 1
+                        border.width: card.hair
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: connLbl; anchors.centerIn: parent
                             text: Services.NetworkService.isConnected ? "CONNECTED" : "DISCONNECTED"
@@ -302,7 +305,7 @@ PanelWindow {
                         width: qrConnRow.implicitWidth + 18; height: Config.PopupMetrics.px(24)
                         radius: Config.PopupMetrics.px(5)
                         color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Row {
                             id: qrConnRow
@@ -420,7 +423,7 @@ PanelWindow {
                     }
                 }
                 Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
-                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
                 Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
@@ -455,7 +458,7 @@ PanelWindow {
                     valueBold: false
                 }
                 Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
-                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
                 Item { height: Config.PopupMetrics.px(8); visible: Services.NetworkService.isConnected }
                 // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
                 Item { height: 10; visible: Services.NetworkService.hasNetwork }
@@ -468,7 +471,7 @@ PanelWindow {
                         return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
                     }
                     border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
-                    border.width: 1
+                    border.width: card.hair
                     Behavior on color { ColorAnimation { duration: 150 } }
                     RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
                         Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
@@ -511,7 +514,7 @@ PanelWindow {
                         radius: Config.PopupMetrics.px(5)
                         color: Services.BluetoothService.powered ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
                         border.color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: 1
+                        border.width: card.hair
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text { id: btLbl; anchors.centerIn: parent
                             text: Services.BluetoothService.powered ? "ON" : "OFF"
@@ -534,7 +537,7 @@ PanelWindow {
                         width: discRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
                         radius: Config.PopupMetrics.px(5)
                         color: "transparent"
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
                         Row {
                             id: discRow
                             anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
@@ -559,7 +562,7 @@ PanelWindow {
                     }
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
-                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
                 Item { height: Config.PopupMetrics.px(8); visible: Services.BluetoothService.hasBluetooth }
 
                 // ── CONNECTED section header ──
@@ -595,7 +598,7 @@ PanelWindow {
                         Layout.bottomMargin: Config.PopupMetrics.px(8)
                         radius: Config.PopupMetrics.px(6)
                         color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
                         Behavior on color { ColorAnimation { duration: 100 } }
 
                         RowLayout {
@@ -632,7 +635,7 @@ PanelWindow {
                                 visible: batt !== undefined
                                 width: Config.PopupMetrics.px(22); height: 11; radius: Config.PopupMetrics.px(2)
                                 color: Config.ThemeConfig.hairlineSoft
-                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
                                 Rectangle {
                                     anchors.left: parent.left
                                     anchors.top: parent.top; anchors.bottom: parent.top
@@ -711,7 +714,7 @@ PanelWindow {
                         Layout.bottomMargin: Config.PopupMetrics.px(8)
                         radius: Config.PopupMetrics.px(6)
                         color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
 
                         RowLayout {
                             anchors.fill: parent
@@ -737,7 +740,7 @@ PanelWindow {
                                 width: pnLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
                                 radius: Config.PopupMetrics.px(5)
                                 color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
                                 Text { id: pnLbl; anchors.centerIn: parent
                                     text: "CONNECT"
                                     font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
@@ -766,7 +769,7 @@ PanelWindow {
                         Layout.bottomMargin: Config.PopupMetrics.px(8)
                         radius: Config.PopupMetrics.px(6)
                         color: nbRow.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
 
                         RowLayout {
                             anchors.fill: parent
@@ -792,7 +795,7 @@ PanelWindow {
                                 width: nbLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
                                 radius: Config.PopupMetrics.px(5)
                                 color: nbArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                                border.color: Config.BarConfig.colorBorder; border.width: 1
+                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
                                 Text { id: nbLbl; anchors.centerIn: parent
                                     text: "PAIR"
                                     font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
@@ -817,7 +820,7 @@ PanelWindow {
                     Layout.fillWidth: true; height: Config.PopupMetrics.px(32)
                     radius: Config.PopupMetrics.px(6)
                     color: btBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                    border.color: Config.BarConfig.colorBorder; border.width: 1
+                    border.color: Config.BarConfig.colorBorder; border.width: card.hair
                     Behavior on color { ColorAnimation { duration: 150 } }
                     RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
                         Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Config.BarConfig.colorTextDim }
@@ -915,7 +918,7 @@ PanelWindow {
                     Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
                 }
                 Item { height: 10; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
                 Item { height: 10; visible: Services.AudioService.hasAudio }
 
                 // ── OUTPUT SINK (PIPEWIRE) picker ──
@@ -952,7 +955,7 @@ PanelWindow {
                         color: sinkMa.containsMouse || isDefault
                                ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
                         border.color: isDefault ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: 1
+                        border.width: card.hair
                         Behavior on color { ColorAnimation { duration: 120 } }
 
                         RowLayout {
@@ -964,7 +967,7 @@ PanelWindow {
                             Rectangle {
                                 width: Config.PopupMetrics.px(7); height: Config.PopupMetrics.px(7); radius: Config.PopupMetrics.px(3.5)
                                 color: isDefault ? Config.ThemeConfig.colors.primary : "transparent"
-                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
+                                border.color: Config.ThemeConfig.colors.primary; border.width: card.hair
                             }
                             ColumnLayout {
                                 spacing: Config.PopupMetrics.px(1)
@@ -990,7 +993,7 @@ PanelWindow {
                                 width: defLbl.implicitWidth + 12; height: 17
                                 radius: Config.PopupMetrics.px(3)
                                 color: Config.ThemeConfig.accentTint
-                                border.color: Config.ThemeConfig.colors.primary; border.width: 1
+                                border.color: Config.ThemeConfig.colors.primary; border.width: card.hair
                                 Text { id: defLbl; anchors.centerIn: parent
                                     text: "DEFAULT"
                                     font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7); font.bold: true; font.letterSpacing: 1
@@ -1019,7 +1022,7 @@ PanelWindow {
                     }
                 }
                 Item { height: 12; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
                 Item { height: 10; visible: Services.AudioService.hasAudio }
 
                 // ── INPUT SOURCE (microphone) ──
@@ -1075,7 +1078,7 @@ PanelWindow {
                             width: micLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
                             radius: Config.PopupMetrics.px(6)
                             color: micBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                            border.color: Config.BarConfig.colorBorder; border.width: 1
+                            border.color: Config.BarConfig.colorBorder; border.width: card.hair
                             Text { id: micLbl; anchors.centerIn: parent
                                 text: Services.AudioService.micMuted ? "UNMUTE MIC" : "MUTE MIC"
                                 font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
@@ -1097,7 +1100,7 @@ PanelWindow {
                         return Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
                     }
                     border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
-                    border.width: 1
+                    border.width: card.hair
                     Behavior on color { ColorAnimation { duration: 150 } }
                     RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
                         Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
@@ -1295,7 +1298,7 @@ PanelWindow {
                         }
                     }
                 }
-                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.hairline }
+                Rectangle { Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
 
                 // ── white QR card (scanner contract: light ground, dark modules)
                 Item { height: 14 }
@@ -1377,7 +1380,7 @@ PanelWindow {
                     Layout.preferredHeight: Config.PopupMetrics.px(40)
                     radius: Config.PopupMetrics.px(8)
                     color: Config.ThemeConfig.fillRest
-                    border.color: Config.BarConfig.colorBorder; border.width: 1
+                    border.color: Config.BarConfig.colorBorder; border.width: card.hair
 
                     Text {
                         anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(12)
@@ -1400,7 +1403,7 @@ PanelWindow {
                         width: copyRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
                         radius: Config.PopupMetrics.px(6)
                         color: copyArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
                         Row {
                             id: copyRow
                             anchors.centerIn: parent
@@ -1440,7 +1443,7 @@ PanelWindow {
                         width: closeLbl.implicitWidth + 18; height: Config.PopupMetrics.px(24)
                         radius: Config.PopupMetrics.px(6)
                         color: footerCloseArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: 1
+                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
                         Text {
                             id: closeLbl; anchors.centerIn: parent
                             text: "Close"

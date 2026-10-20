@@ -33,6 +33,18 @@ Item {
         return Math.round((Number(n) || 0) * root.uiScale)
     }
 
+    // Hairlines snap to whole device pixels: a logical 1px line at a fractional
+    // scale (1.25 / 1.5) straddles two device pixels and anti-aliases into a
+    // soft band, while 1/dpr is the thinnest crisp line the output can draw.
+    // Falls back to exactly 1 when the item has no screen (unmounted window)
+    // or the scale is integral, so 1.0-scale rendering is unchanged. `item` is
+    // any Item the hairline lives in (all items in a window share one screen).
+    function hairline(item) {
+        var dpr = 0
+        if (item && item.Screen) dpr = item.Screen.devicePixelRatio
+        return (isFinite(dpr) && dpr > 0) ? 1 / dpr : 1
+    }
+
     // ── optional user keys from bar-config.json (zero-fork intake) ──────────
     readonly property string configPath: (StandardPaths.writableLocation(StandardPaths.HomeLocation).toString() + "/.config/quickshell/bar-config.json").replace("file://", "")
     property string _lastRaw: ""

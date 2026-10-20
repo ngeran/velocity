@@ -50,7 +50,18 @@ PanelWindow {
         onTriggered: if (!root.shown) root.visible = false
     }
 
-    readonly property int panelWidth: Config.PopupMetrics.px(380)
+    // 380 logical, clamped to the output — a big uiScale on a small screen
+    // must not push the card off-edge. Floor 200 keeps header/footer rows
+    // intact on tiny outputs. (-10 mirrors the 5px right-edge margin.)
+    readonly property int panelWidth: {
+        var w = Config.PopupMetrics.px(380)
+        var scr = root.screen
+        if (scr && scr.width > 0) w = Math.min(w, scr.width - 10)
+        return Math.max(200, w)
+    }
+    // Hairline width, snapped to device pixels (PopupMetrics.hairline) — one
+    // read for the whole panel: every item inside shares the window's screen.
+    readonly property real hair: Config.PopupMetrics.hairline(panel)
     readonly property int unreadCount: Services.NotificationService.unreadCount
 
     // ---- dim backdrop (click-outside = dismiss) ----
@@ -74,7 +85,7 @@ PanelWindow {
         width: root.panelWidth
         color: Config.ThemeConfig.colors.background          // pure black (OLED-safe)
         border.color: Config.ThemeConfig.colors.border       // subtle structure
-        border.width: 1
+        border.width: root.hair
         clip: true
         opacity: root.shown ? 1.0 : 0.0
 
@@ -146,7 +157,7 @@ PanelWindow {
                         radius: Config.PopupMetrics.px(10)
                         color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : "transparent"
                         border.color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.border
-                        border.width: 1
+                        border.width: root.hair
                         Text {
                             anchors.centerIn: parent
                             text: "DND"
@@ -205,7 +216,7 @@ PanelWindow {
                 Rectangle {
                     anchors.left: parent.left; anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    height: 1
+                    height: root.hair
                     color: Config.ThemeConfig.colors.border
                     opacity: 0.6
                 }
@@ -269,7 +280,7 @@ PanelWindow {
                 visible: Services.NotificationService.history.count > 0
 
                 Rectangle {
-                    Layout.fillWidth: true; height: 1
+                    Layout.fillWidth: true; height: root.hair
                     color: Config.ThemeConfig.colors.border; opacity: 0.6
                 }
 
@@ -336,7 +347,7 @@ PanelWindow {
                 Rectangle {
                     anchors.left: parent.left; anchors.right: parent.right
                     anchors.top: parent.top
-                    height: 1
+                    height: root.hair
                     color: Config.ThemeConfig.colors.border
                     opacity: 0.6
                 }

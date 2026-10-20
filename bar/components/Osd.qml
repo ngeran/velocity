@@ -28,13 +28,18 @@ PanelWindow {
     // Keep the window alive through the fade-out (opacity > 0 while closing).
     visible: Services.OsdService.active || card.opacity > 0
 
-    readonly property int pad: 16
-    readonly property int gap: 16
+    // Card metrics ride the popup uiScale token (B3/B4): every literal below
+    // is px(n), so uiScale 1.0 reproduces the old numbers exactly.
+    readonly property int pad: Config.PopupMetrics.px(16)
+    readonly property int gap: Config.PopupMetrics.px(16)
     // A glyph next to text reads airier than it measures — ink falls away from
     // the cell — so the text gap takes two thirds (Omarchy).
     readonly property int messageGap: Math.round(gap * 2 / 3)
-    readonly property int barWidth: 142
-    readonly property int iconPixelSize: 28
+    readonly property int barWidth: Config.PopupMetrics.px(142)
+    readonly property int iconPixelSize: Config.PopupMetrics.px(28)
+    // Hairline (border) width, snapped to device pixels — crisp at fractional
+    // scales; exactly 1 at dpr 1.0 (see PopupMetrics.hairline).
+    readonly property real hair: Config.PopupMetrics.hairline(card)
 
     // ── measured columns ────────────────────────────────────────────────────
     // Nerd Font glyphs draw outside their monospace cell, so measure by ink
@@ -53,21 +58,21 @@ PanelWindow {
 
     Rectangle {
         id: card
-        width: 1 + osdWindow.pad + osdWindow.contentWidth + osdWindow.pad + 1   // 1px border per side
-        height: 1 + osdWindow.pad + osdWindow.iconPixelSize + osdWindow.pad + 1
+        width: osdWindow.hair + osdWindow.pad + osdWindow.contentWidth + osdWindow.pad + osdWindow.hair   // hairline border per side
+        height: osdWindow.hair + osdWindow.pad + osdWindow.iconPixelSize + osdWindow.pad + osdWindow.hair
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 67
+        anchors.bottomMargin: Config.PopupMetrics.px(67)
         color: Config.BarConfig.colorBackground
         border.color: Config.BarConfig.colorBorder
-        border.width: 1
+        border.width: osdWindow.hair
         radius: 0   // sharp corners — bar design language
         opacity: Services.OsdService.active ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         Row {
             anchors.fill: parent
-            anchors.margins: 1 + osdWindow.pad
+            anchors.margins: osdWindow.hair + osdWindow.pad
             spacing: Services.OsdService.hasProgress ? osdWindow.gap : osdWindow.messageGap
 
             Item {
@@ -93,7 +98,7 @@ PanelWindow {
             Rectangle {
                 visible: Services.OsdService.hasProgress
                 width: osdWindow.barWidth
-                height: 6
+                height: Config.PopupMetrics.px(6)
                 anchors.verticalCenter: parent.verticalCenter
                 color: Config.ThemeConfig.hairlineSoft
                 Rectangle {
@@ -115,7 +120,7 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Services.OsdService.message
                 font.family: Config.BarConfig.fontFamily
-                font.pixelSize: 13
+                font.pixelSize: Config.PopupMetrics.px(13)
                 font.bold: true
                 color: Services.OsdService.hasProgress ? Config.BarConfig.colorText : Config.BarConfig.colorAccent
                 elide: Text.ElideRight
@@ -138,7 +143,7 @@ PanelWindow {
     TextMetrics {
         id: readoutMetrics
         font.family: Config.BarConfig.fontFamily
-        font.pixelSize: 13
+        font.pixelSize: Config.PopupMetrics.px(13)
         font.bold: true
         text: "100%"    // longest numeric readout
     }
