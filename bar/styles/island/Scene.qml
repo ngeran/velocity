@@ -394,20 +394,16 @@ Item {
                 for (var i = 0; i < ids.length; i++) m[ids[i]] = "compact"
                 return m
             }
-            // Glance keeps the clock dead-centre with the wings hugging it
-            // (equal sectionGap each way), and the island packs to the REAL
-            // content width: pad · left — clock — right · pad. Both clusters
-            // sit equidistant from the clock, so the bloom reads as a mirror
-            // image, not a lopsided row with dead space on the narrow side.
-            // A missing wing falls back to the wider-side slot so the clock
-            // stays centred even with one section empty.
+            // Glance geometry: the clusters pin to an exact padX from their
+            // outer edges (even padding both sides) and the clock stays
+            // dead-centre. The island reserves a full slot (the wider wing's
+            // width) per side, so a width difference between the sections
+            // becomes breathing room between the clock and the NARROWER
+            // cluster — never a starved outer edge (packing to real content
+            // split padX ∓ Δ/2 and pinned the wide side against the edge).
             readonly property real wingW: Math.max(leftRow.implicitWidth, rightRail.implicitWidth)
-            readonly property real glanceW: {
-                if (leftRow.implicitWidth <= 0 || rightRail.implicitWidth <= 0)
-                    return centerRow.implicitWidth + (wingW > 0 ? 2 * (wingW + sectionGap) : 0)
-                return centerRow.implicitWidth + leftRow.implicitWidth
-                     + rightRail.implicitWidth + 2 * sectionGap
-            }
+            readonly property real glanceW: centerRow.implicitWidth
+                + (wingW > 0 ? 2 * (wingW + sectionGap) : 0)
 
             readonly property var target: Isl.targetSize(islandState, {
                 barH: barH, padX: padX, panelPad: panelPad, margin: margin,
@@ -646,7 +642,7 @@ Item {
                         Engine.BarSection {
                             id: leftRow
                             height: win.barH
-                            x: centerRow.x - win.sectionGap - implicitWidth
+                            x: win.padX
                             name: "left"
                             window: win
                             gap: Config.BarConfig.iconSpacing
@@ -666,7 +662,7 @@ Item {
                         Engine.BarSection {
                             id: rightRail
                             height: win.barH
-                            x: centerRow.x + centerRow.implicitWidth + win.sectionGap
+                            x: row.width - win.padX - implicitWidth
                             name: "right"
                             window: win
                             gap: Config.BarConfig.slotMargin
