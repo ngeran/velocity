@@ -39,7 +39,8 @@ Rectangle {
         { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
         { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3
         { key: "core",       label: "CORE",        icon: "▦" },   // index 4  (plain Unicode — renders under Inter; was a Nerd Font PUA glyph that showed as a box)
-        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 5
+        { key: "logs",       label: "LOGS",        icon: "≡" },   // index 5  (in-app journal tab — header LOGS launcher deep-links here)
+        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 6
     ]
 
     // =========================================================================

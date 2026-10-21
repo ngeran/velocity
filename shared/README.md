@@ -10,6 +10,10 @@ roots** (only file://-loaded plugin code can cross roots).
   is derived from the copy's own location).
 - `BoundedProcess.qml` → synced to `bar/services/` and `settings/services/`
   (no per-root divergence — pure primitive).
+- `LogService.qml` + `LogModel.js` → synced to `bar/services/` and
+  `settings/services/` (the bar's SUPER+T overlay and the settings app's LOGS
+  tab each run their own copy — one journal stream per process; the copies'
+  `import "../config"` resolves to each root's own DebugConfig).
 - `tz.mjs` → synced to `settings/lib/` and into the `nikos.timezones` and
   `nikos.clock` plugins' `lib/` (plugins stay self-contained).
 

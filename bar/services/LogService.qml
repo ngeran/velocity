@@ -1,8 +1,19 @@
 // =============================================================================
-// LogService.qml — popup-gated system journal tail (data backbone for LogsOverlay)
+// LogService.qml — active-gated system journal tail (CANONICAL — shared/)
 // =============================================================================
+// CANONICAL copy: synced to bar/services/ and settings/services/ by
+// tools/sync-shared (VFS blocks cross-root imports; the roots hold
+// byte-identical copies — see shared/README.md). Edit HERE, then
+// `tools/sync-shared`; hand-edits to a root copy fail tools/check-shared.
+// The `import "../config"` below is per-root-relative: it resolves to each
+// root's own DebugConfig singleton after sync.
+//
+// Consumers: bar's LogsOverlay (SUPER+T overlay) and the settings app's
+// LOGS tab — one service each, independent streams, never both writing
+// shared state.
+//
 // Streams the full system journal (system units + user session + kernel) as
-// JSON while the LogsOverlay is open; zero background cost while it is closed
+// JSON while a logs view is open; zero background cost while it is closed
 // (no process, no timer — SystemInfoService's `active` gating pattern).
 //
 //   COMMAND   journalctl -q -n 500 -f -o json --no-pager
@@ -104,7 +115,7 @@ Item {
     }
 
     // =========================================================================
-    // PUBLIC API  (called by LogsOverlay)
+    // PUBLIC API  (called by the logs view — bar overlay or settings tab)
     // =========================================================================
     function open()   { root.active = true;  root.following = true; root.refresh() }
     function close()  { root.active = false; root._stop() }

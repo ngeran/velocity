@@ -2,8 +2,10 @@
 // LogsOverlay.qml — SYSTEM LOGS live journal viewer
 // =============================================================================
 // Full-system journal tail categorized by severity (error / warning / info),
-// opened from the bar's LogsIcon, the settings dashboard header button, or
-// SUPER+T (`quickshell ipc -c bar call logs toggle`).
+// opened from the bar's LogsIcon or SUPER+T (`quickshell ipc -c bar call logs
+// toggle`). The settings app has its own in-app LOGS tab (settings/components/
+// LogsTab.qml) reading the same shared LogService — this overlay is the bar's
+// window onto the same stream, not the only surface.
 //
 // SHELL mirrors KeybindsOverlay (two-phase show/hide, dim backdrop, Esc +
 // click-outside close, size-clamped (≤900×≤680) rounded pure-black card).

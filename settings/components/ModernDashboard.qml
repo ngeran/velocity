@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // TAB ORDER (index-significant):
-//   0 Dashboard | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Settings
+//   0 Dashboard | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Logs | 6 Settings
 //
 // PURPOSE:
 //   Main container for all tabs. Delegates tab-0 (Dashboard) to
@@ -108,6 +108,8 @@ Item {
             root.openControlTab(entry.section || "network")
         } else if (tab === "core") {
             root.openCoreTab(entry.section || "system")
+        } else if (tab === "logs") {
+            root.openLogsTab()
         } else if (tab === "themes") {
             root.openThemeTab()
         }
@@ -175,6 +177,15 @@ Item {
         }
     }
 
+    // In-app journal tab. Deep link from the header LOGS launcher (which used
+    // to cross-process-toggle the bar's overlay) and the search index; the
+    // stream itself gates on LogsTab.streamWanted (tab visible + window shown).
+    function openLogsTab() {
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "logs") { root.currentTab = i; break }
+        }
+    }
+
     // =========================================================================
     // BACKGROUND
     // =========================================================================
@@ -225,6 +236,7 @@ Item {
             right: parent.right
         }
         height: 44
+        onLogsActivated: root.openLogsTab()
     }
 
     // =========================================================================
@@ -354,7 +366,36 @@ Item {
         }
 
         // =====================================================================
-        // TAB 5: SETTINGS (rail + fixed panes — SettingsModule; same
+        // TAB 5: LOGS (in-app journal — LogService gates the stream on
+        // visibility + window-shown, so an idle tab costs nothing)
+        // =====================================================================
+
+        Components.LogsTab {
+            id: logsTab
+
+            visible: root.currentTab === 5
+            opacity: root.currentTab === 5 ? 1.0 : 0.0
+            x: root.currentTab === 5 ? 0 : (root.currentTab < 5 ? 20 : -20)
+            anchors.fill: parent
+            anchors.margins: 24
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.MotionConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.MotionConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        // =====================================================================
+        // TAB 6: SETTINGS (rail + fixed panes — SettingsModule; same
         // architecture as Control/Core. Extracted from the former inline
         // scrolling block. Settings are managed by SettingsConfigService /
         // HypridleService and persisted on every change.)
@@ -363,9 +404,9 @@ Item {
         Item {
             id: settingsTab
 
-            visible: root.currentTab === 5
-            opacity: root.currentTab === 5 ? 1.0 : 0.0
-            x: root.currentTab === 5 ? 0 : 20
+            visible: root.currentTab === 6
+            opacity: root.currentTab === 6 ? 1.0 : 0.0
+            x: root.currentTab === 6 ? 0 : 20
             anchors.fill: parent
 
             Behavior on opacity {

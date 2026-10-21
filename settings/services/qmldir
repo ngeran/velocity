@@ -17,3 +17,4 @@ singleton PluginManagerService 1.0 PluginManagerService.qml
 singleton BarWatchService 1.0 BarWatchService.qml
 singleton HyprSettingsService 1.0 HyprSettingsService.qml
 singleton SearchIndex 1.0 SearchIndex.qml
+singleton LogService 1.0 LogService.qml

@@ -8,7 +8,7 @@
 // the Dashboard tab's calendar owns the date, and the bar's nikos.clock /
 // nikos.timezones plugins own the time; the header repeating both was pure
 // duplication (user call, 2026-10-21). What remains is functional: the LOGS
-// overlay launcher and the identity chip.
+// launcher (deep-links the in-app LOGS tab) and the identity chip.
 //
 // SIZING: intrinsically ~44px tall. ModernDashboard.qml sets height: 44 —
 // LOGS + identity sit as one compact cluster on the right; the strip stays
@@ -29,6 +29,11 @@ Rectangle {
     color: Config.ThemeConfig.colors.background
     radius: 0
 
+    // The LOGS launcher deep-links INTO this app (LogsTab, tab index 5) —
+    // ModernDashboard handles it. It no longer toggles the bar process's
+    // overlay cross-process (that overlay remains for SUPER+T / the bar icon).
+    signal logsActivated()
+
     // Bottom border separates header from content area.
     Rectangle {
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -44,13 +49,6 @@ Rectangle {
     readonly property string avatarSource: "file://" + Services.ThemeService.homeDir + "/.config/ngeran/identity/avatar.png"
 
     Component.onCompleted: identityLoader.running = true
-
-    // System Logs overlay lives in the BAR process — toggle it via Quickshell
-    // IPC (cross-process, WeatherWidget.qml precedent).
-    Process {
-        id: logsToggleProc
-        command: ["quickshell", "ipc", "-c", "bar", "call", "logs", "toggle"]
-    }
 
     Process {
         id: identityLoader
@@ -96,9 +94,8 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 10
 
-        // System Logs overlay launcher — toggles the BAR process's overlay
-        // cross-process (same shape as bar/components/WeatherWidget.qml
-        // calling settings IPC).
+        // System Logs launcher — deep-links to the in-app LOGS tab
+        // (ModernDashboard.onLogsActivated → openLogsTab).
         Rectangle {
             width: 34; height: 34
             color: "transparent"
@@ -117,7 +114,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: logsToggleProc.running = true
+                onClicked: headerRoot.logsActivated()
             }
         }
 
