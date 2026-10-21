@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from xray import SCHEMA_VERSION
 from xray.actions.process_control import ProcessActions
 from xray.config import COVERAGE_DOMAINS, LIMITS
-from xray.devices.gpu import GpuSampler, collect_gpu_clients
+from xray.devices.gpu import GpuSampler, collect_gpu_clients_with_fallback
 from xray.evidence.explanations import derive_explanations
 from xray.evidence.slowdown import diagnose
 from xray.files.packages import PackageIndex
@@ -112,8 +112,8 @@ class SnapshotCollector:
         inhibitors = resources.devices.inhibitors
         context = dict(resources.runtime.context)
         security = resources.runtime.security
-        gpu_clients, gpu_limited = collect_gpu_clients(
-            self.proc, pids, resources.descriptors
+        gpu_clients, gpu_limited = collect_gpu_clients_with_fallback(
+            self.proc, self.runner, pids, resources.descriptors
         )
         metrics["gpuPercent"] = self.gpu.sample(gpu_clients)
         metrics["gpuAvailable"] = metrics["gpuPercent"] is not None

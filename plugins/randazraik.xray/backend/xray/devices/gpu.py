@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass, field
+import os
 import re
+import shutil
 import time
 
+from xray.system.commands import CommandRunner
 from xray.system.procfs import ProcFs
 from xray.system.descriptors import (
     DescriptorInventory,
@@ -150,9 +154,12 @@ class GpuSampler:
             client["utilizationPercent"] = (
                 round(utilization, 1) if utilization is not None else None
             )
-            client["memoryBytes"] = sum(
-                int(value) for value in dict(client.get("memory", {})).values()
-            )
+            # NVIDIA fallback rows carry no memory group when the driver
+            # reports nothing for the client — omit rather than show 0 B.
+            if client.get("memory"):
+                client["memoryBytes"] = sum(
+                    int(value) for value in dict(client["memory"]).values()
+                )
             total_delta += sum(deltas.values())
             for name in engines:
                 capacity_key = (str(client["device"]), name)
@@ -165,3 +172,112 @@ class GpuSampler:
             return None
         denominator = elapsed_ns * sum(device_capacity.values())
         return round(min(100.0, total_delta / denominator * 100), 1)
+
+
+_NVIDIA_DEVICE = re.compile(r"^/dev/nvidia\d+$")
+_NVIDIA_SMI_FALLBACKS = (
+    "/run/current-system/sw/bin/nvidia-smi",  # NixOS
+    "/usr/bin/nvidia-smi",
+)
+
+
+def _resolve_nvidia_smi() -> str | None:
+    found = shutil.which("nvidia-smi")
+    if found:
+        return found
+    for candidate in _NVIDIA_SMI_FALLBACKS:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def nvidia_client_pids(descriptors: DescriptorInventory) -> dict[int, str]:
+    """Pids holding an NVIDIA device node open, mapped to that node.
+
+    The proprietary driver publishes no DRM fdinfo, but every real client
+    keeps /dev/nvidia<N> open alongside nvidiactl/uvm — so device fds are
+    the client evidence.
+    """
+    clients: dict[int, str] = {}
+    for record in descriptors.records:
+        if _NVIDIA_DEVICE.match(record.target):
+            clients.setdefault(record.pid, record.target)
+    return clients
+
+
+def _nvidia_process_memory(
+    runner: CommandRunner, executable: str
+) -> dict[int, int]:
+    result = runner.run(
+        [
+            executable,
+            "--query-compute-apps=pid,used_memory",
+            "--format=csv,noheader,nounits",
+        ]
+    )
+    memory: dict[int, int] = {}
+    for line in result.stdout.splitlines():
+        fields = [field.strip() for field in line.split(",")]
+        if len(fields) != 2 or not fields[0].isdigit():
+            continue
+        with suppress(ValueError):
+            memory[int(fields[0])] = int(float(fields[1]) * 1024 * 1024)
+    return memory
+
+
+def collect_nvidia_clients(
+    runner: CommandRunner, descriptors: DescriptorInventory
+) -> tuple[list[dict[str, object]], list[str]]:
+    """Fallback client rows for drivers without DRM fdinfo (NVIDIA).
+
+    Rows carry the same shape as fdinfo clients so the dashboard renders
+    them unchanged; per-process VRAM arrives from nvidia-smi where it is
+    reported (compute clients) and stays absent otherwise. Engine-level
+    attribution simply does not exist on this driver.
+    """
+    clients = nvidia_client_pids(descriptors)
+    limited = [
+        "GPU engine utilization and per-client memory are not attributed "
+        "per process on this driver"
+    ]
+    rows: list[dict[str, object]] = [
+        {
+            "pid": pid,
+            "device": device,
+            "clientId": str(pid),
+            "engines": {},
+            "capacity": {},
+            "memory": {},
+            "memoryKind": "unknown",
+        }
+        for pid, device in sorted(clients.items())
+    ]
+    executable = _resolve_nvidia_smi()
+    if executable is None:
+        limited.append("nvidia-smi was not found for NVIDIA GPU metrics")
+        return rows, limited
+    memory_by_pid = _nvidia_process_memory(runner, executable)
+    for row in rows:
+        memory = memory_by_pid.get(int(str(row["pid"])))
+        if memory is not None:
+            row["memory"] = {"vram": memory}
+            row["memoryKind"] = "resident"
+    return rows, limited
+
+
+def collect_gpu_clients_with_fallback(
+    proc: ProcFs,
+    runner: CommandRunner,
+    pids: list[int],
+    inventory: DescriptorInventory | None = None,
+) -> tuple[list[dict[str, object]], list[str]]:
+    """fdinfo clients first (amdgpu/i915/xe); on drivers that publish no
+    fdinfo, identify NVIDIA clients by device fds instead. The permission
+    notes from the fdinfo pass are dropped when the fallback fires — they
+    describe the scan that found nothing, not the NVIDIA result.
+    """
+    descriptors = inventory or collect_descriptors(proc, pids)
+    rows, limited = collect_gpu_clients(proc, pids, descriptors)
+    if rows or not nvidia_client_pids(descriptors):
+        return rows, limited
+    return collect_nvidia_clients(runner, descriptors)

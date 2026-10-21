@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from xray.config import LIMITS
-from xray.devices.gpu import collect_gpu_clients
+from xray.devices.gpu import collect_gpu_clients_with_fallback
 from xray.devices.pipewire import collect_pipewire
 from xray.network.sockets import owned_socket_rows
 from xray.processes.collector import process_name
@@ -53,7 +53,13 @@ class TargetCatalog:
             processes_future = pool.submit(self._processes, pids)
 
             descriptors = descriptors_future.result()
-            gpu_future = pool.submit(collect_gpu_clients, self.proc, pids, descriptors)
+            gpu_future = pool.submit(
+                collect_gpu_clients_with_fallback,
+                self.proc,
+                self.runner,
+                pids,
+                descriptors,
+            )
             ports_future = pool.submit(self._listening_ports, pids, descriptors)
 
             windows, window_error = windows_future.result()

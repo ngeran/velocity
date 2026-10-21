@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from xray.config import LIMITS
-from xray.devices.gpu import collect_gpu_clients
+from xray.devices.gpu import collect_gpu_clients_with_fallback
 from xray.devices.pipewire import collect_pipewire, owners_for_device
 from xray.files.open_files import owners_for_file
 from xray.network.sockets import owners_for_port
@@ -135,7 +135,9 @@ class CandidateResolver:
         self, spec: TargetSpec, inventory: ResolutionInventory
     ) -> tuple[list[int], dict[str, object], list[str]]:
         if spec.value == "gpu":
-            clients, limited = collect_gpu_clients(
+            clients, limited = collect_gpu_clients_with_fallback(
+                self.proc,
+                self.runner,
                 self.proc,
                 (
                     list(inventory.same_user_pids)
