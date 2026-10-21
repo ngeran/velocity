@@ -1,8 +1,27 @@
 import QtQuick
-import "../qs/Commons"
-import "../qs/Commons" as Commons
 
 QtObject {
+    // ── LIVE THEME SOURCE (C5 port) ─────────────────────────────────────
+    // The roots inject the engine's api-2 ctx; the seven base tokens read
+    // ctx.theme.colors (the bar's live palette — theme switches propagate),
+    // falling back to the upstream Tokyo-Night constants when ctx is null
+    // (degraded-load path). Everything below the base is derivation and
+    // flows from whichever source is active. The old qs/Commons singletons
+    // (Color/Theme/Style/Border) are folded into this file as constants +
+    // flatBorder(); fonts/borders come from ctx.bar where available.
+    property var ctx: null
+
+    readonly property var _c: ctx && ctx.theme && ctx.theme.colors ? ctx.theme.colors : null
+    readonly property var _b: ctx && ctx.bar ? ctx.bar : null
+
+    function flatBorder(color, width) {
+        return { color: color, width: width === undefined ? 1 : width }
+    }
+
+    // Old qs/Commons/Style.space() — the vendored scale was already 1:1 with
+    // pixels, so this is the identity pass-through the callers expect.
+    function space(n) { return n }
+
     function withAlpha(base, alpha) {
         return Qt.rgba(base.r, base.g, base.b, Math.max(0, Math.min(1, alpha)));
     }
@@ -60,13 +79,13 @@ QtObject {
         return blend(Qt.hsva(hue, chroma, value, 1), accent, 0.08);
     }
 
-    readonly property color canvas: Commons.Color.background
-    readonly property color panel: blend(Commons.Color.background, Commons.Color.menu.text, 0.018)
-    readonly property color text: Commons.Color.menu.text
-    readonly property color accent: Commons.Color.accent
-    readonly property color danger: Commons.Color.urgent
+    readonly property color canvas: _c ? _c.background : "#000000"
+    readonly property color panel: blend(canvas, text, 0.018)
+    readonly property color text: _c ? _c.text : "#c0caf5"
+    readonly property color accent: _c ? _c.primary : "#BB9AF7"
+    readonly property color danger: _c ? _c.error : "#4A6B80"
     readonly property color border: blend(panel, text, 0.18)
-    readonly property color selected: Commons.Color.menu.selectedBackground
+    readonly property color selected: _c ? _c.surfaceVariant : "#1a1c26"
     readonly property color scrim: withAlpha(canvas, 0.82)
     readonly property color transparent: withAlpha(panel, 0)
 
@@ -105,7 +124,8 @@ QtObject {
     readonly property real headingAccentMix: 0.58
     readonly property real focusSurfaceAccentMix: 0.12
     readonly property real focusBorderAccentMix: 0.5
-    readonly property color muted: blend(Commons.Color.muted, text, mutedTextMix)
+    readonly property color muted: blend(_mutedBase, text, mutedTextMix)
+    readonly property color _mutedBase: _c ? _c.textDim : "#a9b1d6"
     readonly property color quietSurface: blend(panel, text, quietSurfaceMix)
     readonly property color previewSurface: blend(quietSurface, accent, previewSurfaceMix)
     readonly property color controlFocusSurface: blend(
@@ -157,25 +177,25 @@ QtObject {
     readonly property int consoleTableHeaderHeight: 27
     readonly property int consoleProcessRowHeight: 31
 
-    readonly property string displayFont: Style.font.family
+    readonly property string displayFont: _b ? _b.fontFamily : "JetBrains Mono"
     readonly property string bodyFont: displayFont
-    readonly property string dataFont: Style.font.family
-    readonly property int microFontSize: Math.max(10, Style.font.caption)
-    readonly property int captionFontSize: Math.max(10, Style.font.caption)
-    readonly property int bodyFontSize: Math.max(11, Style.font.bodySmall)
-    readonly property int labelFontSize: Math.max(12, Style.font.body)
-    readonly property int summaryFontSize: Math.max(13, Style.font.subtitle)
-    readonly property int sectionFontSize: Math.max(15, Style.font.heading)
-    readonly property int metricFontSize: Math.max(16, Style.font.heading)
-    readonly property int heroFontSize: Math.max(21, Style.font.display)
-    readonly property int brandFontSize: Math.max(14, Style.font.subtitle)
+    readonly property string dataFont: _b ? _b.fontNerd : "JetBrainsMono Nerd Font"   // nerd glyphs (launcher, data)
+    readonly property int microFontSize: Math.max(10, 10)
+    readonly property int captionFontSize: Math.max(10, 10)
+    readonly property int bodyFontSize: Math.max(11, 11)
+    readonly property int labelFontSize: Math.max(12, 12)
+    readonly property int summaryFontSize: Math.max(13, 14)
+    readonly property int sectionFontSize: Math.max(15, 16)
+    readonly property int metricFontSize: Math.max(16, 16)
+    readonly property int heroFontSize: Math.max(21, 20)
+    readonly property int brandFontSize: Math.max(14, 14)
     readonly property int brandTaglineFontSize: Math.max(8, microFontSize - 1)
     readonly property real headingTracking: 0.45
     readonly property real utilityTracking: 0.65
     readonly property real labelTracking: 0.9
     readonly property real brandTracking: 1.35
     readonly property real taglineTracking: 0.85
-    readonly property int radius: Math.max(6, Math.min(10, Style.cornerRadius))
+    readonly property int radius: Math.max(6, Math.min(10, 6))
     readonly property int panelRadius: 8
     readonly property int cardRadius: 3
     readonly property int controlRadius: 3
@@ -244,8 +264,8 @@ QtObject {
     readonly property int processEvidenceCommandHeight: 48
     readonly property int processEvidenceHeaderHeight: 28
     readonly property int processEvidenceRowHeight: 40
-    readonly property int processEvidenceIndent: Style.space(8)
-    readonly property int processEvidenceBranchWidth: Style.space(9)
+    readonly property int processEvidenceIndent: space(8)
+    readonly property int processEvidenceBranchWidth: space(9)
     readonly property int processEvidenceMaximumDepth: 7
     readonly property int telemetryHeight: 78
     readonly property int telemetryTargetWidth: 330
@@ -259,10 +279,10 @@ QtObject {
     readonly property int telemetryModulePadding: 7
     readonly property int telemetryRailWidth: Math.max(2, borderWidth * 2)
     readonly property int telemetrySignalHeight: Math.max(2, borderWidth * 2)
-    readonly property int performanceLegendHeight: Style.space(24)
-    readonly property int performanceLegendSwatchWidth: Style.space(18)
-    readonly property int performanceTimelineHeight: Style.space(16)
-    readonly property int performancePlotPadding: Style.space(4)
+    readonly property int performanceLegendHeight: space(24)
+    readonly property int performanceLegendSwatchWidth: space(18)
+    readonly property int performanceTimelineHeight: space(16)
+    readonly property int performancePlotPadding: space(4)
     readonly property real performanceGridOpacity: 0.48
     readonly property real performanceFillOpacity: 0.16
     readonly property real performanceScaleHeadroom: 1.24
@@ -271,11 +291,11 @@ QtObject {
     readonly property real performanceSecondaryTraceWidth: Math.max(1.5, borderWidth * 1.5)
     readonly property real performancePointRadius: Math.max(2, borderWidth * 2)
     readonly property real minimumCpuChartScale: 10
-    readonly property int footerExpandedWidth: Style.space(1120)
-    readonly property int footerSidePadding: Style.space(8)
-    readonly property int footerSpacing: Style.space(5)
-    readonly property int outerGap: Style.gapsOut
-    readonly property int borderWidth: Math.max(1, Style.normalBorderWidth)
+    readonly property int footerExpandedWidth: space(1120)
+    readonly property int footerSidePadding: space(8)
+    readonly property int footerSpacing: space(5)
+    readonly property int outerGap: 8
+    readonly property int borderWidth: 1
     readonly property int dividerWidth: 1
     readonly property real dividerOpacity: 0.58
     readonly property real subtleDividerOpacity: 0.32

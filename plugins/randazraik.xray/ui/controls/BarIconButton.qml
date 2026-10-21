@@ -6,14 +6,14 @@
 //                 (150ms OutCubic — the slot passes implicit size through, so
 //                 the rail shifts the glyph LEFT as the label unfolds)
 //   • no wash, no tooltip, no fixed widths — PluginSlot's T6 regression note.
-// Theme comes from `bar.theme` (the engine's ctx.theme via qs/Ui/BarWidget):
+// Theme comes from `bar.theme` (the engine ctx.theme via the folded base in XRayBarWidget):
 // live, no path import into the bar.
 import QtQuick
 
 Item {
     id: root
 
-    property var bar: null              // { theme, shell } from qs/Ui/BarWidget
+    property var bar: null              // { theme, shell } from the base folded into XRayBarWidget
     readonly property var _colors: bar && bar.theme ? bar.theme.colors : null
     property string text: ""
     property string label: ""           // hover-reveal text (e.g. "X-RAY"); "" = icon-only

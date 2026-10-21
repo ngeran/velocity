@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import "../../qs/Ui"
 import "../controls"
 
 DrawerSurface {

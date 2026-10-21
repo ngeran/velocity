@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls as QQC
-import "../../qs/Ui"
 import "../controls"
 import "../views" as Views
 import "../Format.js" as Format

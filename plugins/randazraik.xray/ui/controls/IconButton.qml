@@ -1,5 +1,4 @@
 import QtQuick
-import "../../qs/Ui"
 import "../Format.js" as Format
 
 Button {

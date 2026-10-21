@@ -3,11 +3,12 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
-import "../qs/Commons" as Commons
-import "../qs/Ui"
+
+
 import "controllers"
 import "drawers"
 import "views"
+import "controls"
 import "DetailDomains.js" as DetailDomains
 
 Item {
@@ -15,6 +16,8 @@ Item {
     objectName: "xrayOverlay"
 
     property alias opened: controller.opened
+    // api-2 ctx from XRay.qml — feeds XRayTheme's live palette (C5 port).
+    property var ctx: null
     property var appLibrary: null
     property var inspectionScreen: null
     property string currentQuery: ""
@@ -90,7 +93,7 @@ Item {
         onCapsuleStatusChanged: function(message) { capsuleDrawer.status = message; }
     }
 
-    XRayTheme { id: theme }
+    XRayTheme { id: theme; ctx: root.ctx }
     XRayContract { id: contract }
 
     PanelWindow {
@@ -132,7 +135,7 @@ Item {
             height: Math.min(theme.panelMaxHeight, panel.height - theme.outerGap * 2)
             anchors.centerIn: parent
             radius: theme.panelRadius
-            borderSpec: Commons.Border.flat(theme.accentBorder, theme.borderWidth)
+            borderSpec: theme.flatBorder(theme.accentBorder, theme.borderWidth)
             padding: theme.panelPadding
             color: theme.panel
 

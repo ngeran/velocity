@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import "../../qs/Ui"
 import "../controls"
 import "../Format.js" as Format
 

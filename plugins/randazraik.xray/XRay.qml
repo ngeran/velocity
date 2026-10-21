@@ -33,6 +33,7 @@ Item {
 
     XRayOverlay {
         id: overlay
+        ctx: root.ctx
         // Omarchy's app browser has no velocity equivalent; IdentityBar
         // falls back to plain names without it.
         appLibrary: null

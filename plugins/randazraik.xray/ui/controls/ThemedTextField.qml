@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell.Io
-import "../../qs/Ui"
 
 TextField {
     id: root

@@ -1,6 +1,4 @@
 import QtQuick
-import "../../qs/Commons" as Commons
-import "../../qs/Ui"
 
 BorderSurface {
     id: root
@@ -23,7 +21,7 @@ BorderSurface {
 
     color: pointerHovered && interactive
         ? theme.surfaceHigh : theme.consoleSurface
-    borderSpec: Commons.Border.flat(
+    borderSpec: theme.flatBorder(
         pointerHovered && interactive
             ? theme.hoveredBorder(accentColor)
             : theme.consoleBorder,

@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls as QQC
-import "../../qs/Ui"
 import "../controls"
 import "../domains/NetworkRows.js" as NetworkRows
 import "../domains/ResourceRows.js" as ResourceRows
