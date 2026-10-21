@@ -409,10 +409,12 @@ Item {
 
     // Safety poll for tmp+mv inode swaps (our own stage writes replace the
     // file) — reload() re-reads by path in C++. Zero forks, cheap text.
+    // Dashboard-gated like the 10s sibling: the store only changes from the
+    // monitor UI, so an idle settings process doesn't need to re-read it.
     Timer {
         id: storePoller
         interval: 2000
-        running: true
+        running: Config.SharedState.dashboardVisible
         repeat: true
         onTriggered: {
             storeFile.reload()

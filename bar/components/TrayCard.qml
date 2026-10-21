@@ -764,6 +764,9 @@ PanelWindow {
         ColumnLayout {
             id: privacyBody
             visible: card.lastTray === "privacy"
+            // Body open → PrivacyService polls; closed → it may idle again.
+            onVisibleChanged: Services.PrivacyService.bodyDemanded = visible
+            Component.onDestruction: Services.PrivacyService.bodyDemanded = false
             Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
 
             readonly property var kindRows: {

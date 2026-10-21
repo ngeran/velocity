@@ -112,8 +112,11 @@ Item {
     }
 
     // Backstop for writers that don't nudge (editor, CLI). Zero forks.
+    // 60s: idle-cadence only — settings-side writes land instantly via the
+    // `config reload` nudge and in-place writes via watchChanges; this catch
+    // exists for tmp+mv writers (vim/tee) and costs one cheap reload a minute.
     Timer {
-        interval: 15000
+        interval: 60000
         running: true
         repeat: true
         onTriggered: {

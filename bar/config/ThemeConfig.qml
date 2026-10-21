@@ -343,9 +343,11 @@ Item {
     }
 
     // Backstop for writers that don't nudge (matugen hooks, theme CLI).
+    // 60s idle cadence — the settings writer nudges `theme reload` on every
+    // atomic write; watchChanges covers in-place edits, this catches tmp+mv.
     Timer {
         id: cachePoller
-        interval: 15000
+        interval: 60000
         running: true
         repeat: true
         onTriggered: {

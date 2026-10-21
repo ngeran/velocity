@@ -2,7 +2,8 @@
 // PrivacyService.qml — what is watching or listening right now
 // =============================================================================
 // Mic / camera / screen-share detection from the PipeWire link graph, polled
-// through `pw-dump` (bounded read, 3s cadence). Classification lives in
+// through `pw-dump` (bounded read, 3s cadence, DEMAND-GATED — see the gate
+// note below; zero forks while no consumer is mounted). Classification lives in
 // bar/lib/privacy.mjs (unit-tested): an ACTIVE capture stream fed by a source
 // decides the bucket —
 //   capture ← mic-like source            → mic
@@ -34,6 +35,16 @@ Item {
     readonly property bool hasActive: totalActive > 0
 
     function appsFor(kind) { return active[kind] || [] }
+
+    // ── DEMAND GATE — zero forks while nobody is listening ─────────────
+    // The pollers (pw-dump 3s, inhibitors 15s) only run while a consumer
+    // exists: the velocity.privacy pill sets iconDemanded while MOUNTED
+    // (not while visible — an idle pill must still catch the first stream
+    // or it could never light up), the tray privacy body sets bodyDemanded
+    // while open. Plugin disabled + body closed → this service idles.
+    property bool iconDemanded: false
+    property bool bodyDemanded: false
+    readonly property bool demanded: iconDemanded || bodyDemanded
 
     // ── sleep inhibitors — who is keeping the machine awake ─────────────
     // Same pill, second detector: systemd-inhibit, filtered to sleep. Runs
@@ -71,7 +82,7 @@ Item {
 
     Timer {
         interval: 15000
-        running: true
+        running: root.demanded
         repeat: true
         triggeredOnStart: true
         onTriggered: inhProc.run()
@@ -133,7 +144,7 @@ Item {
 
     Timer {
         interval: 3000
-        running: true
+        running: root.demanded
         repeat: true
         triggeredOnStart: true
         onTriggered: {

@@ -127,9 +127,11 @@ Item {
         root.ingestMotionText(motionFile.text())
     }
 
-    // Backstop for writers that don't nudge. Zero forks.
+    // Backstop for writers that don't nudge. Zero forks. 60s idle cadence —
+    // the settings writer nudges both shells on every atomic write;
+    // watchChanges covers in-place edits, this catches tmp+mv writers.
     Timer {
-        interval: 15000
+        interval: 60000
         running: true
         repeat: true
         onTriggered: {

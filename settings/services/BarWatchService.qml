@@ -26,6 +26,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../config" as Config
 
 Item {
     id: root
@@ -111,17 +112,26 @@ Item {
 
     // ── cadence ──────────────────────────────────────────────────────────────
     // Healthy: 45s bounding poll. Down: 2s until a stable pid reappears.
+    // Both dashboard-gated: the banner (and every other consumer) lives in
+    // the settings UI, so an idle settings process stops forking entirely.
+    // Reopening the dashboard resolves once for fresh state.
     Timer {
         interval: 45000
-        running: root.barAlive
+        running: root.barAlive && Config.SharedState.dashboardVisible
         repeat: true
         onTriggered: root.resolveBar()
     }
     Timer {
         interval: 2000
-        running: !root.barAlive
+        running: !root.barAlive && Config.SharedState.dashboardVisible
         repeat: true
         onTriggered: root.resolveBar()
+    }
+    Connections {
+        target: Config.SharedState
+        function onDashboardVisibleChanged() {
+            if (Config.SharedState.dashboardVisible) root.resolveBar()
+        }
     }
 
     Component.onCompleted: {

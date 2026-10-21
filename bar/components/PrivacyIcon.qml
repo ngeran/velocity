@@ -14,6 +14,11 @@ Item {
     property bool isActive: false          // tray body open
     signal trayRequested()
 
+    // Demand-gate PrivacyService's pollers: mounted (not visible) — an idle
+    // pill must keep polling or it could never catch the first stream.
+    Component.onCompleted: Services.PrivacyService.iconDemanded = true
+    Component.onDestruction: Services.PrivacyService.iconDemanded = false
+
     visible: active
     implicitWidth: active ? iconRow.implicitWidth : 0
     height: Config.BarConfig.barHeight
