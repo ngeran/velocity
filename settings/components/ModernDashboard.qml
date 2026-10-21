@@ -29,6 +29,13 @@ Item {
     // =========================================================================
 
     property int currentTab: 0
+    // Key of the visible tab ("dashboard" | "themes" | …) — read-only probe
+    // for IPC/tests (SettingsWindow.activeTab); tabModel order is the truth.
+    readonly property string currentTabKey: {
+        var model = navBar.tabModel
+        return (root.currentTab >= 0 && root.currentTab < model.length)
+            ? String(model[root.currentTab].key) : ""
+    }
 
     // Window-visibility funnel (injected from shell.qml). CRITICAL: this file,
     // like every service, imports "../config", while shell.qml imports "config"
@@ -101,7 +108,7 @@ Item {
             root.openControlTab(entry.section || "network")
         } else if (tab === "core") {
             root.openCoreTab(entry.section || "system")
-        } else if (tab === "theme") {
+        } else if (tab === "themes") {
             root.openThemeTab()
         }
         if (entry.item) {
@@ -124,6 +131,16 @@ Item {
     // =========================================================================
     // PUBLIC FUNCTIONS
     // =========================================================================
+
+    // Land on the dashboard tab (index 0). Generic opens (toggle/show/
+    // openSettings) call this so the app ALWAYS starts at the dashboard —
+    // the window no longer reopens on the tab you left. Deep links
+    // (openControlTab/openCoreTab/…) keep their targeting.
+    function openDashboardTab() {
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "dashboard") { root.currentTab = i; break }
+        }
+    }
 
     // Open the Control tab and switch to a specific sub-section
     function openControlTab(section) {
@@ -154,7 +171,7 @@ Item {
 
     function openThemeTab() {
         for (var i = 0; i < navBar.tabModel.length; i++) {
-            if (navBar.tabModel[i].key === "theme") { root.currentTab = i; break }
+            if (navBar.tabModel[i].key === "themes") { root.currentTab = i; break }
         }
     }
 

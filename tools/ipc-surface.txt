@@ -56,6 +56,7 @@ search.activateFirst              manual    # probe/scripting: run the top hit f
 SettingsWindow.toggle             bound    # SUPER+A
 SettingsWindow.show               unused
 SettingsWindow.hide               unused
+SettingsWindow.activeTab          manual   # read-only probe: visible tab key (dashboard-start proof)
 SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
 SettingsWindow.openControlAudio   internal  # TrayCard volume OPEN IN SETTINGS
 SettingsWindow.openControlBluetooth internal  # TrayCard bluetooth OPEN IN SETTINGS

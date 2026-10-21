@@ -130,21 +130,28 @@ ShellRoot {
                 // Already hiding — do nothing
                 return
             }
+            // Every generic open lands on the dashboard — the window no
+            // longer reopens on the tab you left. Only when actually opening
+            // (not on the close half of the toggle).
+            if (!root.shown) dashboard.openDashboardTab()
             root.shown = !root.shown
             panelWindow.visible = true
-            // No tab reset: ModernDashboard persists across open/close, so the
-            // panel reopens on the tab you left (matches coreActiveSection).
         }
 
         function show() {
+            dashboard.openDashboardTab()
             root.shown = true
             panelWindow.visible = true
-            // No tab reset — see toggle().
         }
 
         function hide() {
             root.shown = false
         }
+
+        // Read-only probe: key of the visible top-level tab (dashboard |
+        // themes | …). Makes the dashboard-start behavior scriptable —
+        // generic opens must land on "dashboard" no matter what was open.
+        function activeTab(): string { return dashboard.currentTabKey }
 
         // Deep-link to Control tab sections (Quickshell IPC doesn't support
         // arbitrary arguments, so individual functions per section)
@@ -180,11 +187,13 @@ ShellRoot {
             dashboard.openControlTab("plugins")
         }
 
-        // Deep-link to the Settings tab
+        // Generic "open the settings app" verb (Control Center's SETTINGS ›,
+        // the bar gear). Starts at the dashboard like every generic open —
+        // the SETTINGS tab itself stays reachable from the sidebar.
         function openSettings() {
+            dashboard.openDashboardTab()
             root.shown = true
             panelWindow.visible = true
-            dashboard.openSettingsTab()
         }
 
         // Deep-link to the Theme tab (presets + custom palettes + editor)
