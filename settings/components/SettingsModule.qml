@@ -346,8 +346,13 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ControlConfig.accent
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: Config.ControlConfig.space4
+                // ScrollColumn, not a bare ColumnLayout: four style cards plus
+                // four rows exceed the card (and at the 480px floor the window)
+                // — unclipped, the WORKSPACE DOTS pills painted BELOW the card,
+                // on the backdrop (same failure ScrollColumn exists for).
+                ScrollColumn {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     SettingRow {
                         label: "BAR STYLE"
                         section: "bar"
@@ -439,7 +444,6 @@ Item {
                             }
                         }
                     }
-                    Item { Layout.fillHeight: true }
                 }
             }
         }
