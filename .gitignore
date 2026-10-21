@@ -70,6 +70,5 @@ ui_refresh/
 *.svg
 
 # third-party converted plugin (runtime pool; big — not for the repo)
-plugins/io.github.randazraik.xray/
 bar-config.json
 settings-config.json
