@@ -31,6 +31,11 @@ Item {
     property int unreadCount: 0
     property int nextId: 1
 
+    // Live-arrival hook for the toast layer (NotificationToast). Emitted for
+    // EVERY add() — DnD/panel suppression is the view's call (it reads dnd,
+    // panelOpen and the row's silent mark off this singleton).
+    signal arrived(var row)
+
     // -------------------------------------------------------------------------
     // HISTORY — rows ARCHIVED ON EXPIRY (the reaper), not explicit dismissals
     // (those are intentional deletions). In-memory, capped; the promise from
@@ -276,7 +281,7 @@ Item {
     // -------------------------------------------------------------------------
     // urgency: 0 = low, 1 = normal, 2 = critical
     function add(appName, summary, body, urgency, clickId, appIcon) {
-        root.model.insert(0, {
+        var row = {
             id: root.nextId,
             clickId: (clickId === undefined ? 0 : clickId),  // DBus id for ActionInvoked (0 = none)
             appName: appName || "Notification",
@@ -289,10 +294,12 @@ Item {
             read: false,
             silent: root.dnd,  // DnD arrival: badge stays quiet, row persists
             readAt: 0          // set when marked read — tier clock starts at READ
-        })
+        }
+        root.model.insert(0, row)
         root.nextId++
         root._recount()
         root._persist()
+        root.arrived(row)
     }
 
     // Click-to-open: tell the forwarder (org.quickshell.NotifyBridge) to emit
@@ -425,6 +432,9 @@ Item {
 
         // Bring cleared rows back (the panel footer's RESTORE does the same).
         function restore() { root.restoreCleared() }
+
+        // DnD switch (same path as the panel toggle: memory + persisted flag).
+        function dnd(on: bool) { root.setDnd(on) }
 
         // Inspection / scripting hooks: mark everything read and dump the model.
         function readAll() { root.markAllRead() }

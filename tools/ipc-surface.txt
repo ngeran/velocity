@@ -73,6 +73,7 @@ display.refresh                   manual    # one-shot monitor poll (the poll ti
 notifications.add                 manual    # ingest surface (docs in NotificationService header)
 notifications.clear               manual    # soft clear
 notifications.restore              manual    # undo the soft clear
+notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
 notifications.readAll             manual    # mark all read
 notifications.list                manual    # dump the visible model (truth probes)
 wallpaper-service.toggleCycling   manual    # cycle pill toggles in-process; IPC kept external

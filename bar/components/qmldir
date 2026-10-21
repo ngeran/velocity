@@ -13,6 +13,7 @@ FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 NotificationCard 1.0 NotificationCard.qml
 NotificationButton 1.0 NotificationButton.qml
+NotificationToast 1.0 NotificationToast.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
 ZaiAlertBridge 1.0 ZaiAlertBridge.qml
 Osd 1.0 Osd.qml

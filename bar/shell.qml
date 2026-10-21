@@ -144,6 +144,16 @@ ShellRoot {
     // Overlay-state feedback for the style scene (isActive on icons).
     readonly property bool ncShown: ncLoader.item ? ncLoader.item.shown : false
 
+    // Height of the tallest live style window (island chrome is 32 while
+    // barHeight stays 26) — what top-right banners must clear. Toast eats this.
+    readonly property int topClearance: {
+        var h = Config.BarConfig.barHeight
+        var insts = (styleLoader.item && styleLoader.item.instances) || []
+        for (var i = 0; i < insts.length; i++)
+            if (insts[i] && insts[i].height > h) h = insts[i].height
+        return h
+    }
+
     function closeNotificationCenter() {
         if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
     }
@@ -221,11 +231,25 @@ ShellRoot {
     Connections {
         target: ncLoader.item
         function onShownChanged() {
-            if (ncLoader.item && ncLoader.item.shown)
+            if (ncLoader.item && ncLoader.item.shown) {
                 Engine.PopupCoordinator.request("nc", shellRoot.closeNotificationCenter)
+                notificationToast.dismiss()   // a live banner over the open list is noise
+            }
             else
                 Engine.PopupCoordinator.release("nc")
         }
+    }
+
+    // =========================================================================
+    // NOTIFICATION TOAST — transient arrival banner (top-right, under the bar).
+    // Warm from shell start so it can catch arrivals; shows nothing until
+    // NotificationService.arrived fires and its own policy passes (no DnD,
+    // panel closed). Card click opens the center.
+    // =========================================================================
+    Components.NotificationToast {
+        id: notificationToast
+        topClearance: shellRoot.topClearance
+        onCenterRequested: shellRoot.toggleNotificationCenter()
     }
 
     // =========================================================================
