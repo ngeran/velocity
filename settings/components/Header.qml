@@ -10,9 +10,9 @@
 // duplication (user call, 2026-10-21). What remains is functional: the LOGS
 // overlay launcher and the identity chip.
 //
-// SIZING: intrinsically ~56px tall (avatar 34 + margins). ModernDashboard.qml
-// sets height: 56 — the slimmed strip also gives every tab's content more
-// vertical room.
+// SIZING: intrinsically ~44px tall. ModernDashboard.qml sets height: 44 —
+// LOGS + identity sit as one compact cluster on the right; the strip stays
+// quiet and every tab's content keeps the reclaimed vertical room.
 // =============================================================================
 
 import QtQuick
@@ -69,11 +69,11 @@ Rectangle {
         }
     }
 
-    // Hairline vertical divider ahead of the identity chip.
+    // Hairline vertical divider between the cluster halves.
     component Divider: Rectangle {
         Layout.fillHeight: true
-        Layout.topMargin: 12
-        Layout.bottomMargin: 12
+        Layout.topMargin: 8
+        Layout.bottomMargin: 8
         Layout.preferredWidth: 1
         Layout.alignment: Qt.AlignVCenter
         // NOTE: colors.border reads as near-invisible against a pure-black OLED
@@ -84,43 +84,42 @@ Rectangle {
     }
 
     // ── layout ────────────────────────────────────────────────────────────
-    // LOGS launcher pinned left, identity chip pinned right. (The clock trio
-    // used to own the center — now empty, which is the point: the eye goes
-    // straight to the tab content.)
+    // One compact cluster on the right: LOGS launcher | identity chip. The
+    // rest of the strip stays empty on purpose — everything informational
+    // lives in the tab content (the dedupe lesson); the eye goes straight
+    // there.
 
-    // -- Logs launcher --
-    Rectangle {
-        width: 34; height: 34
-        anchors.left: parent.left
-        anchors.leftMargin: 24
-        anchors.verticalCenter: parent.verticalCenter
-        color: "transparent"
-        border.color: logsMouse.containsMouse ? Config.ThemeConfig.colors.secondary
-                                              : Config.ThemeConfig.colors.outlineVariant
-        border.width: 1
-        Text {
-            anchors.centerIn: parent
-            text: "󰗋"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 15
-            color: Config.ThemeConfig.colors.secondary
-        }
-        MouseArea {
-            id: logsMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: logsToggleProc.running = true
-        }
-    }
-
-    // -- Identity chip (+ its own leading divider) --
     RowLayout {
         id: identityGroup
         anchors.right: parent.right
         anchors.rightMargin: 24
         anchors.verticalCenter: parent.verticalCenter
         spacing: 10
+
+        // System Logs overlay launcher — toggles the BAR process's overlay
+        // cross-process (same shape as bar/components/WeatherWidget.qml
+        // calling settings IPC).
+        Rectangle {
+            width: 34; height: 34
+            color: "transparent"
+            border.color: logsMouse.containsMouse ? Config.ThemeConfig.colors.secondary
+                                                  : Config.ThemeConfig.colors.outlineVariant
+            border.width: 1
+            Text {
+                anchors.centerIn: parent
+                text: "󰗋"
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 15
+                color: Config.ThemeConfig.colors.secondary
+            }
+            MouseArea {
+                id: logsMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: logsToggleProc.running = true
+            }
+        }
 
         Divider {}
         Item { Layout.preferredWidth: 10 }  // breathing room after the divider

@@ -224,7 +224,7 @@ Item {
             left: navBar.right
             right: parent.right
         }
-        height: 56
+        height: 44
     }
 
     // =========================================================================
