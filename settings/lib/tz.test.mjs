@@ -5,6 +5,7 @@ import {
     isKnownZone, lastSundayUtcMs, nthSundayUtcMs,
     euDSTActive, usDSTActive, zoneOffsetMinutes, zoneAbbr,
     formatInZone, formatInZoneHM,
+    KNOWN_ZONES, isLocalZone, zoneCity, zoneShort, wallClock,
 } from "./tz.mjs"
 
 let n = 0
@@ -64,5 +65,17 @@ eq(zoneAbbr("Mars/Olympus", Date.UTC(2026, 5, 15)), "", "unknown zone → empty 
 ok(isKnownZone("Europe/Athens") && !isKnownZone("Mars/Olympus") && !isKnownZone(""), "isKnownZone gates")
 const d = new Date(Date.UTC(2026, 5, 15))
 eq(zoneOffsetMinutes("Mars/Olympus", d), -d.getTimezoneOffset(), "unknown zone → system offset")
+
+// ── labels + wall clock ─────────────────────────────────────────────────────
+ok(KNOWN_ZONES.indexOf("Asia/Tokyo") !== -1 && KNOWN_ZONES.indexOf("Local") === -1, "KNOWN_ZONES lists computable zones")
+ok(isLocalZone("Local") && isLocalZone("") && !isLocalZone("UTC"), "isLocalZone")
+eq(zoneCity("America/New_York"), "New York", "zoneCity strips region + underscores")
+eq(zoneCity("Local"), "Local", "zoneCity local")
+eq(zoneShort("Asia/Tokyo"), "TYO", "zoneShort uses the table")
+eq(zoneShort("Local"), "LOCAL", "zoneShort local")
+const t = new Date(Date.UTC(2026, 6, 1, 12, 30))
+const w = wallClock(t, "Europe/Athens")
+eq(w.getHours() + ":" + w.getMinutes(), "15:30", "wallClock: Athens EEST local getters")
+eq(wallClock(t, "Local").getTime(), t.getTime(), "wallClock: local is identity")
 
 console.log(`tz.test.mjs: OK (${n} assertions)`)

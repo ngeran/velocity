@@ -4,7 +4,7 @@
   "id": "nikos.clock",
   "name": "Clock",
   "version": "1.0.0",
-  "description": "Centered clock + date with city/offset labels from bar-config.json. Click toggles the settings dashboard. Occupies the CENTER slot.",
+  "description": "Centered clock + date. Click toggles the calendar popup. Occupies the CENTER slot.",
   "author": "nikos",
   "kinds": [
     "bar-widget"
@@ -18,5 +18,22 @@
   "commands": [],
   "ipc": [
     "toggle"
-  ]
+  ],
+  "settings": {
+    "zone": {
+      "type": "enum",
+      "default": "Local",
+      "options": [
+        "Local",
+        "Europe/Athens",
+        "Europe/London",
+        "America/New_York",
+        "America/Chicago",
+        "America/Los_Angeles",
+        "Asia/Tokyo",
+        "UTC"
+      ],
+      "label": "Clock zone"
+    }
+  }
 }

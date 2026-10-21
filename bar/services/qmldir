@@ -13,3 +13,5 @@ singleton SystemInfoService 1.0 SystemInfoService.qml
 singleton OsdService 1.0 OsdService.qml
 singleton LogService 1.0 LogService.qml
 singleton EventService 1.0 EventService.qml
+singleton BrightnessService 1.0 BrightnessService.qml
+singleton PowerProfileService 1.0 PowerProfileService.qml

@@ -17,6 +17,9 @@ Item {
     implicitWidth: pill.implicitWidth
     implicitHeight: pill.height
 
+    readonly property var _settings: ctx ? ctx.settings.values : null
+    on_SettingsChanged: TZ.TimezoneService.configure(_settings)
+
     function toggle() { panel.toggle() }
     function open()   { panel.open() }
     function close()  { panel.close() }

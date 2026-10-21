@@ -34,6 +34,7 @@ plugins.summon           manual    # (id, payload) — BOTH required (Quickshell
 plugins.hide             manual
 plugins.call             manual    # (id, verb, arg) — plugin-declared verbs (manifest.ipc); handler in bar/engine/PluginHost.qml
 theme.reload             internal  # ThemeService push nudge after colors.json write
+config.reload            internal  # SettingsConfigService push nudge after bar-config.json write
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
 # keyboard.* = TRANSITIONAL forwarders to `plugins call nikos.keyboard <verb>`;
 # remove with the handler once the keybind uses plugins.call.
@@ -42,6 +43,7 @@ keyboard.prev            manual    # cycle backwards
 keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polytonic)`
 keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
 keyboard.open            manual    # toggle the keyboard settings panel
+controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
@@ -55,15 +57,13 @@ SettingsWindow.toggle             bound    # SUPER+A
 SettingsWindow.show               unused
 SettingsWindow.hide               unused
 SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
-SettingsWindow.openControlAudio   unused   # deep-link surface, awaiting wiring
-SettingsWindow.openControlBluetooth unused
+SettingsWindow.openControlAudio   internal  # TrayCard volume OPEN IN SETTINGS
+SettingsWindow.openControlBluetooth internal  # TrayCard bluetooth OPEN IN SETTINGS
 SettingsWindow.openControlDisplay unused
 SettingsWindow.openControlPlugins internal  # nikos.example pill deep-links the Plugins page (argv-array ctx.run)
-SettingsWindow.openControlPower   unused
-SettingsWindow.openControlSystem  unused
 SettingsWindow.openCore           unused
-SettingsWindow.openSettings       unused
-SettingsWindow.openThemeTab       unused
+SettingsWindow.openSettings       internal  # Control Center footer
+SettingsWindow.openThemeTab       internal  # Control Center THEME tile
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P

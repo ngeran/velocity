@@ -2,7 +2,9 @@
 // SettingsIcon.qml — bar trigger for the settings dashboard (gear glyph)
 // =============================================================================
 // Mounted by the velocity.settings built-in (bar/builtins).
-// Click: if the settings instance is running, IPC-toggle its window; if not,
+// With controlCenter set (the built-in sets it): left click asks the host for
+// the Control Center card, right click opens the dashboard directly.
+// Dashboard open: if the settings instance is running, IPC-toggle its window; if not,
 // spawn it detached. One sh line covers both — ipc exits non-zero with
 // "Target not found" when nothing owns the target, and the || branch spawns.
 //
@@ -28,6 +30,8 @@ Item {
     // Rail parity (LogsIcon/NotificationButton carry it); no feedback channel
     // from the settings process exists yet — the bar cannot know its state.
     property bool isActive: false
+    property bool controlCenter: false
+    signal controlRequested()
 
     readonly property bool expanded: mouseArea.containsMouse
 
@@ -72,6 +76,10 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.activate()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: function(mouse) {
+            if (root.controlCenter && mouse.button === Qt.LeftButton) root.controlRequested()
+            else root.activate()
+        }
     }
 }

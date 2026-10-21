@@ -10,6 +10,8 @@ roots** (only file://-loaded plugin code can cross roots).
   is derived from the copy's own location).
 - `BoundedProcess.qml` → synced to `bar/services/` and `settings/services/`
   (no per-root divergence — pure primitive).
+- `tz.mjs` → synced to `settings/lib/` and into the `nikos.timezones` and
+  `nikos.clock` plugins' `lib/` (plugins stay self-contained).
 
 ## Workflow
 

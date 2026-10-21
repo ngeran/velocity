@@ -14,11 +14,9 @@
 //
 // PROPERTIES
 //   volume / muted / hasAudio          default sink (as before)
-//   sinks                              tracked audio sinks (default first)
-//   micVolume / micMuted / hasMic      default source
+//   micMuted / hasMic                  default source
 //   hwLabel                            short node id for the popup header
-// METHODS: setVolume, toggleMute, volumeUp/Down, setDefaultSink(node),
-//          setMicVolume, toggleMicMute
+// METHODS: setVolume, toggleMute, volumeUp/Down, toggleMicMute
 // =============================================================================
 
 pragma Singleton
@@ -59,23 +57,6 @@ Scope {
         function onValuesChanged() { tracker.objects = Pipewire.nodes.values }
     }
 
-    // Audio sinks, DEFAULT FIRST. Recomputes on registry changes; the node
-    // property population gap (async) self-heals on the next nodes change.
-    readonly property var sinks: {
-        var out = []
-        var objs = tracker.objects.values
-        for (var i = 0; i < objs.length; i++) {
-            var n = objs[i]
-            if (n.isSink === true && !n.isStream) out.push(n)
-        }
-        out.sort(function(a, b) {
-            if (a === root.sink) return -1
-            if (b === root.sink) return 1
-            return String(a.description).localeCompare(String(b.description))
-        })
-        return out
-    }
-
     property bool hasAudio: root.sink != null
     property int volume: root.sink
         ? Math.round(Math.min(root.sink.audio.volume, 1.0) * 100) : 0
@@ -86,24 +67,11 @@ Scope {
 
     // ── INPUT SOURCE (microphone) ──
     property bool hasMic: root.source != null
-    property int micVolume: root.source
-        ? Math.round(Math.min(root.source.audio.volume, 1.0) * 100) : 0
     property bool micMuted: root.source ? root.source.audio.muted : false
 
-    function setMicVolume(val) {
-        if (!root.source) return
-        root.source.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
-    }
     function toggleMicMute() {
         if (!root.source) return
         root.source.audio.muted = !root.source.audio.muted
-    }
-
-    // Switch the default output — the writable native path (memory #6),
-    // wpctl set-default equivalent.
-    function setDefaultSink(node) {
-        if (!node) return
-        Pipewire.preferredDefaultAudioSink = node
     }
 
     onSinkChanged: console.log("[AudioService] default sink: " +

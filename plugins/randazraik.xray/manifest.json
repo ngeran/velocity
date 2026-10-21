@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "randazraik.xray",
+  "name": "Omarchy X-Ray",
+  "version": "0.7.0",
+  "description": "Trace any window, process, service, container, port, file, or device to the process behind it. Ported from omarchy-xray (MIT); Python backend spawned over JSON-lines.",
+  "author": "RandaZraik (ported for nikos shell)",
+  "license": "MIT",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "overlay": "XRay.qml",
+    "barWidget": "XRayBarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [
+    "python3"
+  ],
+  "ipc": [
+    "toggle",
+    "browse",
+    "details"
+  ]
+}

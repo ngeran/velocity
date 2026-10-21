@@ -7,9 +7,9 @@
 // all properties automatically update, triggering reactive updates across
 // all QuickShell components.
 //
-// Reads ~/.cache/theme/colors.json via FileView with watchChanges + a 2s
-// forced reload() (instant on inotify-visible writes, bounded staleness on
-// tmp+mv inode swaps — both zero-fork; see EXTERNAL INTAKE below).
+// Reads ~/.cache/theme/colors.json via FileView with watchChanges, the
+// settings `theme reload` IPC nudge, and a 15s fallback reload() for writers
+// that don't nudge (all zero-fork; see EXTERNAL INTAKE below).
 //
 // =============================================================================
 // SYNC WITH: settings/config/ThemeConfig.qml — the 16 color-token defaults,
@@ -19,8 +19,8 @@
 // only reads colors.json that settings wrote), an inline OLED clamp as defense
 // (equivalent to ThemeService.clampOLED: 4 bg tokens → #000, luminance <0.18
 // text / <0.12 textDim → #e0e0e0 / #808080), and a zero-fork hybrid intake:
-// FileView.watchChanges (instant on same-inode writes) plus a 2s forced
-// reload() Timer. Plain watchChanges alone missed tmp+mv inode swaps
+// FileView.watchChanges (instant on same-inode writes), the theme.reload
+// nudge, plus a 15s fallback reload() Timer. Plain watchChanges alone missed tmp+mv inode swaps
 // cross-process (see git history); reload() re-reads by path in C++, so it
 // is immune. The intake mechanism is process-specific by design.
 // =============================================================================
@@ -285,7 +285,7 @@ Item {
     }
 
     // =========================================================================
-    // EXTERNAL INTAKE — FileView + forced 2s reload() (zero forks)
+    // EXTERNAL INTAKE — FileView + theme.reload nudge + 15s fallback (zero forks)
     // -------------------------------------------------------------------------
     // Hybrid: watchChanges catches same-inode writes instantly via inotify;
     // the Timer's reload() covers the tmp+mv inode swap — writers (ThemeService,
@@ -318,7 +318,7 @@ Item {
     // reload() is the ASYNC path re-read (completes via onTextChanged — a
     // synchronous text() right after reload() returns stale cache); the
     // immediate ingestThemeText(text()) covers the same-inode case. Both
-    // dedupe through lastCachedData, so a nudge racing the 2s poll is free.
+    // dedupe through lastCachedData, so a nudge racing the fallback poll is free.
     function reloadFromDisk() {
         themeFile.reload()
         root.ingestThemeText(themeFile.text())
@@ -342,11 +342,10 @@ Item {
         Component.onCompleted: root.ingestThemeText(themeFile.text())
     }
 
-    // Safety poll for tmp+mv inode swaps — reload() re-reads by path in C++,
-    // so it survives writers that replace the file. Zero forks.
+    // Backstop for writers that don't nudge (matugen hooks, theme CLI).
     Timer {
         id: cachePoller
-        interval: 2000
+        interval: 15000
         running: true
         repeat: true
         onTriggered: {

@@ -1,0 +1,24 @@
+// velocity.keybinds — built-in overlay, a lazy wrapper over components/KeybindsOverlay.qml.
+// The window is built on first open and kept warm (overlay contract:
+// shown / open / close / toggle — the plugin host claims the popup slot).
+import QtQuick
+import "../../components" as Components
+
+Item {
+    id: root
+    property var ctx: null
+
+    readonly property bool shown: loader.item ? loader.item.shown : false
+    property bool _wanted: false
+
+    function open()   { if (loader.item) loader.item.open(); else root._wanted = true }
+    function close()  { if (loader.item) loader.item.close() }
+    function toggle() { if (loader.item) loader.item.toggle(); else root._wanted = true }
+
+    Loader {
+        id: loader
+        active: root._wanted
+        sourceComponent: Component { Components.KeybindsOverlay { } }
+        onLoaded: item.open()
+    }
+}

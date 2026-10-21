@@ -4,6 +4,6 @@ import "../../components" as Components
 
 Components.LogsIcon {
     property var ctx: null
-    isActive: !!ctx && !!ctx.host && ctx.host.logsShown
-    onTriggered: if (ctx && ctx.host) ctx.host.toggleLogs()
+    isActive: !!ctx && !!ctx.host && ctx.host.overlayShown("velocity.logs-viewer")
+    onTriggered: if (ctx && ctx.host) ctx.host.toggleOverlay("velocity.logs-viewer")
 }

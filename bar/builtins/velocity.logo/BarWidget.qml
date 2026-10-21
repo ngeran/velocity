@@ -4,5 +4,5 @@ import "../../components" as Components
 
 Components.ArchLogo {
     property var ctx: null
-    onTriggered: if (ctx && ctx.host) ctx.host.toggleFastfetch()
+    onTriggered: if (ctx && ctx.host) ctx.host.toggleOverlay("velocity.fastfetch")
 }

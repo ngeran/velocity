@@ -31,7 +31,6 @@ Item {
     // Default values - overridden by config file if present
     property int barHeight: 26
     property int workspaceCount: 5
-    property string clockCity: "Local"
     // Bar style (styles/<name>/Scene.qml). Validated: non-empty, no path
     // separators — anything else keeps the current style; the host's Loader
     // falls back to "vector" when the folder/Scene is missing or broken.
@@ -43,7 +42,6 @@ Item {
     readonly property bool barAtBottom: root.barPosition === "bottom"
     // Island style QD-OLED guard (orbit drift + idle dim of the rest clock).
     property bool islandBurnGuard: true
-    property int clockOffset: 0
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
     // read once by the engine's schema-2 migration and ignored after.
@@ -57,12 +55,12 @@ Item {
     property string _lastRaw: ""   // dedup: only re-apply when bar-config.json actually changes
 
     // =========================================================================
-    // CONFIG FILE LOADING — FileView + forced 2s reload() (zero forks)
+    // CONFIG FILE LOADING — FileView + 15s fallback reload() (zero forks)
     // -------------------------------------------------------------------------
     // Hybrid intake identical to ThemeConfig.qml: watchChanges gives instant
-    // updates on same-inode writes; the Timer's reload() covers the tmp+mv
-    // inode swap the settings writer uses (cross-process file watches have
-    // historically missed renames here — see git history). reload()+text()
+    // updates on same-inode writes; the settings writer's tmp+mv swap (which
+    // cross-process watches can miss) is pushed via the `config reload` IPC
+    // nudge; the slow Timer only backstops external writers. reload()+text()
     // re-read by path in C++, replacing the old `sh -c stat` gate.
     // FileView.text is a METHOD in this Quickshell build, not a property.
     // =========================================================================
@@ -78,8 +76,6 @@ Item {
                 barHeight = Math.max(18, Math.min(64, Math.round(data.barHeight)))
             if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
                 workspaceCount = data.workspaceCount
-            if (data.clockCity !== undefined)
-                clockCity = data.clockCity
             if (typeof data.barStyle === "string"
                 && data.barStyle.length > 0
                 && data.barStyle.indexOf("/") === -1)
@@ -88,8 +84,6 @@ Item {
                 barPosition = data.barPosition
             if (typeof data.islandBurnGuard === "boolean")
                 islandBurnGuard = data.islandBurnGuard
-            if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14)
-                clockOffset = data.clockOffset
             console.log("[BarConfig] Hot-reloaded bar-config.json")
         } catch (e) {
             console.log("[BarConfig] Failed to parse config:", e)
@@ -111,10 +105,15 @@ Item {
         Component.onCompleted: root.ingestConfigText(configFile.text())
     }
 
-    // Safety poll for tmp+mv inode swaps — reload() re-reads by path in C++,
-    // so it survives writers that replace the file. Zero forks.
+    // IPC nudge entry (config.reload); dedupes through _lastRaw.
+    function reloadFromDisk() {
+        configFile.reload()
+        root.ingestConfigText(configFile.text())
+    }
+
+    // Backstop for writers that don't nudge (editor, CLI). Zero forks.
     Timer {
-        interval: 2000
+        interval: 15000
         running: true
         repeat: true
         onTriggered: {

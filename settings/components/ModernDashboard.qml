@@ -9,7 +9,7 @@
 // PURPOSE:
 //   Main container for all tabs. Delegates tab-0 (Dashboard) to
 //   DashboardOverviewTab (bento grid layout), other tabs to their
-//   respective modules (ThemeModule, WallpaperModule, ControlModule, Settings).
+//   respective modules (ThemeModule, WallpaperModule, ControlDashboard, Settings).
 //
 // =============================================================================
 
@@ -313,16 +313,13 @@ Item {
         // TAB 3: CONTROL MODULE
         // =====================================================================
 
-        Components.ControlModule {
+        Components.ControlDashboard {
             id: controlModule
 
             visible: root.currentTab === 3
             opacity: root.currentTab === 3 ? 1.0 : 0.0
             x: root.currentTab === 3 ? 0 : (root.currentTab < 3 ? 20 : -20)
             anchors.fill: parent
-
-            // Expose activeSection for IPC deep-link
-            property alias activeSection: controlModule.activeSection
 
             Behavior on opacity {
                 NumberAnimation {

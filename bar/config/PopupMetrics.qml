@@ -74,8 +74,15 @@ Item {
         Component.onCompleted: root.ingestPopupText(popupFile.text())
     }
 
+    // IPC nudge entry (config.reload); dedupes through _lastRaw.
+    function reloadFromDisk() {
+        popupFile.reload()
+        root.ingestPopupText(popupFile.text())
+    }
+
+    // Backstop for writers that don't nudge. Zero forks.
     Timer {
-        interval: 2000
+        interval: 15000
         running: true
         repeat: true
         onTriggered: {

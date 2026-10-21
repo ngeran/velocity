@@ -20,5 +20,21 @@
   ],
   "ipc": [
     "toggle"
-  ]
+  ],
+  "settings": {
+    "lowThreshold": {
+      "type": "number",
+      "default": 20,
+      "min": 5,
+      "max": 50,
+      "label": "Low battery % (error colour)"
+    },
+    "warnThreshold": {
+      "type": "number",
+      "default": 50,
+      "min": 10,
+      "max": 90,
+      "label": "Warning battery % (warning colour)"
+    }
+  }
 }

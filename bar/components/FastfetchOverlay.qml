@@ -14,7 +14,7 @@
 // warning/error/info/accent) rather than one.
 //
 // Shell mirrors ZaiUsageOverlay: transparent PanelWindow, dim backdrop, dim
-// grid + corner brackets. Esc / click-outside closes. Decorations stay dim
+// dim grid. Esc / click-outside closes. Decorations stay dim
 // per the OLED burn-in policy.
 // =============================================================================
 
@@ -98,11 +98,11 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(900, parent.width - 48)
-        height: Math.min(680, parent.height - 48)
-        color: root.cBg
-        border.color: root.cBorder
-        border.width: 1
+        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
+        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
+        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
+        color: "#000000"
+        radius: Config.PopupMetrics.px(18)
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
@@ -117,42 +117,28 @@ PanelWindow {
             anchors.fill: parent
             opacity: 0.22; z: 0
             Repeater {
-                model: Math.floor(card.width / 40)
-                Rectangle { width: 1; height: card.height; x: index * 40; color: root.cBorder }
+                model: Math.floor(card.width / Config.PopupMetrics.px(40))
+                Rectangle { width: Config.PopupMetrics.hairline(parent); height: card.height; x: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
             Repeater {
-                model: Math.floor(card.height / 40)
-                Rectangle { height: 1; width: card.width; y: index * 40; color: root.cBorder }
-            }
-        }
-
-        // ----- (decoration) corner brackets -----
-        Repeater {
-            model: 4
-            Item {
-                width: 14; height: 14; opacity: 0.55; z: 0
-                x: (index === 0 || index === 2) ? 0 : (card.width - 14)
-                y: (index === 0 || index === 1) ? 0 : (card.height - 14)
-                property bool isRight: (index === 1 || index === 3)
-                property bool isBottom: (index === 2 || index === 3)
-                Rectangle { width: 14; height: 2; color: root.cSecondary; y: parent.isBottom ? 12 : 0 }
-                Rectangle { width: 2; height: 14; color: root.cSecondary; x: parent.isRight ? 12 : 0 }
+                model: Math.floor(card.height / Config.PopupMetrics.px(40))
+                Rectangle { height: Config.PopupMetrics.hairline(parent); width: card.width; y: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
         }
 
         // ----- CONTENT -----
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 12
+            anchors.margins: Config.PopupMetrics.px(30)
+            spacing: Config.PopupMetrics.px(12)
             z: 10
 
             // ---- header ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Config.PopupMetrics.px(10)
                 Rectangle {
-                    width: 10; height: 10; radius: 5
+                    width: Config.PopupMetrics.px(10); height: Config.PopupMetrics.px(10); radius: Config.PopupMetrics.px(5)
                     color: Services.SystemInfoService.loading ? root.cWarn : root.cSecondary
                     Layout.alignment: Qt.AlignVCenter
                     SequentialAnimation on opacity {
@@ -165,55 +151,55 @@ PanelWindow {
                     text: "󰻠"
                     color: root.cSecondary
                     font.family: root.fontN
-                    font.pixelSize: 18
+                    font.pixelSize: Config.PopupMetrics.px(18)
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Text {
                     text: "SYSTEM INFO"
                     color: root.cText
                     font.family: root.fontM
-                    font.pixelSize: 18
+                    font.pixelSize: Config.PopupMetrics.px(18)
                     font.bold: true
                     font.letterSpacing: 3
                     Layout.alignment: Qt.AlignVCenter
                 }
                 // live palette swatches (drawn from the active theme, not hard-coded)
                 Row {
-                    spacing: 4
-                    Layout.leftMargin: 10
+                    spacing: Config.PopupMetrics.px(4)
+                    Layout.leftMargin: Config.PopupMetrics.px(10)
                     Layout.alignment: Qt.AlignVCenter
                     Repeater {
                         model: 7
                         Rectangle {
-                            width: 9; height: 9; radius: 2
+                            width: Config.PopupMetrics.px(9); height: Config.PopupMetrics.px(9); radius: Config.PopupMetrics.px(2)
                             color: root.swatchAt(index)
-                            border.color: root.cBorder; border.width: 1
+                            border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
                         }
                     }
                 }
                 Item { Layout.fillWidth: true }
                 ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: 1
+                    spacing: Config.PopupMetrics.px(1)
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: "HOST"
                         color: root.cDim
-                        font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                     }
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: (Services.SystemInfoService.userName || "—") + "@" + (Services.SystemInfoService.hostName || "—")
                         color: root.cSecondary
-                        font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                     }
                 }
                 Text {
                     text: "ESC"
                     color: root.cDim
-                    font.family: root.fontM; font.pixelSize: 9
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 8
+                    Layout.leftMargin: Config.PopupMetrics.px(8)
                 }
             }
 
@@ -224,9 +210,9 @@ PanelWindow {
                       (Services.SystemInfoService.osName || "—") + " " + (Services.SystemInfoService.osVersion || "") + "  //  " +
                       (Services.SystemInfoService.kernelName || "") + " " + (Services.SystemInfoService.kernelRelease || "")
                 color: root.cDim
-                font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
             // ---- card grid (scrollable if it ever overflows) ----
             Flickable {
@@ -243,8 +229,8 @@ PanelWindow {
                     id: grid
                     width: flick.width
                     columns: 3
-                    rowSpacing: 12
-                    columnSpacing: 12
+                    rowSpacing: Config.PopupMetrics.px(12)
+                    columnSpacing: Config.PopupMetrics.px(12)
 
                     // ============================================================
                     // HARDWARE TELEMETRY  (colSpan 2)
@@ -252,65 +238,65 @@ PanelWindow {
                     Rectangle {
                         Layout.columnSpan: 2
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 209
+                        Layout.preferredHeight: Config.PopupMetrics.px(209)
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 10
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(10)
 
                             // card header
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-                                Rectangle { width: 8; height: 8; radius: 2; color: root.cSecondary; Layout.alignment: Qt.AlignVCenter }
+                                spacing: Config.PopupMetrics.px(8)
+                                Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cSecondary; Layout.alignment: Qt.AlignVCenter }
                                 Text {
                                     text: "HARDWARE TELEMETRY"
                                     color: root.cText
-                                    font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2
                                 }
                                 Item { Layout.fillWidth: true }
                                 Rectangle {
-                                    width: badge.implicitWidth + 12; height: 16
+                                    width: badge.implicitWidth + Config.PopupMetrics.px(12); height: Config.PopupMetrics.px(16)
                                     color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.12)
-                                    border.color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.35); border.width: 1
+                                    border.color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.35); border.width: Config.PopupMetrics.hairline(parent)
                                     Text {
                                         id: badge
                                         anchors.centerIn: parent
                                         text: "REAL-TIME"
                                         color: root.cSecondary
-                                        font.family: root.fontM; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1
+                                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
                                     }
                                 }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             // body: CPU/GPU (left) + RAM radial (right)
                             RowLayout {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                spacing: 20
+                                spacing: Config.PopupMetrics.px(20)
 
                                 // CPU + GPU
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    spacing: 14
+                                    spacing: Config.PopupMetrics.px(14)
 
                                     // CPU
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 2
+                                        spacing: Config.PopupMetrics.px(2)
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            spacing: 6
-                                            Text { text: "CPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: 10; font.letterSpacing: 1 }
+                                            spacing: Config.PopupMetrics.px(6)
+                                            Text { text: "CPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: Services.SystemInfoService.cpuModel
                                                 color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                             }
                                         }
                                         RowLayout {
@@ -318,13 +304,13 @@ PanelWindow {
                                             Text {
                                                 text: (Services.SystemInfoService.cpuThreads || 0) + " Threads"
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
-                                                font.family: root.fontM; font.pixelSize: 9
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: Services.SystemInfoService.cpuMaxGhz > 0 ? Services.SystemInfoService.cpuMaxGhz.toFixed(2) + " GHz Max" : "—"
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
-                                                font.family: root.fontM; font.pixelSize: 9
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                         }
                                     }
@@ -332,15 +318,15 @@ PanelWindow {
                                     // GPU
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 2
+                                        spacing: Config.PopupMetrics.px(2)
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: "GPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: 10; font.letterSpacing: 1 }
+                                            Text { text: "GPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: Services.SystemInfoService.gpuName
                                                 color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                             }
                                         }
                                         RowLayout {
@@ -348,13 +334,13 @@ PanelWindow {
                                             Text {
                                                 text: Services.SystemInfoService.gpuType || "—"
                                                 color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.85)
-                                                font.family: root.fontM; font.pixelSize: 9
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: Services.SystemInfoService.gpuDriver || "—"
                                                 color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.85)
-                                                font.family: root.fontM; font.pixelSize: 9
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                         }
                                     }
@@ -362,16 +348,16 @@ PanelWindow {
                                     // BOARD (motherboard model + parsed chipset)
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 2
+                                        spacing: Config.PopupMetrics.px(2)
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: "BOARD"; color: root.cDim; font.family: root.fontM; font.pixelSize: 10; font.letterSpacing: 1 }
+                                            Text { text: "BOARD"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: Services.SystemInfoService.boardName
                                                 color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 14; font.bold: true
-                                                elide: Text.ElideRight; Layout.maximumWidth: 300
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(14); font.bold: true
+                                                elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(300)
                                             }
                                         }
                                         RowLayout {
@@ -379,14 +365,14 @@ PanelWindow {
                                             Text {
                                                 text: Services.SystemInfoService.boardVendor
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
-                                                font.family: root.fontM; font.pixelSize: 9
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                                 visible: Services.SystemInfoService.boardVendor !== "—" && Services.SystemInfoService.boardVendor.length > 0
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
                                                 text: "CHIPSET " + Services.SystemInfoService.chipset
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
-                                                font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                                                 visible: Services.SystemInfoService.chipset !== "—" && Services.SystemInfoService.chipset.length > 0
                                             }
                                         }
@@ -397,10 +383,10 @@ PanelWindow {
                                 // RAM radial
                                 RowLayout {
                                     Layout.alignment: Qt.AlignVCenter
-                                    spacing: 14
+                                    spacing: Config.PopupMetrics.px(14)
 
                                     Item {
-                                        width: 116; height: 116
+                                        width: Config.PopupMetrics.px(116); height: Config.PopupMetrics.px(116)
                                         Layout.alignment: Qt.AlignVCenter
                                         Canvas {
                                             id: ramRadial
@@ -444,29 +430,29 @@ PanelWindow {
                                                 Layout.alignment: Qt.AlignHCenter
                                                 text: Math.round(Services.SystemInfoService.memPct) + "%"
                                                 color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 22; font.bold: true
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(22); font.bold: true
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
                                                 text: "RAM"
                                                 color: root.cDim
-                                                font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1
                                             }
                                         }
                                     }
 
                                     ColumnLayout {
                                         Layout.alignment: Qt.AlignVCenter
-                                        spacing: 2
+                                        spacing: Config.PopupMetrics.px(2)
                                         Text {
                                             text: Services.SystemInfoService.memUsedGiB.toFixed(2) + " GiB"
                                             color: root.cText
-                                            font.family: root.fontM; font.pixelSize: 13; font.bold: true
+                                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(13); font.bold: true
                                         }
                                         Text {
                                             text: (Services.SystemInfoService.memTotalGiB > 0 ? Services.SystemInfoService.memTotalGiB.toFixed(2) + " GiB Total" : "—")
                                             color: root.cDim
-                                            font.family: root.fontM; font.pixelSize: 10
+                                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10)
                                         }
                                     }
                                 }
@@ -481,66 +467,66 @@ PanelWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 10
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(10)
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-                                Rectangle { width: 8; height: 8; radius: 2; color: root.cPrimary; Layout.alignment: Qt.AlignVCenter }
+                                spacing: Config.PopupMetrics.px(8)
+                                Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cPrimary; Layout.alignment: Qt.AlignVCenter }
                                 Text {
                                     text: "SESSION"
                                     color: root.cText
-                                    font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2
                                 }
                                 Item { Layout.fillWidth: true }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignHCenter
-                                spacing: 2
+                                spacing: Config.PopupMetrics.px(2)
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: "UPTIME"
                                     color: root.cDim
-                                    font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                                 }
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: Services.SystemInfoService.uptimeStr
                                     color: root.cPrimary
-                                    font.family: root.fontM; font.pixelSize: 26; font.bold: true
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(26); font.bold: true
                                 }
-                                Item { Layout.preferredHeight: 4 }
+                                Item { Layout.preferredHeight: Config.PopupMetrics.px(4) }
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 8
+                                    spacing: Config.PopupMetrics.px(8)
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 52
+                                        Layout.preferredHeight: Config.PopupMetrics.px(52)
                                         color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.4)
-                                        border.color: root.cOutline; border.width: 1
+                                        border.color: root.cOutline; border.width: Config.PopupMetrics.hairline(parent)
                                         ColumnLayout {
-                                            anchors.centerIn: parent; spacing: 1
-                                            Text { text: "OS AGE"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                            Text { text: (Services.SystemInfoService.osAgeDays || 0) + "d"; color: root.cText; font.family: root.fontM; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                            anchors.centerIn: parent; spacing: Config.PopupMetrics.px(1)
+                                            Text { text: "OS AGE"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
+                                            Text { text: (Services.SystemInfoService.osAgeDays || 0) + "d"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(14); font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                         }
                                     }
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 52
+                                        Layout.preferredHeight: Config.PopupMetrics.px(52)
                                         color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.4)
-                                        border.color: root.cOutline; border.width: 1
+                                        border.color: root.cOutline; border.width: Config.PopupMetrics.hairline(parent)
                                         ColumnLayout {
-                                            anchors.centerIn: parent; spacing: 1
-                                            Text { text: "INSTALLED"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                            Text { text: Services.SystemInfoService.installDate || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                            anchors.centerIn: parent; spacing: Config.PopupMetrics.px(1)
+                                            Text { text: "INSTALLED"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
+                                            Text { text: Services.SystemInfoService.installDate || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(12); font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                         }
                                     }
                                 }
@@ -554,42 +540,42 @@ PanelWindow {
                     // ============================================================
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 168
+                        Layout.preferredHeight: Config.PopupMetrics.px(168)
                         clip: true   // variable disk count — never bleed into the next card
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 10
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(10)
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-                                Rectangle { width: 8; height: 8; radius: 2; color: root.cSecondary; Layout.alignment: Qt.AlignVCenter }
-                                Text { text: "STORAGE"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                                spacing: Config.PopupMetrics.px(8)
+                                Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cSecondary; Layout.alignment: Qt.AlignVCenter }
+                                Text { text: "STORAGE"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2 }
                                 Item { Layout.fillWidth: true }
-                                Text { text: (Services.SystemInfoService.disks ? Services.SystemInfoService.disks.length : 0) + " VOL"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
+                                Text { text: (Services.SystemInfoService.disks ? Services.SystemInfoService.disks.length : 0) + " VOL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
+                                spacing: Config.PopupMetrics.px(8)
                                 Repeater {
                                     model: Services.SystemInfoService.disks
                                     ColumnLayout {
                                         Layout.fillWidth: true
-                                        spacing: 3
+                                        spacing: Config.PopupMetrics.px(3)
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: modelData.dev; color: root.cText; font.family: root.fontM; font.pixelSize: 10; font.bold: true }
+                                            Text { text: modelData.dev; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true }
                                             Item { Layout.fillWidth: true }
-                                            Text { text: modelData.usedLabel + " / " + modelData.totalLabel; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
+                                            Text { text: modelData.usedLabel + " / " + modelData.totalLabel; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                                         }
                                         Item {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 5
+                                            Layout.preferredHeight: Config.PopupMetrics.px(5)
                                             Rectangle {
                                                 anchors.fill: parent
                                                 color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7)
@@ -614,71 +600,71 @@ PanelWindow {
                     // ============================================================
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 168
+                        Layout.preferredHeight: Config.PopupMetrics.px(168)
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 8
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(8)
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
+                                spacing: Config.PopupMetrics.px(8)
                                 Rectangle {
-                                    width: 8; height: 8; radius: 4; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter
+                                    width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(4); color: root.cSuccess; Layout.alignment: Qt.AlignVCenter
                                     SequentialAnimation on opacity {
                                         running: root.shown; loops: Animation.Infinite
                                         NumberAnimation { from: 0.35; to: 1; duration: 900; easing.type: Easing.InOutSine }
                                         NumberAnimation { from: 1; to: 0.35; duration: 900; easing.type: Easing.InOutSine }
                                     }
                                 }
-                                Text { text: "NETWORK"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                                Text { text: "NETWORK"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2 }
                                 Item { Layout.fillWidth: true }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 6
+                                spacing: Config.PopupMetrics.px(6)
                                 // Local IP
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 32
+                                    Layout.fillWidth: true; Layout.preferredHeight: Config.PopupMetrics.px(32)
                                     color: Qt.rgba(root.cBg.r, root.cBg.g, root.cBg.b, 0.4)
-                                    border.color: root.cOutline; border.width: 1
+                                    border.color: root.cOutline; border.width: Config.PopupMetrics.hairline(parent)
                                     RowLayout {
-                                        anchors.fill: parent; anchors.margins: 8
-                                        Text { text: "LOCAL IP"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                        anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(8)
+                                        Text { text: "LOCAL IP"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                         Item { Layout.fillWidth: true }
-                                        Text { text: Services.NetworkService.ipAddress || "—"; color: root.cSecondary; font.family: root.fontM; font.pixelSize: 11; font.bold: true }
+                                        Text { text: Services.NetworkService.ipAddress || "—"; color: root.cSecondary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true }
                                     }
                                 }
                                 // SSID
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 32
+                                    Layout.fillWidth: true; Layout.preferredHeight: Config.PopupMetrics.px(32)
                                     color: Qt.rgba(root.cBg.r, root.cBg.g, root.cBg.b, 0.4)
-                                    border.color: root.cOutline; border.width: 1
+                                    border.color: root.cOutline; border.width: Config.PopupMetrics.hairline(parent)
                                     RowLayout {
-                                        anchors.fill: parent; anchors.margins: 8
-                                        Text { text: Services.NetworkService.connectionType === "wifi" ? "SSID" : "LINK"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                        anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(8)
+                                        Text { text: Services.NetworkService.connectionType === "wifi" ? "SSID" : "LINK"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                         Item { Layout.fillWidth: true }
-                                        Text { text: Services.NetworkService.ssid || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true }
+                                        Text { text: Services.NetworkService.ssid || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true }
                                     }
                                 }
                                 // Geo
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 32
+                                    Layout.fillWidth: true; Layout.preferredHeight: Config.PopupMetrics.px(32)
                                     color: Qt.rgba(root.cBg.r, root.cBg.g, root.cBg.b, 0.4)
-                                    border.color: root.cOutline; border.width: 1
+                                    border.color: root.cOutline; border.width: Config.PopupMetrics.hairline(parent)
                                     RowLayout {
-                                        anchors.fill: parent; anchors.margins: 8
-                                        Text { text: "GEO"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                        anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(8)
+                                        Text { text: "GEO"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                         Item { Layout.fillWidth: true }
                                         Text {
                                             text: Services.SystemInfoService.geoCity
                                                   ? Services.SystemInfoService.geoCity + (Services.SystemInfoService.geoCountry ? ", " + Services.SystemInfoService.geoCountry : "")
                                                   : "—"
-                                            color: root.cPrimary; font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                                            color: root.cPrimary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                         }
                                     }
                                 }
@@ -692,39 +678,39 @@ PanelWindow {
                     // ============================================================
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 168
+                        Layout.preferredHeight: Config.PopupMetrics.px(168)
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 10
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(10)
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-                                Rectangle { width: 8; height: 8; radius: 2; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
-                                Text { text: "HEALTH"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                                spacing: Config.PopupMetrics.px(8)
+                                Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
+                                Text { text: "HEALTH"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2 }
                                 Item { Layout.fillWidth: true }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             // GPU temp
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 3
+                                spacing: Config.PopupMetrics.px(3)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "GPU TEMP"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1 }
+                                    Text { text: "GPU TEMP"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1 }
                                     Item { Layout.fillWidth: true }
                                     Text {
                                         text: Services.SystemInfoService.gpuTempC ? Services.SystemInfoService.gpuTempC + "°C" : "—"
                                         color: root.tempColor(Services.SystemInfoService.gpuTempC)
-                                        font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     }
                                 }
                                 Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 4
+                                    Layout.fillWidth: true; Layout.preferredHeight: Config.PopupMetrics.px(4)
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7) }
                                     Rectangle {
                                         anchors.fill: parent
@@ -738,19 +724,19 @@ PanelWindow {
                             // GPU power
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 3
+                                spacing: Config.PopupMetrics.px(3)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "GPU POWER"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1 }
+                                    Text { text: "GPU POWER"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1 }
                                     Item { Layout.fillWidth: true }
                                     Text {
                                         text: Services.SystemInfoService.gpuPowerW > 0 ? Services.SystemInfoService.gpuPowerW.toFixed(1) + " W" : "—"
                                         color: root.cSecondary
-                                        font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     }
                                 }
                                 Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 4
+                                    Layout.fillWidth: true; Layout.preferredHeight: Config.PopupMetrics.px(4)
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7) }
                                     Rectangle {
                                         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
@@ -765,16 +751,16 @@ PanelWindow {
                             // footer: utilization
                             RowLayout {
                                 Layout.fillWidth: true
-                                Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.5) }
+                                Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.5) }
                             }
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: "GPU UTIL"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                Text { text: "GPU UTIL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                 Item { Layout.fillWidth: true }
                                 Text {
                                     text: Services.SystemInfoService.gpuUsagePct + "%"
                                     color: root.cAccent2
-                                    font.family: root.fontM; font.pixelSize: 10; font.bold: true
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true
                                 }
                             }
                         }
@@ -786,81 +772,81 @@ PanelWindow {
                     Rectangle {
                         Layout.columnSpan: 3
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 118
+                        Layout.preferredHeight: Config.PopupMetrics.px(118)
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
-                        border.color: root.cBorder; border.width: 1
+                        border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 16
-                            spacing: 10
+                            anchors.fill: parent; anchors.margins: Config.PopupMetrics.px(16)
+                            spacing: Config.PopupMetrics.px(10)
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-                                Rectangle { width: 8; height: 8; radius: 2; color: root.cPrimary; Layout.alignment: Qt.AlignVCenter }
-                                Text { text: "SOFTWARE & OS"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                                spacing: Config.PopupMetrics.px(8)
+                                Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cPrimary; Layout.alignment: Qt.AlignVCenter }
+                                Text { text: "SOFTWARE & OS"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2 }
                                 Item { Layout.fillWidth: true }
                             }
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                spacing: 24
+                                spacing: Config.PopupMetrics.px(24)
 
                                 // OS
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
-                                    Rectangle { width: 16; height: 2; color: root.cPrimary; Layout.alignment: Qt.AlignLeft }
-                                    Text { text: "OPERATING SYSTEM"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                    spacing: Config.PopupMetrics.px(1)
+                                    Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cPrimary; Layout.alignment: Qt.AlignLeft }
+                                    Text { text: "OPERATING SYSTEM"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
                                         text: (Services.SystemInfoService.osName || "—") + (Services.SystemInfoService.osVersion ? " " + Services.SystemInfoService.osVersion : "")
-                                        color: root.cPrimary; font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                        color: root.cPrimary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
                                     Text {
                                         text: Services.SystemInfoService.osCodename ? "(" + Services.SystemInfoService.osCodename + ") " + (Services.SystemInfoService.arch || "") : (Services.SystemInfoService.arch || "")
-                                        color: root.cDim; font.family: root.fontM; font.pixelSize: 9; font.italic: true
+                                        color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                                     }
                                 }
                                 // Kernel
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
-                                    Rectangle { width: 16; height: 2; color: root.cSecondary; Layout.alignment: Qt.AlignLeft }
-                                    Text { text: "KERNEL"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                    spacing: Config.PopupMetrics.px(1)
+                                    Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cSecondary; Layout.alignment: Qt.AlignLeft }
+                                    Text { text: "KERNEL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
                                         text: (Services.SystemInfoService.kernelName || "—") + " " + (Services.SystemInfoService.kernelRelease || "")
-                                        color: root.cText; font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                        color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
-                                    Text { text: Services.SystemInfoService.arch || ""; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
+                                    Text { text: Services.SystemInfoService.arch || ""; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                                 }
                                 // Packages
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
-                                    Rectangle { width: 16; height: 2; color: root.cSuccess; Layout.alignment: Qt.AlignLeft }
-                                    Text { text: "PACKAGES"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                    spacing: Config.PopupMetrics.px(1)
+                                    Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cSuccess; Layout.alignment: Qt.AlignLeft }
+                                    Text { text: "PACKAGES"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
                                         text: root.fmtNum(Services.SystemInfoService.pkgAll) + " Total"
-                                        color: root.cSuccess; font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                        color: root.cSuccess; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
                                     Text {
                                         text: (Services.SystemInfoService.pkgSystem || 0) + " sys / " + (Services.SystemInfoService.pkgUser || 0) + " user"
-                                        color: root.cDim; font.family: root.fontM; font.pixelSize: 9
+                                        color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                     }
                                 }
                                 // Shell
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
-                                    Rectangle { width: 16; height: 2; color: root.cAccent2; Layout.alignment: Qt.AlignLeft }
-                                    Text { text: "SHELL"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                    spacing: Config.PopupMetrics.px(1)
+                                    Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cAccent2; Layout.alignment: Qt.AlignLeft }
+                                    Text { text: "SHELL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
                                         text: Services.SystemInfoService.shellName || "—"
-                                        color: root.cAccent2; font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                                        color: root.cAccent2; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
-                                    Text { text: "Quickshell"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
+                                    Text { text: "Quickshell"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                                 }
                             }
                         }
@@ -871,26 +857,26 @@ PanelWindow {
             // ---- footer ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 16
+                spacing: Config.PopupMetrics.px(16)
                 opacity: 0.7
                 RowLayout {
-                    spacing: 6
-                    Rectangle { width: 6; height: 6; radius: 3; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
-                    Text { text: "KERNEL OK"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                    spacing: Config.PopupMetrics.px(6)
+                    Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: "KERNEL OK"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                 }
                 RowLayout {
-                    spacing: 6
-                    Rectangle { width: 6; height: 6; radius: 3; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
-                    Text { text: "DAEMONS ACTIVE"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                    spacing: Config.PopupMetrics.px(6)
+                    Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: "DAEMONS ACTIVE"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: "[ " + (Services.SystemInfoService.hostName || "host") + " ]"
-                    color: root.cDim; font.family: root.fontM; font.pixelSize: 9
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                 }
                 Text {
                     text: root.clockText
-                    color: root.cSecondary; font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                    color: root.cSecondary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                 }
             }
         }

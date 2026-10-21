@@ -7,12 +7,14 @@ NetworkIcon 1.0 NetworkIcon.qml
 BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
 TrayCard 1.0 TrayCard.qml
+ControlCenterBody 1.0 ControlCenterBody.qml
 NotificationCenter 1.0 NotificationCenter.qml
 FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 NotificationCard 1.0 NotificationCard.qml
 NotificationButton 1.0 NotificationButton.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
+ZaiAlertBridge 1.0 ZaiAlertBridge.qml
 Osd 1.0 Osd.qml
 LogsIcon 1.0 LogsIcon.qml
 PrivacyIcon 1.0 PrivacyIcon.qml

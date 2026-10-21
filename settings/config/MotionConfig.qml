@@ -120,8 +120,16 @@ Item {
         Component.onCompleted: root.ingestMotionText(motionFile.text())
     }
 
+    // Writers nudge this after their atomic write (bar: config.reload IPC;
+    // settings: SettingsConfigService on save); dedupes through _lastRaw.
+    function reloadFromDisk() {
+        motionFile.reload()
+        root.ingestMotionText(motionFile.text())
+    }
+
+    // Backstop for writers that don't nudge. Zero forks.
     Timer {
-        interval: 2000
+        interval: 15000
         running: true
         repeat: true
         onTriggered: {

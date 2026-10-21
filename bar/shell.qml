@@ -72,38 +72,21 @@ ShellRoot {
     // =========================================================================
     // LAZY OVERLAYS — load-on-first-use, keep-warm afterwards.
     // -------------------------------------------------------------------------
-    // The five overlay windows (NotificationCenter, Fastfetch, Keybinds, Logs,
-    // ZaiUsage) used to be constructed at bar launch — ~2400 lines of subtree
-    // built before anything was ever opened. Each now loads on its first
-    // toggle and stays warm (unload-on-close was rejected: between onLoaded
-    // setting wanted=false and item.toggle() setting shown=true, the active
-    // binding can re-evaluate to false and unload mid-open).
+    // NotificationCenter loads on its first toggle and stays warm. Fastfetch,
+    // Keybinds, the log viewer and Z.ai usage are overlay built-ins
+    // (builtins/velocity.*, same lazy wrapper) — enable/disable them in
+    // Settings ▸ Plugins; toggleOverlay/overlayShown are their host verbs.
     // =========================================================================
     property bool ncWanted: false
-    property bool fastfetchWanted: false
-    property bool keybindsWanted: false
-    property bool logsWanted: false
-    property bool zaiWanted: false
 
     function toggleNotificationCenter() {
         if (ncLoader.item) ncLoader.item.toggle()
         else shellRoot.ncWanted = true        // load; onLoaded completes the open
     }
-    function toggleFastfetch() {
-        if (fastfetchLoader.item) fastfetchLoader.item.toggle()
-        else shellRoot.fastfetchWanted = true
-    }
-    function toggleKeybinds() {
-        if (keybindsLoader.item) keybindsLoader.item.toggle()
-        else shellRoot.keybindsWanted = true
-    }
-    function toggleLogs() {
-        if (logsLoader.item) logsLoader.item.toggle()
-        else shellRoot.logsWanted = true
-    }
-    function toggleZaiUsage() {
-        if (zaiLoader.item) zaiLoader.item.toggle()
-        else shellRoot.zaiWanted = true
+    function toggleOverlay(id) { return Engine.PluginRegistry.call(id, "toggle", "") }
+    function overlayShown(id) {
+        var ov = Engine.PluginRegistry.instance(id, "overlay")
+        return !!ov && ov.shown === true
     }
 
     // EventService must be EAGER: QML singletons construct lazily on first
@@ -126,7 +109,7 @@ ShellRoot {
     // the velocity.* tray built-ins through ctx.host.
     property var trayOwner: null
     property Item trayAnchor: null
-    property string activeTray: ""   // "network" | "bluetooth" | "volume" | "privacy" | ""
+    property string activeTray: ""   // "network" | "bluetooth" | "volume" | "privacy" | "control" | ""
 
     function trayOpenOn(window, name) {
         return shellRoot.activeTray === name && shellRoot.trayOwner === window
@@ -138,6 +121,20 @@ ShellRoot {
         shellRoot.activeTray = name
         Engine.PopupCoordinator.request("tray", shellRoot.closeTray)
     }
+    // Swap the open card's body in place (same owner, same popup slot).
+    function switchTray(name) {
+        if (shellRoot.activeTray !== "") shellRoot.activeTray = name
+    }
+    // Control Center on the focused output's bar (keybind / IPC).
+    function toggleControlCenter() {
+        var insts = (styleLoader.item && styleLoader.item.instances) || []
+        var mon = Services.HyprlandService.focusedMonitor
+        var win = null
+        for (var i = 0; i < insts.length; i++)
+            if (insts[i].screen && insts[i].screen.name === mon) { win = insts[i]; break }
+        if (!win && insts.length > 0) win = insts[0]
+        if (win) shellRoot.toggleTray(win, "control", null)
+    }
     function closeTray() {
         if (shellRoot.activeTray === "") return
         shellRoot.activeTray = ""
@@ -146,7 +143,6 @@ ShellRoot {
 
     // Overlay-state feedback for the style scene (isActive on icons).
     readonly property bool ncShown: ncLoader.item ? ncLoader.item.shown : false
-    readonly property bool logsShown: logsLoader.item ? logsLoader.item.shown : false
 
     function closeNotificationCenter() {
         if (ncLoader.item && ncLoader.item.shown) ncLoader.item.close()
@@ -200,6 +196,7 @@ ShellRoot {
         activeTray: shellRoot.activeTray
         anchorItem: shellRoot.trayAnchor
         onCloseRequested: shellRoot.closeTray()
+        onSwitchRequested: function(tray) { shellRoot.switchTray(tray) }
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
         embedHost: shellRoot.trayOwner && shellRoot.trayOwner.screen
             ? (Engine.PopupCoordinator.islands[shellRoot.trayOwner.screen.name] || null) : null
@@ -229,62 +226,6 @@ ShellRoot {
             else
                 Engine.PopupCoordinator.release("nc")
         }
-    }
-
-    // =========================================================================
-    // FASTFETCH OVERLAY — system info (lazy; toggled by the ArchLogo icon)
-    // =========================================================================
-    Loader {
-        id: fastfetchLoader
-        active: shellRoot.fastfetchWanted
-        sourceComponent: fastfetchComponent
-        onLoaded: item.toggle()
-    }
-    Component {
-        id: fastfetchComponent
-        Components.FastfetchOverlay { }
-    }
-
-    // =========================================================================
-    // KEYBINDS OVERLAY — mod+K cheat-sheet (lazy; toggled via IPC)
-    // =========================================================================
-    Loader {
-        id: keybindsLoader
-        active: shellRoot.keybindsWanted
-        sourceComponent: keybindsComponent
-        onLoaded: item.toggle()
-    }
-    Component {
-        id: keybindsComponent
-        Components.KeybindsOverlay { }
-    }
-
-    // =========================================================================
-    // LOGS OVERLAY — system journal viewer (lazy; bar icon / SUPER+T / IPC)
-    // =========================================================================
-    Loader {
-        id: logsLoader
-        active: shellRoot.logsWanted
-        sourceComponent: logsComponent
-        onLoaded: item.toggle()
-    }
-    Component {
-        id: logsComponent
-        Components.LogsOverlay { }
-    }
-
-    // =========================================================================
-    // Z.AI USAGE OVERLAY — quota HUD (lazy; toggled via IPC)
-    // =========================================================================
-    Loader {
-        id: zaiLoader
-        active: shellRoot.zaiWanted
-        sourceComponent: zaiComponent
-        onLoaded: item.toggle()
-    }
-    Component {
-        id: zaiComponent
-        Components.ZaiUsageOverlay { }
     }
 
     // =========================================================================
@@ -327,6 +268,17 @@ ShellRoot {
         }
     }
 
+    // bar-config.json nudge — settings fires it after its atomic write.
+    IpcHandler {
+        target: "config"
+        function reload(): string {
+            Config.BarConfig.reloadFromDisk()
+            Config.MotionConfig.reloadFromDisk()
+            Config.PopupMetrics.reloadFromDisk()
+            return "ok"
+        }
+    }
+
     // Bar visibility toggle (for Hyprland keybind)
     IpcHandler {
         id: barToggleIpc
@@ -361,13 +313,18 @@ ShellRoot {
         function open(): string { return Engine.PluginRegistry.call("nikos.keyboard", "toggle", "") }
     }
 
+    IpcHandler {
+        target: "controlCenter"
+        function toggle() { shellRoot.toggleControlCenter() }
+    }
+
     // Keybinds overlay toggle (for SUPER+K — see configs/hypr/keybindings.lua)
     IpcHandler {
         id: keybindsIpc
         target: "keybinds"
 
         function toggle() {
-            shellRoot.toggleKeybinds()
+            shellRoot.toggleOverlay("velocity.keybinds")
         }
     }
 
@@ -377,7 +334,7 @@ ShellRoot {
         target: "zaiUsage"
 
         function toggle() {
-            shellRoot.toggleZaiUsage()
+            shellRoot.toggleOverlay("velocity.zai-usage")
         }
     }
 
@@ -387,24 +344,7 @@ ShellRoot {
         target: "logs"
 
         function toggle() {
-            shellRoot.toggleLogs()
-        }
-    }
-
-    // Bridge Z.ai quota threshold alerts into the in-app NotificationService.
-    // No notify-send/mako on this box — NotificationService is the single sink.
-    // Referencing the service here also forces its lazy instantiation so the
-    // polling Timer starts at bar launch.
-    Connections {
-        target: Services.ZaiUsageService
-        ignoreUnknownSignals: true
-        function onThresholdAlert(info) {
-            Services.NotificationService.add(
-                "Z.ai Usage",
-                info.windowName + " at " + Math.round(info.pct) + "%",
-                "Quota window used. Resets in " + info.resetLabel + ".",
-                info.urgency,
-                0)
+            shellRoot.toggleOverlay("velocity.logs-viewer")
         }
     }
 }

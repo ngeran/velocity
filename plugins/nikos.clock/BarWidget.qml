@@ -9,6 +9,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import qs.Ui
+import "lib/tz.mjs" as Tz
 
 Item {
     id: root
@@ -48,14 +49,9 @@ Item {
     readonly property var _months: ["JAN","FEB","MAR","APR","MAY","JUN",
                                     "JUL","AUG","SEP","OCT","NOV","DEC"]
 
-    function _shifted(d) {
-        var off = ctx ? ctx.bar.clockOffset : 0
-        if (off !== 0) {
-            var utc = d.getTime() + (d.getTimezoneOffset() * 60000)
-            d = new Date(utc + (off * 3600000))
-        }
-        return d
-    }
+    readonly property string zone: ctx ? ctx.settings.get("zone", "Local") : "Local"
+
+    function _shifted(d) { return Tz.wallClock(d, root.zone) }
 
     function _formattedTime(d) {
         var s = root._shifted(d)
@@ -65,9 +61,8 @@ Item {
     function _formattedDate(d) {
         var s = root._shifted(d)
         var out = root._fullDays[s.getDay()] + " " + root._formattedTime(d)
-        var city = ctx ? (ctx.bar.clockCity || "").trim() : ""
-        if (city.length > 0 && city.toLowerCase() !== "local")
-            out += " · " + city.toUpperCase()
+        if (!Tz.isLocalZone(root.zone))
+            out += " · " + Tz.zoneCity(root.zone).toUpperCase()
         return out
     }
 

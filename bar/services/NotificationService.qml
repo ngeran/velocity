@@ -76,10 +76,11 @@ Item {
     }
 
     // "now" ticks every 30s so cards can render relative timestamps ("5m ago")
-    // without each card owning its own timer.
+    // without each card owning its own timer. Cards only render inside the
+    // notification center, so it ticks only while that panel is open.
     property real now: Date.now()
     Timer {
-        interval: 30000; running: true; repeat: true
+        interval: 30000; running: root.panelOpen; repeat: true
         onTriggered: root.now = Date.now()
     }
 
@@ -91,6 +92,9 @@ Item {
     // Persisted to ~/.config/quickshell/dnd.flag across restarts.
     property bool dnd: false
     property bool panelOpen: false   // set by NotificationCenter — suppresses reaping while open
+    onPanelOpenChanged: if (panelOpen) root.now = Date.now()
+    // True while some row can auto-expire (read, not critical) — gates the sweep.
+    property bool _hasExpiring: false
     readonly property string _dndFlag: "~/.config/quickshell/dnd.flag"
 
     // -------------------------------------------------------------------------
@@ -229,9 +233,8 @@ Item {
     }
 
     Timer {
-        interval: 3000; running: true; repeat: true
+        interval: 3000; running: root._hasExpiring && !root.panelOpen; repeat: true
         onTriggered: {
-            if (root.panelOpen) return   // user is reading
             var nowMs = Date.now()
             var removed = 0
             for (var i = root.model.count - 1; i >= 0; i--) {
@@ -258,12 +261,14 @@ Item {
     }
 
     function _recount() {
-        var n = 0
+        var n = 0, expiring = false
         for (var i = 0; i < root.model.count; i++) {
             var r = root.model.get(i)
             if (!r.read && !r.silent) n++   // DnD-silent arrivals never badge
+            if (r.read && root._lifetimeMs(r.urgency) > 0) expiring = true
         }
         root.unreadCount = n
+        root._hasExpiring = expiring
     }
 
     // -------------------------------------------------------------------------

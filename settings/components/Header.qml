@@ -51,15 +51,10 @@ Rectangle {
 
     readonly property string localTime: Qt.formatTime(headerRoot._now, "hh:mm:ss")
 
-    // ── second clock: world zone from the nikos.timezones plugin settings ────
-    // The old fixed-offset hardcode was Athens-only AND wrong half the year:
-    // Athens is UTC+2 (EET) in winter, +3 (EEST) in summer, so a fixed +7 from
-    // a US-eastern local clock drifts an hour at every EU DST flip. The real
-    // math lives in settings/lib/tz.mjs (node-tested EU+US rules); the zone
-    // itself follows the timezones popup's plugin settings file
-    // ($XDG_STATE_HOME/velocity/plugins/nikos.timezones.json, flat values —
-    // key "zone") so the header and the bar pill can't disagree. The plugin
-    // writes no settings yet → fallback Europe/Athens.
+    // ── second clock: the nikos.timezones pill zone ────────────────────────
+    // Reads that plugin's settings file (key "zone") so the header and the bar
+    // pill can't disagree; math in lib/tz.mjs (synced from shared/). Unset or
+    // "Local" → Europe/Athens, matching the plugin's default.
     readonly property string zone: headerRoot._pluginZone !== "" && Tz.isKnownZone(headerRoot._pluginZone)
         ? headerRoot._pluginZone : "Europe/Athens"
     property string _pluginZone: ""

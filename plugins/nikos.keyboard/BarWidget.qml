@@ -192,9 +192,10 @@ Item {
         property double lastWheel: 0
 
         onClicked: function(mouse) {
-            if (!root.ready && mouse.button !== Qt.LeftButton) return
-            if (mouse.button === Qt.LeftButton) root.toggle()
-            else if (mouse.button === Qt.RightButton) root.next()
+            // Left = quick switch (EN ↔ GR); right = the layout manager panel.
+            if (!root.ready && mouse.button !== Qt.RightButton) return
+            if (mouse.button === Qt.LeftButton) root.next()
+            else if (mouse.button === Qt.RightButton) root.toggle()
             else if (mouse.button === Qt.MiddleButton) root.mainLayout()
         }
         onWheel: function(wheel) {

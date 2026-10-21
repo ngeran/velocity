@@ -114,11 +114,7 @@ Item {
 
     // ── Link diagnostics for the WiFi popup (all popup-gated) ─────────────
     property string ipAddress: ""
-    property string gateway: ""     // default IPv4 gateway, e.g. "10.0.0.1"
     property string iface: ""       // active interface, e.g. "wlp10s0"
-    property string dns: ""         // PRIMARY DNS server only
-    property real latencyMs: -1     // ping RTT (avg); -1 = no reply
-
     // ── Interface throughput (popup-only): deltas of sysfs counters; totals
     // are raw since-interface-up. Empty rate strings mean "no sample yet" —
     // the fold in NetworkModel.js guards iface changes and counter resets.
@@ -143,44 +139,16 @@ Item {
 
     function getIP() { ipProc.run() }
 
-    // ── Gateway + active interface: `default via <gw> dev <iface>` ──────────
+    // ── Active interface (for the throughput counters): `default … dev <iface>` ──
     BoundedProcess {
         id: gwProc
         command: ["sh", "-c", "ip -4 route show default 2>/dev/null"]
         onDone: function(out) {
-            var m = out.trim().match(/via\s+(\S+)\s+dev\s+(\S+)/)
-            if (m) { root.gateway = m[1]; root.iface = m[2] }
-            else { root.gateway = ""; root.iface = "" }
-            // gwProc finished — iface is now known (or empty). Kick the
-            // throughput probe only if the popup is open AND we got an
-            // iface. This closes the race where statsProc ran with an
-            // empty iface and read /sys/class/net//statistics (no data).
+            var m = out.trim().match(/dev\s+(\S+)/)
+            root.iface = m ? m[1] : ""
+            // iface known — start sampling now (avoids reading an empty iface path).
             if (root.popupOpen && root.iface !== "")
                 statsProc.run()
-        }
-    }
-
-    // ── PRIMARY DNS only: nmcli terse emits `IP4.DNS[1]:<ip>` ───────────────
-    BoundedProcess {
-        id: dnsProc
-        command: ["sh", "-c", "nmcli -t -f IP4.DNS dev show 2>/dev/null | grep ':' | head -1"]
-        onDone: function(out) {
-            var line = out.trim()
-            if (line.indexOf(":") !== -1)
-                root.dns = line.substring(line.indexOf(":") + 1).trim()
-            else
-                root.dns = ""
-        }
-    }
-
-    // ── Latency: one ping to a stable target (-W 1 so the tool can't hang;
-    // BoundedProcess timeout covers the spawn side) ──
-    BoundedProcess {
-        id: pingProc
-        command: ["sh", "-c", "ping -c 1 -W 1 1.1.1.1 2>/dev/null"]
-        onDone: function(out) {
-            var m = out.match(/rtt[^=]*=\s*([0-9.]+)\/([0-9.]+)/)
-            root.latencyMs = m ? parseFloat(m[2]) : -1
         }
     }
 
@@ -205,7 +173,7 @@ Item {
         // gwProc's output. gwProc's onRunningChanged kicks statsProc once
         // iface is known (fixes the empty-iface race that showed no data).
         if (isConnected) getIP()
-        if (isConnected) { gwProc.run(); dnsProc.run(); pingProc.run() }
+        if (isConnected) gwProc.run()
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────
@@ -238,110 +206,16 @@ Item {
         onTriggered: if (root.isConnected && root.iface !== "") statsProc.run()
     }
 
-    // Gateway / DNS / latency refresh — slower cadence (these change rarely
-    // and ping is a network round-trip). Popup-only: stops dead while closed.
-    Timer {
-        id: diagTimer
-        interval: 10000
-        repeat: true
-        triggeredOnStart: true
-        running: root.hasNetwork && root.popupOpen
-        onTriggered: {
-            if (!root.isConnected) return
-            if (!gwProc.running)   gwProc.running = true
-            if (!dnsProc.running)  dnsProc.running = true
-            if (!pingProc.running) pingProc.running = true
-        }
-    }
-
     // (The old 15s hung-process reaper is gone: every probe is a
     // BoundedProcess now — the timeout IS the reaper, at 5s not 15s.)
 
     function _reset() {
         root.ipAddress = ""
-        root.gateway = ""
         root.iface = ""
-        root.dns = ""
-        root.latencyMs = -1
         root.rxRate = ""
         root.txRate = ""
         root.rxTotal = ""
         root.txTotal = ""
         root._stats = null
-    }
-
-    // ── WI-FI QR — credentials of the ACTIVE connection as a scannable code.
-    // Requires qrencode (manifest-level dependency; degrades to qrError).
-    property var qrMatrix: []           // "0101…" rows
-    property string qrSsid: ""
-    property string qrSecurity: ""      // "WPA2-Personal" / "WPA3-Personal" / "Open"
-    property string qrBand: ""          // "2.4 GHz" / "5 GHz"
-    property string qrPassword: ""
-    property string qrError: ""
-
-    function generateQr() {
-        _qrProc.command = ["bash", "-c",
-            "iface=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); " +
-            "[ -z \"$iface\" ] && iface=$(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null | awk -F: '$2==\"wifi\" && $3 ~ /^connected/{print $1;exit}'); " +
-            "[ -z \"$iface\" ] && echo 'No active Wi-Fi connection' && exit 0; " +
-            "uuid=$(nmcli --get-values GENERAL.CON-UUID device show \"$iface\" | head -n1); " +
-            "mapfile -t fl < <(nmcli --show-secrets --escape no --get-values " +
-            "802-11-wireless.ssid,802-11-wireless-security.key-mgmt,802-11-wireless-security.psk connection show uuid \"$uuid\"); " +
-            "ssid=${fl[0]}; km=${fl[1]}; pw=${fl[2]}; " +
-            "[ -z \"$ssid\" ] && echo 'Could not read the Wi-Fi name' && exit 0; " +
-            "freq=$(nmcli -t -f IN-USE,FREQ device wifi list ifname \"$iface\" 2>/dev/null | awk -F: '$1 ~ /\\*/{print $2; exit}'); " +
-            "band=2.4\\ GHz; [ -n \"$freq\" ] && [ \"$freq\" -ge 5000 ] 2>/dev/null && band=5\\ GHz; " +
-            "sec=nopass; seclabel=Open; " +
-            "case \"$km\" in sae) sec=WPA; seclabel=WPA3-Personal;; wpa-psk) sec=WPA; seclabel=WPA2-Personal;; \"\") ;; *) sec=WPA; seclabel=$km;; esac; " +
-            "printf 'meta\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$seclabel\" \"$ssid\" \"$pw\" \"$band\" \"$sec\"; " +
-            "payload=\"WIFI:T:$sec;S:$ssid;P:$pw;\"; " +
-            "qrencode --type ASCII --margin 4 --output - <<< \"$payload\" | " +
-            "awk '{r=\"\";for(c=1;c<=length($0);c+=2) r =r (substr($0,c,2) ~ /#/ ? 1 : 0); print r}'"]
-        _qrProc.run()
-    }
-
-    // Carries Wi-Fi CREDENTIALS in stdout — bounded, stderr kept apart, and
-    // the buffer can never outlive the run.
-    BoundedProcess {
-        id: _qrProc
-        command: []
-        maxBytes: 262144
-        onDone: function(out) {
-            var raw = out
-            root.qrMatrix = []
-            root.qrSsid = ""; root.qrSecurity = ""; root.qrBand = ""; root.qrPassword = ""
-            if (raw.indexOf("No active Wi-Fi") !== -1 || raw.trim() === "") {
-                root.qrError = raw.trim() !== "" ? raw.trim().split("\n")[0] : "no active wi-fi"
-                return
-            }
-            var rows = []
-            raw.split("\n").forEach(function(line) {
-                if (line.indexOf("meta\t") === 0) {
-                    var f = line.split("\t")
-                    root.qrSecurity = f[1] || ""; root.qrSsid = f[2] || ""
-                    root.qrPassword = f[3] || ""; root.qrBand = f[4] || ""
-                } else if (line !== "") rows.push(line)
-            })
-            root.qrMatrix = rows
-            root.qrError = rows.length === 0 ? "qrencode not found — add it to the flake" : ""
-        }
-    }
-
-    // Copy the PSK to the Wayland clipboard. The key travels as a positional
-    // parameter ($1) — never interpolated into the shell string (it can
-    // contain any character). Requires wl-clipboard.
-    signal qrCopyDone(bool ok)
-    function copyQrPassword() {
-        if (qrPassword === "") { qrCopyDone(false); return }
-        _copyProc.command = ["sh", "-c", "printf %s \"$1\" | wl-copy", "sh", qrPassword]
-        _copyProc.run()
-    }
-
-    // The PSK travels as a positional parameter ($1) — never interpolated
-    // into the shell string (it can contain any character).
-    BoundedProcess {
-        id: _copyProc
-        command: []
-        onDone: function(out, err, code) { root.qrCopyDone(code === 0) }
     }
 }

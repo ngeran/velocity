@@ -14,33 +14,55 @@
 // EU and falls ~1 week after it), so US and EU zones legitimately disagree
 // for those windows — the tests pin both sides of every boundary.
 //
-// Consumers: settings/components/Header.qml (second clock; zone from the
-// nikos.timezones plugin settings file). Lives under settings/ (NOT a
-// top-level shared/) because the qrc VFS root of a `-c <name>` instance is
-// that config's own directory — imports escaping it fail with "Script
-// qrc:/qs-blackhole unavailable". plugins/nikos.timezones keeps its own copy
-// until the C-phase consolidation (plugins must stay portable).
+// Canonical copy: shared/tz.mjs — synced by tools/sync-shared into
+// settings/lib (Header), plugins/nikos.timezones/lib and plugins/nikos.clock/lib
+// (each config root / plugin must hold its own file; cross-root imports fail).
+// Zone "Local" (or "") = the system zone.
 // =============================================================================
 
 const HOUR_MS = 3600000
 
-// offset = minutes EAST of UTC, [standard, daylight]. Zones the header (and
-// later the C-phase consumers) resolve by name; unknown zones fall through to
-// the system offset.
+// offset = minutes EAST of UTC, [standard, daylight]. Unknown zones fall
+// through to the system offset.
 const ZONES = {
-    "Europe/Athens":       { rule: "eu", offsets: [120, 180],   abbr: ["EET", "EEST"] },
-    "Europe/London":       { rule: "eu", offsets: [0, 60],      abbr: ["GMT", "BST"] },
-    "America/New_York":    { rule: "us", offsets: [-300, -240], abbr: ["EST", "EDT"] },
-    "America/Chicago":     { rule: "us", offsets: [-360, -300], abbr: ["CST", "CDT"] },
-    "America/Los_Angeles": { rule: "us", offsets: [-480, -420], abbr: ["PST", "PDT"] },
-    "Asia/Tokyo":          { rule: "fixed", offsets: [540],     abbr: ["JST"] },
-    "UTC":                 { rule: "fixed", offsets: [0],       abbr: ["UTC"] },
+    "Europe/Athens":       { rule: "eu", offsets: [120, 180],   abbr: ["EET", "EEST"], short: "ATH" },
+    "Europe/London":       { rule: "eu", offsets: [0, 60],      abbr: ["GMT", "BST"],  short: "LON" },
+    "America/New_York":    { rule: "us", offsets: [-300, -240], abbr: ["EST", "EDT"],  short: "NYC" },
+    "America/Chicago":     { rule: "us", offsets: [-360, -300], abbr: ["CST", "CDT"],  short: "CHI" },
+    "America/Los_Angeles": { rule: "us", offsets: [-480, -420], abbr: ["PST", "PDT"],  short: "LAX" },
+    "Asia/Tokyo":          { rule: "fixed", offsets: [540],     abbr: ["JST"],         short: "TYO" },
+    "UTC":                 { rule: "fixed", offsets: [0],       abbr: ["UTC"],         short: "UTC" },
 }
+
+export const KNOWN_ZONES = Object.keys(ZONES)
 
 // True if the lib can compute this zone (unknown names would silently fall
 // back to the system offset — callers use this to keep their own fallback).
 export function isKnownZone(zone) {
     return Object.prototype.hasOwnProperty.call(ZONES, String(zone || ""))
+}
+
+export function isLocalZone(zone) {
+    return !zone || zone === "Local"
+}
+
+// "America/New_York" → "New York"; local → "Local".
+export function zoneCity(zone) {
+    if (isLocalZone(zone)) return "Local"
+    return (String(zone).split("/").pop() || String(zone)).replace(/_/g, " ")
+}
+
+export function zoneShort(zone) {
+    if (isLocalZone(zone)) return "LOCAL"
+    const z = ZONES[String(zone)]
+    return z ? z.short : zoneCity(zone).slice(0, 3).toUpperCase()
+}
+
+// A Date whose LOCAL getters (getHours, getDay, …) read `zone`'s wall clock.
+export function wallClock(t, zone) {
+    const d = t instanceof Date ? t : new Date(t)
+    if (isLocalZone(zone)) return d
+    return new Date(d.getTime() + (d.getTimezoneOffset() + zoneOffsetMinutes(zone, d)) * 60000)
 }
 
 // UTC ms of the last Sunday of `monthIdx` (0-based) at 01:00 UTC.
@@ -78,7 +100,7 @@ export function usDSTActive(t) {
 
 // Minutes EAST of UTC for `zone` at instant `t`. Unknown zone → system offset.
 export function zoneOffsetMinutes(zone, t) {
-    const z = ZONES[String(zone || "")]
+    const z = isLocalZone(zone) ? null : ZONES[String(zone)]
     if (!z) return -(t instanceof Date ? t : new Date(t)).getTimezoneOffset()
     if (z.rule === "fixed") return z.offsets[0]
     const dst = z.rule === "eu" ? euDSTActive(t) : usDSTActive(t)

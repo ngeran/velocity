@@ -4,7 +4,7 @@
   "id": "nikos.keyboard",
   "name": "Keyboard",
   "version": "1.1.0",
-  "description": "Keyboard layout pill + settings panel — searchable layout picker, safe look-and-feel.lua editing (backups + restore), switch-key management, live hyprctl eval apply. SUPER+SHIFT+SPACE / wheel / right-click cycles; events ride the host's HyprlandService socket.",
+  "description": "Keyboard layout pill — click (or SUPER+SHIFT+SPACE / wheel) switches layout; right-click opens the layout manager (searchable picker, safe look-and-feel.lua editing with backups, switch keys, live hyprctl apply).",
   "author": "nikos",
   "kinds": [
     "bar-widget"

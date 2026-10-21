@@ -52,8 +52,8 @@ Item {
             var c = root.ctx.theme.colors
             if (!PW.BatteryService.hasBattery) return root.ctx.bar.colorText
             if (PW.BatteryService.charging) return c.success
-            if (PW.BatteryService.percentage <= 20) return c.error
-            if (PW.BatteryService.percentage <= 50) return c.warning
+            if (PW.BatteryService.percentage <= root.ctx.settings.get("lowThreshold", 20)) return c.error
+            if (PW.BatteryService.percentage <= root.ctx.settings.get("warnThreshold", 50)) return c.warning
             return root.ctx.bar.colorText
         }
         onClicked: function(button) { panel.toggle() }

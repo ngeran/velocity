@@ -10,6 +10,7 @@ import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 import "../services" as Services
 import "../engine" as Engine
 import "../config" as Config
@@ -46,31 +47,57 @@ PanelWindow {
     // so the closing view's content, header and height don't flash to another
     // body while the 140ms fade runs.
     property string lastTray: ""
-    // NETWORK CREDENTIALS sub-view (QR) — only meaningful for the network tray.
-    property bool qrOpen: false
-    // Copy feedback (QR view) — auto-resets so the button label reverts.
-    property bool copied: false
-    property bool copyFailed: false
-    Timer {
-        id: copyResetTimer
-        interval: 1600
-        onTriggered: { card.copied = false; card.copyFailed = false }
+    // "OPEN IN SETTINGS ›" — the full manager for each body lives in the
+    // settings app (single source); literal call strings for tools/check-ipc.
+    readonly property var _settingsCalls: ({
+        openControlNetwork: "quickshell ipc -c settings call SettingsWindow openControlNetwork",
+        openControlBluetooth: "quickshell ipc -c settings call SettingsWindow openControlBluetooth",
+        openControlAudio: "quickshell ipc -c settings call SettingsWindow openControlAudio"
+    })
+    function openSettings(verb) {
+        settingsLauncher.command = ["sh", "-c", card._settingsCalls[verb] + " 2>/dev/null || " +
+            "setsid quickshell -c settings >/dev/null 2>&1 &"]
+        settingsLauncher.running = true
+        card.closeRequested()
     }
-    Connections {
-        target: Services.NetworkService
-        function onQrCopyDone(ok) {
-            card.copied = ok
-            card.copyFailed = !ok
-            copyResetTimer.restart()
+    Process {   // unbounded-ok: one-shot ipc call / detached spawn — exits at once
+        id: settingsLauncher
+        command: []
+    }
+    component SettingsLink: Item {
+        id: link
+        property string verb: ""
+        signal activated(string verb)
+        Layout.fillWidth: true
+        Layout.topMargin: Config.PopupMetrics.px(10)
+        implicitHeight: Config.PopupMetrics.px(20)
+        implicitWidth: linkTxt.implicitWidth
+        Text {
+            id: linkTxt
+            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+            text: "OPEN IN SETTINGS ›"
+            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
+            font.bold: true; font.letterSpacing: 1.5
+            color: linkArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
         }
+        MouseArea { id: linkArea; anchors.fill: linkTxt; anchors.margins: -4; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor; onClicked: link.activated(link.verb) }
     }
     signal closeRequested()
+    // Swap the open body in place (Control Center drill-down / back).
+    signal switchRequested(string tray)
+    // True while a body was reached from the Control Center (shows ‹ back).
+    property bool fromControl: false
 
     // HOVER-OUT DISMISSAL: lives in the Popover primitive (hoverClose +
     // hoverCloseNeedsEntry — the entered-guard idiom this card introduced).
     onActiveTrayChanged: {
         if (activeTray !== "") lastTray = activeTray
-        if (activeTray !== "network") qrOpen = false   // QR view is network-only
+        if (activeTray === "" || activeTray === "control") fromControl = false
+        if (activeTray === "control") {
+            Services.BrightnessService.refresh()
+            Services.PowerProfileService.refresh()
+        }
         // Popup-gated polling: detail probes run only while their popup is the
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
@@ -103,6 +130,7 @@ PanelWindow {
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
         if (lastTray === "privacy")   return "󰍍"
+        if (lastTray === "control")   return "󰒓"
         return ""
     }
     readonly property string headerTitle: {
@@ -110,6 +138,7 @@ PanelWindow {
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
         if (lastTray === "privacy")   return "PRIVACY"
+        if (lastTray === "control")   return "CONTROL CENTER"
         return ""
     }
 
@@ -139,22 +168,21 @@ PanelWindow {
         // chrome (12px content margins ×2 + 34 header + 1 hairline = 59).
         // Without the body term every card ran 32px short — the footer pill
         // (DISABLE BLUETOOTH / MUTE / DISABLE WI-FI) clipped exactly — and
-        // 12px narrow, squeezing every row. qrBody carries no margins (its
-        // +66 budgets its own padding) so it stays out of the bodyPad math.
+        // 12px narrow, squeezing every row.
         readonly property real bodyPad: 2 * Config.PopupMetrics.px(16)
         cardWidth: Math.max(300, networkBody.implicitWidth,
                              btBody.implicitWidth,
                              volumeBody.implicitWidth,
-                             privacyBody.implicitWidth) + 24 + bodyPad
+                             privacyBody.implicitWidth,
+                             controlBody.implicitWidth) + 24 + bodyPad
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget.
-        cardHeight: card.lastTray === "network"
-                ? (card.qrOpen ? qrBody.implicitHeight + 66
-                               : networkBody.implicitHeight + 59 + bodyPad)
+        cardHeight: card.lastTray === "network" ? networkBody.implicitHeight + 59 + bodyPad
               : card.lastTray === "volume" ? volumeBody.implicitHeight + 59 + bodyPad
               : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59 + bodyPad
               : card.lastTray === "privacy" ? privacyBody.implicitHeight + 59 + bodyPad
+              : card.lastTray === "control" ? controlBody.implicitHeight + 59 + bodyPad
               : 220
 
         // Tray geometry is card-internal (per-body sizing) — flow through the
@@ -182,6 +210,20 @@ PanelWindow {
                 spacing: Config.PopupMetrics.px(8)
 
                 Text {
+                    // back to the Control Center grid
+                    visible: card.fromControl && card.lastTray !== "control"
+                    text: "‹"
+                    font.pixelSize: Config.PopupMetrics.px(16)
+                    color: backArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
+                    MouseArea {
+                        id: backArea
+                        anchors.fill: parent; anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onClicked: card.switchRequested("control")
+                    }
+                }
+                Text {
                     text: card.headerIcon
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: Config.PopupMetrics.px(14)
@@ -195,43 +237,6 @@ PanelWindow {
                     font.letterSpacing: 2.5
                     color: Config.BarConfig.colorText
                     Layout.fillWidth: true
-                }
-                Text {
-                    // BT scan/re-discover — visible on the bluetooth tray
-                    visible: card.lastTray === "bluetooth" && Services.BluetoothService.hasBluetooth
-                    text: "󰑐"
-                    font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: Config.PopupMetrics.px(13)
-                    color: hdrScanArea.containsMouse
-                           ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-                    Behavior on color { ColorAnimation { duration: 100 } }
-                    MouseArea {
-                        id: hdrScanArea
-                        anchors.fill: parent; anchors.margins: -4
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: Services.BluetoothService.startScan()
-                    }
-                }
-                Text {
-                    // QR entry — opens the NETWORK CREDENTIALS view
-                    visible: card.lastTray === "network" && Services.NetworkService.isConnected
-                    text: "󰀄"
-                    font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: Config.PopupMetrics.px(13)
-                    color: hdrQrArea.containsMouse || card.qrOpen
-                           ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-                    Behavior on color { ColorAnimation { duration: 100 } }
-                    MouseArea {
-                        id: hdrQrArea
-                        anchors.fill: parent; anchors.margins: -4
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: {
-                            card.qrOpen = true
-                            Services.NetworkService.generateQr()
-                        }
-                    }
                 }
                 Text {
                     // volume tray: node id label (mockup "hw:0,0" slot)
@@ -275,6 +280,7 @@ PanelWindow {
             currentIndex: {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
+                if (card.lastTray === "control")   return 3
                 return 0
             }
 
@@ -314,32 +320,6 @@ PanelWindow {
                             color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
                     }
                     Item { Layout.fillWidth: true }
-                    // QR Connect — opens the NETWORK CREDENTIALS view
-                    Rectangle {
-                        visible: Services.NetworkService.isConnected
-                        width: qrConnRow.implicitWidth + 18; height: Config.PopupMetrics.px(24)
-                        radius: Config.PopupMetrics.px(5)
-                        color: qrConnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                        Row {
-                            id: qrConnRow
-                            anchors.centerIn: parent
-                            spacing: Config.PopupMetrics.px(6)
-                            Text { text: "󰀄"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                            Text { text: "QR Connect"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                        }
-                        MouseArea {
-                            id: qrConnArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                card.qrOpen = true
-                                Services.NetworkService.generateQr()
-                            }
-                        }
-                    }
                 }
                 Item { height: 12; visible: Services.NetworkService.hasNetwork }
                 // Named state (Omarchy): radio-off otherwise reads as a broken
@@ -437,37 +417,16 @@ PanelWindow {
                         }
                     }
                 }
-                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
-                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
                 NetRow {
                     visible: Services.NetworkService.isConnected
-                    label: "GATEWAY"
-                    value: Services.NetworkService.gateway !== "" ? Services.NetworkService.gateway : "—"
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "DNS"
-                    value: Services.NetworkService.dns !== "" ? Services.NetworkService.dns : "—"
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "LATENCY"
-                    value: Services.NetworkService.latencyMs >= 0 ? (Math.round(Services.NetworkService.latencyMs) + " ms") : "—"
-                    valueColor: Services.NetworkService.latencyMs < 0 ? Config.BarConfig.colorTextDim
-                              : Services.NetworkService.latencyMs < 50 ? Config.ThemeConfig.colors.success
-                              : Config.ThemeConfig.colors.error
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "RX"
+                    label: "↓ DOWNLOAD"
                     value: Services.NetworkService.rxRate === "" ? "—"
                           : Services.NetworkService.rxRate + "  ·  " + Services.NetworkService.rxTotal
                     valueBold: false
                 }
                 NetRow {
                     visible: Services.NetworkService.isConnected
-                    label: "TX"
+                    label: "↑ UPLOAD"
                     value: Services.NetworkService.txRate === "" ? "—"
                           : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
                     valueBold: false
@@ -495,6 +454,7 @@ PanelWindow {
                     MouseArea { id: wifiBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
                 }
 
+                SettingsLink { visible: Services.NetworkService.hasNetwork; verb: "openControlNetwork"; onActivated: function(v) { card.openSettings(v) } }
                 Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
             }
 
@@ -545,35 +505,6 @@ PanelWindow {
                         text: Services.BluetoothService.powered ? "adapter: UP" : "adapter: DOWN"
                         font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
                         color: Config.BarConfig.colorTextDim
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        visible: Services.BluetoothService.hasBluetooth
-                        width: discRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
-                        radius: Config.PopupMetrics.px(5)
-                        color: "transparent"
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                        Row {
-                            id: discRow
-                            anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
-                            Rectangle {
-                                width: Config.PopupMetrics.px(5); height: Config.PopupMetrics.px(5); radius: Config.PopupMetrics.px(2.5)
-                                color: Config.ThemeConfig.colors.primary
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: "DISCOVERABLE"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                                font.letterSpacing: 1.2
-                                color: Config.BarConfig.colorText
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Services.BluetoothService.startScan()
-                        }
                     }
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
@@ -689,145 +620,12 @@ PanelWindow {
                              Services.BluetoothService.connectedDevices.length === 0
                     Layout.fillWidth: true
                     text: Services.BluetoothService.powered
-                          ? "No devices connected — pairing lives in Settings ▸ Control"
+                          ? "No devices connected"
                           : "Bluetooth is off"
                     font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                     color: Config.BarConfig.colorTextDim
                 }
                 Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
-
-                // ── PAIRED & NEARBY ──
-                RowLayout {
-                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
-                    Layout.fillWidth: true
-                    Text {
-                        text: "PAIRED & NEARBY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                        font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
-                              ? "SCANNING…" : "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                        font.letterSpacing: 1.5
-                        color: Services.BluetoothService.adapter && Services.BluetoothService.adapter.discovering
-                               ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim
-                    }
-                }
-                Item { height: Config.PopupMetrics.px(6); visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
-
-                Repeater {
-                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
-                    model: Services.BluetoothService.pairedDevices.slice(0, 3)
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Config.PopupMetrics.px(46)
-                        Layout.bottomMargin: Config.PopupMetrics.px(8)
-                        radius: Config.PopupMetrics.px(6)
-                        color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
-                            spacing: Config.PopupMetrics.px(10)
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorTextDim }
-                            ColumnLayout {
-                                spacing: Config.PopupMetrics.px(1)
-                                Layout.fillWidth: true
-                                Text {
-                                    text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                                    color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(180)
-                                }
-                                Text {
-                                    text: "Paired"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                                    color: Config.BarConfig.colorTextDim
-                                }
-                            }
-                            Rectangle {
-                                width: pnLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
-                                radius: Config.PopupMetrics.px(5)
-                                color: pnRow.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                                Text { id: pnLbl; anchors.centerIn: parent
-                                    text: "CONNECT"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
-                                    color: Config.BarConfig.colorText }
-                                MouseArea {
-                                    id: pnArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Services.BluetoothService.connectDevice(modelData.address)
-                                }
-                            }
-                        }
-                        MouseArea { id: pnRow; anchors.fill: parent; hoverEnabled: true }
-                    }
-                }
-
-                Repeater {
-                    visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
-                    model: Services.BluetoothService.nearbyDevices.slice(0, 2)
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Config.PopupMetrics.px(46)
-                        Layout.bottomMargin: Config.PopupMetrics.px(8)
-                        radius: Config.PopupMetrics.px(6)
-                        color: nbRow.containsMouse ? Config.ThemeConfig.fillHover : "transparent"
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
-                            spacing: Config.PopupMetrics.px(10)
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorTextDim }
-                            ColumnLayout {
-                                spacing: Config.PopupMetrics.px(1)
-                                Layout.fillWidth: true
-                                Text {
-                                    text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11)
-                                    color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(180)
-                                }
-                                Text {
-                                    text: "New device"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                                    color: Config.BarConfig.colorTextDim
-                                }
-                            }
-                            Rectangle {
-                                width: nbLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
-                                radius: Config.PopupMetrics.px(5)
-                                color: nbArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                                Text { id: nbLbl; anchors.centerIn: parent
-                                    text: "PAIR"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
-                                    color: Config.BarConfig.colorText }
-                                MouseArea {
-                                    id: nbArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Services.BluetoothService.pairDevice(modelData.address)
-                                }
-                            }
-                        }
-                        MouseArea { id: nbRow; anchors.fill: parent; hoverEnabled: true }
-                    }
-                }
-                Item { height: 10; visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered }
 
                 // ── DISABLE / ENABLE BLUETOOTH footer (mockup full-width pill) ──
                 Rectangle {
@@ -843,10 +641,11 @@ PanelWindow {
                     }
                     MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
                 }
+                SettingsLink { visible: Services.BluetoothService.hasBluetooth; verb: "openControlBluetooth"; onActivated: function(v) { card.openSettings(v) } }
             }
 
             // ── Volume ── mockup port: hero %, dB scale, OUTPUT SINK picker,
-            // INPUT SOURCE mic strip, MUTE footer.
+            // MUTE footer. Outputs, mic and per-app streams live in Settings.
             ColumnLayout {
                 id: volumeBody
                 Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
@@ -922,186 +721,6 @@ PanelWindow {
                         Behavior on scale { NumberAnimation { duration: 90 } }
                     }
                 }
-                // ── dB scale labels (mockup) ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Text { text: "0 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "+6 dB"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "MAX"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); color: Config.BarConfig.colorTextDim }
-                }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
-
-                // ── OUTPUT SINK (PIPEWIRE) picker ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                    Text {
-                        text: "OUTPUT SINK (PIPEWIRE)"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                        font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: Services.AudioService.hwLabel
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                        color: Config.ThemeConfig.colors.primary
-                        elide: Text.ElideMiddle
-                        Layout.maximumWidth: Config.PopupMetrics.px(130)
-                    }
-                }
-                Item { height: Config.PopupMetrics.px(8); visible: Services.AudioService.hasAudio }
-
-                Repeater {
-                    visible: Services.AudioService.hasAudio
-                    model: Services.AudioService.sinks
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        readonly property bool isDefault: modelData === Services.AudioService.sink
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Config.PopupMetrics.px(44)
-                        radius: Config.PopupMetrics.px(6)
-                        color: sinkMa.containsMouse || isDefault
-                               ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: isDefault ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: card.hair
-                        Behavior on color { ColorAnimation { duration: 120 } }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(10)
-                            spacing: Config.PopupMetrics.px(10)
-
-                            // selected dot (mockup: ● vs ○)
-                            Rectangle {
-                                width: Config.PopupMetrics.px(7); height: Config.PopupMetrics.px(7); radius: Config.PopupMetrics.px(3.5)
-                                color: isDefault ? Config.ThemeConfig.colors.primary : "transparent"
-                                border.color: Config.ThemeConfig.colors.primary; border.width: card.hair
-                            }
-                            ColumnLayout {
-                                spacing: Config.PopupMetrics.px(1)
-                                Layout.fillWidth: true
-                                Text {
-                                    text: modelData.description || modelData.nickname || modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                                    color: isDefault ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
-                                    elide: Text.ElideRight
-                                    Layout.maximumWidth: sinkRowWidth - 150
-                                }
-                                Text {
-                                    text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                                    color: Config.BarConfig.colorTextDim
-                                    elide: Text.ElideMiddle
-                                    Layout.maximumWidth: sinkRowWidth - 150
-                                }
-                            }
-                            // DEFAULT chip + check, or Select hint
-                            Rectangle {
-                                visible: isDefault
-                                width: defLbl.implicitWidth + 12; height: 17
-                                radius: Config.PopupMetrics.px(3)
-                                color: Config.ThemeConfig.accentTint
-                                border.color: Config.ThemeConfig.colors.primary; border.width: card.hair
-                                Text { id: defLbl; anchors.centerIn: parent
-                                    text: "DEFAULT"
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7); font.bold: true; font.letterSpacing: 1
-                                    color: Config.ThemeConfig.colors.primary }
-                            }
-                            Text {
-                                visible: isDefault
-                                text: "✓"
-                                font.pixelSize: Config.PopupMetrics.px(12)
-                                color: Config.ThemeConfig.colors.primary
-                            }
-                            Text {
-                                visible: !isDefault
-                                text: "Select"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                                color: sinkMa.containsMouse ? Config.BarConfig.colorText : Config.BarConfig.colorTextDim
-                            }
-                        }
-                        MouseArea {
-                            id: sinkMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: isDefault ? Qt.ArrowCursor : Qt.PointingHandCursor
-                            onClicked: if (!isDefault) Services.AudioService.setDefaultSink(modelData)
-                        }
-                    }
-                }
-                Item { height: 12; visible: Services.AudioService.hasAudio }
-                Rectangle { visible: Services.AudioService.hasAudio; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-                Item { height: 10; visible: Services.AudioService.hasAudio }
-
-                // ── INPUT SOURCE (microphone) ──
-                ColumnLayout {
-                    visible: Services.AudioService.hasMic
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(6)
-
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                        Text { text: "󰍬"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(11); color: Config.BarConfig.colorTextDim }
-                        Text {
-                            text: "INPUT SOURCE"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                            font.letterSpacing: 1.5
-                            color: Config.BarConfig.colorTextDim
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: Math.round(Services.AudioService.micVolume) + "%"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true
-                            color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                        }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(10)
-                        Slider {
-                            id: micSlider
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Config.PopupMetrics.px(22)
-                            hoverEnabled: true
-                            from: 0; to: 100
-                            value: Services.AudioService.micVolume
-                            onMoved: Services.AudioService.setMicVolume(value)
-                            background: Rectangle {
-                                x: micSlider.leftPadding
-                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                implicitHeight: Config.PopupMetrics.px(4); width: micSlider.availableWidth; radius: 0
-                                color: Config.ThemeConfig.hairlineSoft
-                                Rectangle {
-                                    height: parent.height
-                                    width: micSlider.visualPosition * parent.width
-                                    color: Services.AudioService.micMuted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                                }
-                            }
-                            handle: Rectangle {
-                                x: micSlider.leftPadding + micSlider.visualPosition * (micSlider.availableWidth - width)
-                                y: micSlider.topPadding + micSlider.availableHeight / 2 - height / 2
-                                width: 14; height: 14; radius: Config.PopupMetrics.px(7)
-                                color: Config.BarConfig.colorText
-                            }
-                        }
-                        Rectangle {
-                            width: micLbl.implicitWidth + 16; height: Config.PopupMetrics.px(24)
-                            radius: Config.PopupMetrics.px(6)
-                            color: micBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                            border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                            Text { id: micLbl; anchors.centerIn: parent
-                                text: Services.AudioService.micMuted ? "UNMUTE MIC" : "MUTE MIC"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1
-                                color: Services.AudioService.micMuted ? Config.ThemeConfig.colors.error : Config.BarConfig.colorText }
-                            MouseArea { id: micBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.AudioService.toggleMicMute() }
-                        }
-                    }
-                }
                 Item { height: 12; visible: Services.AudioService.hasAudio }
 
                 // ── MUTE footer ──
@@ -1126,8 +745,17 @@ PanelWindow {
                         Services.OsdService.showMute(Services.AudioService.muted)
                     } }
                 }
+                SettingsLink { visible: Services.AudioService.hasAudio; verb: "openControlAudio"; onActivated: function(v) { card.openSettings(v) } }
             }
 
+            // ── Control Center ──
+            ControlCenterBody {
+                id: controlBody
+                Layout.fillWidth: true
+                Layout.margins: Config.PopupMetrics.px(16)
+                onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }
+                onDone: card.closeRequested()
+            }
         }
 
         // ── PRIVACY BODY — who is watching or listening ──
@@ -1263,219 +891,6 @@ PanelWindow {
             }
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // NETWORK CREDENTIALS (QR) — replaces the body when qrOpen. Card-level
-        // overlay: it must cover the header too, and its clicks must not fall
-        // through to the tray backdrop.
-        // ═══════════════════════════════════════════════════════════════════════
-        Item {
-            id: qrBody
-            anchors.fill: parent
-            visible: card.qrOpen && card.lastTray === "network"
-            z: 10
-            implicitHeight: qrCol.implicitHeight + 24
-
-            // swallow all clicks; buttons below re-stop them explicitly
-            MouseArea { anchors.fill: parent }
-
-            ColumnLayout {
-                id: qrCol
-                anchors.fill: parent
-                anchors.margins: Config.PopupMetrics.px(12)
-                spacing: 0
-
-                // ── header: dot · NETWORK CREDENTIALS · ✕ ──
-                Item {
-                    Layout.fillWidth: true
-                    height: Config.PopupMetrics.px(30)
-                    RowLayout {
-                        anchors.fill: parent
-                        spacing: Config.PopupMetrics.px(8)
-                        Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: Config.BarConfig.colorAccent; Layout.alignment: Qt.AlignVCenter }
-                        Text {
-                            text: "NETWORK CREDENTIALS"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                            font.bold: true; font.letterSpacing: 2.5
-                            color: Config.BarConfig.colorText
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: "✕"
-                            font.pixelSize: Config.PopupMetrics.px(11)
-                            color: qrCloseArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                            MouseArea {
-                                id: qrCloseArea
-                                anchors.fill: parent; anchors.margins: -4
-                                cursorShape: Qt.PointingHandCursor; hoverEnabled: true
-                                onClicked: card.qrOpen = false
-                            }
-                        }
-                    }
-                }
-                Rectangle { Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-
-                // ── white QR card (scanner contract: light ground, dark modules)
-                Item { height: 14 }
-                Rectangle {
-                    Layout.alignment: Qt.AlignHCenter
-                    width: qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 200
-                    height: qrGrid.matrix.length > 0 ? qrGrid.matrix.length * qrGrid.modulePx + qrGrid.quiet * 2 * qrGrid.modulePx : 120
-                    color: "#f2f2f2"
-                    radius: Config.PopupMetrics.px(12)
-
-                    Grid {
-                        id: qrGrid
-                        property var matrix: Services.NetworkService.qrMatrix
-                        property int modulePx: 6
-                        property int quiet: 3
-                        anchors.centerIn: parent
-                        columns: matrix.length > 0 ? matrix[0].length : 0
-                        visible: matrix.length > 0
-
-                        Repeater {
-                            model: qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length * qrGrid.matrix.length : 0
-
-                            Rectangle {
-                                readonly property int row: Math.floor(index / (qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length : 1))
-                                readonly property int col: index % (qrGrid.matrix.length > 0 ? qrGrid.matrix[0].length : 1)
-                                readonly property bool dark: {
-                                    if (qrGrid.matrix.length === 0 || row >= qrGrid.matrix.length) return false
-                                    var line = qrGrid.matrix[row] || ""
-                                    return col < line.length && line.charAt(col) === "1"
-                                }
-                                width: qrGrid.modulePx; height: qrGrid.modulePx
-                                color: dark ? "#141414" : "#f2f2f2"
-                            }
-                        }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        width: parent.width - 20
-                        visible: Services.NetworkService.qrMatrix.length === 0
-                        text: Services.NetworkService.qrError !== "" ? Services.NetworkService.qrError : "generating…"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                        color: "#141414"
-                        wrapMode: Text.Wrap
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-                }
-                Item { height: 10 }
-
-                // ── ssid • security • band ──
-                Row {
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: Config.PopupMetrics.px(6)
-                    Text {
-                        text: Services.NetworkService.qrSsid !== "" ? Services.NetworkService.qrSsid : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                        color: Config.BarConfig.colorText
-                    }
-                    Text { text: "•"; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
-                    Text {
-                        text: Services.NetworkService.qrSecurity !== "" ? Services.NetworkService.qrSecurity : "OPEN"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                        color: Config.ThemeConfig.colors.primary
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    Text { text: "•"; font.pixelSize: Config.PopupMetrics.px(10); color: Config.BarConfig.colorTextDim; anchors.verticalCenter: parent.verticalCenter }
-                    Text {
-                        text: Services.NetworkService.qrBand !== "" ? Services.NetworkService.qrBand : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                        color: Config.BarConfig.colorTextDim
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
-                Item { height: 10 }
-
-                // ── NETWORK KEY chip + Copy ──
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Config.PopupMetrics.px(40)
-                    radius: Config.PopupMetrics.px(8)
-                    color: Config.ThemeConfig.fillRest
-                    border.color: Config.BarConfig.colorBorder; border.width: card.hair
-
-                    Text {
-                        anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(12)
-                        anchors.top: parent.top; anchors.topMargin: Config.PopupMetrics.px(6)
-                        text: "NETWORK KEY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7)
-                        font.bold: true; font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Text {
-                        anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(12)
-                        anchors.bottom: parent.bottom; anchors.bottomMargin: Config.PopupMetrics.px(6)
-                        text: Services.NetworkService.qrPassword !== "" ? Services.NetworkService.qrPassword : "—"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                        color: Config.BarConfig.colorText
-                    }
-                    Rectangle {
-                        anchors.right: parent.right; anchors.rightMargin: Config.PopupMetrics.px(8)
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: copyRow.implicitWidth + 16; height: Config.PopupMetrics.px(24)
-                        radius: Config.PopupMetrics.px(6)
-                        color: copyArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                        Row {
-                            id: copyRow
-                            anchors.centerIn: parent
-                            spacing: Config.PopupMetrics.px(5)
-                            Text { text: card.copied ? "✓" : "󰆏"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(10); color: card.copied ? Config.ThemeConfig.colors.success : Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                            Text { text: card.copied ? "Copied" : "Copy"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); color: Config.BarConfig.colorText; anchors.verticalCenter: parent.verticalCenter }
-                        }
-                        MouseArea {
-                            id: copyArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Services.NetworkService.copyQrPassword()
-                        }
-                    }
-                }
-                Text {
-                    visible: card.copyFailed
-                    text: "copy failed — wl-copy is not installed"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                    color: Config.ThemeConfig.colors.error
-                }
-                Item { height: Config.PopupMetrics.px(8) }
-
-                // ── footer: hint · Close ──
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.PopupMetrics.px(8)
-                    Text {
-                        text: "SCAN CAMERA OR QR READER"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(7)
-                        font.bold: true; font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                        Layout.fillWidth: true
-                    }
-                    Rectangle {
-                        width: closeLbl.implicitWidth + 18; height: Config.PopupMetrics.px(24)
-                        radius: Config.PopupMetrics.px(6)
-                        color: footerCloseArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                        Text {
-                            id: closeLbl; anchors.centerIn: parent
-                            text: "Close"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                            color: Config.BarConfig.colorText
-                        }
-                        MouseArea {
-                            id: footerCloseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: card.qrOpen = false
-                        }
-                    }
-                }
-            }
-        }
     }   // content ColumnLayout
     }   // dropdown Rectangle
 }

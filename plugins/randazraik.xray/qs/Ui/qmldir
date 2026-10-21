@@ -1,0 +1,7 @@
+BarWidget 1.0 BarWidget.qml
+BarIconButton 1.0 BarIconButton.qml
+Button 1.0 Button.qml
+TextField 1.0 TextField.qml
+Dropdown 1.0 Dropdown.qml
+Toggle 1.0 Toggle.qml
+BorderSurface 1.0 BorderSurface.qml

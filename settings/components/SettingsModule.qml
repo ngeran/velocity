@@ -10,7 +10,6 @@
 // Flickable block; every write path is byte-identical:
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
 //   BAR        — bar height, workspace dots       (SettingsConfigService + saveSettings)
-//   CLOCK      — city (text input), UTC offset    (SettingsConfigService + saveSettings)
 //   IDLE & LOCK— dim/lock/off timeouts, suspend   (HypridleService + saveConfig)
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
@@ -53,7 +52,6 @@ Item {
         { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
         { key: "bar",        label: "BAR",        icon: "󰖬" },
         { key: "desktop",    label: "DESKTOP",    icon: "󰍹" },
-        { key: "clock",      label: "CLOCK",      icon: "󰥔" },
         { key: "idle",       label: "IDLE & LOCK", icon: "󰌾" }
     ]
 
@@ -512,86 +510,6 @@ Item {
                         text: "Applied live to Hyprland · kept in ~/.config/hypr/velocity-settings.lua · your own config answers again on reset"
                         color: Config.ThemeConfig.colors.textDim; opacity: 0.7
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
-                }
-            }
-        }
-
-        // ── CLOCK ──────────────────────────────────────────────────────
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Config.ControlConfig.space4
-            visible: root.active === "clock"
-            spacing: Config.ControlConfig.space4
-
-            SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Clock"
-                subtitle: "Bar clock city label and UTC offset" }
-
-            CoreCard {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                accent: Config.ControlConfig.accent
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: Config.ControlConfig.space4
-
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: Config.ControlConfig.space1
-                        Text { text: "CITY"; color: Config.ThemeConfig.colors.textDim
-                            font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
-                            font.bold: true; font.letterSpacing: 1.0 }
-                        Rectangle {
-                            id: cityCard
-                            Layout.fillWidth: true; Layout.preferredWidth: 220
-                            Layout.preferredHeight: 32
-                            radius: Config.ControlConfig.radiusPill
-                            color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
-                            border.color: cityInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
-                            border.width: 1
-                            Behavior on border.color { ColorAnimation { duration: 100 } }
-                            Component.onCompleted: Services.SearchIndex.register({
-                                title: "CITY", tab: "settings", section: "clock",
-                                keywords: "city clock label text", item: cityCard })
-                            Component.onDestruction: Services.SearchIndex.unregister(cityCard)
-                            TextInput {
-                                id: cityInput
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                verticalAlignment: TextInput.AlignVCenter
-                                text: Services.SettingsConfigService.clockCity
-                                color: Config.ThemeConfig.colors.text
-                                font.family: Config.SettingsConfig.fontFamily
-                                font.pixelSize: 14
-                                selectByMouse: true
-                                onAccepted: {
-                                    Services.SettingsConfigService.clockCity = text
-                                    Services.SettingsConfigService.saveSettings()
-                                }
-                                onFocusChanged: {
-                                    if (!focus) {
-                                        Services.SettingsConfigService.clockCity = text
-                                        Services.SettingsConfigService.saveSettings()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    SettingRow {
-                        label: "TIMEZONE"
-                        section: "clock"
-                        keywords: "utc offset"
-                        value: Services.SettingsConfigService.clockOffset === 0 ? "LOCAL"
-                             : "UTC" + (Services.SettingsConfigService.clockOffset >= 0 ? "+" : "")
-                               + Services.SettingsConfigService.clockOffset
-                        Repeater {
-                            model: [-12, -8, -5, -4, 0, 1, 2, 3, 8, 10, 12]
-                            delegate: OptSeg {
-                                text: modelData === 0 ? "LOCAL" : (modelData > 0 ? "+" + modelData : "" + modelData)
-                                active: Services.SettingsConfigService.clockOffset === modelData
-                                onPicked: { Services.SettingsConfigService.clockOffset = modelData; Services.SettingsConfigService.saveSettings() }
-                            }
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
                 }
             }
         }

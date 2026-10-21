@@ -166,18 +166,6 @@ ShellRoot {
             dashboard.openControlTab("audio")
         }
 
-        function openControlPower() {
-            root.shown = true
-            panelWindow.visible = true
-            dashboard.openControlTab("power")
-        }
-
-        function openControlSystem() {
-            root.shown = true
-            panelWindow.visible = true
-            dashboard.openControlTab("system")
-        }
-
         // Deep-link to the Display control section (live mode/HDR/VRR/scale)
         function openControlDisplay() {
             root.shown = true

@@ -43,8 +43,9 @@ Item {
 
     // QtObject has no default property — the poll timer must be an explicit
     // property, not a child object.
+    // Slow backstop: only instantiated while a qs.Commons plugin (X-Ray) runs.
     property Timer ticker: Timer {
-        interval: 2000
+        interval: 15000
         running: true
         repeat: true
         onTriggered: {

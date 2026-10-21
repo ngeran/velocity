@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // Manages persistent settings for the Obsidian Core shell.
-// Stores settings in ~/.config/quickshell/settings-config.json
-// Handles both settings-process and cross-process settings (bar, etc.)
+// Settings-app keys: ~/.config/quickshell/settings-config.json
+// Bar keys: bar-config.json only (the file the bar process reads)
 //
 // =============================================================================
 
@@ -49,10 +49,6 @@ Item {
     property string barPosition: "top"
     property var barStyles: ["vector"]          // scanned from bar/styles/
     property int workspaceCount: 5             // 3, 5, 7, 9
-
-    // Clock settings (cross-process - bar reads from config file)
-    property string clockCity: "Local"          // Display name for timezone
-    property int clockOffset: 0                 // UTC offset in hours (-12 to +14)
 
     // Auto-regenerate the palette from the active wallpaper via matugen
     // whenever it changes (instant, no rebuild). Default OFF: a burn-in
@@ -105,23 +101,20 @@ Item {
     // =========================================================================
 
     function saveSettings() {
+        // Bar keys live only in bar-config.json (saveBarConfig).
         var config = {
-            schemaVersion: 1,   // bump + branch in applyLoadedSettings on shape changes
+            schemaVersion: 2,
             animationSpeed: root.animationSpeed,
             cornerRadius: root.cornerRadius,
-            barHeight: root.barHeight,
-            workspaceCount: root.workspaceCount,
-            clockCity: root.clockCity,
-            clockOffset: root.clockOffset,
-            barStyle: root.barStyle,
-            barPosition: root.barPosition,
             matugenOnWallpaperChange: root.matugenOnWallpaperChange
         }
 
         var json = JSON.stringify(config, null, 2)
         // Single write funnel for the whole settings process (atomic tmp+mv —
         // readers never see a half-written file; rename-compat verified in bar).
-        ThemeService._atomicWrite(root.configFilePath, json)
+        ThemeService._atomicWrite(root.configFilePath, json, function(ok) {
+            if (ok) Config.MotionConfig.reloadFromDisk()
+        })
 
         // Also write bar-specific config for cross-process sync
         saveBarConfig()
@@ -138,8 +131,6 @@ Item {
         root.barHeight = 26
         root.barPosition = "top"
         root.workspaceCount = 5
-        root.clockCity = "Local"
-        root.clockOffset = 0
         root.matugenOnWallpaperChange = false
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
     }
@@ -161,24 +152,6 @@ Item {
         if (data.cornerRadius !== undefined && [0, 4, 8, 12].indexOf(data.cornerRadius) !== -1) {
             root.cornerRadius = data.cornerRadius
         }
-        if (data.barHeight !== undefined) {
-            root.barHeight = Math.max(18, Math.min(64, Math.round(data.barHeight)))
-        }
-        if (typeof data.barStyle === "string" && data.barStyle.length > 0) {
-            root.barStyle = data.barStyle
-        }
-        if (data.barPosition === "top" || data.barPosition === "bottom") {
-            root.barPosition = data.barPosition
-        }
-        if (data.workspaceCount !== undefined && [3, 5, 7, 9].indexOf(data.workspaceCount) !== -1) {
-            root.workspaceCount = data.workspaceCount
-        }
-        if (data.clockCity !== undefined) {
-            root.clockCity = data.clockCity
-        }
-        if (data.clockOffset !== undefined && data.clockOffset >= -12 && data.clockOffset <= 14) {
-            root.clockOffset = data.clockOffset
-        }
         // Migrate the legacy `rebuildOnWallpaperChange` key → matugenOnWallpaperChange.
         if (data.matugenOnWallpaperChange !== undefined) {
             root.matugenOnWallpaperChange = data.matugenOnWallpaperChange
@@ -187,29 +160,41 @@ Item {
         }
     }
 
+    function applyBarConfig(data) {
+        if (data.barHeight !== undefined)
+            root.barHeight = Math.max(18, Math.min(64, Math.round(data.barHeight)))
+        if (typeof data.barStyle === "string" && data.barStyle.length > 0)
+            root.barStyle = data.barStyle
+        if (data.barPosition === "top" || data.barPosition === "bottom")
+            root.barPosition = data.barPosition
+        if ([3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
+            root.workspaceCount = data.workspaceCount
+        if (typeof data.islandBurnGuard === "boolean")
+            root.islandBurnGuard = data.islandBurnGuard
+    }
+
     function saveBarConfig() {
-        // Write bar-specific config for bar process to read
         var barConfig = {
             schemaVersion: 1,   // bar's ingestConfigText ignores unknown keys; bump on shape changes
             barHeight: root.barHeight,
             workspaceCount: root.workspaceCount,
-            clockCity: root.clockCity,
-            clockOffset: root.clockOffset,
             barStyle: root.barStyle,
             barPosition: root.barPosition,
             islandBurnGuard: root.islandBurnGuard
         }
-        // Preserve bar-owned keys this service does not model (rightLayout,
-        // motionScale, reduceMotion, …) — captured from bar-config.json at
-        // init. A whole-file rewrite here used to silently reset them on
-        // every settings save.
+        // Merge back bar-owned keys this service does not model (motionScale,
+        // reduceMotion, …) so a save doesn't reset them.
         for (var k in root.barConfigExtras) {
             if (Object.prototype.hasOwnProperty.call(root.barConfigExtras, k))
                 barConfig[k] = root.barConfigExtras[k]
         }
         var json = JSON.stringify(barConfig, null, 2)
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
-        ThemeService._atomicWrite(barConfigPath, json)
+        ThemeService._atomicWrite(barConfigPath, json, function(ok) {
+            if (!ok) return
+            ThemeService._runSh("n=0; until quickshell ipc -c bar call config reload 2>&1 | grep -q ok; do " +
+                                "n=$((n+1)); [ $n -ge 10 ] && exit 1; sleep 0.15; done", "bar config nudge")
+        })
     }
 
     // ── bar-config extras capture ───────────────────────────────────────────
@@ -225,19 +210,19 @@ Item {
             if (running === false && barConfigRead.buffer.trim().length > 0) {
                 try {
                     var data = JSON.parse(barConfigRead.buffer)
-                    var modeled = ["schemaVersion", "barHeight", "workspaceCount",
+                    // Dropped on save: rightLayout (now plugins-state.json layout) and
+                    // clockCity/clockOffset (now the nikos.clock plugin's `zone` setting).
+                    var dropped = ["schemaVersion", "barHeight", "workspaceCount",
                                    "clockCity", "clockOffset", "barStyle", "barPosition",
-                                   "islandBurnGuard"]
+                                   "islandBurnGuard", "rightLayout"]
                     var extras = {}
                     for (var k in data) {
                         if (Object.prototype.hasOwnProperty.call(data, k)
-                                && modeled.indexOf(k) === -1)
+                                && dropped.indexOf(k) === -1)
                             extras[k] = data[k]
                     }
                     root.barConfigExtras = extras
-                    // Bar-only key: bar-config.json is its sole home.
-                    if (typeof data.islandBurnGuard === "boolean")
-                        root.islandBurnGuard = data.islandBurnGuard
+                    root.applyBarConfig(data)
                 } catch (e) { /* keep empty extras */ }
             }
             barConfigRead.buffer = ""

@@ -14,7 +14,8 @@ cd "$(dirname "$0")/.."
 roots=("$@")
 (( ${#roots[@]} )) || roots=(bar settings plugins bin)
 
-mapfile -t tests < <(find "${roots[@]}" -name '*.test.mjs' -type f | sort)
+tests=()   # no mapfile: macOS ships bash 3.2
+while IFS= read -r t; do tests+=("$t"); done < <(find "${roots[@]}" -name '*.test.mjs' -type f | sort)
 if (( ${#tests[@]} == 0 )); then
   echo "run-unit-tests: no *.test.mjs found under ${roots[*]}" >&2
   exit 1

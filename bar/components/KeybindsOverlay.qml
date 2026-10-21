@@ -45,11 +45,11 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(900, parent.width - 48)
-        height: Math.min(680, parent.height - 48)
-        color: Config.ThemeConfig.colors.background
-        border.color: Config.ThemeConfig.colors.border
-        border.width: 1
+        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
+        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
+        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
+        color: "#000000"
+        radius: Config.PopupMetrics.px(18)
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
@@ -61,23 +61,23 @@ PanelWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 24
-            spacing: 12
+            anchors.margins: Config.PopupMetrics.px(24)
+            spacing: Config.PopupMetrics.px(12)
 
             // ---- header ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Config.PopupMetrics.px(8)
                 Text {
                     text: "󰬃"
                     font.family: Config.BarConfig.fontNerd
-                    font.pixelSize: 16
+                    font.pixelSize: Config.PopupMetrics.px(16)
                     color: Config.BarConfig.colorAccent
                 }
                 Text {
                     text: "KEYBINDINGS"
                     color: Config.ThemeConfig.colors.text
-                    font.pixelSize: 16
+                    font.pixelSize: Config.PopupMetrics.px(16)
                     font.bold: true
                     font.family: Config.BarConfig.fontFamily
                     font.letterSpacing: 2.5
@@ -86,11 +86,11 @@ PanelWindow {
                 Text {
                     text: "ESC to close"
                     color: Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Config.PopupMetrics.px(10)
                     font.family: Config.BarConfig.fontFamily
                 }
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.border }
+            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: Config.ThemeConfig.colors.border }
 
             // ---- scrollable sections ----
             Flickable {
@@ -103,7 +103,7 @@ PanelWindow {
                 ColumnLayout {
                     id: sectionsCol
                     width: parent.width
-                    spacing: 16
+                    spacing: Config.PopupMetrics.px(16)
 
                     Repeater {
                         model: root.keybindModel
@@ -113,12 +113,12 @@ PanelWindow {
                             property string sectionTitle: modelData.sectionName
                             property var sectionBinds: modelData.binds
                             Layout.fillWidth: true
-                            spacing: 6
+                            spacing: Config.PopupMetrics.px(6)
 
                             Text {
                                 text: sec.sectionTitle
                                 color: Config.ThemeConfig.colors.primary
-                                font.pixelSize: 10
+                                font.pixelSize: Config.PopupMetrics.px(10)
                                 font.bold: true
                                 font.family: Config.BarConfig.fontFamily
                                 font.letterSpacing: 1.8
@@ -128,19 +128,19 @@ PanelWindow {
                                 model: sec.sectionBinds
                                 delegate: RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 12
+                                    spacing: Config.PopupMetrics.px(12)
                                     Rectangle {
-                                        Layout.preferredWidth: keyLbl.implicitWidth + 18
-                                        Layout.preferredHeight: 20
+                                        Layout.preferredWidth: keyLbl.implicitWidth + Config.PopupMetrics.px(18)
+                                        Layout.preferredHeight: Config.PopupMetrics.px(20)
                                         color: Config.ThemeConfig.colors.surfaceVariant
                                         border.color: Config.ThemeConfig.colors.border
-                                        border.width: 1
+                                        border.width: Config.PopupMetrics.hairline(parent)
                                         Text {
                                             id: keyLbl
                                             anchors.centerIn: parent
                                             text: modelData.key
                                             color: Config.ThemeConfig.colors.text
-                                            font.pixelSize: 10
+                                            font.pixelSize: Config.PopupMetrics.px(10)
                                             font.bold: true
                                             font.family: Config.BarConfig.fontFamily
                                         }
@@ -149,7 +149,7 @@ PanelWindow {
                                         Layout.fillWidth: true
                                         text: modelData.desc
                                         color: Config.ThemeConfig.colors.textDim
-                                        font.pixelSize: 11
+                                        font.pixelSize: Config.PopupMetrics.px(11)
                                         font.family: Config.BarConfig.fontFamily
                                         elide: Text.ElideRight
                                     }

@@ -24,7 +24,7 @@
 //   ctx.summon(id, payloadJson) / ctx.hide(id)
 //   ctx.log(msg)
 //   ctx.host        built-ins only (source "builtin"): the bar shell —
-//                   overlay toggles, ncShown/logsShown. null for everyone else.
+//                   toggleOverlay(id)/overlayShown(id), ncShown. null for everyone else.
 // =============================================================================
 
 import QtQuick

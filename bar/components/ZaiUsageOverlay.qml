@@ -186,11 +186,11 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(900, parent.width - 48)
-        height: Math.min(680, parent.height - 48)
-        color: root.cBg
-        border.color: root.cBorder
-        border.width: 1
+        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
+        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
+        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
+        color: "#000000"
+        radius: Config.PopupMetrics.px(18)
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
@@ -207,12 +207,12 @@ PanelWindow {
             opacity: 0.22
             z: 0
             Repeater {
-                model: Math.floor(card.width / 40)
-                Rectangle { width: 1; height: card.height; x: index * 40; color: root.cBorder }
+                model: Math.floor(card.width / Config.PopupMetrics.px(40))
+                Rectangle { width: Config.PopupMetrics.hairline(parent); height: card.height; x: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
             Repeater {
-                model: Math.floor(card.height / 40)
-                Rectangle { height: 1; width: card.width; y: index * 40; color: root.cBorder }
+                model: Math.floor(card.height / Config.PopupMetrics.px(40))
+                Rectangle { height: Config.PopupMetrics.hairline(parent); width: card.width; y: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
         }
 
@@ -221,7 +221,7 @@ PanelWindow {
         Repeater {
             model: 4   // 0=TL 1=TR 2=BL 3=BR
             Item {
-                width: 14; height: 14
+                width: Config.PopupMetrics.px(14); height: Config.PopupMetrics.px(14)
                 opacity: 0.55
                 z: 0
                 x: (index === 0 || index === 2) ? 0 : (card.width - 14)
@@ -229,12 +229,12 @@ PanelWindow {
                 property bool isRight: (index === 1 || index === 3)
                 property bool isBottom: (index === 2 || index === 3)
                 Rectangle {   // horizontal arm
-                    width: 14; height: 2; color: root.cAccent
-                    y: parent.isBottom ? 12 : 0
+                    width: Config.PopupMetrics.px(14); height: Config.PopupMetrics.px(2); color: root.cAccent
+                    y: parent.isBottom ? Config.PopupMetrics.px(12) : 0
                 }
                 Rectangle {   // vertical arm
-                    width: 2; height: 14; color: root.cAccent
-                    x: parent.isRight ? 12 : 0
+                    width: Config.PopupMetrics.px(2); height: Config.PopupMetrics.px(14); color: root.cAccent
+                    x: parent.isRight ? Config.PopupMetrics.px(12) : 0
                 }
             }
         }
@@ -242,16 +242,16 @@ PanelWindow {
         // ----- CONTENT -----
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 14
+            anchors.margins: Config.PopupMetrics.px(30)
+            spacing: Config.PopupMetrics.px(14)
             z: 10
 
             // ---- header ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: Config.PopupMetrics.px(12)
                 Rectangle {
-                    width: 10; height: 10; color: Services.ZaiUsageService.hasError ? root.cCrit : root.cAccent
+                    width: Config.PopupMetrics.px(10); height: Config.PopupMetrics.px(10); color: Services.ZaiUsageService.hasError ? root.cCrit : root.cAccent
                     Layout.alignment: Qt.AlignVCenter
                     SequentialAnimation on opacity {
                         running: root.shown; loops: Animation.Infinite
@@ -263,7 +263,7 @@ PanelWindow {
                     text: "USAGE ANALYTICS"
                     color: root.cText
                     font.family: root.fontM
-                    font.pixelSize: 20
+                    font.pixelSize: Config.PopupMetrics.px(20)
                     font.bold: true
                     font.letterSpacing: 3
                     Layout.alignment: Qt.AlignVCenter
@@ -273,63 +273,63 @@ PanelWindow {
                 // ---- quota multiplier badge (1x/2x/3x, time-zone aware) ----
                 Rectangle {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: multiplierCol.implicitWidth + 24
-                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: multiplierCol.implicitWidth + Config.PopupMetrics.px(24)
+                    Layout.preferredHeight: Config.PopupMetrics.px(40)
                     color: root.zaiIsPeak
                         ? Qt.rgba(root.cWarn.r, root.cWarn.g, root.cWarn.b, 0.12)
                         : Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
                     border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
-                    border.width: 1
+                    border.width: Config.PopupMetrics.hairline(parent)
                     Behavior on color { ColorAnimation { duration: Config.MotionConfig.flap } }
 
                     ColumnLayout {
                         id: multiplierCol
                         anchors.centerIn: parent
-                        spacing: 1
+                        spacing: Config.PopupMetrics.px(1)
                         RowLayout {
-                            spacing: 7
+                            spacing: Config.PopupMetrics.px(7)
                             Layout.alignment: Qt.AlignHCenter
                             Text {
                                 text: root.zaiMultiplier + "×"
                                 color: root.zaiIsPeak ? root.cWarn : root.cAccent
-                                font.family: root.fontM; font.pixelSize: 16; font.bold: true
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(16); font.bold: true
                             }
                             Text {
                                 text: root.zaiIsPeak ? "PEAK RATE" : "OFF-PEAK RATE"
                                 color: root.zaiIsPeak ? root.cWarn : root.cAccent
-                                font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                             }
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: root.zaiNextChangeLabel
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 8
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                         }
                     }
                 }
 
                 ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: 1
+                    spacing: Config.PopupMetrics.px(1)
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: "ACTIVE CONNECTION"
                         color: root.cDim
-                        font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                     }
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: "Z.AI // GLM CODING"
                         color: root.cAccent
-                        font.family: root.fontM; font.pixelSize: 12; font.bold: true
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(12); font.bold: true
                     }
                 }
                 Text {
                     text: "󰬃"
                     color: root.cAccent
                     font.family: root.fontN
-                    font.pixelSize: 22
+                    font.pixelSize: Config.PopupMetrics.px(22)
                     Layout.alignment: Qt.AlignVCenter
                     RotationAnimation on rotation { from: 0; to: 360; duration: 3000; loops: Animation.Infinite; running: root.shown }
                 }
@@ -338,43 +338,43 @@ PanelWindow {
                 Layout.fillWidth: true
                 text: "GLOBAL TELEMETRY // PLAN " + Services.ZaiUsageService.level + "  //  LAST SYNC  " + (Services.ZaiUsageService.lastUpdated || "—")
                 color: root.cDim
-                font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
             // ---- rate + model advisor strip ----
             Rectangle {
                 visible: !Services.ZaiUsageService.hasError
                 Layout.fillWidth: true
-                Layout.preferredHeight: 96
+                Layout.preferredHeight: Config.PopupMetrics.px(96)
                 color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.30)
                 border.color: root.zaiIsPeak ? root.cWarn : root.cBorder
-                border.width: 1
+                border.width: Config.PopupMetrics.hairline(parent)
                 Behavior on border.color { ColorAnimation { duration: Config.MotionConfig.flap } }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 18
+                    anchors.margins: Config.PopupMetrics.px(14)
+                    spacing: Config.PopupMetrics.px(18)
 
                     // ---- left: recommended model for right now ----
                     ColumnLayout {
-                        Layout.preferredWidth: 250
+                        Layout.preferredWidth: Config.PopupMetrics.px(250)
                         Layout.fillHeight: true
-                        spacing: 3
+                        spacing: Config.PopupMetrics.px(3)
                         RowLayout {
-                            spacing: 6
-                            Rectangle { width: 8; height: 8; color: root.zaiIsPeak ? root.cWarn : root.cAccent }
+                            spacing: Config.PopupMetrics.px(6)
+                            Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); color: root.zaiIsPeak ? root.cWarn : root.cAccent }
                             Text {
                                 text: root.zaiModelAdvice.tag
                                 color: root.zaiIsPeak ? root.cWarn : root.cAccent
-                                font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                             }
                         }
                         Text {
                             text: "USE  ·  " + root.zaiModelAdvice.model
                             color: root.cText
-                            font.family: root.fontM; font.pixelSize: 15; font.bold: true
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
@@ -383,30 +383,30 @@ PanelWindow {
                             Layout.fillHeight: true
                             text: root.zaiModelAdvice.note
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 8
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                             wrapMode: Text.WordWrap
                             verticalAlignment: Text.AlignTop
                         }
                     }
 
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: root.cBorder }
+                    Rectangle { Layout.preferredWidth: Config.PopupMetrics.px(1); Layout.fillHeight: true; color: root.cBorder }
 
                     // ---- right: 24h local timeline, peak band + live NOW marker ----
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 6
+                        spacing: Config.PopupMetrics.px(6)
                         Text {
                             Layout.fillWidth: true
                             text: root.zaiPeakLocalLabel
                             color: root.zaiIsPeak ? root.cWarn : root.cDim
-                            font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                             elide: Text.ElideRight
                         }
                         Canvas {
                             id: zaiTimeline
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 30
+                            Layout.preferredHeight: Config.PopupMetrics.px(30)
                             onPaint: {
                                 var ctx = getContext("2d")
                                 ctx.reset()
@@ -457,15 +457,15 @@ PanelWindow {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: "00:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Text { text: "00:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(7) }
                             Item { Layout.fillWidth: true }
-                            Text { text: "06:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Text { text: "06:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(7) }
                             Item { Layout.fillWidth: true }
-                            Text { text: "12:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Text { text: "12:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(7) }
                             Item { Layout.fillWidth: true }
-                            Text { text: "18:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Text { text: "18:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(7) }
                             Item { Layout.fillWidth: true }
-                            Text { text: "24:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: 7 }
+                            Text { text: "24:00"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(7) }
                         }
                     }
                 }
@@ -476,10 +476,10 @@ PanelWindow {
                 visible: Services.ZaiUsageService.hasError
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 40
+                Layout.topMargin: Config.PopupMetrics.px(40)
                 text: Services.ZaiUsageService.errorMessage
                 color: root.cCrit
-                font.family: root.fontM; font.pixelSize: 12
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(12)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
             }
@@ -489,51 +489,51 @@ PanelWindow {
                 visible: !Services.ZaiUsageService.hasError
                 Layout.fillWidth: true
                 columns: 3
-                rowSpacing: 12
-                columnSpacing: 12
+                rowSpacing: Config.PopupMetrics.px(12)
+                columnSpacing: Config.PopupMetrics.px(12)
 
                 Repeater {
                     model: Services.ZaiUsageService.windows
                     delegate: Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 178
+                        Layout.preferredHeight: Config.PopupMetrics.px(178)
                         color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
                         border.color: root.cBorder
-                        border.width: 1
+                        border.width: Config.PopupMetrics.hairline(parent)
 
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 14
-                            spacing: 8
+                            anchors.margins: Config.PopupMetrics.px(14)
+                            spacing: Config.PopupMetrics.px(8)
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Text {
                                     text: "L-0" + (index + 1) + "  //  " + modelData.label
                                     color: root.tierColor(modelData.tier)
-                                    font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
                                     text: "[" + modelData.statusWord + "]"
                                     color: root.tierColor(modelData.tier)
-                                    font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                                 }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
+                                spacing: Config.PopupMetrics.px(8)
                                 Text {
                                     text: modelData.pct.toFixed(1) + "%"
                                     color: root.tierColor(modelData.tier)
-                                    font.family: root.fontM; font.pixelSize: 34; font.bold: true
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(34); font.bold: true
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
                                     text: "USED"
                                     color: root.cDim
-                                    font.family: root.fontM; font.pixelSize: 9
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                     Layout.alignment: Qt.AlignBottom
                                 }
                             }
@@ -541,12 +541,12 @@ PanelWindow {
                             // segmented bar: track + tier fill + 10 dividers
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 14
+                                Layout.preferredHeight: Config.PopupMetrics.px(14)
                                 Rectangle {   // track
                                     anchors.fill: parent
                                     color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.04)
                                     border.color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.6)
-                                    border.width: 1
+                                    border.width: Config.PopupMetrics.hairline(parent)
                                 }
                                 Rectangle {   // fill (animated, tier-colored — not a static bright block)
                                     anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
@@ -558,7 +558,7 @@ PanelWindow {
                                 Repeater {   // 9 segment dividers (=> 10 segments)
                                     model: 9
                                     Rectangle {
-                                        width: 1; height: parent.height
+                                        width: Config.PopupMetrics.hairline(parent); height: parent.height
                                         x: parent.width * (index + 1) / 10
                                         color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.5)
                                     }
@@ -570,20 +570,20 @@ PanelWindow {
                                 Text {
                                     text: "RESET: " + modelData.resetLabel
                                     color: root.cDim
-                                    font.family: root.fontM; font.pixelSize: 8
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
                                     property var used: root.usedTokensFor(modelData)
                                     text: (used !== null) ? (root.formatTokens(used) + " USED") : ""
                                     color: root.cDim
-                                    font.family: root.fontM; font.pixelSize: 8
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                                 }
-                                Text { text: "  ·  "; color: root.cDim; font.family: root.fontM; font.pixelSize: 8 }
+                                Text { text: "  ·  "; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8) }
                                 Text {
                                     text: (modelData.remaining != null) ? (root.formatTokens(modelData.remaining) + " LEFT") : "—"
                                     color: root.cDim
-                                    font.family: root.fontM; font.pixelSize: 8
+                                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                                 }
                             }
                         }
@@ -595,38 +595,38 @@ PanelWindow {
             Rectangle {
                 visible: !Services.ZaiUsageService.hasError
                 Layout.fillWidth: true
-                Layout.preferredHeight: 150
+                Layout.preferredHeight: Config.PopupMetrics.px(150)
                 color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.30)
                 border.color: root.cBorder
-                border.width: 1
+                border.width: Config.PopupMetrics.hairline(parent)
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 18
-                    spacing: 24
+                    anchors.margins: Config.PopupMetrics.px(18)
+                    spacing: Config.PopupMetrics.px(24)
 
                     // peak window — the HUD headline figure
                     ColumnLayout {
                         Layout.alignment: Qt.AlignVCenter
-                        spacing: 2
+                        spacing: Config.PopupMetrics.px(2)
                         RowLayout {
-                            spacing: 8
-                            Rectangle { width: 28; height: 12; color: root.tierColor(Services.ZaiUsageService.peakTier); Layout.alignment: Qt.AlignVCenter }
+                            spacing: Config.PopupMetrics.px(8)
+                            Rectangle { width: Config.PopupMetrics.px(28); height: Config.PopupMetrics.px(12); color: root.tierColor(Services.ZaiUsageService.peakTier); Layout.alignment: Qt.AlignVCenter }
                             Text {
                                 text: "PEAK USAGE"
                                 color: root.cAccent
-                                font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                             }
                         }
                         Text {
                             text: Math.round(Services.ZaiUsageService.peakPct) + "%"
                             color: root.tierColor(Services.ZaiUsageService.peakTier)
-                            font.family: root.fontM; font.pixelSize: 40; font.bold: true
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(40); font.bold: true
                         }
                         Text {
                             text: Services.ZaiUsageService.peakLabel + " WINDOW"
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 9
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                         }
                     }
 
@@ -635,22 +635,22 @@ PanelWindow {
                     // total tokens consumed across all windows
                     ColumnLayout {
                         Layout.alignment: Qt.AlignVCenter
-                        spacing: 2
+                        spacing: Config.PopupMetrics.px(2)
                         Text {
                             text: "TOKENS CONSUMED"
                             color: root.cAccent
-                            font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                         }
                         Text {
                             property var total: root.totalUsedTokens()
                             text: (total !== null) ? root.formatTokens(total) : "—"
                             color: root.cText
-                            font.family: root.fontM; font.pixelSize: 26; font.bold: true
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(26); font.bold: true
                         }
                         Text {
                             text: "ACROSS ALL WINDOWS"
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 9
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                         }
                     }
 
@@ -659,17 +659,17 @@ PanelWindow {
                     // live sparkline of the 5h session %
                     ColumnLayout {
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: 320
-                        spacing: 4
+                        Layout.preferredWidth: Config.PopupMetrics.px(320)
+                        spacing: Config.PopupMetrics.px(4)
                         Text {
                             text: "SESSION %  //  LIVE"
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                         }
                         Canvas {
                             id: spark
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 90
+                            Layout.preferredHeight: Config.PopupMetrics.px(90)
                             onPaint: {
                                 var ctx = getContext("2d")
                                 ctx.reset()
@@ -720,7 +720,7 @@ PanelWindow {
                         Text {
                             text: Services.ZaiUsageService.sparkline.length + " SAMPLES // 60s INTERVAL"
                             color: root.cDim
-                            font.family: root.fontM; font.pixelSize: 8
+                            font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                         }
                     }
                 }
@@ -735,13 +735,13 @@ PanelWindow {
                 Text {
                     text: "DATA_SRC: api.z.ai  //  LAST_UPDT: " + (Services.ZaiUsageService.lastUpdated || "—")
                     color: root.cAccent
-                    font.family: root.fontM; font.pixelSize: 8
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: "[Z] REFRESH"
                     color: root.cAccent
-                    font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor

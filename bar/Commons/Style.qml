@@ -14,7 +14,7 @@ QtObject {
     readonly property int body: 12
     readonly property int bodySmall: 10
     readonly property int caption: 9
-    // xray surface chrome (qs.Commons consumers in plugins/omarchy-xray)
+    // xray surface chrome (qs.Commons consumers in plugins/randazraik.xray)
     readonly property int display: 20
     readonly property int subtitle: 14
     readonly property int cornerRadius: 6

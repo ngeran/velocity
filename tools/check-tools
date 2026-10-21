@@ -54,7 +54,7 @@ check required curl        "notification/web bridges (no python3 in the bar env)
 check required git         "PluginManagerService install-from-git pipeline"
 
 # --- feature: wired today, breaks silently if absent ------------------------
-check feature qrencode     "TrayCard NETWORK popup QR (wifi share)"
+check feature qrencode     "settings Wi-Fi QR share (WifiListView)"
 check feature upower       "battery daemon behind the native UPower client"
 check feature bluetoothctl "settings bluetooth control services"
 check feature wpctl        "settings audio control services"
@@ -63,7 +63,10 @@ check feature nvidia-smi   "settings GPU telemetry section (this is the NVIDIA b
 
 # --- optional: degrade gracefully by design ---------------------------------
 check optional fastfetch   "FastfetchOverlay hides itself without it"
-check optional ping        "network diagnostics popup falls back to ip-only view"
+check optional ping        "settings network engineer view latency"
+check optional powerprofilesctl "Control Center power-profile tile hides without it"
+check optional brightnessctl "Control Center brightness (backlight); falls back to ddcutil"
+check optional ddcutil    "Control Center brightness on external monitors (DDC/CI)"
 
 if (( fail )); then
   echo "check-tools: FAIL — add the missing tools to ~/.omni-nix and omni-apply" >&2

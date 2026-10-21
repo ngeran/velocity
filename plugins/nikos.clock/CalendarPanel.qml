@@ -13,6 +13,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import "lib/tz.mjs" as Tz
 
 ColumnLayout {
     id: calRoot
@@ -73,15 +74,10 @@ ColumnLayout {
         return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365
     }
 
-    // TZ label for the eyebrow — the clock anchor's configured offset/city.
+    // TZ label for the eyebrow — the clock's configured zone.
     readonly property string _tzLabel: {
-        if (!ctx) return "LOCAL"
-        var city = (ctx.bar.clockCity || "").trim()
-        if (city.length > 0 && city.toLowerCase() !== "local")
-            return city.toUpperCase()
-        var off = ctx.bar.clockOffset || 0
-        if (off === 0) return "LOCAL"
-        return "UTC" + (off > 0 ? "+" : "") + off
+        var z = ctx ? ctx.settings.get("zone", "Local") : "Local"
+        return Tz.isLocalZone(z) ? "LOCAL" : Tz.zoneCity(z).toUpperCase()
     }
 
     // Cell metrics — 7 columns across the panel body.

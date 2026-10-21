@@ -6,9 +6,9 @@
 // SUPER+T (`quickshell ipc -c bar call logs toggle`).
 //
 // SHELL mirrors KeybindsOverlay (two-phase show/hide, dim backdrop, Esc +
-// click-outside close, size-clamped (≤900×≤680) sharp-corner card).
+// click-outside close, size-clamped (≤900×≤680) rounded pure-black card).
 // INTERIOR mirrors FastfetchOverlay (pulsing header dot, live palette
-// swatches, dim grid + corner brackets, sub-header strip, footer status
+// swatches, dim dim grid, sub-header strip, footer status
 // dots + clock).
 //
 // DATA + FILTERING live in Services.LogService / LogModel.js — this file is
@@ -117,11 +117,11 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(900, parent.width - 48)
-        height: Math.min(680, parent.height - 48)
-        color: root.cBg
-        border.color: root.cBorder
-        border.width: 1
+        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
+        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
+        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
+        color: "#000000"
+        radius: Config.PopupMetrics.px(18)
         clip: true
         opacity: root.shown ? 1.0 : 0.0
         scale: root.shown ? 1.0 : 0.96
@@ -136,42 +136,28 @@ PanelWindow {
             anchors.fill: parent
             opacity: 0.22; z: 0
             Repeater {
-                model: Math.floor(card.width / 40)
-                Rectangle { width: 1; height: card.height; x: index * 40; color: root.cBorder }
+                model: Math.floor(card.width / Config.PopupMetrics.px(40))
+                Rectangle { width: Config.PopupMetrics.hairline(parent); height: card.height; x: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
             Repeater {
-                model: Math.floor(card.height / 40)
-                Rectangle { height: 1; width: card.width; y: index * 40; color: root.cBorder }
-            }
-        }
-
-        // ----- (decoration) corner brackets -----
-        Repeater {
-            model: 4
-            Item {
-                width: 14; height: 14; opacity: 0.55; z: 0
-                x: (index === 0 || index === 2) ? 0 : (card.width - 14)
-                y: (index === 0 || index === 1) ? 0 : (card.height - 14)
-                property bool isRight: (index === 1 || index === 3)
-                property bool isBottom: (index === 2 || index === 3)
-                Rectangle { width: 14; height: 2; color: root.cSecondary; y: parent.isBottom ? 12 : 0 }
-                Rectangle { width: 2; height: 14; color: root.cSecondary; x: parent.isRight ? 12 : 0 }
+                model: Math.floor(card.height / Config.PopupMetrics.px(40))
+                Rectangle { height: Config.PopupMetrics.hairline(parent); width: card.width; y: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
         }
 
         // ----- CONTENT -----
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 12
+            anchors.margins: Config.PopupMetrics.px(30)
+            spacing: Config.PopupMetrics.px(12)
             z: 10
 
             // ---- header ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Config.PopupMetrics.px(10)
                 Rectangle {
-                    width: 10; height: 10; radius: 5
+                    width: Config.PopupMetrics.px(10); height: Config.PopupMetrics.px(10); radius: Config.PopupMetrics.px(5)
                     color: Services.LogService.unreadable ? root.cErr
                          : Services.LogService.following ? root.cSuccess : root.cWarn
                     Layout.alignment: Qt.AlignVCenter
@@ -185,55 +171,55 @@ PanelWindow {
                     text: "󰗋"
                     color: root.cSecondary
                     font.family: root.fontN
-                    font.pixelSize: 18
+                    font.pixelSize: Config.PopupMetrics.px(18)
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Text {
                     text: "SYSTEM LOGS"
                     color: root.cText
                     font.family: root.fontM
-                    font.pixelSize: 18
+                    font.pixelSize: Config.PopupMetrics.px(18)
                     font.bold: true
                     font.letterSpacing: 3
                     Layout.alignment: Qt.AlignVCenter
                 }
                 // live palette swatches (drawn from the active theme, not hard-coded)
                 Row {
-                    spacing: 4
-                    Layout.leftMargin: 10
+                    spacing: Config.PopupMetrics.px(4)
+                    Layout.leftMargin: Config.PopupMetrics.px(10)
                     Layout.alignment: Qt.AlignVCenter
                     Repeater {
                         model: 7
                         Rectangle {
-                            width: 9; height: 9; radius: 2
+                            width: Config.PopupMetrics.px(9); height: Config.PopupMetrics.px(9); radius: Config.PopupMetrics.px(2)
                             color: root.swatchAt(index)
-                            border.color: root.cBorder; border.width: 1
+                            border.color: root.cBorder; border.width: Config.PopupMetrics.hairline(parent)
                         }
                     }
                 }
                 Item { Layout.fillWidth: true }
                 ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: 1
+                    spacing: Config.PopupMetrics.px(1)
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: "JOURNAL"
                         color: root.cDim
-                        font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                     }
                     Text {
                         Layout.alignment: Qt.AlignRight
                         text: Services.LogService.hostName || "—"
                         color: root.cSecondary
-                        font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                     }
                 }
                 Text {
                     text: "ESC"
                     color: root.cDim
-                    font.family: root.fontM; font.pixelSize: 9
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 8
+                    Layout.leftMargin: Config.PopupMetrics.px(8)
                 }
             }
 
@@ -243,16 +229,16 @@ PanelWindow {
                 text: "LIVE TAIL  //  journalctl -f -o json  //  CAP " + Services.LogService.maxEntries +
                       "  //  SYS + USER + KERNEL"
                 color: root.cDim
-                font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
             // ---- severity chips + action buttons ----
             // 4 hardcoded chips (no Repeater/model — the repo's delegate-init
             // gotchas don't apply to plain literals).
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: Config.PopupMetrics.px(6)
 
                 component SevChip: Rectangle {
                     id: chip
@@ -261,17 +247,17 @@ PanelWindow {
                     property int count: 0
                     readonly property bool active: root.sevFilter === chip.sev
                     readonly property color tint: root.sevColor(chip.sev === "all" ? "" : chip.sev)
-                    height: 22
-                    width: chipLabel.implicitWidth + 16
+                    height: Config.PopupMetrics.px(22)
+                    width: chipLabel.implicitWidth + Config.PopupMetrics.px(16)
                     color: active ? Qt.rgba(tint.r, tint.g, tint.b, 0.12) : "transparent"
                     border.color: active ? Qt.rgba(tint.r, tint.g, tint.b, 0.35) : root.cBorder
-                    border.width: 1
+                    border.width: Config.PopupMetrics.hairline(parent)
                     Text {
                         id: chipLabel
                         anchors.centerIn: parent
                         text: chip.label + " " + chip.count
                         color: chip.active ? chip.tint : root.cDim
-                        font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -292,17 +278,17 @@ PanelWindow {
                     id: btn
                     property string label: ""
                     signal activated()
-                    height: 22
-                    width: btnLabel.implicitWidth + 16
+                    height: Config.PopupMetrics.px(22)
+                    width: btnLabel.implicitWidth + Config.PopupMetrics.px(16)
                     color: btnMouse.containsMouse ? Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.10) : "transparent"
                     border.color: btnMouse.containsMouse ? root.cSecondary : root.cBorder
-                    border.width: 1
+                    border.width: Config.PopupMetrics.hairline(parent)
                     Text {
                         id: btnLabel
                         anchors.centerIn: parent
                         text: btn.label
                         color: btnMouse.containsMouse ? root.cSecondary : root.cDim
-                        font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
                     }
                     MouseArea {
                         id: btnMouse
@@ -325,17 +311,17 @@ PanelWindow {
             // ---- search field + matched count ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Config.PopupMetrics.px(10)
 
                 Rectangle {
-                    width: 280; height: 26
+                    width: Config.PopupMetrics.px(280); height: Config.PopupMetrics.px(26)
                     color: Qt.rgba(root.cBg.r, root.cBg.g, root.cBg.b, 0.4)
                     border.color: searchField.activeFocus ? root.cSecondary : root.cOutline
-                    border.width: 1
+                    border.width: Config.PopupMetrics.hairline(parent)
                     Controls.TextField {
                         id: searchField
                         anchors.fill: parent
-                        anchors.margins: 4
+                        anchors.margins: Config.PopupMetrics.px(4)
                         background: null
                         placeholderText: "SEARCH — UNIT OR MESSAGE"
                         color: root.cText
@@ -343,7 +329,7 @@ PanelWindow {
                         selectionColor: root.cSecondary
                         selectedTextColor: root.cBg
                         font.family: root.fontM
-                        font.pixelSize: 10
+                        font.pixelSize: Config.PopupMetrics.px(10)
                         selectByMouse: true
                         onTextChanged: searchDebounce.restart()
                         // Esc closes the overlay, not just the keyboard focus.
@@ -354,10 +340,10 @@ PanelWindow {
                 Text {
                     text: "MATCHED " + root.matchCount + " / " + Services.LogService.entries.count
                     color: root.cDim
-                    font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
                 }
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+            Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
             // ---- log list ----
             Item {
@@ -388,32 +374,32 @@ PanelWindow {
                         color: "transparent"
 
                         Rectangle {
-                            x: 12; width: 2; height: 14
+                            x: 12; width: Config.PopupMetrics.px(2); height: Config.PopupMetrics.px(14)
                             anchors.verticalCenter: parent.verticalCenter
                             color: root.sevColor(model.severity)
                         }
                         Row {
                             x: 20
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: 10
+                            spacing: Config.PopupMetrics.px(10)
                             Text {
                                 text: model.timeLabel
                                 color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 10
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10)
                             }
                             Text {
-                                width: 190
+                                width: Config.PopupMetrics.px(190)
                                 text: model.unit + (model.pid ? "[" + model.pid + "]" : "")
                                 color: root.sevColor(model.severity)
-                                font.family: root.fontM; font.pixelSize: 10; font.bold: true
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true
                                 elide: Text.ElideMiddle
                             }
                             Text {
-                                width: list.width - 20 - 190 - 80 - 40
+                                width: list.width - Config.PopupMetrics.px(20 + 190 + 80 + 40)
                                 text: model.message
                                 color: model.severity === "error" ? root.cErr
                                      : model.severity === "warn"  ? root.cWarn : root.cText
-                                font.family: root.fontM; font.pixelSize: 10
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10)
                                 elide: Text.ElideRight
                             }
                         }
@@ -422,7 +408,7 @@ PanelWindow {
                     // ---- named empty states (one visible at a time) ----
                     ColumnLayout {
                         anchors.centerIn: parent
-                        spacing: 6
+                        spacing: Config.PopupMetrics.px(6)
                         z: 5
                         visible: Services.LogService.unreadable ||
                                  Services.LogService.entries.count === 0 ||
@@ -430,50 +416,50 @@ PanelWindow {
 
                         // 1. journalctl itself failed (sticky until refresh)
                         ColumnLayout {
-                            spacing: 4
+                            spacing: Config.PopupMetrics.px(4)
                             visible: Services.LogService.unreadable
                             Layout.alignment: Qt.AlignHCenter
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "󰅖"
-                                font.family: root.fontN; font.pixelSize: 26
+                                font.family: root.fontN; font.pixelSize: Config.PopupMetrics.px(26)
                                 color: root.cErr
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "JOURNALCTL UNREADABLE"
                                 color: root.cErr
-                                font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "check journal access / group membership — REFRESH to retry"
                                 color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 9; font.italic: true
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                             }
                         }
                         // 2. stream alive but nothing ingested yet
                         ColumnLayout {
-                            spacing: 4
+                            spacing: Config.PopupMetrics.px(4)
                             visible: !Services.LogService.unreadable &&
                                      Services.LogService.entries.count === 0
                             Layout.alignment: Qt.AlignHCenter
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "󰔛"
-                                font.family: root.fontN; font.pixelSize: 26
+                                font.family: root.fontN; font.pixelSize: Config.PopupMetrics.px(26)
                                 color: root.cDim
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "WAITING FOR JOURNAL ENTRIES"
                                 color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2
                             }
                         }
                         // 3. entries exist, none match severity/search
                         ColumnLayout {
-                            spacing: 4
+                            spacing: Config.PopupMetrics.px(4)
                             visible: !Services.LogService.unreadable &&
                                      Services.LogService.entries.count > 0 &&
                                      root.matchCount === 0
@@ -481,20 +467,20 @@ PanelWindow {
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "󰍉"
-                                font.family: root.fontN; font.pixelSize: 26
+                                font.family: root.fontN; font.pixelSize: Config.PopupMetrics.px(26)
                                 color: root.cDim
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "NO ENTRIES MATCH FILTER"
                                 color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "adjust severity or search — CLEAR search resets the view"
                                 color: root.cDim
-                                font.family: root.fontM; font.pixelSize: 9; font.italic: true
+                                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                             }
                         }
                     }
@@ -504,12 +490,12 @@ PanelWindow {
             // ---- footer ----
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 16
+                spacing: Config.PopupMetrics.px(16)
                 opacity: 0.7
                 RowLayout {
-                    spacing: 6
+                    spacing: Config.PopupMetrics.px(6)
                     Rectangle {
-                        width: 6; height: 6; radius: 3
+                        width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3)
                         color: Services.LogService.unreadable ? root.cErr
                              : Services.LogService.following  ? root.cSuccess : root.cWarn
                         Layout.alignment: Qt.AlignVCenter
@@ -517,25 +503,25 @@ PanelWindow {
                     Text {
                         text: Services.LogService.unreadable ? "STREAM ERROR"
                              : Services.LogService.following  ? "LIVE" : "PAUSED"
-                        color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                        color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1
                     }
                 }
                 Text {
                     text: (Services.LogService.entries.count || 0) + " ENTRIES"
-                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1
                 }
                 Text {
                     text: Services.LogService.following ? "" : "RESUME RE-TAILS THE JOURNAL"
-                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: "[ " + (Services.LogService.hostName || "host") + " ]"
-                    color: root.cDim; font.family: root.fontM; font.pixelSize: 9
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                 }
                 Text {
                     text: root.clockText
-                    color: root.cSecondary; font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                    color: root.cSecondary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
                 }
             }
         }

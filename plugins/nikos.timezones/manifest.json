@@ -4,7 +4,7 @@
   "id": "nikos.timezones",
   "name": "Timezones",
   "version": "1.0.0",
-  "description": "World-clock pill + worldtimebuddy working-hours grid. Zones configured in TimezoneService.qml (Athens/London/Tokyo). Manual UTC-offset math — this host's tzdata is untrusted.",
+  "description": "World-clock pill + worldtimebuddy working-hours grid. Zone math via lib/tz.mjs (manual DST rules — this host's tzdata is untrusted).",
   "author": "nikos",
   "kinds": [
     "bar-widget"
@@ -18,5 +18,33 @@
   "commands": [],
   "ipc": [
     "toggle"
-  ]
+  ],
+  "settings": {
+    "zone": {
+      "type": "enum",
+      "default": "Europe/Athens",
+      "options": [
+        "Local",
+        "Europe/Athens",
+        "Europe/London",
+        "America/New_York",
+        "America/Chicago",
+        "America/Los_Angeles",
+        "Asia/Tokyo",
+        "UTC"
+      ],
+      "label": "Pill zone (also the settings header's second clock)"
+    },
+    "zones": {
+      "type": "list",
+      "default": [
+        "Europe/Athens",
+        "Europe/London",
+        "Asia/Tokyo",
+        "Local",
+        "UTC"
+      ],
+      "label": "Grid zones (IANA names or Local)"
+    }
+  }
 }

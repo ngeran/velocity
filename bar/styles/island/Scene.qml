@@ -172,12 +172,13 @@ Item {
             }
 
             // =================================================================
-            // SWITCHER — Calendar · Wi-Fi · Bluetooth · Volume. While one of
+            // SWITCHER — Control · Calendar · Wi-Fi · Bluetooth · Volume. While one of
             // them is open in the island, a strip on the flat-edge side
             // switches in place (the island morphs between their sizes).
             // =================================================================
             readonly property string calendarPlugin: "nikos.clock"
             readonly property var dockItems: [
+                { key: "control",   glyph: "󰒓", plugin: "" },
                 { key: "calendar",  glyph: "󰃭", plugin: calendarPlugin },
                 { key: "network",   glyph: "󰖩", plugin: "velocity.network" },
                 { key: "bluetooth", glyph: "󰂯", plugin: "velocity.bluetooth" },
@@ -188,7 +189,7 @@ Item {
                 if (win.client === null) return ""
                 if (_trayMine) {
                     var t = sceneRoot.host.activeTray
-                    if (t === "network" || t === "bluetooth" || t === "volume") return t
+                    if (t === "control" || t === "network" || t === "bluetooth" || t === "volume") return t
                     return ""
                 }
                 return Engine.PopupCoordinator.current === calendarPlugin ? "calendar" : ""
@@ -559,12 +560,20 @@ Item {
                     onHoveredChanged: win._setRawHover(hovered)
                 }
 
-                // Empty-island click closes the tray card this bar opened.
+                // Empty-island click: closes the tray card this bar opened,
+                // otherwise opens the Control Center (widgets sit above and
+                // keep their own clicks; open plugin panels swallow theirs).
                 MouseArea {
                     anchors.fill: parent
-                    enabled: !!sceneRoot.host && sceneRoot.host.trayOwner === win
-                             && sceneRoot.host.activeTray !== ""
-                    onClicked: sceneRoot.host.closeTray()
+                    enabled: !!sceneRoot.host
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: {
+                        win._touch()
+                        if (sceneRoot.host.trayOwner === win && sceneRoot.host.activeTray !== "")
+                            sceneRoot.host.closeTray()
+                        else if (win.client === null)
+                            sceneRoot.host.toggleTray(win, "control", null)
+                    }
                 }
 
                 // ── shell: flat edge on the screen, round far corners ──────
@@ -780,7 +789,8 @@ Item {
                                 id: seg
                                 required property var modelData
                                 readonly property bool current: win.dockKey === modelData.key
-                                readonly property bool available: modelData.key === "calendar"
+                                readonly property bool available: modelData.key === "control" ? true
+                                    : modelData.key === "calendar"
                                     ? win._ownInstance(modelData.plugin) !== null
                                     : win._inLayout(modelData.plugin)
                                 visible: available
