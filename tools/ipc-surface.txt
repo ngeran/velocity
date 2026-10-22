@@ -71,6 +71,9 @@ powerMenu.toggle                  bound    # SUPER+P
 display.status                   manual    # truth probe (persist state, target, monitors)
 display.stage                    manual    # stage live display settings (the panel button, scriptable)
 display.refresh                   manual    # one-shot monitor poll (the poll timer is dashboard-gated)
+display.revertProbe               manual    # keep/revert cycle probe: stage the CURRENT rule (no visible change)
+display.revertState               manual    # pending keep/revert window (label + secondsLeft) or "none"
+display.revertKeep                manual    # cancel the pending window (stops the external revert timer)
 notifications.add                 manual    # ingest surface (docs in NotificationService header)
 notifications.clear               manual    # soft clear
 notifications.restore              manual    # undo the soft clear

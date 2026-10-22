@@ -317,7 +317,7 @@ Item {
     }
 
     function applyRule(over) {
-        var rule = ruleString(over)
+        var rule = ruleFor(target, over)
         if (rule === "") return
         if (ruleProc.running) { ruleProc.queued = rule; return }
         _runRule(rule)
@@ -343,20 +343,90 @@ Item {
     }
 
     // Risky change (mode/scale): snapshot the CURRENT rule first, apply, then
-    // open the 10s Keep/Revert window. confirmKeep() closes it; revertNow()
-    // re-issues the snapshot.
-    function applyWithRevert(label, over) {
-        var before = ruleString({})
-        applyRule(over)
-        pendingRevert = { rule: before, deadline: Date.now() + 10000, label: label }
+    // open the Keep/Revert window. The DEADLINE lives OUTSIDE this process:
+    // a transient systemd timer (systemd-run --user --on-active) re-applies
+    // the snapshot even if the shell dies mid-window (the Omacale lesson —
+    // whoever owns the clock must outlive the UI; see .plans/omacale-review.md
+    // #1). confirmKeep() cancels the timer; revertNow() cancels it and
+    // applies immediately. The 250ms in-process timer above stays as a
+    // backup — re-applying the same rule is idempotent, so both firing is
+    // harmless. If the shell dies the window simply reverts (fail-safe to
+    // the old config); we never re-apply a risky change automatically.
+    //
+    // A second risky change while a window is pending implicitly KEEPS the
+    // first (its effect is now part of "current"); the fresh snapshot then
+    // reverts BOTH if let go.
+    readonly property int revertWindowMs: 30000
+    readonly property string revertUnit: "velocity-display-revert"
+    // Generation gate for the stop→arm chain: every keep/revert bumps it, so
+    // an arm still in flight when KEEP lands never spawns (and the spawn
+    // completion handler below re-stops one that slipped through).
+    property int _revertGen: 0
+    property int _revertArmGen: -1
+
+    Process {   // unbounded-ok: systemctl stop of a maybe-absent unit — returns in ms
+        id: revertStopProc
+        command: ["sh", "-c",
+            "systemctl --user stop " + root.revertUnit + ".timer " + root.revertUnit + ".service 2>/dev/null || true"]
+        running: false
+        onRunningChanged: if (!running && root._revertArmGen === root._revertGen
+                              && root._revertArmGen >= 0) {
+            root._revertArmGen = -1
+            revertArmProc.running = true
+        }
     }
 
-    function confirmKeep() { pendingRevert = null }
+    Process {   // unbounded-ok: systemd-run transient-unit spawn — returns in ms
+        id: revertArmProc
+        command: []; running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { revertArmProc.buffer += data + "\n" } }
+        onRunningChanged: if (!running) {
+            var armed = revertArmProc.buffer.indexOf("Running") !== -1
+            if (armed && !root.revertPending) {
+                // KEEP/REVERT landed while the spawn was mid-flight: the unit
+                // exists but no window is pending — kill it again.
+                revertStopProc.running = true
+            } else if (root.revertPending && !armed) {
+                CommandService.pushLog("[display] external revert timer not armed — in-process fallback active", "warning")
+            }
+            revertArmProc.buffer = ""
+        }
+    }
+
+    function applyWithRevert(label, over) {
+        if (pendingRevert) confirmKeep()   // implicit keep: the pending change is current now
+        var before = ruleFor(target, {})
+        applyRule(over)
+        pendingRevert = { rule: before, deadline: Date.now() + revertWindowMs, label: label }
+        // Absolute path: a transient user unit must not depend on the
+        // shell's environment.
+        revertArmProc.command = ["systemd-run", "--user",
+            "--unit=" + revertUnit,
+            "--on-active=" + Math.round(revertWindowMs / 1000) + "s",
+            "/run/current-system/sw/bin/hyprctl", "eval", before]
+        // Re-arm needs the old unit gone first: bump the generation and stop;
+        // the stop's completion fires the arm while the gen still matches.
+        root._revertGen++
+        root._revertArmGen = root._revertGen
+        revertStopProc.running = true
+    }
+
+    function _cancelExternalRevert() {
+        root._revertGen++                  // invalidates any in-flight arm
+        revertStopProc.running = true
+    }
+
+    function confirmKeep() {
+        _cancelExternalRevert()
+        pendingRevert = null
+    }
 
     function revertNow() {
         var pr = pendingRevert
         pendingRevert = null
         if (!pr) return
+        _cancelExternalRevert()
         _runRule(pr.rule)
     }
 

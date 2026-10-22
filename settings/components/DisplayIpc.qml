@@ -42,6 +42,28 @@ IpcHandler {
         return "polling"
     }
 
+    // Keep/Revert cycle probe (no visible change): stages the CURRENT rule
+    // through applyWithRevert({}, …) — exercises the snapshot, the banner,
+    // and the external systemd revert timer. Pair with
+    // `systemctl --user list-timers | grep velocity-display-revert` and
+    // display.revertState / display.revertKeep.
+    function revertProbe(): string {
+        Services.MonitorService.applyWithRevert("PROBE keep/revert cycle", {})
+        return revertState()
+    }
+
+    function revertState(): string {
+        var pr = Services.MonitorService.pendingRevert
+        return pr ? JSON.stringify({ label: pr.label,
+                                     secondsLeft: Services.MonitorService.revertSecondsLeft })
+                  : "none"
+    }
+
+    function revertKeep(): string {
+        Services.MonitorService.confirmKeep()
+        return revertState()
+    }
+
     // Synthetic-topology assertions for the twin-EDID keying (no dual-display
     // hardware required). Returns PASS or the failing list.
     function selftest(): string {
