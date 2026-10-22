@@ -253,7 +253,12 @@ ColumnLayout {
         }
     }
 
-    // ── scaffold + install row ────────────────────────────────────────────────
+    // ── scaffold + install rows ───────────────────────────────────────────────
+    // Two rows, not one: combined they set a ~850px implicit width, which
+    // became this pane's effective minimum and pushed every plugin row's
+    // toggle past the card edge on the 720px-floor dashboard card (pane
+    // cell ~544). Inputs flex (minimumWidth + fillWidth, capped) so each
+    // row's implicit stays well under the narrowest pane.
     RowLayout {
         Layout.fillWidth: true
         spacing: 8
@@ -261,7 +266,9 @@ ColumnLayout {
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 9
             font.bold: true; color: Config.ThemeConfig.colors.textDim }
         Rectangle {
-            Layout.preferredWidth: 170; Layout.preferredHeight: 24
+            Layout.preferredWidth: 170; Layout.minimumWidth: 60
+            Layout.fillWidth: true; Layout.maximumWidth: 200
+            Layout.preferredHeight: 24
             radius: Config.ControlConfig.radiusSmall
             color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
             border.color: scaffoldInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
@@ -283,11 +290,17 @@ ColumnLayout {
         }
         Pill { text: "NEW PLUGIN"; accentStyle: true; onActivated: view.mgr.scaffold(scaffoldInput.text, view.newKind) }
         Item { Layout.fillWidth: true }
+    }
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
         Text { text: "INSTALL FROM GIT"
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 9
             font.bold: true; color: Config.ThemeConfig.colors.textDim }
         Rectangle {
-            Layout.preferredWidth: 300; Layout.preferredHeight: 24
+            Layout.preferredWidth: 300; Layout.minimumWidth: 80
+            Layout.fillWidth: true; Layout.maximumWidth: 340
+            Layout.preferredHeight: 24
             radius: Config.ControlConfig.radiusSmall
             color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
             border.color: gitInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
@@ -428,6 +441,7 @@ ColumnLayout {
                                 color: row.p.enabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                                 elide: Text.ElideRight
                                 Layout.maximumWidth: 180
+                                Layout.minimumWidth: 0
                             }
                             Text {
                                 text: row.p.id
@@ -435,6 +449,7 @@ ColumnLayout {
                                 color: Config.ThemeConfig.colors.textDim
                                 elide: Text.ElideRight
                                 Layout.maximumWidth: 200
+                                Layout.minimumWidth: 0
                             }
                             // where it comes from: user / system / bundled / builtin
                             Text {
@@ -450,6 +465,7 @@ ColumnLayout {
                                 color: Config.ThemeConfig.colors.warning
                                 elide: Text.ElideRight
                                 Layout.maximumWidth: 120
+                                Layout.minimumWidth: 0
                             }
                             Text {
                                 visible: row.isErr
@@ -458,6 +474,7 @@ ColumnLayout {
                                 color: Config.ThemeConfig.colors.error
                                 elide: Text.ElideMiddle
                                 Layout.maximumWidth: 160
+                                Layout.minimumWidth: 0
                             }
 
                             Item { Layout.fillWidth: true }
