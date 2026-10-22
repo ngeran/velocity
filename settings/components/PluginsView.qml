@@ -2,7 +2,9 @@
 // PluginsView.qml — CONTROL ▸ PLUGINS: plugin manager (theme-aware)
 // =============================================================================
 // Compact rows ordered like the bar (left → center → right, then headless
-// plugins), search-as-you-type, and per-row lifecycle: enable/disable,
+// plugins), search-as-you-type, status chips (ERROR carries the live
+// failure count — load errors surface from the bar's registry), and
+// per-row lifecycle: enable/disable,
 // section chip (bar widgets: click cycles LEFT → CENTER → RIGHT), reorder
 // within the section (▲▼), a settings form generated from the manifest
 // schema (⚙), and DEL → trash (user/bundled plugins only) with RESTORE
@@ -42,7 +44,10 @@ ColumnLayout {
             var p = ps[i]
             if (view.statusFilter === "enabled" && !p.enabled) continue
             if (view.statusFilter === "disabled" && p.enabled) continue
-            if (view.statusFilter === "error" && p.status !== "error") continue
+            // ERROR catches both "error" (load failed in the bar) and
+            // "invalid" (manifest rejected at scan) — the row dot paints
+            // both red.
+            if (view.statusFilter === "error" && p.status !== "error" && p.status !== "invalid") continue
             if (q !== "" && (p.id + " " + p.name + " " + (p.description || "")).toLowerCase().indexOf(q) === -1) continue
             out.push(p)
         }
@@ -52,6 +57,16 @@ ColumnLayout {
             return (s === -1 ? 3 : s) * 1000 + (p.position >= 0 ? p.position : 999)
         }
         return out.sort(function(a, b) { return rank(a) - rank(b) || (a.id < b.id ? -1 : 1) })
+    }
+
+    // Errored or invalid rows (same states the dot paints red) — the ERROR
+    // chip carries the count so a failed load is visible without filtering.
+    readonly property int errorCount: {
+        var n = 0
+        var ps = view.mgr.plugins
+        for (var i = 0; i < ps.length; i++)
+            if (ps[i].status === "error" || ps[i].status === "invalid") n++
+        return n
     }
 
     function isBarWidget(p) { return p.kinds.indexOf("bar-widget") !== -1 }
@@ -321,6 +336,33 @@ ColumnLayout {
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 9
             color: Config.ThemeConfig.colors.error
         }
+    }
+
+    // ── status filter ────────────────────────────────────────────────────────
+    // statusFilter existed but nothing ever set it — the ERROR view was
+    // unreachable and a failed load was only visible as red row text you
+    // had to be looking at. The ERROR chip carries the live count.
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+        Repeater {
+            model: [
+                { key: "all", label: "ALL" },
+                { key: "enabled", label: "ENABLED" },
+                { key: "disabled", label: "DISABLED" },
+                { key: "error", label: "ERROR" }
+            ]
+            Pill {
+                readonly property bool isErr: modelData.key === "error"
+                text: isErr && view.errorCount > 0 ? "ERROR " + view.errorCount : modelData.label
+                accentStyle: view.statusFilter === modelData.key
+                // Pill paints danger over accentStyle, so an errored ERROR
+                // chip reads red whether or not it's the active filter.
+                danger: isErr && view.errorCount > 0
+                onActivated: view.statusFilter = modelData.key
+            }
+        }
+        Item { Layout.fillWidth: true }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
