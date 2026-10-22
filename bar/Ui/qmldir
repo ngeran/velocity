@@ -8,3 +8,4 @@ BarIconButton 1.0 BarIconButton.qml
 BorderSurface 1.0 BorderSurface.qml
 PluginPopup 1.0 PluginPopup.qml
 BarPill 1.0 BarPill.qml
+Sparkline 1.0 Sparkline.qml

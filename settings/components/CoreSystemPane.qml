@@ -5,7 +5,7 @@
 // (not floating cards). Layout, top to bottom:
 //   header rail   SYSTEM / TELEMETRY · DIGITAL INSTRUMENT CLUSTER · ● LIVE
 //   load band     LED-matrix CPU history, 0–100 scale
-//   main row      GPU dial readout | dominant PROCESSOR digits | MEMORY banks
+//   main row      GPU dial readout | dominant PROCESSOR digits | MEMORY trend
 //   aux row       CPU TEMP ticks · PER-CORE LEDs · STORAGE · ENGINE (+ GPU
 //                 process rows, X-Ray inspect deep-links)
 //   footer rail   LOCAL TELEMETRY / sample · UPDATED Ns AGO
@@ -201,7 +201,7 @@ Rectangle {
             }
             DashDivider { Layout.fillHeight: true; width: 1 }
 
-            // ── MEMORY: digits + dual-bank chip graphic ───────────────────
+            // ── MEMORY: digits + 2-min sparkline trend ────────────────────
             ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 Layout.minimumWidth: 150
@@ -219,22 +219,24 @@ Rectangle {
                     text: Services.CoreEngineService.ramUsedGB.toFixed(1) + " / " + Services.CoreEngineService.ramTotalGB.toFixed(1) + " GiB"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
-                Item { Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 8
-                    Grid { id: bankGrid
-                        anchors.centerIn: parent
-                        columns: 12; rows: 2; spacing: 3
-                        Repeater {
-                            model: 24
-                            Rectangle {
-                                width: 13; height: 10; radius: 2
-                                readonly property bool _lit: index < Math.round(Services.CoreEngineService.ramPct / 100 * 24)
-                                color: _lit ? root.loadTier(Services.CoreEngineService.ramPct)
-                                            : Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
-                                border.color: Config.ThemeConfig.colors.outlineVariant
-                                border.width: _lit ? 0 : 1
-                            }
-                        }
+                // 2-min utilization trend — memoryHistory was collected but
+                // never rendered (the old 24-chip gauge re-drew the same
+                // single number the big digits already show). Colour follows
+                // the load tier like every other meter in this pane.
+                Sparkline {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    Layout.leftMargin: 12; Layout.rightMargin: 12
+                    Layout.topMargin: 8; Layout.bottomMargin: 8
+                    samples: {
+                        var h = Services.CoreEngineService.memoryHistory
+                        var out = []
+                        for (var i = 0; i < h.length; i++) out.push(Number(h[i].value) || 0)
+                        return out
                     }
+                    capacity: Services.CoreEngineService.historyMaxSamples
+                    valueMax: 100
+                    stroke: root.loadTier(Services.CoreEngineService.ramPct)
+                    fill: Config.ThemeConfig.tint(root.loadTier(Services.CoreEngineService.ramPct), 0.12)
                 }
                 Text { Layout.leftMargin: 12; text: "SWAP " + Services.CoreEngineService.swapUsedGB.toFixed(1) + " / " + Services.CoreEngineService.swapTotalGB.toFixed(0) + " GB"
                     color: Config.ThemeConfig.colors.textDim

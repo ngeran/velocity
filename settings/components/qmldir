@@ -55,3 +55,4 @@ NetworkEngineerView 1.0 NetworkEngineerView.qml
 NetworkIpc 1.0 NetworkIpc.qml
 BarFormCard 1.0 BarFormCard.qml
 LogsTab 1.0 LogsTab.qml
+Sparkline 1.0 Sparkline.qml
