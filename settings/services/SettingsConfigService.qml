@@ -174,6 +174,18 @@ Item {
     }
 
     function saveBarConfig() {
+        // Anti-drift: the extras snapshot is captured at startup; a hand-edit
+        // made since (motionScale via CLI, …) would be clobbered by writing
+        // from that stale snapshot. Re-read the file first and chain the
+        // write off the read's exit (skipping applyBarConfig — see the
+        // _barConfigReadForSave branch). A read still in flight can't be
+        // re-triggered, so write with what we have rather than drop the save.
+        if (barConfigRead.running) { _writeBarConfig(); return }
+        root._barConfigReadForSave = true
+        barConfigRead.running = true
+    }
+
+    function _writeBarConfig() {
         var barConfig = {
             schemaVersion: 1,   // bar's ingestConfigText ignores unknown keys; bump on shape changes
             barHeight: root.barHeight,
@@ -199,8 +211,11 @@ Item {
 
     // ── bar-config extras capture ───────────────────────────────────────────
     // Everything in bar-config.json the service does NOT model, so saves can
-    // merge it back instead of clobbering it.
+    // merge it back instead of clobbering it. Snapshot is refreshed from disk
+    // at the START of every save (see saveBarConfig) — the startup snapshot
+    // alone would clobber hand-edits made since (motionScale via CLI etc.).
     property var barConfigExtras: ({})
+    property bool _barConfigReadForSave: false
     property var barConfigRead: Process {   // unbounded-ok: waived — see service header
         command: ["cat", StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"]
         property string buffer: ""
@@ -222,10 +237,20 @@ Item {
                             extras[k] = data[k]
                     }
                     root.barConfigExtras = extras
-                    root.applyBarConfig(data)
+                    // In save mode the disk copy is STALE by definition (the
+                    // user just changed values in the UI) — refresh extras
+                    // only; re-applying would silently revert the save.
+                    if (!root._barConfigReadForSave) root.applyBarConfig(data)
                 } catch (e) { /* keep empty extras */ }
             }
             barConfigRead.buffer = ""
+            // A save chains through the re-read (extras refreshed above);
+            // the actual write waits until here so it always lands, even if
+            // the file was missing/unparseable (extras stay from startup).
+            if (root._barConfigReadForSave) {
+                root._barConfigReadForSave = false
+                root._writeBarConfig()
+            }
         }
     }
 
