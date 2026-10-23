@@ -20,6 +20,9 @@
 //   setCyclingEnabled   — Set cycling state explicitly
 //   setTransition       — Set transition type (outer, fade, wipe, simple, wave)
 //   getTransition       — Returns current transition type
+//   setAnimationPaused  — Freeze/resume live (gif/apng) playback
+//   toggleAnimationPause— Flip playback state
+//   getAnimationPaused  — Returns bool (true = frozen)
 // =============================================================================
 
 pragma Singleton
@@ -63,6 +66,10 @@ Item {
     property bool   scanInProgress: false
     property string currentMonitor: ""  // Target monitor for wallpaper (empty = all)
 
+    /// True while the daemon's animation is frozen (awww pause) — a HOLD on a
+    /// live (gif/apng) wallpaper. Static images are unaffected visually.
+    property bool   animationPaused: false
+
     // =========================================================================
     // CONFIGURATION PERSISTENCE
     // =========================================================================
@@ -84,6 +91,9 @@ Item {
             }
             if (data.transitionType !== undefined) {
                 root.transitionType = data.transitionType
+            }
+            if (data.animationPaused !== undefined) {
+                root.animationPaused = data.animationPaused
             }
             if (data.wallpaperDir !== undefined) {
                 root.wallpaperDir = data.wallpaperDir
@@ -111,6 +121,7 @@ Item {
             cycleInterval: root.cycleInterval / 1000, // Convert ms to seconds
             cyclingEnabled: root.cyclingEnabled,
             transitionType: root.transitionType,
+            animationPaused: root.animationPaused,
             wallpaperDir: root.wallpaperDir,
             currentWallpaper: root.currentWallpaper
         })
@@ -229,6 +240,8 @@ Item {
                  "-o", "-iname", "*.jpeg",
                  "-o", "-iname", "*.png",
                  "-o", "-iname", "*.webp",
+                 "-o", "-iname", "*.gif",
+                 "-o", "-iname", "*.apng",
             ")"
         ]
         scanner.running = true
@@ -293,11 +306,55 @@ Item {
         }
     }
 
+    // =========================================================================
+    // LIVE (ANIMATED) WALLPAPER CONTROL
+    // --------------------------------------------------------------------------
+    // awww plays gif/apng wallpapers natively. `awww pause` freezes the
+    // animation (and incoming transitions); `awww unpause` resumes. Runs as its
+    // own one-shot Process so a HOLD toggle can never stomp a pending img
+    // apply on the shared awwwProcess.
+    // =========================================================================
+
+    /// True for formats awww animates as a wallpaper.
+    function isLive(path: string): bool {
+        var p = (path || "").toLowerCase()
+        return p.endsWith(".gif") || p.endsWith(".apng")
+    }
+
+    Process {   // unbounded-ok: one-shot daemon control command
+        id: pauseCtl
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode !== 0)
+                console.warn("[WallpaperService] awww pause/unpause failed with exit code:", exitCode)
+        }
+    }
+
+    /// Freeze (true) or resume (false) live-wallpaper playback.
+    function setAnimationPaused(paused: bool) {
+        pauseCtl.command = ["awww", paused ? "pause" : "unpause"]
+        pauseCtl.running = true
+        root.animationPaused = paused
+        saveConfig()
+    }
+
+    function toggleAnimationPause() {
+        root.setAnimationPaused(!root.animationPaused)
+    }
+
     /// Apply a wallpaper by absolute path.
     function applyWallpaper(path) {
         if (!path || path.length === 0) {
             console.log("[WallpaperService] applyWallpaper: empty path, aborting")
             return
+        }
+
+        // A fresh apply resumes playback: a paused daemon swallows the new
+        // image's transition too. HOLD is re-armed by the user afterwards.
+        if (root.animationPaused) {
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Resuming animation for fresh apply")
+            setAnimationPaused(false)
         }
 
         // Build command with optional --outputs flag
@@ -491,6 +548,21 @@ Item {
         /// Set transition type
         function setTransition(type: string) {
             root.setTransition(type)
+        }
+
+        /// Freeze/resume live (gif/apng) playback
+        function setAnimationPaused(paused: bool) {
+            root.setAnimationPaused(paused)
+        }
+
+        /// Flip playback state
+        function toggleAnimationPause() {
+            root.toggleAnimationPause()
+        }
+
+        /// Return whether playback is currently frozen
+        function getAnimationPaused(): bool {
+            return root.animationPaused
         }
 
         /// Return current transition type

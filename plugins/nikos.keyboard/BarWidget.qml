@@ -499,10 +499,30 @@ Item {
         property string lua: ""
         onRunningChanged: {
             if (!running) {
-                lastAction = "Applied live — commit ~/.omni-nix to persist across deploys"
-                refresh(true)
-                requestEffectiveRead()
+                lastAction = "Applied live — checking config health…"
+                configErrorsProc.running = true
             }
+        }
+    }
+    // Post-apply config health check. configerrors reports the last FULL
+    // parse (deploy/load time) — never our eval payload — so a non-empty
+    // report means the deployed file has problems from some other writer;
+    // the live apply itself still landed. Report, don't fail.
+    Process {   // unbounded-ok: one-shot local hyprctl probe
+        id: configErrorsProc
+        command: []
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(d) { configErrorsProc.buffer += d + "\n" } }
+        onRunningChanged: {
+            if (running) return
+            var report = configErrorsProc.buffer.trim()
+            configErrorsProc.buffer = ""
+            if (report === "")
+                lastAction = "Applied live — deployed config parses clean (commit ~/.omni-nix to persist)"
+            else
+                lastError = "hyprctl configerrors (deployed config, not this apply): " + report
+            refresh(true)
+            requestEffectiveRead()
         }
     }
     Timer {

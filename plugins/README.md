@@ -193,6 +193,28 @@ PanelWindow {
 Item { property var ctx: null; Timer { interval: 60000; running: true; repeat: true } }
 ```
 
+### Self-installing runtime (service kind)
+
+A service that needs files outside its own dir (a Lua engine under
+`~/.config/hypr`, a helper binary, a unit) bootstraps them on enable — the
+`--kind service` template ships the full pattern:
+
+- **`install.sh`** runs once per enable, from the QML side, `timeout`-bounded.
+  It is **serialized** (`flock`), **skip-if-unchanged** (a checksum over
+  `runtime/` in a state marker), and `--force`-able via the `setup` IPC verb.
+  Log: `$XDG_STATE_HOME/velocity/plugins/<id>/install.log`.
+- **Anything it edits outside the plugin dir gets backup-once**
+  (`<target>.<id>.bak`, never overwritten on re-run) and a **validator before
+  the marker is written** (`luac -p` for Lua, `hyprctl configerrors` for the
+  deployed Hyprland config) — a failed validation leaves the marker unwritten,
+  so the next run retries instead of skipping.
+- State surfaces through manifest `ipc: ["status", "setup"]`:
+  `velocity-plugin call <id> status ""` → `{ready, installing, error, log}`.
+
+Runtime files live in the plugin's `runtime/` dir (checksummed payload); the
+QML side reaches `install.sh` via `Qt.resolvedUrl` — plugin dirs load from
+`file://`, so crossing roots is allowed here (unlike `qrc://` plugins).
+
 ## Gates
 
 Run before you publish a plugin:

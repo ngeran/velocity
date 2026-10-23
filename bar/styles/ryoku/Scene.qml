@@ -53,25 +53,43 @@ Item {
             // userHidden keeps the IPC toggle out of the binding (assignment
             // would break it).
             readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
-            // QD-OLED: the active-workspace plate stays bright only this
-            // long after a switch (feedback), then dims to a faint tint.
-            property bool wsPlateBright: false
+            // QD-OLED: the active-workspace plate flashes on switch, then
+            // decays exponentially to the faint settled tint — no binary
+            // flip. Bright exposure stays strictly below the old flat 45s
+            // pattern (strength crosses the 2% floor at ~24s, tau = 6s), and
+            // the timer only ticks while there is anything left to decay.
+            // The decay is an energy-budget pattern, not a motion token — it
+            // deliberately ignores reduceMotion.
+            property real plateStrength: 0
+            readonly property color wsInk: Config.ThemeConfig.colors.text
+            // Settled plate = ink @0.10. Built from the color object directly —
+            // ThemeConfig.withAlpha takes a HEX STRING and throws on a color
+            // (the tint() trap), which would kill the whole cell binding.
+            readonly property color plateBase: Qt.rgba(wsInk.r, wsInk.g, wsInk.b, 0.10)
+            function mixPlate(a, b, s) {
+                return Qt.rgba(a.r + (b.r - a.r) * s, a.g + (b.g - a.g) * s,
+                               a.b + (b.b - a.b) * s, a.a + (b.a - a.a) * s)
+            }
 
             property bool userHidden: false
-            visible: validScreen && !userHidden
+            // `visible` is bound ONCE, in the B5 block below
+            // (validScreen && !userHidden && edgeApplied) — a second binding
+            // here is a hard compile error ("Property value set multiple
+            // times") and silently drops the whole style to vector.
 
             Timer {
-                id: wsPlateDim
-                interval: 45000
-                running: panelWindow.wsPlateBright
-                repeat: false
-                onTriggered: panelWindow.wsPlateBright = false
+                interval: 200
+                running: panelWindow.plateStrength > 0.02
+                repeat: true
+                onTriggered: {
+                    panelWindow.plateStrength *= Math.exp(-0.2 / 6)
+                    if (panelWindow.plateStrength <= 0.02) panelWindow.plateStrength = 0
+                }
             }
             Connections {
                 target: Services.HyprlandService
                 function onActiveWorkspaceChanged() {
-                    panelWindow.wsPlateBright = true   // bright = feedback only
-                    wsPlateDim.restart()
+                    panelWindow.plateStrength = 1   // bright = feedback only
                 }
             }
 
@@ -164,21 +182,24 @@ Item {
                         id: wsCell
                         readonly property int ws: index + 1
                         readonly property bool active: Services.HyprlandService.activeWorkspace === ws
+                        // Hover intent (press grammar, #5): the hover fill
+                        // lands after a short entry delay so sweeping the
+                        // row doesn't shimmer; exit is instant.
+                        property bool hot: false
                         implicitWidth: wsNum.implicitWidth + (active ? 12 : 6)
                         implicitHeight: 17
                         radius: 0   // QD-OLED: no anti-aliased corner subpixels
                         // Ryoku press grammar: hover = ink @0.08, pressed
-                        // @0.16, snap-timed. The active plate inverts BRIGHT
-                        // only as switch feedback (wsPlateBright), then
-                        // settles to a faint @0.10 tint — no static bright
-                        // fill (QD-OLED burn-in rule).
+                        // @0.16, snap-timed. The active plate starts INVERTED
+                        // on switch and decays (plateStrength) to the faint
+                        // @0.10 tint — no static bright fill (QD-OLED rule).
                         color: wsCell.active
-                               ? (panelWindow.wsPlateBright
-                                   ? Config.ThemeConfig.colors.text
-                                   : Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.10))
+                               ? panelWindow.mixPlate(panelWindow.plateBase,
+                                                      panelWindow.wsInk,
+                                                      panelWindow.plateStrength)
                                : wsMa.pressed
                                  ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.16)
-                                 : wsMa.containsMouse
+                                 : wsCell.hot
                                    ? Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.08)
                                    : "transparent"
                         Behavior on color { ColorAnimation { duration: Config.MotionConfig.move } }
@@ -191,11 +212,11 @@ Item {
                             font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
                             font.letterSpacing: 1.2
                             color: wsCell.active
-                                   ? (panelWindow.wsPlateBright
-                                       ? Config.ThemeConfig.colors.background
-                                       : Config.ThemeConfig.colors.text)
+                                   ? panelWindow.mixPlate(Config.ThemeConfig.colors.text,
+                                                          Config.ThemeConfig.colors.background,
+                                                          panelWindow.plateStrength)
                                    : Config.ThemeConfig.colors.textDim
-                            opacity: wsCell.active ? 1.0 : (wsMa.containsMouse ? 0.95 : 0.62)
+                            opacity: wsCell.active ? 1.0 : (wsCell.hot ? 0.95 : 0.62)
                             Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.snap } }
                         }
 
@@ -204,7 +225,16 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            onContainsMouseChanged: {
+                                if (containsMouse) wsHotDelay.restart()
+                                else { wsHotDelay.stop(); wsCell.hot = false }
+                            }
                             onClicked: Services.HyprlandService.switchTo(wsCell.ws)
+                        }
+                        Timer {
+                            id: wsHotDelay
+                            interval: 70
+                            onTriggered: wsCell.hot = true
                         }
                     }
                 }

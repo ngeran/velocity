@@ -31,6 +31,7 @@ Item {
     readonly property bool cyclingEnabled: Services.WallpaperService.cyclingEnabled
     readonly property string transitionType: Services.WallpaperService.transitionType || "outer"
     readonly property string wallpaperDir: Services.WallpaperService.wallpaperDir || (Services.ThemeService.homeDir + "/Pictures/Wallpapers/")
+    readonly property bool animPaused: Services.WallpaperService.animationPaused
 
     // Editable path buffer (tracks the service dir until the user types).
     property string dirText: root.wallpaperDir
@@ -59,6 +60,8 @@ Item {
     function applyWallpaper(path) { Services.WallpaperService.setWallpaperByPath(path) }
     function toggleCycling()       { Services.WallpaperService.toggleCycling() }
     function setTransition(t)      { Services.WallpaperService.setTransition(t) }
+    function setAnimPaused(p)      { Services.WallpaperService.setAnimationPaused(p) }
+    function isLive(p)             { return Services.WallpaperService.isLive(p) }
     function setIntervalSec(s)     { Services.WallpaperService.setInterval(s) }
     function refreshWallpapers()   { Services.WallpaperService.refreshList() }
     function handleLoadDirectory(path) {
@@ -218,6 +221,29 @@ Item {
                     }
                 }
 
+                // Anim segmented [RUN|HOLD] — freezes/resumes gif/apng playback
+                ColumnLayout {
+                    spacing: 3
+                    Text { text: "ANIM"; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
+                    Row {
+                        spacing: 0
+                        Rectangle {
+                            width: 44; height: 22
+                            color: !root.animPaused ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "RUN"; color: !root.animPaused ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { if (root.animPaused) root.setAnimPaused(false) } }
+                        }
+                        Rectangle {
+                            width: 44; height: 22
+                            color: root.animPaused ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "HOLD"; color: root.animPaused ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { if (!root.animPaused) root.setAnimPaused(true) } }
+                        }
+                    }
+                }
+
                 Item { Layout.fillWidth: true }   // keep the control group left-aligned
             }
         }
@@ -253,7 +279,15 @@ Item {
             Text { text: "GALLERY_MANAGER: CONNECTED"; color: Config.ThemeConfig.colors.primary; font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter }
             Text { text: root.wallpaperDir; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; elide: Text.ElideMiddle; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
             Text { text: "SYNC: 1000ms"; color: Config.ThemeConfig.colors.secondary; font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter }
-            Text { text: "OLED_SHIELD: ACTIVE"; color: Config.ThemeConfig.colors.primary; font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter }
+            Text {
+                text: (root.currentWallpaper && root.isLive(root.currentWallpaper))
+                      ? (root.animPaused ? "LIVE: HOLD" : "LIVE: RUN")
+                      : "STATIC"
+                color: (root.currentWallpaper && root.isLive(root.currentWallpaper) && !root.animPaused)
+                       ? Config.ThemeConfig.colors.success
+                       : (root.animPaused ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim)
+                font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter
+            }
         }
     }
 
@@ -415,6 +449,16 @@ Item {
                             width: badgeLabel.implicitWidth + 8; height: 12
                             color: Config.ThemeConfig.colors.primary
                             Text { id: badgeLabel; anchors.centerIn: parent; text: "ACTIVE"; color: Config.ThemeConfig.colors.background; font.family: root.fMono; font.pixelSize: 7; font.bold: true }
+                        }
+
+                        // LIVE badge (animated gif/apng — plays in-place on apply)
+                        Rectangle {
+                            visible: root.isLive(modelData)
+                            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.margins: 3
+                            width: liveLabel.implicitWidth + 8; height: 12
+                            color: Config.ThemeConfig.colors.background
+                            border.color: Config.ThemeConfig.colors.secondary; border.width: 1
+                            Text { id: liveLabel; anchors.centerIn: parent; text: "LIVE"; color: Config.ThemeConfig.colors.secondary; font.family: root.fMono; font.pixelSize: 7; font.bold: true }
                         }
 
                         // Hover overlay (gradient + filename)

@@ -51,7 +51,11 @@ for s in "${styles[@]}"; do
   echo "== $s"
   since="$(date '+%Y-%m-%d %H:%M:%S')"
   set_style "$s"
-  sleep "$DWELL"                                  # config poll ≤2s + scene load
+  # Force the reload instead of relying on the file watcher: a same-value
+  # write (smoke-testing the already-active style) must STILL reload, or the
+  # verdict judges a bar still serving its cached scene.
+  ipc config reload
+  sleep "$DWELL"                                  # scene load + fallback time
   # popup path (island: presented inside the island), then the OSD path
   ipc plugins summon nikos.clock "{}";  sleep 1.5
   ipc plugins hide nikos.clock;         sleep 1
@@ -70,6 +74,25 @@ for s in "${styles[@]}"; do
     echo "  (no $UNIT unit — journal capture skipped; watch the terminal running the bar)"
   fi
 done
+
+# The restore write fires one more style reload — capture it too. Blind spot
+# found 2026-10-22: a broken ACTIVE style (ryoku, duplicate `visible:`) only
+# failed HERE, after every per-style verdict had already printed "ok".
+echo "== restore reload check"
+since="$(date '+%Y-%m-%d %H:%M:%S')"
+restore
+trap - EXIT
+ipc config reload
+sleep "$DWELL"
+if (( have_journal )); then
+  hits="$(journalctl --user -u "$UNIT" --since "$since" --no-pager -o cat 2>/dev/null | grep -iE "$PATTERN" || true)"
+  if [[ -n $hits ]]; then
+    status=1
+    echo "$hits" | sed 's/^/  ! /' | head -40
+  else
+    echo "  ok (original style reloaded clean)"
+  fi
+fi
 
 echo "== restored original bar-config.json"
 exit "$status"

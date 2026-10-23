@@ -212,10 +212,21 @@ commands.new = argv => {
     if (existing) die(id + " already exists (" + existing.source + ": " + existing.dir + ") — use `clone` to override it")
     const vars = { ID: id, NAME: flags.name || titleCase(id.split(".").slice(1).join(" ")), AUTHOR: id.split(".")[0] }
     fs.mkdirSync(dest, { recursive: true })
-    for (const f of fs.readdirSync(tdir)) {
-        const text = fs.readFileSync(path.join(tdir, f), "utf8").replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m))
-        fs.writeFileSync(path.join(dest, f), text)
+    // Recursive: a template may carry subdirectories (the service template
+    // ships a runtime/ payload dir). Text substitution applies at every level.
+    const copyTree = (src, dst) => {
+        for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+            const from = path.join(src, e.name)
+            const to = path.join(dst, e.name)
+            if (e.isDirectory()) { fs.mkdirSync(to); copyTree(from, to) }
+            else if (e.isFile()) {
+                const text = fs.readFileSync(from, "utf8").replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? vars[k] : m))
+                fs.writeFileSync(to, text)
+                fs.chmodSync(to, fs.statSync(from).mode & 0o777)   // keep +x (install.sh)
+            }
+        }
     }
+    copyTree(tdir, dest)
     const v = validateDir(dest)
     if (!v.ok) { fs.rmSync(dest, { recursive: true, force: true }); die("template produced an invalid plugin: " + v.errors.join("; ")) }
     say("created " + dest)

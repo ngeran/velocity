@@ -17,14 +17,43 @@ Item {
     implicitWidth: label.implicitWidth + 16
     implicitHeight: label.implicitHeight + 8
 
+    // Hover intent: glyph tint lands after a short entry delay (sweeping
+    // must not shimmer); exit instant. 70/90ms literals mirror the
+    // MotionConfig snap scale (Ui imports no config singletons — D13).
+    readonly property bool hoverLive: ma.containsMouse
+    property bool hot: false
+    onHoverLiveChanged: {
+        if (hoverLive) hotDelay.restart()
+        else { hotDelay.stop(); hot = false }
+    }
+    Timer {
+        id: hotDelay
+        interval: 70
+        onTriggered: root.hot = true
+    }
+    // Press grammar (transient 16% ink plate + 1px settle — QD-OLED-safe).
+    // Named `down`: `pressed` is this component's compat signal.
+    readonly property bool down: ma.pressed
+    readonly property color ink: CT.Theme.colors.text
+
+    Rectangle {
+        anchors.fill: parent
+        color: root.down ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.16) : "transparent"
+        Behavior on color { ColorAnimation { duration: 90 } }
+    }
+
     Text {
         id: label
         anchors.centerIn: parent
         text: root.text
         font.family: root.fontFamily
         font.pixelSize: root.fontPixelSize
-        color: ma.containsMouse ? CT.Theme.colors.primary : CT.Theme.colors.text
+        color: root.hot ? CT.Theme.colors.primary : CT.Theme.colors.text
         Behavior on color { ColorAnimation { duration: 120 } }
+        transform: Translate {
+            y: root.down ? 1 : 0
+            Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+        }
     }
 
     MouseArea {

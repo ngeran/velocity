@@ -10,6 +10,9 @@
 #   InputLua.pl backups PATH MAX_BYTES BACKUP_DIR
 #   InputLua.pl restore PATH MAX_BYTES BACKUP_DIR BACKUP_ID
 #
+# Every write and restore is syntax-checked with luac -p BEFORE any state
+# changes (no backup, no replacement) — see validate_lua_syntax.
+#
 # Reading and writing share one scanner that understands Lua comments and
 # strings, so a commented-out example can never be mistaken for the live
 # setting, and the writer always edits exactly what the reader reported.
@@ -48,6 +51,26 @@ my @KEYS = qw(kb_layout kb_variant kb_options);
 
 my $temp_path;
 my $partial_backup;
+
+# luac lookup: PATH first, then locations that exist outside PATH in
+# restricted service environments (NixOS current-system sw in particular).
+my @LUAC_FALLBACKS = (
+  "/run/current-system/sw/bin/luac",
+  "/usr/bin/luac", "/usr/bin/luac5.4",
+  "/usr/bin/luac5.3", "/usr/bin/luac5.2", "/usr/bin/luac5.1",
+);
+
+sub find_luac {
+  for my $dir (split(/:/, $ENV{PATH} // "")) {
+    next if $dir eq "";
+    my $candidate = "$dir/luac";
+    return $candidate if -x $candidate && !-d $candidate;
+  }
+  for my $candidate (@LUAC_FALLBACKS) {
+    return $candidate if -x $candidate;
+  }
+  return undef;
+}
 
 END {
   unlink($temp_path) if defined($temp_path) && -e $temp_path;
@@ -339,6 +362,35 @@ sub rotate_backup {
   return $name;
 }
 
+# The compositor never parses the file we edit — the live ~/.config/hypr
+# path is a nix-store symlink that only changes on deploy — so a
+# structurally broken write would surface only at the next reload, which
+# also reverts every live-applied setting. Validate the exact bytes with
+# luac -p before anything on disk changes. This is a syntax net, not a
+# content check: the writer only replaces regex-validated string literals,
+# so what it guards is structural corruption (mangled insertion, truncated
+# file). System Lua here is 5.2, adjacent to whatever the compositor
+# embeds — every construct this file uses parses identically across
+# 5.1-5.4. Fail-closed: no validator found, no write.
+sub validate_lua_syntax {
+  my ($bytes, $scratch_base) = @_;
+  my $luac = find_luac();
+  unless (defined $luac) {
+    fail(13, "no luac in PATH or " . join(" ", @LUAC_FALLBACKS)
+      . " — refusing an unvalidated look-and-feel.lua write");
+  }
+  my ($probe, $probe_path) = create_exclusive($scratch_base, 0600, ".");
+  $temp_path = $probe_path;   # END unlinks it on every exit path
+  write_all($probe, $bytes, "syntax probe");
+  close($probe) or fail(8, "syntax probe close failed");
+  my $rc = system($luac, "-p", $probe_path);
+  $temp_path = undef;
+  unlink($probe_path);
+  # luac's own diagnostic went to stderr (the caller shows it next to this
+  # message). -1 means the exec itself failed — also fatal.
+  $rc == 0 or fail(13, "edited look-and-feel.lua fails luac -p — nothing was written");
+}
+
 # Atomically replaces PATH with BYTES, provided the file still is exactly the
 # one that was read (same inode, mode and content) or is still absent.
 sub replace_input {
@@ -495,6 +547,7 @@ sub command_write {
   my $updated = encode("UTF-8", $text, FB_CROAK);
   length($updated) <= $max or fail(5, "updated input exceeds byte limit");
   return if $source && $updated eq $original;
+  validate_lua_syntax($updated, "$path.probe.$$");   # before ANY state change
   rotate_backup($backup_dir, $original, $max) if $source;
   replace_input($path, $max, $source, $metadata, $original, $updated);
 }
@@ -565,6 +618,7 @@ sub command_restore {
   close($backup);
   my ($settings, $error) = settings_from(scan(decode_utf8($restored, "backup")));
   $settings or fail(11, "backup cannot be restored: $error");
+  validate_lua_syntax($restored, "$path.probe.$$");   # before ANY state change
 
   my ($source, $metadata, $original) = load_input($path, $max);
   rotate_backup($backup_dir, $original, $max) if $source;
