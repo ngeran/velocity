@@ -61,10 +61,27 @@ QtObject {
         key = String(key || "")
         if (key === "") return
         var prev = root._closer
+        var prevKey = root.current
         var changed = root.current !== key
         root.current = key
         root._closer = typeof closer === "function" ? closer : null
-        if (changed && prev) prev()
+        if (changed) {
+            // The replaced holder's carve geometry is dead the moment it
+            // loses the slot: a holder destroyed before it could publish
+            // null (hot-reloaded plugin panel, style swap mid-open) would
+            // otherwise leave the notch carve stuck until the next
+            // successful open. Owner-checked, so a successor that already
+            // published is never wiped.
+            if (root.connected && root.connected.owner === prevKey) root.connected = null
+            if (prev) {
+                // A closer bound to a destroyed object throws. Clear the
+                // claim anyway — the successor's claim is already in place;
+                // the stale closer must not poison the swap.
+                try { prev() } catch (e) {
+                    console.warn("[PopupCoordinator] stale closer for '" + prevKey + "':", e)
+                }
+            }
+        }
     }
 
     function release(key) {
@@ -85,6 +102,10 @@ QtObject {
         root.current = ""
         root._closer = null
         root.connected = null
-        if (prev) prev()
+        if (prev) {
+            try { prev() } catch (e) {
+                console.warn("[PopupCoordinator] stale closer during clear:", e)
+            }
+        }
     }
 }
