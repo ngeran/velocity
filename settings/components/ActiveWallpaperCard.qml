@@ -12,10 +12,24 @@
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
+import "../services" as Services
 
 HudCard {
     id: root
     accent: Config.ThemeConfig.colors.success
+
+    /// Video (live-library) wallpapers can't be decoded by Qt — show their
+    /// cached poster frame from WallpaperService's thumbnail pipeline instead.
+    /// "" while no wallpaper is set or the frame hasn't been extracted yet.
+    function previewSource() {
+        var p = Config.SharedState.wallpaperPath
+        if (!p) return ""
+        if (Services.WallpaperService.isEngined(p)) {
+            var t = Services.WallpaperService.thumbMap[p]
+            return t ? "file://" + t : ""
+        }
+        return "file://" + p
+    }
 
     // Mirrors ActiveThemeCard's changeRequested() — clicking the preview
     // deep-links to the Wallpaper tab. Before this, ActiveThemeCard was the
@@ -71,8 +85,7 @@ HudCard {
 
             Image {
                 anchors.fill: parent
-                source: Config.SharedState.wallpaperPath
-                        ? "file://" + Config.SharedState.wallpaperPath : ""
+                source: root.previewSource()
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 cache: true
@@ -81,7 +94,7 @@ HudCard {
             }
             Text {
                 anchors.centerIn: parent
-                visible: !Config.SharedState.wallpaperPath
+                visible: root.previewSource() === ""
                 text: "◌"
                 color: Config.ThemeConfig.colors.textDim
                 font.family: Config.SettingsConfig.fontFamily

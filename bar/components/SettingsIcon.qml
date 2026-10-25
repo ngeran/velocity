@@ -54,7 +54,7 @@ Item {
         spacing: root.expanded ? 6 : 0
 
         Text {
-            text: "\u{F0492}"   // nf-md-settings — the gear
+            text: "\u{F0493}"   // nf-md-cog — the SOLID gear (F0492 is cog_outline, reads as a ring at bar size)
             font.family: Config.BarConfig.fontNerd
             font.pixelSize: Config.BarConfig.fontSizeIcon
             color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.BarConfig.colorText

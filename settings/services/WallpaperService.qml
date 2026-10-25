@@ -2,16 +2,37 @@
 // WallpaperService.qml — Wallpaper Management Service
 // =============================================================================
 //
-// Background service for wallpaper rotation via awww (swww-compatible).
+// Background service for wallpaper rotation via awww (swww-compatible) for
+// stills, plus the wallpaper-engine (mpvpaper) backend for animated content.
 // Exposes IPC interface for control from Settings UI without duplicating state.
+//
+// LIBRARY MODEL
+//   still library : wallpaperDir  (default ~/Pictures/Wallpapers/)  → awww
+//   live library  : liveDir       (default ~/Pictures/Live-Wallpapers/) →
+//                   wallpaper-engine (mpvpaper + mpv IPC, NVDEC on the panel's
+//                   video engine). Everything in liveDir routes to the engine —
+//                   gif/webp/apng included — so pause, frame extraction and
+//                   thumbnails all live in one place.
+//   libraryMode filters what rotation picks: all | still | live.
+//
+// ENGINE INTEGRATION (single owner: this service)
+//   The engine daemon runs in integrated mode (WE_AUTOSTART=0): it never picks
+//   media itself, it only keeps mpvpaper instances alive (crash, hotplug) for
+//   whatever the last `set` requested. This service drives it through:
+//     set FILE   → heal instances + loadfile replace (video→video, no restart)
+//     clear      → kill instances + forget media (reveals the awww still below)
+//     pause/resume → mpv pause (decode stops; only ever done when the panel is
+//                    covered or DPMS-off — never on a visible static frame)
+//   Handoff is flash-free both ways: awww renders UNDER mpvpaper, so
+//   animated→still applies the still first, then clears the instances.
 //
 // IPC Commands (quickshell ipc call settings call wallpaper-service <fn>):
 //   cycleNow            — Apply a random wallpaper immediately
-//   refreshList         — Re-scan the wallpaper directory
+//   refreshList         — Re-scan both wallpaper directories
 //   getList             — Returns newline-separated list of wallpaper paths
 //   getCurrentInfo      — Returns the active wallpaper path
 //   getCount            — Returns number of discovered wallpapers
-//   setWallpaperByPath  — Apply a specific path
+//   setWallpaperByPath  — Apply a specific path (backend auto-selected)
 //   setWallpaperByIndex — Apply by 0-based index
 //   setInterval         — Set cycle interval in seconds (min: 10)
 //   getInterval         — Returns current interval in seconds
@@ -20,9 +41,15 @@
 //   setCyclingEnabled   — Set cycling state explicitly
 //   setTransition       — Set transition type (outer, fade, wipe, simple, wave)
 //   getTransition       — Returns current transition type
-//   setAnimationPaused  — Freeze/resume live (gif/apng) playback
+//   setAnimationPaused  — Freeze/resume live playback (engine pause or awww)
 //   toggleAnimationPause— Flip playback state
 //   getAnimationPaused  — Returns bool (true = frozen)
+//   setLibraryMode      — all | still | live (what rotation may pick)
+//   getLibraryMode      — Returns current mode
+//   setLiveDir          — Change the live library directory and re-scan
+//   getLiveDir          — Returns the live library directory
+//   getEngineStatus     — Returns engine status as a JSON string
+//   enginePause / engineResume / engineTogglePause — direct engine control
 // =============================================================================
 
 pragma Singleton
@@ -58,17 +85,59 @@ Item {
     // STATE
     // =========================================================================
 
-    property string wallpaperDir: ""
+    property string wallpaperDir: ""     // still library
+    property string liveDir: ""          // animated library (engine-backed)
     property string currentWallpaper: ""
-    property var    wallpaperList: []
     property int    lastIndex: -1
     property bool   cyclingEnabled: true
     property bool   scanInProgress: false
     property string currentMonitor: ""  // Target monitor for wallpaper (empty = all)
 
-    /// True while the daemon's animation is frozen (awww pause) — a HOLD on a
-    /// live (gif/apng) wallpaper. Static images are unaffected visually.
+    /// What rotation may pick: "all" | "still" | "live"
+    property string libraryMode: "all"
+
+    /// Raw per-library lists — wallpaperList is the filtered view.
+    property var    stillList: []
+    property var    liveList: []
+
+    /// True while the daemon's animation is frozen — engine pause for
+    /// live-library content, awww HOLD for gif/apng in the still library.
     property bool   animationPaused: false
+
+    /// liveDir path → cached poster frame (png) for grid thumbnails + matugen.
+    property var    thumbMap: ({})
+
+    // --- engine (wallpaper-engine CLI) state, refreshed by status polling ---
+    property bool   engineAvailable: false   // CLI found on PATH
+    property bool   engineRunning: false     // daemon pid alive
+    property bool   enginePaused: false      // daemon-level pause flag
+    property int    engineInstances: 0       // alive mpvpaper instances
+
+    /// Filtered pick list — rotation, IPC index access and the gallery all
+    /// read this, so a mode switch re-scopes everything at once.
+    readonly property var wallpaperList: {
+        if (root.libraryMode === "still") return root.stillList
+        if (root.libraryMode === "live")  return root.liveList
+        return root.stillList.concat(root.liveList)
+    }
+
+    // =========================================================================
+    // CLASSIFICATION
+    // =========================================================================
+
+    /// True for formats awww animates as a wallpaper (still library gif/apng).
+    function isLive(path: string): bool {
+        var p = (path || "").toLowerCase()
+        return p.endsWith(".gif") || p.endsWith(".apng")
+    }
+
+    /// True for anything in the live library — routed to wallpaper-engine
+    /// (mpvpaper), awww fallback if the engine is unavailable. Directory-based
+    /// (not extension-based) so existing still-library content, including
+    /// gif/apng/webp, keeps its current awww behaviour untouched.
+    function isEngined(path: string): bool {
+        return root.liveDir.length > 0 && (path || "").indexOf(root.liveDir) === 0
+    }
 
     // =========================================================================
     // CONFIGURATION PERSISTENCE
@@ -101,6 +170,12 @@ Item {
             if (data.currentWallpaper !== undefined) {
                 root.currentWallpaper = data.currentWallpaper
             }
+            if (data.liveDir !== undefined) {
+                root.liveDir = data.liveDir
+            }
+            if (data.libraryMode !== undefined) {
+                root.libraryMode = data.libraryMode
+            }
             // Sync the loaded wallpaper into SharedState so dashboard widgets
             // (e.g. the Active Wallpaper preview) show it immediately on
             // startup — not only after a wallpaper is freshly applied.
@@ -123,7 +198,9 @@ Item {
             transitionType: root.transitionType,
             animationPaused: root.animationPaused,
             wallpaperDir: root.wallpaperDir,
-            currentWallpaper: root.currentWallpaper
+            currentWallpaper: root.currentWallpaper,
+            liveDir: root.liveDir,
+            libraryMode: root.libraryMode
         })
     }
 
@@ -138,7 +215,7 @@ Item {
     }
 
     // =========================================================================
-    // STEP 1 — Resolve $HOME
+    // STEP 1 — Resolve $HOME (+ engine availability probe)
     // =========================================================================
 
     Process {   // unbounded-ok: trivial local check — no hang risk
@@ -156,23 +233,58 @@ Item {
                 var home = homeGetter.buf.trim()
                 homeGetter.buf = ""
 
-                // If config didn't set wallpaperDir, use default
+                // If config didn't set the dirs, use defaults
                 if (root.wallpaperDir.length === 0) {
                     root.wallpaperDir = home + "/Pictures/Wallpapers/"
                 }
+                if (root.liveDir.length === 0) {
+                    root.liveDir = home + "/Pictures/Live-Wallpapers/"
+                }
                 console.log("[WallpaperService] Wallpaper dir:", root.wallpaperDir)
+                console.log("[WallpaperService] Live dir:", root.liveDir)
 
                 // Load saved config
                 configPersister.load()
                 startScan()
+                startLiveScan()
+                probeEngine()
+            }
+        }
+    }
+
+    /// One-shot probe: is the wallpaper-engine CLI installed? (It appears once
+    /// services.wallpaperEngine is enabled in the NixOS config.) Re-probed
+    /// whenever the dashboard opens while still unavailable, so enabling the
+    /// module never needs a shell restart. Absolute path — systemd user units
+    /// have a closed PATH (same reason hypridle's hooks are absolute).
+    readonly property string engineBin: "/run/current-system/sw/bin/wallpaper-engine"
+
+    function probeEngine() {
+        if (engineProbe.running) return
+        engineProbe.command = ["sh", "-c", "[ -x " + root.engineBin + " ] && echo yes"]
+        engineProbe.running = true
+    }
+
+    Process {
+        id: engineProbe
+
+        onExited: function(exitCode) {
+            var had = root.engineAvailable
+            root.engineAvailable = (exitCode === 0)
+            if (root.engineAvailable && !had) {
+                console.log("[WallpaperService] wallpaper-engine available — animated backend enabled")
+                pollEngineStatus()
+            } else if (!root.engineAvailable) {
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] wallpaper-engine not on PATH — live library falls back to awww")
             }
         }
     }
 
     // =========================================================================
-    // STEP 2 — Scan wallpaper directory for image files
+    // STEP 2 — Scan wallpaper directories
     // =========================================================================
 
+    // --- still library (unchanged behaviour) ---------------------------------
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: scanner
 
@@ -192,22 +304,26 @@ Item {
 
                 // Sort for deterministic ordering
                 lines.sort()
-                root.wallpaperList = lines
+                root.stillList = lines
                 scanner.buf = ""
 
                 if (lines.length === 0 && root.wallpaperDir.length > 0) {
                     console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
                     console.warn("[WallpaperService] Check that the directory exists and contains image files")
                 } else {
-                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Found", root.wallpaperList.length, "wallpaper(s)")
+                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Found", root.stillList.length, "still wallpaper(s)")
                 }
 
-                // First run: apply an initial wallpaper (cycleTimer auto-starts
-                // via its running binding once wallpaperList is non-empty).
-                if (root.wallpaperList.length > 0) {
-                    if (root.currentWallpaper.length === 0) {
-                        applyWallpaper(selectRandomWallpaper())
-                    }
+                // First run / boot restore. A saved still is re-applied so the
+                // fresh awww daemon doesn't sit on a black screen until the
+                // first cycle tick.
+                if (root.stillList.length > 0 && root.currentWallpaper.length === 0) {
+                    applyWallpaper(selectRandomWallpaper())
+                } else if (root.currentWallpaper.length > 0
+                           && !root.isEngined(root.currentWallpaper)
+                           && !root.bootRestored) {
+                    root.bootRestored = true
+                    applyWallpaper(root.currentWallpaper)
                 }
             }
         }
@@ -220,7 +336,48 @@ Item {
         }
     }
 
-    /// Kick off a directory scan; silently skips if one is already running.
+    // --- live library (engine content) ---------------------------------------
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+        id: liveScanner
+
+        property string buf: ""
+
+        stdout: SplitParser {
+            onRead: data => { liveScanner.buf += data + "\n" }
+        }
+
+        onRunningChanged: {
+            if (!running) {
+                var lines = liveScanner.buf.trim().split("\n").filter(function(l) {
+                    return l.trim().length > 0
+                })
+
+                lines.sort()
+                root.liveList = lines
+                liveScanner.buf = ""
+
+                if (lines.length === 0) {
+                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Live library empty:", root.liveDir)
+                } else {
+                    console.log("[WallpaperService] Found", root.liveList.length, "live wallpaper(s)")
+                    startThumbWorker()
+                }
+
+                // Boot restore for engine content (video survives reboots only
+                // if something re-issues the `set` — the engine daemon starts
+                // intentionally empty in integrated mode).
+                if (root.currentWallpaper.length > 0
+                        && root.isEngined(root.currentWallpaper)
+                        && root.engineAvailable
+                        && !root.bootRestored) {
+                    root.bootRestored = true
+                    applyWallpaper(root.currentWallpaper)
+                }
+            }
+        }
+    }
+
+    /// Scan both libraries (stills silently skip if one is already running).
     function startScan() {
         if (root.scanInProgress) {
             if (Config.DebugConfig.debugService) console.log("[WallpaperService] Scan already in progress, skipping")
@@ -247,6 +404,79 @@ Item {
         scanner.running = true
     }
 
+    function startLiveScan() {
+        if (root.liveDir.length === 0) return
+        liveScanner.command = [
+            "find", root.liveDir,
+            "-maxdepth", "1",
+            "-type",     "f",
+            "(", "-iname", "*.mp4",
+                 "-o", "-iname", "*.webm",
+                 "-o", "-iname", "*.mkv",
+                 "-o", "-iname", "*.mov",
+                 "-o", "-iname", "*.gif",
+                 "-o", "-iname", "*.webp",
+                 "-o", "-iname", "*.apng",
+            ")"
+        ]
+        liveScanner.running = true
+    }
+
+    // =========================================================================
+    // THUMBNAILS — poster frames for the live library
+    // ---------------------------------------------------------------------------
+    // Qt can't decode video (or animated webp) into an Image, so each live
+    // entry gets a cached poster frame: ~/.cache/quickshell/wallpaper-thumbs/
+    // The same frame feeds matugen when an animated wallpaper is applied.
+    // One worker process per scan; cache keys include mtime+size like the
+    // engine's transcode cache, so edits invalidate naturally.
+    // =========================================================================
+
+    readonly property string thumbCacheDir: StandardPaths.writableLocation(StandardPaths.CacheLocation).toString()
+                                            .replace("file://", "") + "/quickshell/wallpaper-thumbs"
+
+    Process {   // unbounded-ok: one ffmpeg per uncached file, error-level logs only
+        id: thumbWorker
+
+        property string buf: ""
+
+        stdout: SplitParser {
+            onRead: data => { thumbWorker.buf += data + "\n" }
+        }
+
+        onRunningChanged: {
+            if (!running) {
+                var map = {}
+                var lines = thumbWorker.buf.trim().split("\n")
+                for (var i = 0; i < lines.length; i++) {
+                    var parts = lines[i].split("\t")
+                    if (parts.length === 2 && parts[0].length > 0) map[parts[0]] = parts[1]
+                }
+                thumbWorker.buf = ""
+                root.thumbMap = map
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(map).length)
+            }
+        }
+    }
+
+    function startThumbWorker() {
+        thumbWorker.buf = ""
+        thumbWorker.command = ["/run/current-system/sw/bin/bash", "-c",
+            'd="$1"; c="$2"; mkdir -p "$c"; find -L "$d" -maxdepth 1 -type f ' +
+            '\\( -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mkv" -o -iname "*.mov" ' +
+            '-o -iname "*.gif" -o -iname "*.webp" -o -iname "*.apng" \\) -print0 | ' +
+            'while IFS= read -r -d "" f; do ' +
+            'key=$(printf "%s" "$f$(stat -c %Y:%s "$f")" | sha1sum | cut -c1-12); ' +
+            'out="$c/$(basename "${f%.*}")-$key.png"; ' +
+            '[ -s "$out" ] || ffmpeg -nostdin -loglevel error -y -ss 1 -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null ' +
+            '|| ffmpeg -nostdin -loglevel error -y -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null ' +
+            '|| rm -f "$out"; ' +
+            '[ -f "$out" ] && printf "%s\\t%s\\n" "$f" "$out"; ' +
+            'done',
+            "thumb-worker", root.liveDir, root.thumbCacheDir]
+        thumbWorker.running = true
+    }
+
     // =========================================================================
     // PERIODIC LIST REFRESH
     // =========================================================================
@@ -258,6 +488,7 @@ Item {
         repeat: true
         onTriggered: {
             if (root.wallpaperDir.length > 0) startScan()
+            startLiveScan()
         }
     }
 
@@ -265,7 +496,7 @@ Item {
     // RANDOM SELECTION
     // =========================================================================
 
-    /// Returns a random path from wallpaperList, avoiding immediate repeats.
+    /// Returns a random path from the filtered list, avoiding immediate repeats.
     function selectRandomWallpaper(): string {
         if (root.wallpaperList.length === 0) {
             if (Config.DebugConfig.debugService) console.log("[WallpaperService] List empty — triggering re-scan")
@@ -289,73 +520,22 @@ Item {
     }
 
     // =========================================================================
-    // WALLPAPER APPLICATION
+    // WALLPAPER APPLICATION — backend routing
     // =========================================================================
 
-    Process {   // unbounded-ok: platform command — short-lived; timeout migration queued
-        id: awwwProcess
-        running: false
+    /// True while an awww apply is in flight and the engine should be cleared
+    /// once it lands (animated → still handoff: reveal the still beneath).
+    property bool pendingClear: false
 
-        onExited: function(exitCode) {
-            if (exitCode !== 0) {
-                console.warn("[WallpaperService] Wallpaper apply failed with exit code:", exitCode)
-                console.warn("[WallpaperService] Make sure awww is installed and the path is valid")
-            } else {
-                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Wallpaper applied OK")
-            }
-        }
-    }
+    /// Set after the first boot restore / initial pick, so the 60 s refresh
+    /// scans don't re-apply the same wallpaper forever.
+    property bool bootRestored: false
 
-    // =========================================================================
-    // LIVE (ANIMATED) WALLPAPER CONTROL
-    // --------------------------------------------------------------------------
-    // awww plays gif/apng wallpapers natively. `awww pause` freezes the
-    // animation (and incoming transitions); `awww unpause` resumes. Runs as its
-    // own one-shot Process so a HOLD toggle can never stomp a pending img
-    // apply on the shared awwwProcess.
-    // =========================================================================
-
-    /// True for formats awww animates as a wallpaper.
-    function isLive(path: string): bool {
-        var p = (path || "").toLowerCase()
-        return p.endsWith(".gif") || p.endsWith(".apng")
-    }
-
-    Process {   // unbounded-ok: one-shot daemon control command
-        id: pauseCtl
-        running: false
-
-        onExited: function(exitCode) {
-            if (exitCode !== 0)
-                console.warn("[WallpaperService] awww pause/unpause failed with exit code:", exitCode)
-        }
-    }
-
-    /// Freeze (true) or resume (false) live-wallpaper playback.
-    function setAnimationPaused(paused: bool) {
-        pauseCtl.command = ["awww", paused ? "pause" : "unpause"]
-        pauseCtl.running = true
-        root.animationPaused = paused
-        saveConfig()
-    }
-
-    function toggleAnimationPause() {
-        root.setAnimationPaused(!root.animationPaused)
-    }
-
-    /// Apply a wallpaper by absolute path.
-    function applyWallpaper(path) {
-        if (!path || path.length === 0) {
-            console.log("[WallpaperService] applyWallpaper: empty path, aborting")
-            return
-        }
-
-        // A fresh apply resumes playback: a paused daemon swallows the new
-        // image's transition too. HOLD is re-armed by the user afterwards.
-        if (root.animationPaused) {
-            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Resuming animation for fresh apply")
-            setAnimationPaused(false)
-        }
+    /// Legacy awww apply (stills, and gif/apng/webp fallback without engine).
+    function applyAwww(path) {
+        // pendingClear decided once: engine present → clear it after the still
+        // lands (a no-op if nothing is running).
+        root.pendingClear = root.engineAvailable
 
         // Build command with optional --outputs flag
         var cmd = [
@@ -372,15 +552,238 @@ Item {
 
         awwwProcess.command = cmd
         awwwProcess.running  = true
+    }
+
+    /// Apply a wallpaper by absolute path. Backend is selected by library:
+    /// liveDir content → wallpaper-engine (mpvpaper), everything else → awww.
+    function applyWallpaper(path) {
+        if (!path || path.length === 0) {
+            console.log("[WallpaperService] applyWallpaper: empty path, aborting")
+            return
+        }
+
+        var engined = root.isEngined(path) && root.engineAvailable
+
+        // A fresh apply resumes playback (a paused backend swallows the new
+        // image's transition / starts the new file frozen). HOLD is re-armed
+        // by the user afterwards. Resume the backend that was holding.
+        if (root.animationPaused) {
+            if (root.currentWallpaper.length > 0 && root.isEngined(root.currentWallpaper) && root.engineAvailable) {
+                engineAct(["resume"])
+            } else {
+                pauseCtl.command = ["awww", "unpause"]
+                pauseCtl.running = true
+            }
+            root.animationPaused = false
+        }
+
+        if (root.isEngined(path)) {
+            if (engined) {
+                // Video → video: loadfile replace, no process restart. The
+                // engine also heals dead instances as part of `set`.
+                engineAct(["set", path])
+            } else {
+                // Engine unavailable: legacy fallback — awww animates
+                // gif/apng/webp natively; real video files will warn in the
+                // journal. Nothing else changes.
+                console.warn("[WallpaperService] Engine unavailable — awww fallback for", path)
+                applyAwww(path)
+            }
+        } else {
+            applyAwww(path)
+        }
+
         root.currentWallpaper = path
         Config.SharedState.updateWallpaper(path)
         saveConfig()
 
         // Auto-theme from the new wallpaper via matugen (instant, no rebuild)
-        // when the matugenOnWallpaperChange toggle is on.
+        // when the matugenOnWallpaperChange toggle is on. Engine content gets
+        // its extracted poster frame instead of the (undecodable) video path.
         if (Services.SettingsConfigService.matugenOnWallpaperChange) {
-            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
-            Services.ThemeService.applyDynamicTheme(path)
+            if (engined) {
+                themeFromEngineWallpaper(path)
+            } else {
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
+                Services.ThemeService.applyDynamicTheme(path)
+            }
+        }
+    }
+
+    /// matugen from an animated wallpaper: use the cached poster frame.
+    function themeFromEngineWallpaper(path) {
+        var t = root.thumbMap[path]
+        if (t) {
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from poster frame:", t)
+            Services.ThemeService.applyDynamicTheme(t)
+            return
+        }
+        // Frame not cached yet — extract it now, then theme.
+        frameExtractor.targetPath = path
+        frameExtractor.command = ["/run/current-system/sw/bin/ffmpeg", "-nostdin", "-loglevel", "error", "-y",
+                                  "-ss", "1", "-i", path, "-frames:v", "1",
+                                  "-vf", "scale=640:-2", root.thumbCacheDir + "/matugen-frame.png"]
+        frameExtractor.running = true
+    }
+
+    Process {   // unbounded-ok: one-shot frame extraction, error-level logs only
+        id: frameExtractor
+
+        property string targetPath: ""
+
+        onExited: function(exitCode) {
+            if (exitCode === 0 && Services.SettingsConfigService.matugenOnWallpaperChange) {
+                Services.ThemeService.applyDynamicTheme(root.thumbCacheDir + "/matugen-frame.png")
+            } else if (exitCode !== 0) {
+                console.warn("[WallpaperService] matugen frame extraction failed for", targetPath)
+            }
+        }
+    }
+
+    Process {   // unbounded-ok: platform command — short-lived; timeout migration queued
+        id: awwwProcess
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode !== 0) {
+                console.warn("[WallpaperService] Wallpaper apply failed with exit code:", exitCode)
+                console.warn("[WallpaperService] Make sure awww is installed and the path is valid")
+            } else if (root.pendingClear) {
+                // Still applied under the running mpvpaper layer — reveal it.
+                root.pendingClear = false
+                engineAct(["clear"])
+            }
+        }
+    }
+
+    // =========================================================================
+    // LIVE (ANIMATED) WALLPAPER CONTROL
+    // --------------------------------------------------------------------------
+    // RUN/HOLD routes by what is currently on screen: engine content gets
+    // wallpaper-engine pause/resume (mpv decode stops), still-library
+    // gif/apng keeps the legacy awww pause. One-shot Process so a HOLD toggle
+    // can never stomp a pending img apply on the shared awwwProcess.
+    // =========================================================================
+
+    Process {   // unbounded-ok: one-shot daemon control command
+        id: pauseCtl
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode !== 0)
+                console.warn("[WallpaperService] awww pause/unpause failed with exit code:", exitCode)
+        }
+    }
+
+    /// Freeze (true) or resume (false) live-wallpaper playback.
+    function setAnimationPaused(paused: bool) {
+        root.animationPaused = paused
+        saveConfig()
+
+        if (root.currentWallpaper.length > 0 && root.isEngined(root.currentWallpaper) && root.engineAvailable) {
+            engineAct([paused ? "pause" : "resume"])
+        } else {
+            pauseCtl.command = ["awww", paused ? "pause" : "unpause"]
+            pauseCtl.running = true
+        }
+    }
+
+    function toggleAnimationPause() {
+        root.setAnimationPaused(!root.animationPaused)
+    }
+
+    // =========================================================================
+    // ENGINE CONTROL (wallpaper-engine CLI)
+    // =========================================================================
+
+    property var _pendingEngineArgs: null
+
+    Process {   // unbounded-ok: local IPC control command
+        id: engineActProc
+        running: false
+
+        onExited: function(exitCode) {
+            var next = root._pendingEngineArgs
+            root._pendingEngineArgs = null
+            if (exitCode !== 0) {
+                console.warn("[WallpaperService] wallpaper-engine command failed (exit " + exitCode + ")")
+            }
+            pollEngineStatus()
+            if (next !== null) engineAct(next)
+        }
+    }
+
+    /// Fire a wallpaper-engine subcommand; one queued slot if busy.
+    function engineAct(args) {
+        if (!root.engineAvailable) {
+            console.warn("[WallpaperService] engineAct ignored (engine unavailable):", args.join(" "))
+            return
+        }
+        if (engineActProc.running) {
+            root._pendingEngineArgs = args
+            return
+        }
+        engineActProc.command = [root.engineBin].concat(args)
+        engineActProc.running = true
+    }
+
+    /// Latest engine status JSON (for IPC consumers), refreshed ~10 s while
+    /// the dashboard is open and after every engine command.
+    property string lastEngineStatus: "{}"
+
+    property string _statusBuf: ""
+
+    Process {   // unbounded-ok: one-line JSON from a local CLI
+        id: engineStatusProc
+
+        stdout: SplitParser {
+            onRead: data => { root._statusBuf += data + "\n" }
+        }
+
+        onRunningChanged: {
+            if (!running) {
+                var buf = root._statusBuf
+                root._statusBuf = ""
+                try {
+                    var st = JSON.parse(buf.trim())
+                    root.engineRunning   = st.running === true
+                    root.enginePaused    = st.paused === true
+                    root.engineInstances = st.instances | 0
+                    root.lastEngineStatus = buf.trim()
+                } catch (e) {
+                    // Daemon down mid-poll or garbage output — treat as off.
+                    root.engineRunning   = false
+                    root.enginePaused    = false
+                    root.engineInstances = 0
+                }
+            }
+        }
+    }
+
+    function pollEngineStatus() {
+        if (!root.engineAvailable) return
+        if (engineStatusProc.running) return
+        root._statusBuf = ""
+        engineStatusProc.command = [root.engineBin, "status"]
+        engineStatusProc.running = true
+    }
+
+    Timer {
+        id: engineStatusTimer
+        interval: 10000
+        running: Config.SharedState.dashboardVisible && root.engineAvailable
+        repeat: true
+        onTriggered: pollEngineStatus()
+    }
+
+    // Re-probe when the dashboard opens — covers "module enabled after shell start".
+    Connections {
+        target: Config.SharedState
+        function onDashboardVisibleChanged() {
+            if (Config.SharedState.dashboardVisible) {
+                if (!root.engineAvailable) probeEngine()
+                pollEngineStatus()
+            }
         }
     }
 
@@ -434,10 +837,11 @@ Item {
         }
     }
 
-    /// Re-scan the wallpaper directory.
+    /// Re-scan both wallpaper directories.
     function refreshList() {
         console.log("[WallpaperService] refreshList")
         startScan()
+        startLiveScan()
     }
 
     /// Change the wallpaper directory and re-scan immediately.
@@ -448,7 +852,7 @@ Item {
             return
         }
         root.wallpaperDir     = dir.endsWith("/") ? dir : dir + "/"
-        root.wallpaperList    = []
+        root.stillList        = []
         root.currentWallpaper = ""
         root.lastIndex        = -1
         console.log("[WallpaperService] Wallpaper directory set to", root.wallpaperDir)
@@ -456,8 +860,35 @@ Item {
         startScan()
     }
 
+    /// Set what rotation may pick: "all" | "still" | "live".
+    function setLibraryMode(mode: string) {
+        console.log("[WallpaperService] setLibraryMode", mode)
+        if (mode !== "all" && mode !== "still" && mode !== "live") {
+            console.warn("[WallpaperService] Invalid library mode:", mode)
+            return
+        }
+        root.libraryMode = mode
+        root.lastIndex   = -1
+        saveConfig()
+    }
+
+    /// Change the live library directory and re-scan it.
+    function setLiveDir(dir: string) {
+        console.log("[WallpaperService] setLiveDir", dir)
+        if (dir.length === 0) {
+            console.log("[WallpaperService] Empty directory, ignoring")
+            return
+        }
+        root.liveDir   = dir.endsWith("/") ? dir : dir + "/"
+        root.liveList  = []
+        root.thumbMap  = ({})
+        root.lastIndex = -1
+        saveConfig()
+        startLiveScan()
+    }
+
     // =========================================================================
-    // AUTO-CYCLE TIMER
+    // AUTO-CYCLE TIMER  (the single rotation owner — QML, not the engine)
     // =========================================================================
 
     Timer {
@@ -487,7 +918,7 @@ Item {
             applyWallpaper(selectRandomWallpaper())
         }
 
-        /// Re-scan the wallpaper directory
+        /// Re-scan both wallpaper directories
         function refreshList() {
             root.refreshList()
         }
@@ -578,6 +1009,46 @@ Item {
         /// Change the wallpaper directory and re-scan immediately
         function setWallpaperDir(dir: string) {
             root.setWallpaperDir(dir)
+        }
+
+        /// Set what rotation may pick: all | still | live
+        function setLibraryMode(mode: string) {
+            root.setLibraryMode(mode)
+        }
+
+        /// Return the current library mode
+        function getLibraryMode(): string {
+            return root.libraryMode
+        }
+
+        /// Return the live library directory
+        function getLiveDir(): string {
+            return root.liveDir
+        }
+
+        /// Change the live library directory and re-scan
+        function setLiveDir(dir: string) {
+            root.setLiveDir(dir)
+        }
+
+        /// Return the last engine status JSON string
+        function getEngineStatus(): string {
+            return root.lastEngineStatus
+        }
+
+        /// Freeze engine playback (mpv decode stops)
+        function enginePause() {
+            root.setAnimationPaused(true)
+        }
+
+        /// Resume engine playback
+        function engineResume() {
+            root.setAnimationPaused(false)
+        }
+
+        /// Flip engine playback state
+        function engineTogglePause() {
+            root.toggleAnimationPause()
         }
     }
 }

@@ -8,7 +8,8 @@ import "../services" as Services
 // WallpaperModule.qml — "Tactical Gallery" wallpaper command tab
 // =============================================================================
 // Redesign of the Wallpaper tab to a tactical-HUD layout: a bracketed controls
-// bar (source path / cycling / interval / effect), a real-info sidebar
+// bar (still source path / live library path / cycling / interval / effect), a
+// real-info sidebar
 // (library count, current wallpaper, system memory, matugen toggle), a
 // scrollable thumbnail gallery with hover overlays + ACTIVE badges, and a
 // status footer. Mirrors the Dashboard's anchored layout so it fits the panel's
@@ -32,9 +33,18 @@ Item {
     readonly property string transitionType: Services.WallpaperService.transitionType || "outer"
     readonly property string wallpaperDir: Services.WallpaperService.wallpaperDir || (Services.ThemeService.homeDir + "/Pictures/Wallpapers/")
     readonly property bool animPaused: Services.WallpaperService.animationPaused
+    // Live library + engine (mpvpaper) state
+    readonly property string libraryMode: Services.WallpaperService.libraryMode
+    readonly property string liveDir: Services.WallpaperService.liveDir
+    readonly property bool engineAvailable: Services.WallpaperService.engineAvailable
+    readonly property bool engineRunning: Services.WallpaperService.engineRunning
+    readonly property bool enginePaused: Services.WallpaperService.enginePaused
+    readonly property int engineInstances: Services.WallpaperService.engineInstances
+    readonly property var thumbMap: Services.WallpaperService.thumbMap
 
     // Editable path buffer (tracks the service dir until the user types).
     property string dirText: root.wallpaperDir
+    property string liveDirText: root.liveDir
 
     // =========================================================================
     // GEOMETRY — panel clamps to 720×480 → content ~656×408. Anchored, with a
@@ -62,11 +72,29 @@ Item {
     function setTransition(t)      { Services.WallpaperService.setTransition(t) }
     function setAnimPaused(p)      { Services.WallpaperService.setAnimationPaused(p) }
     function isLive(p)             { return Services.WallpaperService.isLive(p) }
+    function isEngined(p)          { return Services.WallpaperService.isEngined(p) }
     function setIntervalSec(s)     { Services.WallpaperService.setInterval(s) }
     function refreshWallpapers()   { Services.WallpaperService.refreshList() }
+    function setLibraryMode(m)     { Services.WallpaperService.setLibraryMode(m) }
+
+    /// Image source for a gallery entry: stills use the file itself, engine
+    /// content uses its cached poster frame ("" until extracted → placeholder).
+    function thumbFor(p) {
+        if (!root.isEngined(p)) return "file://" + p
+        var t = root.thumbMap[p]
+        return t ? "file://" + t : ""
+    }
+
+    /// Anything that plays: still-library gif/apng or any live-library entry.
+    function isAnimated(p) { return root.isLive(p) || root.isEngined(p) }
     function handleLoadDirectory(path) {
         if (path.length === 0) return
         Services.WallpaperService.setWallpaperDir(path)
+        refreshDelay.start()
+    }
+    function handleLoadLiveDirectory(path) {
+        if (path.length === 0) return
+        Services.WallpaperService.setLiveDir(path)
         refreshDelay.start()
     }
     Timer { id: refreshDelay; interval: 400; onTriggered: refreshWallpapers() }
@@ -129,6 +157,52 @@ Item {
                         id: loadMa; anchors.fill: parent; hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.handleLoadDirectory(root.dirText)
+                    }
+                }
+            }
+
+            // Row 1b — live (mpvpaper) library path + APPLY
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    text: "LIVE_DIRECTORY_PATH"
+                    color: Config.ThemeConfig.colors.secondary
+                    font.family: root.fMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.5
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true; Layout.preferredHeight: 26
+                    color: Config.ThemeConfig.colors.surfaceVariant
+                    border.color: Config.ThemeConfig.colors.border; border.width: 1
+                    TextInput {
+                        id: liveDirInput
+                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                        verticalAlignment: TextInput.AlignVCenter
+                        font.family: root.fMono; font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.text
+                        text: root.liveDirText
+                        onTextEdited: root.liveDirText = liveDirInput.text
+                        clip: true
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 26; Layout.preferredWidth: 84
+                    color: Config.ThemeConfig.colors.secondary
+                    opacity: liveLoadMa.containsMouse ? 0.88 : 1.0
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                    Text {
+                        anchors.centerIn: parent
+                        text: "APPLY_LIVE"
+                        color: Config.ThemeConfig.colors.background
+                        font.family: root.fMono; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                    }
+                    MouseArea {
+                        id: liveLoadMa; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.handleLoadLiveDirectory(root.liveDirText)
                     }
                 }
             }
@@ -280,10 +354,22 @@ Item {
             Text { text: root.wallpaperDir; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; elide: Text.ElideMiddle; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
             Text { text: "SYNC: 1000ms"; color: Config.ThemeConfig.colors.secondary; font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter }
             Text {
-                text: (root.currentWallpaper && root.isLive(root.currentWallpaper))
+                // Engine badge: daemon + instance state from `wallpaper-engine status`
+                text: !root.engineAvailable ? "ENG:—"
+                    : !root.engineRunning   ? "ENG:OFF"
+                    : root.engineInstances > 0 ? (root.enginePaused ? "ENG:HOLD" : "ENG:RUN")
+                    : "ENG:IDLE"
+                color: !root.engineAvailable || !root.engineRunning || root.engineInstances === 0
+                       ? Config.ThemeConfig.colors.textDim
+                    : root.enginePaused ? Config.ThemeConfig.colors.warning
+                    : Config.ThemeConfig.colors.success
+                font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter
+            }
+            Text {
+                text: (root.currentWallpaper && root.isAnimated(root.currentWallpaper))
                       ? (root.animPaused ? "LIVE: HOLD" : "LIVE: RUN")
                       : "STATIC"
-                color: (root.currentWallpaper && root.isLive(root.currentWallpaper) && !root.animPaused)
+                color: (root.currentWallpaper && root.isAnimated(root.currentWallpaper) && !root.animPaused)
                        ? Config.ThemeConfig.colors.success
                        : (root.animPaused ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim)
                 font.family: root.fMono; font.pixelSize: 8; font.bold: true; Layout.alignment: Qt.AlignVCenter
@@ -306,7 +392,7 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true
             spacing: 10
 
-            // LIBRARY
+            // LIBRARY (+ VIEW selector — scopes the gallery AND rotation)
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 4
                 Text { text: "󰊫  LIBRARY"; color: Config.ThemeConfig.colors.primary; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
@@ -315,6 +401,31 @@ Item {
                     Layout.fillWidth: true
                     Text { text: "ALL_WALLPAPERS"; color: Config.ThemeConfig.colors.text; font.family: root.fMono; font.pixelSize: 8; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                     Text { text: root.wallpaperList.length; color: Config.ThemeConfig.colors.primary; font.family: root.fMono; font.pixelSize: 9; font.bold: true }
+                }
+                Text { text: "VIEW"; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
+                Row {
+                    spacing: 0
+                    Rectangle {
+                        width: 40; height: 20
+                        color: root.libraryMode === "all" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                        border.color: root.libraryMode === "all" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                        Text { anchors.centerIn: parent; text: "ALL"; color: root.libraryMode === "all" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setLibraryMode("all") }
+                    }
+                    Rectangle {
+                        width: 40; height: 20
+                        color: root.libraryMode === "still" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                        border.color: root.libraryMode === "still" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                        Text { anchors.centerIn: parent; text: "STILL"; color: root.libraryMode === "still" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setLibraryMode("still") }
+                    }
+                    Rectangle {
+                        width: 40; height: 20
+                        color: root.libraryMode === "live" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                        border.color: root.libraryMode === "live" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                        Text { anchors.centerIn: parent; text: "LIVE"; color: root.libraryMode === "live" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setLibraryMode("live") }
+                    }
                 }
             }
 
@@ -433,13 +544,25 @@ Item {
                         clip: true
 
                         Image {
+                            // Stills load directly; engine content uses its
+                            // cached poster frame ("" → placeholder glyph).
+                            visible: root.thumbFor(modelData) !== ""
                             anchors.fill: parent; anchors.margins: 1
-                            source: "file://" + modelData
+                            source: root.thumbFor(modelData)
                             fillMode: Image.PreserveAspectCrop
                             sourceSize: Qt.size(220, 140)
                             asynchronous: true; cache: true
                             opacity: thumbMa.containsMouse ? 1.0 : 0.85
                             Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
+
+                        // Placeholder while an engine entry has no frame yet
+                        Text {
+                            visible: root.isEngined(modelData) && root.thumbFor(modelData) === ""
+                            anchors.centerIn: parent
+                            text: ""
+                            color: Config.ThemeConfig.colors.textDim
+                            font.family: root.fMono; font.pixelSize: 14
                         }
 
                         // ACTIVE badge
@@ -451,9 +574,10 @@ Item {
                             Text { id: badgeLabel; anchors.centerIn: parent; text: "ACTIVE"; color: Config.ThemeConfig.colors.background; font.family: root.fMono; font.pixelSize: 7; font.bold: true }
                         }
 
-                        // LIVE badge (animated gif/apng — plays in-place on apply)
+                        // LIVE badge (gif/apng in the still library, or any
+                        // live-library entry — plays in-place on apply)
                         Rectangle {
-                            visible: root.isLive(modelData)
+                            visible: root.isAnimated(modelData)
                             anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.margins: 3
                             width: liveLabel.implicitWidth + 8; height: 12
                             color: Config.ThemeConfig.colors.background

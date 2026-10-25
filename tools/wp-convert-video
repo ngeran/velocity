@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# =============================================================================
+# wp-convert-video — MP4/MKV/WebM → OLED-friendly GIF loop for awww
+# =============================================================================
+# The wallpaper stack is awww-only (no mpvpaper): awww animates GIF files
+# natively, so video wallpapers enter the library as converted loops.
+#
+#   wp-convert-video [-o OUT.gif] [-t SECONDS] [-f FPS] INPUT.mp4
+#
+# Defaults are tuned for 4K QD-OLED + sane file size:
+#   - scale to 2560x1440 (awww upscales to the panel; loss invisible on loops)
+#   - cap 30 fps (frame-copy cost to the compositor scales with fps)
+#   - cap 12 s (short seamless loops cycle naturally via the 5-min rotator)
+#   - per-frame palette + optimize pass (dark sources compress cleanly)
+#
+# Decoder: needs ffmpeg at runtime. This system ships none — try it one-off
+# without touching the flake:   nix shell nixpkgs#ffmpeg -c wp-convert-video x.mp4
+# =============================================================================
+set -euo pipefail
+
+FPS=30
+MAXSEC=12
+SCALE=2560:1440
+OUTDIR="$HOME/Pictures/Wallpapers"
+OUT=""
+
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+die()   { echo "wp-convert-video: $*" >&2; exit 1; }
+
+while getopts "o:t:f:h" opt; do
+  case "$opt" in
+    o) OUT="$OPTARG" ;;
+    t) MAXSEC="$OPTARG" ;;
+    f) FPS="$OPTARG" ;;
+    h) usage ;;
+    *) die "bad flag" ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+[ $# -ge 1 ] || usage
+IN="$1"
+[ -f "$IN" ] || die "not a file: $IN"
+command -v ffmpeg >/dev/null || die "no ffmpeg on PATH — try: nix shell nixpkgs#ffmpeg -c wp-convert-video $IN"
+command -v magick >/dev/null || die "no magick on PATH (ImageMagick)"
+
+BASE="$(basename -- "$IN")"
+BASE="${BASE%.*}"
+OUT="${OUT:-$OUTDIR/$BASE.gif}"
+TMP="$(mktemp -d /tmp/wp-convert.XXXXXX)"
+trap 'rm -rf "$TMP"' EXIT
+
+# Decode capped segment to PNG frames, then assemble an optimized GIF.
+# -vf chain order matters: fps first (dropper, cheap), scale last (good frames).
+ffmpeg -v error -t "$MAXSEC" -i "$IN" \
+  -vf "fps=$FPS,scale=$SCALE:flags=lanczos" \
+  -start_number 0 "$TMP/f_%05d.png"
+
+FIRST="$TMP/f_00000.png"
+[ -f "$FIRST" ] || die "no frames decoded — unsupported codec in $IN?"
+
+DELAY=$(awk "BEGIN { printf \"%d\", 100 / $FPS }")
+magick "$FIRST" +dither -colors 64 -unique-colors "$TMP/palette.png"
+magick "$TMP"/f_*.png -dither FloydSteinberg -remap "$TMP/palette.png" \
+  -delay "$DELAY" -loop 0 -layers Optimize "$OUT"
+
+echo "$(basename -- "$OUT"): $(du -h -- "$OUT" | cut -f1) — $(magick identify -format '%wx%h' "$OUT[0]")"
