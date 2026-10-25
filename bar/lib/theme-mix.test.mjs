@@ -1,9 +1,13 @@
-// theme-mix.test.mjs — runs the SAME suite against BOTH process copies
-// (bar + settings). They must stay behaviorally identical; a change applied to
-// one copy but not the other fails here (drift check).
+// theme-mix.test.mjs — behavioral suite for the CANONICAL shared/theme-mix.mjs,
+// plus byte-identity checks on the per-root copies sync-shared distributes
+// (bar/lib + settings/lib). Behavior lives in one place; the copies must never
+// diverge from it (check-shared enforces the same rule at gate level).
 import { strict as assert } from "node:assert"
-import * as bar from "./theme-mix.mjs"
-import * as settings from "../../settings/lib/theme-mix.mjs"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import * as canonical from "../../shared/theme-mix.mjs"
+
+const here = fileURLToPath(new URL(".", import.meta.url))
 
 let n = 0
 function ok(name, fn) { fn(); n++; console.log("  ok " + name) }
@@ -52,13 +56,18 @@ function suite(mod, label) {
     })
 }
 
-suite(bar, "bar")
-suite(settings, "settings")
+suite(canonical, "shared")
 
-ok("exports identical across copies", () => {
-    const a = Object.keys(bar).sort().join(",")
-    const b = Object.keys(settings).sort().join(",")
+ok("bar copy byte-identical to canonical", () => {
+    const a = readFileSync(here + "theme-mix.mjs", "utf8")
+    const b = readFileSync(here + "../../shared/theme-mix.mjs", "utf8")
     assert.equal(a, b)
 })
 
-console.log("theme-mix: " + n + " assertions passed (both copies)")
+ok("settings copy byte-identical to canonical", () => {
+    const a = readFileSync(here + "../../settings/lib/theme-mix.mjs", "utf8")
+    const b = readFileSync(here + "../../shared/theme-mix.mjs", "utf8")
+    assert.equal(a, b)
+})
+
+console.log("theme-mix: " + n + " assertions passed (canonical + 2 copies)")

@@ -260,17 +260,18 @@ Item {
     readonly property string engineBin: "/run/current-system/sw/bin/wallpaper-engine"
 
     function probeEngine() {
-        if (engineProbe.running) return
         engineProbe.command = ["sh", "-c", "[ -x " + root.engineBin + " ] && echo yes"]
-        engineProbe.running = true
+        engineProbe.run()   // latest-wins queue while busy — never drops a probe
     }
 
-    Process {
+    BoundedProcess {
         id: engineProbe
+        timeoutMs: 5000
+        maxBytes: 4096
 
-        onExited: function(exitCode) {
+        onDone: function(out, err, code) {
             var had = root.engineAvailable
-            root.engineAvailable = (exitCode === 0)
+            root.engineAvailable = (code === 0)
             if (root.engineAvailable && !had) {
                 console.log("[WallpaperService] wallpaper-engine available — animated backend enabled")
                 pollEngineStatus()

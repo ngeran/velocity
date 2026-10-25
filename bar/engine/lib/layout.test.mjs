@@ -84,12 +84,29 @@ ok("migrate: no/garbage rightLayout → legacy default, nothing disabled", () =>
     }
 })
 
-ok("migrate: the live bar-config.json matches the committed plugins-state.json", () => {
+ok("migrate: state stays schema-2-valid with no stale ids; legacy config still migrates clean", () => {
     const cfg = JSON.parse(readFileSync(join(root, "bar-config.json"), "utf8"))
     const state = JSON.parse(readFileSync(join(root, "plugins-state.json"), "utf8"))
     assert.equal(state.schemaVersion, 2)
-    const { layout, disabled } = migrate({ rightLayout: cfg.rightLayout, order: [], plugins: repoPlugins() })
-    assert.deepEqual(state.layout, layout)
+
+    // The old equality contract (migrate(bar-config) == plugins-state) is gone
+    // by design: plugins-state.json is the bar's runtime-owned arrangement —
+    // the settings app and CLI move widgets through the plugins IPC, and the
+    // legacy bar-config schema cannot even express center placement. What must
+    // hold instead:
+    const layout = normalize(state.layout)
+    for (const s of ["left", "center", "right"]) assert.ok(Array.isArray(layout[s]), s)
+
+    // Every committed id is a real plugin or builtin. resolve() tolerates
+    // stale ids at runtime, but the committed file must not accumulate them —
+    // the bar prunes on its own writes; this keeps the gate honest.
+    const known = new Set(BUILTIN_IDS)
+    for (const p of repoPlugins()) known.add(p.id)
+    for (const s of ["left", "center", "right"])
+        for (const id of layout[s]) assert.ok(known.has(id), "stale id in committed state: " + id)
+
+    // The legacy path still migrates clean from the committed bar-config.
+    const { disabled } = migrate({ rightLayout: cfg.rightLayout, order: [], plugins: repoPlugins() })
     assert.deepEqual(disabled, [])
 })
 

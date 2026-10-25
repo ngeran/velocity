@@ -1,11 +1,5 @@
 module qs.Ui
-Util 1.0 Util.qml
-WidgetButton 1.0 WidgetButton.qml
 QsPanel 1.0 QsPanel.qml
-PanelKeyCatcher 1.0 PanelKeyCatcher.qml
 QsBarWidget 1.0 QsBarWidget.qml
-BarIconButton 1.0 BarIconButton.qml
-BorderSurface 1.0 BorderSurface.qml
 PluginPopup 1.0 PluginPopup.qml
 BarPill 1.0 BarPill.qml
-Sparkline 1.0 Sparkline.qml

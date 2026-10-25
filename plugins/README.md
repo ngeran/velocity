@@ -157,7 +157,6 @@ import bar folders by path (`tools/check-engine` enforces this).
   morphs to the body's size: keep the body's `implicitHeight` honest and
   `contentWidth` realistic, and don't rely on the drag header there (the island
   hides it).
-- `BarIconButton`, `WidgetButton`, `BorderSurface`, `PanelKeyCatcher`, `Util`.
 - `QsBarWidget`, `QsPanel`: compat bases for converted Quattro plugins.
 
 The three kinds, smallest form (`velocity-plugin new` writes fuller versions,

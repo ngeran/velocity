@@ -3,8 +3,8 @@
 // target. See shared/README.md for the model (VFS blocks cross-root imports;
 // the roots hold byte-identical synced copies).
 //
-// Registering a new canonical file: add rows to TARGETS below (canonical
-// relative path → per-root relative paths), then run this script once.
+// Registering a new canonical file: add a row to tools/shared-targets.js (the
+// one table, also consumed by tools/check-shared), then run this script once.
 'use strict'
 const fs = require('fs')
 const path = require('path')
@@ -12,15 +12,7 @@ const path = require('path')
 const root = path.resolve(__dirname, '..')
 
 // canonical file → target paths (repo-relative, one per shell root)
-const TARGETS = {
-  'shared/MotionConfig.qml': ['bar/config/MotionConfig.qml', 'settings/config/MotionConfig.qml'],
-  'shared/DebugConfig.qml': ['bar/config/DebugConfig.qml', 'settings/config/DebugConfig.qml'],
-  'shared/BoundedProcess.qml': ['bar/services/BoundedProcess.qml', 'settings/services/BoundedProcess.qml'],
-  'shared/LogService.qml': ['bar/services/LogService.qml', 'settings/services/LogService.qml'],
-  'shared/LogModel.js': ['bar/services/LogModel.js', 'settings/services/LogModel.js'],
-  'shared/components/Sparkline.qml': ['bar/Ui/Sparkline.qml', 'settings/components/Sparkline.qml'],
-  'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
-}
+const TARGETS = require('./shared-targets.js')
 
 let failures = 0
 for (const [src, dsts] of Object.entries(TARGETS)) {

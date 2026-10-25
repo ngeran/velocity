@@ -1,15 +1,14 @@
 // =============================================================================
 // theme-mix.mjs — palette cross-fade math (pure, node-testable)
 // =============================================================================
-// Consumed by settings/config/ThemeConfig.qml's _applyBlend: interpolates the 16
-// token hex strings from a previous palette to a target at factor t, so every
-// colors.* binding in the process fades per-frame during a theme swap without
-// any consumer changes.
-//
-// SYNC WITH: bar/lib/theme-mix.js — must stay identical (Quickshell
-// sandboxes relative JS imports to each config root, so the two processes
-// cannot share one copy). Drift is caught by the test suite, which runs the
-// same assertions against BOTH files.
+// CANONICAL copy — edit HERE and run tools/sync-shared. bar/lib and
+// settings/lib hold byte-identical synced copies (the VFS sandboxes relative
+// JS imports to each config root, so the two processes cannot share one file).
+// Consumed by each root's config/ThemeConfig.qml _applyBlend: interpolates the
+// 16 token hex strings from a previous palette to a target at factor t, so
+// every colors.* binding in the process fades per-frame during a theme swap
+// without any consumer changes. Drift is caught by check-shared and by
+// bar/lib/theme-mix.test.mjs.
 // =============================================================================
 
 function clamp255(v) {

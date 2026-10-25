@@ -265,32 +265,61 @@ Item {
                     }
                 }
 
-                // Effect segmented [Fade|Wipe|Outer]
+                // Effect segmented — awww's transition set. ANY = awww picks a
+                // different random transition per apply.
                 ColumnLayout {
                     spacing: 3
                     Text { text: "EFFECT"; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
                     Row {
                         spacing: 4
                         Rectangle {
-                            width: 48; height: 22
+                            width: 36; height: 22
                             color: root.transitionType === "fade" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
                             border.color: root.transitionType === "fade" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
                             Text { anchors.centerIn: parent; text: "FADE"; color: root.transitionType === "fade" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
                             MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("fade") }
                         }
                         Rectangle {
-                            width: 48; height: 22
+                            width: 36; height: 22
                             color: root.transitionType === "wipe" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
                             border.color: root.transitionType === "wipe" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
                             Text { anchors.centerIn: parent; text: "WIPE"; color: root.transitionType === "wipe" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
                             MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("wipe") }
                         }
                         Rectangle {
-                            width: 48; height: 22
+                            width: 36; height: 22
                             color: root.transitionType === "outer" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
                             border.color: root.transitionType === "outer" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
                             Text { anchors.centerIn: parent; text: "OUTER"; color: root.transitionType === "outer" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
                             MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("outer") }
+                        }
+                        Rectangle {
+                            width: 36; height: 22
+                            color: root.transitionType === "wave" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: root.transitionType === "wave" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "WAVE"; color: root.transitionType === "wave" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("wave") }
+                        }
+                        Rectangle {
+                            width: 36; height: 22
+                            color: root.transitionType === "grow" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: root.transitionType === "grow" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "GROW"; color: root.transitionType === "grow" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("grow") }
+                        }
+                        Rectangle {
+                            width: 36; height: 22
+                            color: root.transitionType === "center" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: root.transitionType === "center" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "CENTER"; color: root.transitionType === "center" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("center") }
+                        }
+                        Rectangle {
+                            width: 36; height: 22
+                            color: root.transitionType === "any" ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.20) : Config.ThemeConfig.colors.surfaceVariant
+                            border.color: root.transitionType === "any" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "ANY"; color: root.transitionType === "any" ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setTransition("any") }
                         }
                     }
                 }
