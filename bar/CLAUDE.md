@@ -61,6 +61,7 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
    - `NetworkService` — Native `Quickshell.Networking` for bar state (type/SSID/connected); wifi scanner leased to `popupOpen`; IP + throughput are popup-gated probes (full diagnostics live in settings)
    - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
    - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
+   - Storage: the `nikos.storage` plugin's `StorageService` qmldir singleton + headless `Service.qml` (WeatherService pattern) keep a drive inventory warm for the pill and panel: ONE `lsblk -J -b` probe at mount, open-gated 30 s, plus a 10-min cold tick — no df side-channel, no state cache. Pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`); the parser keeps ALL lsblk mountpoints per volume and prefers the volume hosting `/` (NixOS bind-mounts list "/" last).
    - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact); its zone is the plugin's `zone` setting (zone math: `lib/tz.mjs`, synced from `shared/tz.mjs`). The today-card panel's weather comes from the plugin-internal `WeatherService` qmldir singleton (like `nikos.timezones`' service): keyless Open-Meteo via one-shot curl, location = explicit lat/lon settings > cached coords > ipwho.is probe, refresh gated to panel-open + 15 min (idle-zero at rest), last-known forecast cached at `$XDG_STATE_HOME/velocity/plugins/nikos.clock-weather.json` and booted back as `stale`. Pure parsing lives in `lib/weather.mjs` (node-tested, synced from `shared/weather.mjs`); configured by the plugin's `Service.qml` headless root.
 
 3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`. Bar icons are mounted through their `builtins/velocity.*` wrappers, never placed by a scene directly.
@@ -70,7 +71,7 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
 ```
 left:   velocity.logo · velocity.workspaces
 center: nikos.clock · velocity.settings
-right:  nikos.keyboard · nikos.power · nikos.timezones · randazraik.xray
+right:  nikos.keyboard · nikos.power · nikos.timezones · nikos.storage · randazraik.xray
         velocity.network · bluetooth · volume · privacy · logs · notifications
 ```
 Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <delta>`, or Settings ▸ Plugins.
@@ -92,6 +93,9 @@ Every directory has a `qmldir` file. Components/services are registered there an
 
 ### Clock (nikos.clock)
 - **Click**: the TODAY CARD popup (upstream-Ryoku TodayCard adaptation) — LEFT month calendar (‹ › nav, today = filled accent circle, the sanctioned ephemeral fill); RIGHT hero 12-hour clock (seconds tick only while open), weather card, 2×2 metrics (WIND/HUMIDITY/RAIN/FEELS), and the next-8h temperature curve with glyph+hour row (keyless Open-Meteo; `showWeather`/`place`/`lat`/`lon` settings under Settings ▸ Plugins)
+
+### Storage (nikos.storage)
+- **Click**: the STORAGE popup (upstream-Ryoku StoragePanel adaptation) — ROOT fs card (bar + USED/FREE/TOTAL), then one card per physical drive: class glyph + model + capacity, `MEDIA · FS · MOUNT` line, usage bar + USED/FREE/TOTAL (unmounted drives show state only). Pill shows the root used-% on hover, tinted `warning` past `warnThreshold` (default 85) and `error` at 95+. Data: ONE `lsblk -J -b` probe (no df side-channel) through the plugin-internal `StorageService` singleton + headless `Service.qml` — refresh at mount, on open (30 s gate), plus a 10-min cold tick; pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`)
 
 ### Keyboard (US/GR)
 - **Click**: Cycle to the next XKB layout (EN ↔ GR); **right click** opens the layout manager panel (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).

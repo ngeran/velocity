@@ -57,7 +57,7 @@ asynchronously — a run can legitimately watch the raw count decay. The bar
 unit's MainPID filter is the zombie-immune open/close signal.
 (currently: unit-less dev `-p` mode degrades `.alive` to the raw count).
 
-## Suite inventory (13)
+## Suite inventory (14)
 
 | Scenario | What it proves |
 |----------|----------------|
@@ -71,6 +71,7 @@ unit's MainPID filter is the zombie-immune open/close signal.
 | `barsettings-toggle-cycle` | the bar-settings reveal (logo overlay, C4) maps exactly one alive surface and closes clean |
 | `barsettings-style-roundtrip` | bar-side style/edge picks travel `SettingsWindow.setBar*` → settings save funnel → `config reload` nudge; live swap shot; bad names rejected; `bar-config.json` byte-identical after the roundtrip (single-writer proof) |
 | `clock-calendar-toggle-cycle` | the calendar popup (clock click, C1) maps exactly one alive surface and closes clean; the weather state cache holds a real Open-Meteo payload (`raw.current.temperature_2m` numeric) before the panel opens |
+| `storage-toggle-cycle` | the storage popup (drive click, C2) maps exactly one alive surface and closes clean; the headless service mounted and warmed the inventory (journal); local `lsblk` serves ≥1 block device |
 | `wallpaper-noop-set` | re-setting the current wallpaper is a render exercise with zero state drift |
 | `settings-search-index` | search index serves well-formed query hits (title/tab/section) |
 | `keybinds-via-keybind` | the REAL SUPER+K keybind end-to-end through the compositor — **SKIPs until wtype lands in the flake** |

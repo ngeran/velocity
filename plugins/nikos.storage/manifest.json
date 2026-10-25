@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "nikos.storage",
+  "name": "Storage",
+  "version": "1.0.0",
+  "description": "Drive glyph + storage panel: root filesystem bar with USED/FREE/TOTAL and per-drive rows (NVMe/SSD/HDD/USB class, usage bar, capacity). One-shot lsblk, open-gated refresh, no daemon.",
+  "author": "nikos",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [
+    "lsblk"
+  ],
+  "ipc": [
+    "toggle",
+    "open",
+    "close"
+  ],
+  "settings": {
+    "warnThreshold": {
+      "type": "number",
+      "default": 85,
+      "min": 50,
+      "max": 95,
+      "label": "Warning used % (warning colour)"
+    }
+  }
+}

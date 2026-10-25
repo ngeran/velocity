@@ -285,6 +285,35 @@
       "teardown": [
         "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call nikos.clock close \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ]"
       ]
+    },
+    {
+      "id": "storage-toggle-cycle",
+      "name": "The storage panel maps one layer, shows drives, and closes clean",
+      "covers": "nikos.storage PluginPopup (C2 drive click); StorageService lsblk probe + parse; PopupCoordinator claim",
+      "steps": [
+        "ipc bar plugins list",
+        "layers before",
+        "sh journalctl --user -u quickshell-bar --since today --no-pager | grep -c 'nikos.storage\\] service mounted'",
+        "sh lsblk -J -b -o NAME,TYPE,SIZE | jq -e '.blockdevices | length > 0'",
+        "ipc bar plugins call nikos.storage open \"\"",
+        "sleep 3",
+        "shot open",
+        "layers open",
+        "ipc bar plugins call nikos.storage close \"\"",
+        "sleep 2",
+        "layers closed"
+      ],
+      "asserts": [
+        "jq -e 'any(.[]; .id == \"nikos.storage\" and .status == \"ready\")' $QA_EV/01-plugins-list.out",
+        "grep -qx '[1-9][0-9]*' $QA_EV/03-sh.out",
+        "grep -qx true $QA_EV/04-sh.out",
+        "test -s $QA_EV/07-shot-open.png",
+        "test $(( $(cat $QA_EV/08-layers-open.alive) - $(cat $QA_EV/02-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/11-layers-closed.alive)\" = \"$(cat $QA_EV/02-layers-before.alive)\""
+      ],
+      "teardown": [
+        "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call nikos.storage close \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ]"
+      ]
     }
   ]
 }

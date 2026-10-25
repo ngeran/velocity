@@ -1,0 +1,2 @@
+module nikos.storage
+singleton StorageService 1.0 StorageService.qml
