@@ -105,7 +105,12 @@ Folders under user and bundled may not contain symlinks.
   `omarchy.*` is reserved.
 - **api**: must be `2`; the bar refuses other versions.
 - **kinds / entryPoints**: `bar-widget` → `barWidget`, `service` → `service`,
-  `overlay` → `overlay`. A plugin may have several kinds.
+  `overlay` → `overlay`. A plugin may have several kinds. A bar-widget or
+  overlay may ALSO declare an extra `entryPoints.service` root — a headless
+  component mounted ONCE per bar process (not per output) and exposed to the
+  plugin's views as `ctx.service`: the service/view split. Put shared state,
+  probes and timers there; views bind it (never copy it in
+  Component.onCompleted — it may mount after them).
 - **bar.defaultSection**: where the widget goes the first time it is enabled.
 - **bar.collapsePriority**: optional int (default 50) — when the bar runs out
   of width, widgets hide lowest-priority first (settings 20 hides before
@@ -191,6 +196,26 @@ PanelWindow {
 // service: headless; lives while enabled, survives bar style swaps
 Item { property var ctx: null; Timer { interval: 60000; running: true; repeat: true } }
 ```
+
+### Service/view split (extra `entryPoints.service` on a widget or overlay)
+
+Two ways to share state across a plugin's per-output views:
+
+- **Plugin-internal qmldir singleton** (`singleton Foo 1.0 Foo.qml` in your
+  `qmldir`): one instance per bar process, but invisible to the engine — no
+  ctx, no settings injection, not reachable by `plugins call`. Best for pure
+  data bridges. (`nikos.timezones`' `TimezoneService`.)
+- **`entryPoints.service` root**: mounted by the host like a kind-service
+  plugin — full `ctx` (settings, events, run), survives bar style swaps and
+  view reloads, and its functions are reachable by
+  `qs -c bar ipc call plugins call <id> <verb>` (routing tries bar-widget →
+  service → overlay). Views reach it via `ctx.service`. Best when the shared
+  logic needs the engine (settings-driven config, socket2 subscriptions,
+  switch commands that must run exactly once regardless of output count —
+  e.g. a `hyprctl` apply).
+
+Reference: `plugins/nikos.timezones` (Service.qml configures the singleton
+from settings; BarWidget/Panel only bind it).
 
 ### Self-installing runtime (service kind)
 

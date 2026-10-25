@@ -53,6 +53,14 @@ export function validateManifest(m, opts) {
         if (!isSafeEntry(entry)) errors.push("entryPoints." + key + " must be a safe relative filename")
         else if (typeof o.fileExists === "function" && !o.fileExists(entry)) errors.push("entry point file not found: '" + entry + "'")
     }
+    // The service/view split: a bar-widget or overlay may declare an EXTRA
+    // headless root (mounted once in the host, exposed to views as
+    // ctx.service). Same rules as a kind entry — extra keys were previously
+    // carried through unvalidated.
+    if (eps && eps.service !== undefined && (kinds || []).indexOf("service") === -1) {
+        if (!isSafeEntry(eps.service)) errors.push("entryPoints.service must be a safe relative filename")
+        else if (typeof o.fileExists === "function" && !o.fileExists(eps.service)) errors.push("entry point file not found: '" + eps.service + "'")
+    }
 
     if (m.slot !== undefined && m.slot !== "right" && m.slot !== "center")
         errors.push("slot must be 'right' or 'center'")

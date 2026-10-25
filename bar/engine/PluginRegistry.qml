@@ -99,7 +99,14 @@ Item {
 
     // What each bar section renders: { left: [plugin], center, right }.
     readonly property var sections: Layout.resolve(root.layout, root.plugins)
-    readonly property var servicePlugins: root._byKind("service")
+    // Headless roots mounted ONCE in the host (PluginHost): kind-"service"
+    // plugins, plus any plugin with an extra entryPoints.service root — the
+    // service/view split (one live service per plugin across hosts and
+    // outputs; views stay per-window and disposable).
+    readonly property var servicePlugins: root.plugins.filter(function(p) {
+        return p.enabled && p.status === "ready"
+            && (p.kinds.indexOf("service") !== -1 || !!p.entryPoints.service)
+    })
     readonly property var overlayPlugins: root._byKind("overlay")
 
     function plugin(id) {
@@ -537,6 +544,16 @@ Item {
             if (focused !== "" && w && w.screen && w.screen.name === focused) return list[i].item
         }
         return list[0].item
+    }
+
+    // The plugin's one headless service root (entryPoints.service or kind
+    // "service"), or null until it mounts. Reads `instances`, so bindings
+    // on it re-evaluate when the root appears/disappears (ctx.service).
+    function serviceFor(id) {
+        var list = root.instances[id] || []
+        for (var i = 0; i < list.length; i++)
+            if (list[i].kind === "service" && list[i].item) return list[i].item
+        return null
     }
 
     // One verb for widget panels AND overlays. Dual-kind plugins (xray:

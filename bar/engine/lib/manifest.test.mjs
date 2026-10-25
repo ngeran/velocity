@@ -46,6 +46,19 @@ ok("entry points must be safe and (offline) exist", () => {
     assert.equal(entryKey("overlay"), "overlay")
 })
 
+ok("extra entryPoints.service on a bar-widget: the service/view split root", () => {
+    const m = { ...base(), entryPoints: { barWidget: "BarWidget.qml", service: "Service.qml" } }
+    const r = validateManifest(m, { hostApi: 1, fileExists: () => true })
+    assert.equal(r.ok, true)
+    assert.equal(r.plugin.entryPoints.service, "Service.qml")
+    assert.match(errs({ ...m, entryPoints: { barWidget: "BarWidget.qml", service: "../x.qml" } }), /entryPoints\.service must be a safe/)
+    assert.match(errs({ ...m, entryPoints: { barWidget: "BarWidget.qml", service: "Nope.qml" } },
+                      { hostApi: 1, fileExists: () => false }), /entry point file not found: 'Nope\.qml'/)
+    // kind-service plugins keep validating service through the kinds loop
+    assert.equal(validateManifest({ ...base(), kinds: ["service"], entryPoints: { service: "Service.qml" } },
+                                  { hostApi: 1, fileExists: () => true }).ok, true)
+})
+
 ok("v2 bar.defaultSection: any section; v1 slot maps onto it", () => {
     const v2 = { ...base(), schemaVersion: 2, bar: { defaultSection: "center" }, ipc: ["next", "set"], settings: { city: { type: "string", default: "Athens" } } }
     const r = validateManifest(v2, { hostApi: 1 })

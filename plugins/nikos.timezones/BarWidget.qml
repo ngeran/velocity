@@ -17,8 +17,9 @@ Item {
     implicitWidth: pill.implicitWidth
     implicitHeight: pill.height
 
-    readonly property var _settings: ctx ? ctx.settings.values : null
-    on_SettingsChanged: TZ.TimezoneService.configure(_settings)
+    // Configuration lives in Service.qml (entryPoints.service): one headless
+    // root per bar process pushes settings into TZ.TimezoneService. This
+    // view only binds the singleton — safe on any number of outputs.
 
     function toggle() { panel.toggle() }
     function open()   { panel.open() }

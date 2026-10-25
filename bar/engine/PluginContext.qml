@@ -12,6 +12,8 @@
 //   ctx.osd         OSD (showVolume / showMute / showLayout …)
 //   ctx.events      onHyprEvent(line) — the bar's socket2 stream
 //   ctx.settings    SettingsStore: values / get / set / onSettingChanged
+//   ctx.service     the plugin's entryPoints.service root — ONE headless
+//                   instance per plugin across hosts/outputs (null until mounted)
 //   ctx.popup       open (bool) · request() · release() · publish(geom) ·
 //                   island — one-at-a-time panels, notch carve geometry, and
 //                   the island host on this screen (null unless island style)
@@ -48,6 +50,13 @@ QtObject {
     property QtObject events: null
     property var settings: null
     property var host: null
+
+    // The plugin's ONE headless service root (entryPoints.service), mounted
+    // once in the host and shared by every view on every output — the
+    // service/view split. null until it mounts; bindings on this
+    // re-evaluate when it appears (the instance map changes). Views bind it,
+    // never copy it at Component.onCompleted.
+    readonly property var service: PluginRegistry.serviceFor(ctx.pluginId)
 
     // Overflow state for THIS instance's window: "full" | "compact" |
     // "collapsed". "compact" asks a widget to drop to its glyph/minimum form

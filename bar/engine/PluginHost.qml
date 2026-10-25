@@ -3,7 +3,10 @@
 // =============================================================================
 // Placed once in shell.qml (NOT in a style scene) so headless services and
 // full-screen overlays survive bar style swaps. Bar widgets are mounted by
-// the scenes through PluginSlot + PluginRegistry.mount.
+// the scenes through PluginSlot + PluginRegistry.mount. A bar-widget or
+// overlay may ALSO declare entryPoints.service — a headless root mounted
+// here once per plugin (not per output) and exposed to its views as
+// ctx.service (the service/view split).
 //
 // IPC (qs -c bar ipc call plugins <fn> …) — Quickshell IPC has no optional
 // params, so pass "" / "{}" where an argument is unused:
