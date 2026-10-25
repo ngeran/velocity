@@ -60,6 +60,7 @@ check feature bluetoothctl "settings bluetooth control services"
 check feature wpctl        "settings audio control services"
 check feature node         "plugin tooling that shells out to node"
 check feature nvidia-smi   "settings GPU telemetry section (this is the NVIDIA box)"
+check feature jq           "tools/qa harness asserts + ipc-surface/layer evidence"
 
 # --- optional: degrade gracefully by design ---------------------------------
 check optional fastfetch   "FastfetchOverlay hides itself without it"
@@ -67,6 +68,8 @@ check optional ping        "settings network engineer view latency"
 check optional powerprofilesctl "Control Center power-profile tile hides without it"
 check optional brightnessctl "Control Center brightness (backlight); falls back to ddcutil"
 check optional ddcutil    "Control Center brightness on external monitors (DDC/CI)"
+check optional grim       "tools/qa screenshot evidence (shot steps fail without it)"
+check optional wtype      "tools/qa keyboard steps SKIP without it (keybinds-via-keybind)"
 
 if (( fail )); then
   echo "check-tools: FAIL — add the missing tools to ~/.omni-nix and omni-apply" >&2

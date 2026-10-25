@@ -1,0 +1,208 @@
+{
+  "scenarios": [
+    {
+      "id": "bar-resident-health",
+      "name": "Bar process answers ping and serves a consistent plugin registry",
+      "covers": "resident-shell preflight; plugins.list invariants; layout shape",
+      "steps": [
+        "ipc bar osd ping",
+        "ipc bar plugins list",
+        "ipc bar plugins layout"
+      ],
+      "asserts": [
+        "grep -qx ok $QA_EV/01-osd-ping.out",
+        "jq -e 'type == \"array\" and length > 0' $QA_EV/02-plugins-list.out",
+        "jq -e '([.[].id] | unique | length) == length' $QA_EV/02-plugins-list.out",
+        "jq -e 'any(.[]; .id == \"nikos.clock\")' $QA_EV/02-plugins-list.out",
+        "jq -e 'all(.[]; (.id | type) == \"string\" and (.name | type) == \"string\")' $QA_EV/02-plugins-list.out",
+        "jq -e 'has(\"left\") and has(\"center\") and has(\"right\")' $QA_EV/03-plugins-layout.out"
+      ]
+    },
+    {
+      "id": "settings-resident-health",
+      "name": "Settings process serves wallpaper getters and the search index",
+      "covers": "resident settings IPC; wallpaper getters; search index dump",
+      "steps": [
+        "ipc settings wallpaper-service getCount",
+        "ipc settings wallpaper-service getList",
+        "ipc settings wallpaper-service getCyclingEnabled",
+        "ipc settings wallpaper-service getEngineStatus",
+        "ipc settings search list"
+      ],
+      "asserts": [
+        "grep -Eq '^[0-9]+$' $QA_EV/01-wallpaper-service-getCount.out",
+        "grep -q '^/' $QA_EV/02-wallpaper-service-getList.out",
+        "test \"$(grep -c '^/' $QA_EV/02-wallpaper-service-getList.out)\" = \"$(cat $QA_EV/01-wallpaper-service-getCount.out)\"",
+        "grep -Eq '^(true|false)$' $QA_EV/03-wallpaper-service-getCyclingEnabled.out",
+        "jq -e 'type == \"object\"' $QA_EV/04-wallpaper-service-getEngineStatus.out",
+        "sed 's/^entries=[0-9]* //' $QA_EV/05-search-list.out | jq -e 'type == \"array\" and length >= 10'"
+      ]
+    },
+    {
+      "id": "plugins-layout-noop-roundtrip",
+      "name": "Placing an id at its live position leaves layout byte-identical",
+      "covers": "engine save path + Layout.prune + discovery, with zero net state change (the sanctioned write path)",
+      "steps": [
+        "ipc bar plugins layout",
+        "ipc bar plugins place nikos.clock center 0",
+        "ipc bar plugins layout",
+        "ipc bar plugins rescan",
+        "ipc bar plugins layout"
+      ],
+      "asserts": [
+        "diff <(jq -S . $QA_EV/01-plugins-layout.out) <(jq -S . $QA_EV/03-plugins-layout.out)",
+        "diff <(jq -S . $QA_EV/03-plugins-layout.out) <(jq -S . $QA_EV/05-plugins-layout.out)",
+        "jq -e '.center | index(\"nikos.clock\") == 0' $QA_EV/05-plugins-layout.out"
+      ]
+    },
+    {
+      "id": "plugins-settings-roundtrip",
+      "name": "Plugin settings transport: schema read, noop write accepted, bad value rejected, values byte-identical",
+      "covers": "plugins settings/setSetting IPC — the exact transport the Plugins pane settings form uses; schema coercion and rejection paths; no state drift. The noop write may materialize an implicit default as an explicit stored value (zone Local == absent zone Local)",
+      "steps": [
+        "ipc bar plugins settings nikos.clock",
+        "sh v=$(jq -r '.values.zone // \"Local\"' \"$QA_EV/01-plugins-settings.out\"); qs -c bar ipc call plugins setSetting nikos.clock zone \"\\\"$v\\\"\"",
+        "ipc bar plugins setSetting nikos.clock zone \"Mars/Olympus\"",
+        "ipc bar plugins settings nikos.clock"
+      ],
+      "asserts": [
+        "jq -e '.schema.zone.type == \"enum\" and (.schema.zone.options | length) >= 1 and .schema.zone.default != null' $QA_EV/01-plugins-settings.out",
+        "grep -qx ok $QA_EV/02-sh.out",
+        "grep -q 'rejected by the manifest schema' $QA_EV/03-plugins-setSetting.out",
+        "diff <(jq -S '.values' $QA_EV/01-plugins-settings.out) <(jq -S '.values' $QA_EV/04-plugins-settings.out)"
+      ]
+    },
+    {
+      "id": "keyboard-layout-status",
+      "name": "Keyboard status serves at least one layout",
+      "covers": "nikos.keyboard status IPC (read-only)",
+      "steps": [
+        "ipc bar keyboard status"
+      ],
+      "asserts": [
+        "jq -e 'has(\"layouts\") and (.layouts | type == \"array\" and length >= 1)' $QA_EV/01-keyboard-status.out"
+      ]
+    },
+    {
+      "id": "popup-controlcenter-cycle",
+      "name": "Control Center opens one layer surface and closes it clean",
+      "covers": "PopupCoordinator claim/release; Popover window map/unmap; journal silence. Layer asserts use .alive (bar-MainPID-owned surfaces) — zombie layers from past restarts are reaped asynchronously and must not fail deltas",
+      "steps": [
+        "layers before",
+        "ipc bar controlCenter toggle",
+        "sleep 1.2",
+        "shot open",
+        "layers open",
+        "ipc bar controlCenter toggle",
+        "sleep 1.2",
+        "layers closed"
+      ],
+      "asserts": [
+        "test -s $QA_EV/04-shot-open.png",
+        "test $(( $(cat $QA_EV/05-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/08-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
+      ],
+      "teardown": [
+        "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call controlCenter toggle >/dev/null 2>&1; sleep 0.8; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
+      ]
+    },
+    {
+      "id": "overlay-keybinds-cycle",
+      "name": "Keybinds overlay opens one layer surface and closes it clean",
+      "covers": "toggleOverlay built-ins; overlay window map/unmap; journal silence",
+      "steps": [
+        "layers before",
+        "ipc bar keybinds toggle",
+        "sleep 1.2",
+        "shot open",
+        "layers open",
+        "ipc bar keybinds toggle",
+        "sleep 1.2",
+        "layers closed"
+      ],
+      "asserts": [
+        "test -s $QA_EV/04-shot-open.png",
+        "test $(( $(cat $QA_EV/05-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/08-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
+      ],
+      "teardown": [
+        "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call keybinds toggle >/dev/null 2>&1; sleep 0.8; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
+      ]
+    },
+    {
+      "id": "wallpaper-noop-set",
+      "name": "Setting the current wallpaper is a render exercise with no state drift",
+      "covers": "wallpaper setWallpaperByPath roundtrip (awww re-set of the same file)",
+      "steps": [
+        "ipc settings wallpaper-service getCurrentInfo",
+        "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/01-wallpaper-service-getCurrentInfo.out)\"",
+        "sleep 1",
+        "ipc settings wallpaper-service getCurrentInfo"
+      ],
+      "asserts": [
+        "diff $QA_EV/01-wallpaper-service-getCurrentInfo.out $QA_EV/04-wallpaper-service-getCurrentInfo.out"
+      ]
+    },
+    {
+      "id": "settings-search-index",
+      "name": "Search index answers queries with well-formed hits",
+      "covers": "dashboard search index (query path used by truth probes)",
+      "steps": [
+        "ipc settings search list",
+        "ipc settings search query theme"
+      ],
+      "asserts": [
+        "sed 's/^entries=[0-9]* //' $QA_EV/01-search-list.out | jq -e 'type == \"array\" and length >= 10'",
+        "jq -e 'type == \"array\" and length >= 1' $QA_EV/02-search-query.out",
+        "jq -e '.[0] | has(\"title\") and has(\"tab\") and has(\"section\")' $QA_EV/02-search-query.out"
+      ]
+    },
+    {
+      "id": "launcher-toggle-cycle",
+      "name": "The native launcher maps one layer surface and closes it clean",
+      "covers": "velocity.launcher overlay plugin; DesktopEntries index alive; PopupCoordinator claim via PluginHost",
+      "steps": [
+        "ipc bar plugins list",
+        "layers before",
+        "ipc bar plugins call velocity.launcher open \"\"",
+        "sleep 2.5",
+        "shot open",
+        "layers open",
+        "ipc bar plugins call velocity.launcher close \"\"",
+        "sleep 2.5",
+        "layers closed"
+      ],
+      "asserts": [
+        "jq -e 'any(.[]; .id == \"velocity.launcher\" and .status == \"ready\")' $QA_EV/01-plugins-list.out",
+        "test -s $QA_EV/05-shot-open.png",
+        "test $(( $(cat $QA_EV/06-layers-open.alive) - $(cat $QA_EV/02-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/09-layers-closed.alive)\" = \"$(cat $QA_EV/02-layers-before.alive)\""
+      ],
+      "teardown": [
+        "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call velocity.launcher close \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ]"
+      ]
+    },
+    {
+      "id": "keybinds-via-keybind",
+      "name": "The real SUPER+K keybind cycles the keybinds overlay",
+      "covers": "keybind -> IPC parity exercised END TO END through the compositor (needs wtype)",
+      "requires": ["wtype"],
+      "steps": [
+        "layers before",
+        "key -M super -k k -m super",
+        "sleep 1.2",
+        "layers open",
+        "key -M super -k k -m super",
+        "sleep 1.2",
+        "layers closed"
+      ],
+      "asserts": [
+        "test $(( $(cat $QA_EV/03-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/06-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
+      ],
+      "teardown": [
+        "sh N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call keybinds toggle >/dev/null 2>&1; sleep 0.8; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.namespace?==\"quickshell\" and .pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
+      ]
+    }
+  ]
+}

@@ -167,7 +167,7 @@ PanelWindow {
         { sectionName: "CORE APPLICATIONS", binds: [
             { key: "SUPER + X",         desc: "Terminal" },
             { key: "SUPER + B",         desc: "Chromium" },
-            { key: "SUPER + SPACE",     desc: "App launcher (rofi)" },
+            { key: "SUPER + SPACE",     desc: "App launcher (rofi; velocity.launcher rebind pending)" },
             { key: "SUPER + C",         desc: "Close window" },
             { key: "SUPER + SHIFT + F", desc: "File manager" }
         ]},

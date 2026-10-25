@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.launcher",
+  "name": "Launcher",
+  "version": "1.0.0",
+  "description": "Built-in overlay: native app launcher (search + launch, frequency-ranked).",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "overlay"
+  ],
+  "entryPoints": {
+    "overlay": "Overlay.qml"
+  },
+  "commands": [],
+  "ipc": [
+    "toggle",
+    "open",
+    "close"
+  ]
+}

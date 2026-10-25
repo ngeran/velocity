@@ -11,6 +11,15 @@
 // below. Data comes from PluginManagerService: state and settings through
 // the BAR's plugins IPC (the bar is their single writer), file ops through
 // bin/velocity-plugin.
+//
+// The settings form (SettingsForm) renders whatever the manifest declares:
+// string/number/list as text inputs, bool as a toggle, enum as a
+// PanelDropdown of the declared options — every write goes through
+// plugins setSetting, so the value is coerced by the same schema the
+// plugin sees and a rejection is reported AT the form (the engine logs
+// the precise reason). RESET DEFAULTS writes the manifest defaults back.
+// Reloads only rebuild the field delegates when the schema keys actually
+// change — a value-only reload keeps focus in the input you were editing.
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
@@ -86,17 +95,59 @@ ColumnLayout {
         property var schema: ({})
         property var values: ({})
         property bool loaded: false
+        // Last rejected write, shown at the form ("key: reason") — the
+        // engine keeps the precise coercion error in the bar's journal.
+        property string error: ""
+        // Schema keys, reassigned only when the CONTENT changes: the field
+        // Repeater models this, so a value-only reload never rebuilds
+        // delegates (focus survives editing several fields in a row).
+        property var _keys: []
         spacing: 4
 
+        function _setKeys(next) {
+            var cur = form._keys
+            if (cur.length === next.length) {
+                var same = true
+                for (var i = 0; i < next.length; i++)
+                    if (cur[i] !== next[i]) { same = false; break }
+                if (same) return
+            }
+            form._keys = next
+        }
         function reload() {
             view.mgr.loadSettings(form.pluginId, function(j) {
                 if (!form) return
                 form.schema = j.schema || {}
                 form.values = j.values || {}
+                form._setKeys(Object.keys(form.schema))
                 form.loaded = true
             })
         }
-        function commit(key, value) { view.mgr.setSetting(form.pluginId, key, value, function() { if (form) form.reload() }) }
+        function commit(key, value) {
+            view.mgr.setSetting(form.pluginId, key, value, function(ok) {
+                if (!form) return
+                if (ok) { form.error = ""; form.reload() }
+                else form.error = view.mgr.lastError
+            })
+        }
+        // Write every declared default back (one IPC per key), then reload
+        // once. A failed key aborts the loop and reports at the form.
+        function applyDefaults() {
+            var keys = Object.keys(form.schema)
+            var i = 0
+            var step = function() {
+                if (!form) return
+                if (i >= keys.length) { form.reload(); return }
+                var k = keys[i++]
+                view.mgr.setSetting(form.pluginId, k, form.schema[k].default, function(ok) {
+                    if (!form) return
+                    if (!ok) { form.error = view.mgr.lastError; return }
+                    step()
+                })
+            }
+            form.error = ""
+            step()
+        }
         Component.onCompleted: reload()
 
         Text {
@@ -106,8 +157,25 @@ ColumnLayout {
             color: Config.ThemeConfig.colors.textDim
         }
 
+        // form header: eyebrow + reset (kept narrow — this pane has a
+        // ~544px floor; wide rows here become the whole pane's minimum)
+        RowLayout {
+            visible: form.loaded
+            Layout.fillWidth: true
+            spacing: 8
+            Text {
+                text: "PLUGIN SETTINGS"
+                font.family: Config.ControlConfig.fontSans; font.pixelSize: 8; font.bold: true
+                font.letterSpacing: 1.0
+                color: Config.ThemeConfig.colors.textDim
+                Layout.minimumWidth: 0
+            }
+            Item { Layout.fillWidth: true }
+            Pill { text: "RESET DEFAULTS"; onActivated: form.applyDefaults() }
+        }
+
         Repeater {
-            model: form.loaded ? Object.keys(form.schema) : []
+            model: form.loaded ? form._keys : []
 
             RowLayout {
                 id: field
@@ -121,6 +189,7 @@ ColumnLayout {
                 Text {
                     text: (field.spec.label || field.key).toUpperCase()
                     Layout.preferredWidth: 160
+                    Layout.minimumWidth: 0
                     elide: Text.ElideRight
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 9; font.bold: true
                     color: Config.ThemeConfig.colors.textDim
@@ -128,7 +197,10 @@ ColumnLayout {
 
                 Rectangle {
                     visible: field.textual
-                    Layout.preferredWidth: 240; Layout.preferredHeight: 22
+                    Layout.preferredWidth: 240; Layout.minimumWidth: 0
+                    Layout.fillWidth: field.textual
+                    Layout.maximumWidth: 280
+                    Layout.preferredHeight: 22
                     radius: Config.ControlConfig.radiusSmall
                     color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.7)
                     border.color: fieldInput.activeFocus ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
@@ -158,15 +230,26 @@ ColumnLayout {
                     onToggled: form.commit(field.key, !(field.value === true))
                 }
 
-                // enum: click cycles the declared options
-                Pill {
+                // enum: the declared options as a dropdown (the old cycle
+                // pill needed N clicks to wrap an N-option list). value is
+                // synced imperatively — PanelDropdown assigns its own value
+                // on pick, which would break a declarative binding.
+                PanelDropdown {
+                    id: enumDrop
                     visible: field.spec.type === "enum"
-                    text: String(field.value === undefined ? "" : field.value).toUpperCase()
-                    onActivated: {
-                        var opts = field.spec.options || []
-                        if (opts.length === 0) return
-                        form.commit(field.key, opts[(opts.indexOf(field.value) + 1) % opts.length])
+                    Layout.preferredWidth: 240; Layout.minimumWidth: 0
+                    Layout.maximumWidth: 280
+                    showLabel: false
+                    options: field.spec.options || []
+                    function _sync() {
+                        value = String(field.value === undefined ? "" : field.value)
                     }
+                    Component.onCompleted: _sync()
+                    Connections {
+                        target: field
+                        function onValueChanged() { enumDrop._sync() }
+                    }
+                    onChanged: function(v) { form.commit(field.key, v) }
                 }
 
                 Text {
@@ -177,6 +260,16 @@ ColumnLayout {
                 }
                 Item { Layout.fillWidth: true }
             }
+        }
+
+        Text {
+            visible: form.error !== ""
+            text: "⚠ " + form.error
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            elide: Text.ElideRight
+            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
+            color: Config.ThemeConfig.colors.error
         }
     }
 

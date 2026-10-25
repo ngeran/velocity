@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+#
+# qa/run — live QA harness: scenario JSON against the RESIDENT shells.
+#
+# Ryoku's launcher/qa contract (release 1.0.3) adapted to our two-process
+# setup. Same skeleton, different transport:
+#
+#   - string-step DSL (ipc / sh / sleep / key / cursor / shot / layers)
+#   - bash -c asserts, evaluated ONLY after clean steps (no partial pass)
+#   - per-scenario evidence dir + results.tsv; PASS/FAIL/SKIP/BLOCKED
+#   - BLOCKED: a documented defect OUTSIDE the harness (scenario's `blocked`
+#     field) — visible in the summary without failing the run
+#   - teardown ALWAYS runs; a teardown failure FAILS the scenario
+#     (hardened beyond Ryoku, which ignores per-scenario teardown errors)
+#   - journal-cursor error gate around EVERY scenario: any `-p err` line from
+#     the gated shells during a scenario fails it. Cursor-based, not
+#     timestamp-windowed. `allowJournalErrors` (ERE) exempts known-noisy lines.
+#
+# THIS HARNESS NEVER SPAWNS QUICKSHELL. It talks only to the resident
+# bar/settings processes over their IPC sockets (`qs -c ... ipc call`) —
+# a second `quickshell -c` instance froze the session once; see memory
+# quickshell-verify-no-multi-instance. If preflight cannot reach the
+# resident shells it refuses to run.
+#
+# Usage:
+#   tools/qa/run                  # default suite (tools/qa/scenarios.json)
+#   tools/qa/run SUITE.json       # a custom suite file
+#   tools/qa/run --only id1,id2   # subset of the default suite
+#   tools/qa/run --list           # print ids + names, run nothing
+#
+# Env:
+#   QA_OUT      evidence root   (default /tmp/velocity-qa)
+#   QA_TIMEOUT  per-step timeout in seconds (default 10)
+#
+# Step ops (whitespace-split):
+#   ipc  <bar|settings> <target> <fn> [args...]
+#       `timeout $QA_TIMEOUT qs -c <shell> ipc call <target> <fn> args...`
+#       Output saved to evidence as NN-<target>-<fn>.out.
+#       Nonzero exit or timeout = FAIL. (`ipc?` tolerates any exit code —
+#       for probes where failure is data.)
+#   sh  <command>            bash -c; nonzero = FAIL. Output to evidence.
+#   sleep <seconds>          fractional ok
+#   key <wtype args...>      passed to wtype VERBATIM (full combo syntax,
+#       e.g. `key -M super -k k -m super`). Keys land in the FOCUSED window
+#       — write scenarios that make that safe. SKIPs if wtype is absent.
+#   cursor <x> <y>           hyprctl synthetic cursor move (Lua dispatcher;
+#       `movecursor` is a no-op on this host)
+#   shot <label>             grim -> evidence NN-shot-<label>.png
+#   layers <label>           hyprctl -j layers -> NN-layers-<label>.json
+#       plus NN-layers-<label>.count = number of `quickshell`-namespace
+#       layer surfaces (the open/closed signal for popup scenarios)
+#
+# Scenario fields:
+#   id, name, covers                  id required, rest documentation
+#   steps[]                           the DSL steps above
+#   asserts[]                         bash -c, exit 0 = pass; $QA_EV points
+#                                     at the scenario's evidence dir; run
+#                                     from the repo root; only after clean
+#                                     steps
+#   teardown[]                        bash -c, ALWAYS runs (not on SKIP);
+#                                     any failure fails the scenario
+#   requires[]                        tool names; any missing -> SKIP
+#   units[]                           journal units to gate (default:
+#                                     quickshell-bar + quickshell-settings)
+#   allowJournalErrors                ERE; matching -p err lines are exempt
+#   blocked                           reason string; FAIL reports as BLOCKED
+set -u
+export LC_ALL=C
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+cd "$ROOT"
+
+SUITE="$HERE/scenarios.json"
+ONLY=""
+LIST=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --only) ONLY="${2:?--only needs a value}"; shift 2 ;;
+    --list) LIST=1; shift ;;
+    -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
+    *) SUITE="$1"; shift ;;
+    esac
+done
+
+[[ -f "$SUITE" ]] || { echo "qa/run: suite not found: $SUITE" >&2; exit 2; }
+command -v jq >/dev/null || { echo "qa/run: jq is required" >&2; exit 2; }
+
+if (( LIST )); then
+    jq -r '.scenarios[] | .id + "\t" + .name' "$SUITE"
+    exit 0
+fi
+
+QA_TIMEOUT="${QA_TIMEOUT:-10}"
+OUT="${QA_OUT:-/tmp/velocity-qa}/run-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$OUT"
+
+# --- preflight: resident shells ONLY ----------------------------------------
+ping="$(timeout 5 qs -c bar ipc call osd ping 2>&1)"
+if [[ "$ping" != "ok" ]]; then
+    echo "qa/run: bar is not resident (ping => '$ping')." >&2
+    echo "  The harness never spawns quickshell — restart the unit first:" >&2
+    echo "  systemctl --user restart quickshell-bar" >&2
+    exit 2
+fi
+count="$(timeout 5 qs -c settings ipc call wallpaper-service getCount 2>&1)"
+if [[ ! "$count" =~ ^[0-9]+$ ]]; then
+    echo "qa/run: settings is not resident (getCount => '$count')." >&2
+    echo "  systemctl --user restart quickshell-settings" >&2
+    exit 2
+fi
+
+# --- helpers -----------------------------------------------------------------
+have() { command -v "$1" >/dev/null 2>&1; }
+
+evname() { # <n> <label> -> NN-<sanitized-label>
+    printf '%02d-%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '_')"
+}
+
+jcursor() { # <unit> -> last journal cursor (empty on failure)
+    journalctl --user -u "$1" -n 0 --show-cursor --quiet 2>/dev/null |
+        sed -n 's/.*-- cursor: //p'
+}
+
+errcount_since() { # <unit> <cursor> [exempt-ERE] -> -p err line count
+    local u="$1" c="$2" re="${3:-}"
+    journalctl --user -u "$u" -p err --after-cursor="$c" --quiet 2>/dev/null |
+        { if [[ -n "$re" ]]; then grep -Ev "$re" || true; else cat; fi; } |
+        wc -l
+}
+
+# --- one step ----------------------------------------------------------------
+# Returns 0 ok, nonzero on hard failure. Sets SKIP_NOW=1 (and returns 0) when
+# the step is skipped because its tool is absent -> scenario verdict SKIP.
+SKIP_NOW=0
+STEPNO=0
+EV=""
+
+run_step() {
+    local step="$1" rc=0 ev label
+    local -a p
+    read -r -a p <<<"$step"
+    local op="${p[0]:-}"
+    STEPNO=$((STEPNO + 1))
+
+    case "$op" in
+    ipc | 'ipc?')
+        local shell_="${p[1]:-}" target="${p[2]:-}" fn="${p[3]:-}"
+        if [[ "$shell_" != bar && "$shell_" != settings ]]; then
+            echo "BAD STEP (shell must be bar|settings): $step" >>"$EV/steps.log"
+            return 1
+        fi
+        ev="$EV/$(evname "$STEPNO" "$target-$fn").out"
+        echo "[ipc] $step" >>"$EV/steps.log"
+        timeout "$QA_TIMEOUT" qs -c "$shell_" ipc call "$target" "$fn" \
+            "${p[@]:4}" >"$ev" 2>&1
+        rc=$?
+        echo "  rc=$rc out=$(head -c 120 "$ev" | tr '\n' ' ')" >>"$EV/steps.log"
+        if (( rc != 0 )) && [[ "$op" == "ipc" ]]; then
+            echo "  STEP FAILED" >>"$EV/steps.log"
+            return 1
+        fi
+        ;;
+    sh)
+        ev="$EV/$(evname "$STEPNO" sh).out"
+        echo "[sh] $step" >>"$EV/steps.log"
+        bash -c "${step#sh }" >"$ev" 2>&1
+        rc=$?
+        echo "  rc=$rc out=$(head -c 120 "$ev" | tr '\n' ' ')" >>"$EV/steps.log"
+        if (( rc != 0 )); then
+            echo "  STEP FAILED" >>"$EV/steps.log"
+            return 1
+        fi
+        ;;
+    sleep)
+        echo "[sleep] ${p[1]:-0}" >>"$EV/steps.log"
+        sleep "${p[1]:-0}"
+        ;;
+    key)
+        if ! have wtype; then
+            echo "[key] wtype not installed -> scenario SKIP" >>"$EV/steps.log"
+            SKIP_NOW=1
+            return 0
+        fi
+        echo "[key] wtype ${p[*]:1}" >>"$EV/steps.log"
+        wtype "${p[@]:1}" >>"$EV/steps.log" 2>&1
+        rc=$?
+        if (( rc != 0 )); then
+            echo "  STEP FAILED (wtype rc=$rc)" >>"$EV/steps.log"
+            return 1
+        fi
+        ;;
+    cursor)
+        echo "[cursor] x=${p[1]:-0} y=${p[2]:-0}" >>"$EV/steps.log"
+        hyprctl dispatch "hl.dsp.cursor.move({x:${p[1]:-0}, y:${p[2]:-0}})" \
+            >>"$EV/steps.log" 2>&1
+        rc=$?
+        if (( rc != 0 )); then
+            echo "  STEP FAILED (hyprctl rc=$rc)" >>"$EV/steps.log"
+            return 1
+        fi
+        ;;
+    shot)
+        label="${p[1]:-shot}"
+        ev="$EV/$(evname "$STEPNO" "shot-$label").png"
+        echo "[shot] $label" >>"$EV/steps.log"
+        grim "$ev" >>"$EV/steps.log" 2>&1
+        rc=$?
+        if (( rc != 0 )) || [[ ! -s "$ev" ]]; then
+            echo "  STEP FAILED (grim rc=$rc)" >>"$EV/steps.log"
+            return 1
+        fi
+        ;;
+    layers)
+        label="${p[1]:-layers}"
+        ev="$EV/$(evname "$STEPNO" "layers-$label")"
+        echo "[layers] $label" >>"$EV/steps.log"
+        if ! hyprctl -j layers >"$ev.json" 2>>"$EV/steps.log"; then
+            echo "  STEP FAILED (hyprctl layers)" >>"$EV/steps.log"
+            return 1
+        fi
+        # .count  = ALL quickshell-namespace surfaces (evidence; includes
+        #           pid:-1 zombie layers from past restarts — Hyprland reaps
+        #           those asynchronously, so this number can drift DOWNWARD
+        #           for environmental reasons; do not assert on it)
+        # .alive  = surfaces owned by the live bar MainPID — the open/close
+        #           signal popup scenarios assert on (zombie-immune)
+        if ! jq '[.. | objects | select(.namespace? == "quickshell")] | length' \
+            <"$ev.json" >"$ev.count" 2>>"$EV/steps.log"; then
+            echo "  STEP FAILED (layer count jq)" >>"$EV/steps.log"
+            return 1
+        fi
+        local barpid
+        barpid="$(systemctl --user show -p MainPID --value quickshell-bar 2>/dev/null)"
+        if [[ "$barpid" =~ ^[0-9]+$ ]] && (( barpid > 0 )); then
+            jq --argjson p "$barpid" \
+                '[.. | objects | select(.namespace? == "quickshell" and .pid == $p)] | length' \
+                <"$ev.json" >"$ev.alive" 2>>"$EV/steps.log"
+        else
+            # no systemd unit (dev -p mode): degrade to the raw count
+            cp "$ev.count" "$ev.alive"
+        fi
+        echo "  quickshell layers = $(cat "$ev.count") alive=$(cat "$ev.alive")" \
+            >>"$EV/steps.log"
+        ;;
+    *)
+        echo "BAD STEP (unknown op): $step" >>"$EV/steps.log"
+        return 1
+        ;;
+    esac
+    return 0
+}
+
+# --- suite -------------------------------------------------------------------
+pass=0; fail=0; skip=0; block=0
+: >"$OUT/results.tsv"
+DEFAULT_UNITS='"quickshell-bar","quickshell-settings"'
+
+while IFS= read -r sc; do
+    id="$(jq -r '.id // "unnamed"' <<<"$sc")"
+    name="$(jq -r '.name // ""' <<<"$sc")"
+    if [[ -n "$ONLY" ]] && ! [[ ",$ONLY," == *",$id,"* ]]; then continue; fi
+
+    EV="$OUT/$id"
+    export QA_EV="$EV" # asserts + teardown resolve evidence files through this
+    STEPNO=0          # evidence filenames restart at 01 per scenario
+    mkdir -p "$EV"
+    jq -S . <<<"$sc" >"$EV/scenario.json"
+    : >"$EV/steps.log"
+
+    # journal gate: capture cursors BEFORE anything runs
+    gate_units=()
+    while IFS= read -r u; do
+        [[ -z "$u" ]] && continue
+        gate_units+=("$u")
+    done < <(jq -r ".units // [$DEFAULT_UNITS] | .[]" <<<"$sc")
+    declare -A gate_cur=()
+    for u in "${gate_units[@]}"; do gate_cur[$u]="$(jcursor "$u")"; done
+
+    allow_re="$(jq -r '.allowJournalErrors // ""' <<<"$sc")"
+    blocked="$(jq -r '.blocked // ""' <<<"$sc")"
+
+    verdict=PASS; reason=""
+
+    # requires: any missing tool -> SKIP before touching anything
+    missing=""
+    while IFS= read -r r; do
+        [[ -z "$r" ]] && continue
+        if ! have "$r"; then missing="$missing $r"; fi
+    done < <(jq -r '.requires[]? // empty' <<<"$sc")
+    if [[ -n "$missing" ]]; then
+        verdict=SKIP; reason="missing tools:$missing"
+    else
+        # steps
+        while IFS= read -r step; do
+            [[ -z "$step" ]] && continue
+            SKIP_NOW=0
+            if ! run_step "$step" 2>>"$EV/steps.log"; then
+                if (( SKIP_NOW )); then
+                    verdict=SKIP; reason="step needs an absent tool"
+                else
+                    verdict=FAIL; reason="step failed: $step"
+                fi
+                break
+            fi
+        done < <(jq -r '.steps[]?' <<<"$sc")
+
+        # asserts — only after clean steps (no partial pass)
+        if [[ "$verdict" == PASS ]]; then
+            while IFS= read -r a; do
+                [[ -z "$a" ]] && continue
+                if ! bash -c "$a" >>"$EV/steps.log" 2>&1; then
+                    verdict=FAIL; reason="assert failed: $a"
+                    break
+                fi
+            done < <(jq -r '.asserts[]?' <<<"$sc")
+        fi
+    fi
+
+    # teardown — ALWAYS (even after failed asserts), failure fails the scenario
+    if [[ "$verdict" != SKIP ]]; then
+        while IFS= read -r t; do
+            [[ -z "$t" ]] && continue
+            if ! bash -c "$t" >>"$EV/steps.log" 2>&1; then
+                verdict=FAIL
+                reason="teardown failed: $t (prior: $reason)"
+            fi
+        done < <(jq -r '.teardown[]?' <<<"$sc")
+    fi
+
+    # journal gate — only a passing scenario can be failed by it
+    if [[ "$verdict" == PASS ]]; then
+        for u in "${gate_units[@]}"; do
+            n="$(errcount_since "$u" "${gate_cur[$u]}" "$allow_re")"
+            if (( n > 0 )); then
+                verdict=FAIL
+                reason="$n journal error(s) in $u during scenario"
+                break
+            fi
+        done
+    fi
+
+    # documented external defect: FAIL reads as BLOCKED
+    if [[ "$verdict" == FAIL && -n "$blocked" ]]; then
+        verdict=BLOCKED; reason="$blocked (assert: $reason)"
+    fi
+
+    case "$verdict" in
+    PASS) pass=$((pass + 1)) ;;
+    SKIP) skip=$((skip + 1)) ;;
+    BLOCKED) block=$((block + 1)) ;;
+    *) fail=$((fail + 1)) ;;
+    esac
+    printf '%s\t%s\t%s\t%s\n' "$id" "$verdict" "$name" "$reason" |
+        tee -a "$OUT/results.tsv"
+done < <(jq -c '.scenarios[]' "$SUITE")
+
+echo "----"
+echo "PASS $pass  FAIL $fail  SKIP $skip  BLOCKED $block"
+echo "evidence: $OUT"
+(( fail == 0 ))

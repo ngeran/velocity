@@ -32,6 +32,7 @@ exec-once = quickshell -c ~/.config/quickshell/bar
 
 ### Entry point
 - **`shell.qml` — the HOST**: IPC handlers, shared overlays (TrayCard, NotificationCenter, OSD; Fastfetch/Keybinds/log viewer/Z.ai usage are overlay built-ins `velocity.fastfetch|keybinds|logs-viewer|zai-usage` reached via `toggleOverlay(id)`), the tray state (`trayOwner/trayAnchor/activeTray`, `toggleTray/closeTray`), the `hostApi` it injects into the plugin engine, `Engine.PluginHost` (service + overlay plugins, `plugins` IPC), and the **style Loader** — it loads `styles/<barStyle>/Scene.qml` (barStyle from bar-config.json, default `vector`; Loader.Error auto-falls back to vector so a broken style never renders an empty bar).
+- **Native launcher** (`velocity.launcher`, an overlay built-in like the ones above): spotlight card under the bar — `components/LauncherOverlay.qml` over the app index (Quickshell `DesktopEntries`, rebuilt imperatively — a declarative `.values` binding latches empty when it reads mid-init). Ranking in `lib/launcher-search.mjs` (node-tested): prefix > substring > subsequence, `LauncherFrecency` (services singleton, `$XDG_STATE_HOME/velocity/launcher-usage.json`) breaks ties and fills the empty query; rows render segment Texts, never RichText (app names must not inject markup). `focusable: true` gives the surface exclusive keys while mapped; focus returns on unmap. `qs -c bar ipc call plugins call velocity.launcher toggle ""`; rofi stays as the fallback entry point (SUPER+SPACE rebind is an omni-nix decision).
 - **`styles/<name>/Scene.qml` — a bar style**: one `PanelWindow` per real output via `Variants { model: Quickshell.screens }` (hotplug-safe; delegates must carry a plain `property var modelData`). A style owns only window chrome; WHAT renders comes from three `Engine.BarSection`s (left/center/right, from the engine layout). A style may swap one widget's look via `overrides: { id: Component }` (ryoku's workspaces). It receives the host as `host` and exposes `instances` for the barToggle IPC.
 - **Adding a bar style** = new folder `styles/<name>/` with a `Scene.qml` honoring the same host contract (see vector's header). It appears automatically in Settings → Bar (styles are scanned, shown as "Bar form" preview cards — add a silhouette + copy for it in `settings/components/BarFormCard.qml`) and swaps live — no restart.
 - **Styles today:** `vector` (default, full strip), `notch` (lobe + caret carve), `ryoku` (paper-and-ink strip), `island` (Dynamic Island).
@@ -173,6 +174,9 @@ To move the bar to the bottom: Settings → Bar → BAR POSITION (`barPosition` 
 | `nmcli` | Settings network section (the bar popup reads ip/sysfs only) |
 | `bluetoothctl` / `wpctl` | Settings process only (control services); the bar is native |
 | `qrencode` | Settings Wi-Fi QR share |
+| `jq` | `tools/qa` harness (asserts, layer evidence) |
+| `grim` | `tools/qa` screenshot evidence |
+| `wtype` | `tools/qa` keyboard steps (SKIP without it — flake candidate) |
 
 **On NixOS:** All packages managed via `~/.omni-nix/flake.nix`.
 
