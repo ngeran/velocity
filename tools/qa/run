@@ -233,8 +233,11 @@ run_step() {
         local barpid
         barpid="$(systemctl --user show -p MainPID --value quickshell-bar 2>/dev/null)"
         if [[ "$barpid" =~ ^[0-9]+$ ]] && (( barpid > 0 )); then
+            # pid-owned, ANY namespace: plugin popups map their own layer
+            # surface as `bar-plugin-<id>` (Quickshell WlrLayershell.namespace),
+            # so pinning the namespace here made every PluginPopup invisible.
             jq --argjson p "$barpid" \
-                '[.. | objects | select(.namespace? == "quickshell" and .pid == $p)] | length' \
+                '[.. | objects | select(.pid == $p)] | length' \
                 <"$ev.json" >"$ev.alive" 2>>"$EV/steps.log"
         else
             # no systemd unit (dev -p mode): degrade to the raw count

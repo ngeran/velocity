@@ -4,20 +4,27 @@
   "id": "nikos.clock",
   "name": "Clock",
   "version": "1.0.0",
-  "description": "Centered clock + date. Click toggles the calendar popup. Occupies the CENTER slot.",
+  "description": "Centered clock + date. Click toggles the calendar popup with a weather today card (keyless Open-Meteo). Occupies the CENTER slot.",
   "author": "nikos",
   "kinds": [
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
   },
   "bar": {
     "defaultSection": "center"
   },
-  "commands": [],
+  "commands": [
+    "curl",
+    "sh",
+    "mkdir"
+  ],
   "ipc": [
-    "toggle"
+    "toggle",
+    "open",
+    "close"
   ],
   "settings": {
     "zone": {
@@ -34,6 +41,30 @@
         "UTC"
       ],
       "label": "Clock zone"
+    },
+    "showWeather": {
+      "type": "bool",
+      "default": true,
+      "label": "Weather in the calendar panel"
+    },
+    "place": {
+      "type": "string",
+      "default": "",
+      "label": "Place label (blank = auto-detected city)"
+    },
+    "lat": {
+      "type": "number",
+      "default": 0,
+      "min": -90,
+      "max": 90,
+      "label": "Latitude (0 = auto via IP locate)"
+    },
+    "lon": {
+      "type": "number",
+      "default": 0,
+      "min": -180,
+      "max": 180,
+      "label": "Longitude (0 = auto via IP locate)"
     }
   }
 }

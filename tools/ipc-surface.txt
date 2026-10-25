@@ -68,6 +68,8 @@ SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
 SettingsWindow.openCore           unused
 SettingsWindow.openSettings       internal  # Control Center footer
 SettingsWindow.openThemeTab       internal  # Control Center THEME tile
+SettingsWindow.setBarStyle        internal  # velocity.bar-settings style pick — write via the settings funnel (single bar-config writer)
+SettingsWindow.setBarPosition     internal  # velocity.bar-settings bar-edge pick — same funnel
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P

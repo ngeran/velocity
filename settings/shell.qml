@@ -210,6 +210,29 @@ ShellRoot {
             panelWindow.visible = true
             dashboard.openCoreTab(section || "system")
         }
+
+        // ── C4: bar-owned keys written FROM the bar (velocity.bar-settings) ──
+        // The settings app stays bar-config.json's single writer — the in-bar
+        // overlay routes style/edge picks through these verbs so the write
+        // lands via the same funnel as the Bar pane (extras merge → atomic
+        // write → `config reload` nudge) and a later settings-side save can't
+        // clobber a bar-side pick. No window is opened: a silent write.
+        function setBarStyle(name: string): string {
+            if (!/^[a-z0-9][a-z0-9-]*$/.test(String(name)))
+                return "error: style name must match [a-z0-9-]"
+            Services.SettingsConfigService.barStyle = String(name)
+            Services.SettingsConfigService.saveSettings()
+            Services.SettingsConfigService.scanBarStyles()
+            return "ok"
+        }
+
+        function setBarPosition(pos: string): string {
+            if (pos !== "top" && pos !== "bottom")
+                return "error: position must be top|bottom"
+            Services.SettingsConfigService.barPosition = String(pos)
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
     }
 
     // =========================================================================

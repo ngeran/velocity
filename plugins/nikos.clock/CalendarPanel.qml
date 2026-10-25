@@ -1,32 +1,46 @@
 // =============================================================================
-// nikos.clock — calendar popup body ("TEMPORAL MAP", Omarchy mockup port)
+// nikos.clock — calendar popup body ("TODAY CARD", upstream-Ryoku adaptation)
 // =============================================================================
-// Port of the dashboard CalendarWidget's month logic (MON-start offset, fixed
-// 6-row grid, today-only highlight) restyled to the bar-popup mockup:
-//   • eyebrow "TEMPORAL MAP :: Q3 // <TZ>"
-//   • headline "SEPTEMBER 2026" (year in dim weight)
-//   • meta "WEEK 37 • DAY 255 OF 365" (ISO week + day-of-year)
-//   • adjacent-month ghost days, weekend dimming, per-cell hover
-//   • today = primary reticle box (1.5px border + primary tint fill)
-// All colours are live ctx tokens — re-tints on theme change.
+// Adaptation of Ryoku's TodayCard (their orpheus shell, user-provided photos)
+// to this bar's design language (teal on pure black, JetBrains Mono):
+//   ┌─ calendar ─────┐  ┌─ clock hero ──────────────┐
+//   │ ‹ OCTOBER 2026 ›│  │ 10:38 PM :12    Sunday    │
+//   │ MO TU .. SU     │  └───────────────────────────┘
+//   │ grid, today =   │  ┌─ weather ─────┐ ┌ metrics ┐
+//   │ filled circle   │  │ ☾ 49° Clear   │ │WIND HUM │
+//   └─────────────────┘  │ Pennsylvania  │ │RAIN FEEL│
+//                        └───────────────┘ └─────────┘
+//                        ┌─ hourly curve (next 8h) ───┐
+//                        │   49°–41° line + fill      │
+//                        └────────────────────────────┘
+// Card chrome is transparent + 1px hairline (QD-OLED: no bright static fills;
+// the ephemeral popup is the one place a filled accent circle is allowed).
+// Weather data: the plugin's WeatherService singleton (open-gated fetch);
+// pure parsing/curve slicing lives in lib/weather.mjs (node-tested).
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import "lib/tz.mjs" as Tz
+import "lib/weather.mjs" as Wx
+import "." as Clock
 
-ColumnLayout {
+RowLayout {
     id: calRoot
 
     property var ctx: null
+    // Drives the hero clock's seconds: BarWidget sets this while the popup
+    // is open, so the Seconds-precision SystemClock never ticks at rest
+    // (idle-zero doctrine — the panel body stays loaded while closed).
+    property bool live: false
 
     Layout.fillWidth: true
-    spacing: 0
+    spacing: 12
 
-    // ── "now" — hour precision (the day only changes at midnight) ───────────
+    // ── "now" — minutes; Seconds only while the panel is open ───────────────
     SystemClock {
         id: clk
-        precision: SystemClock.Hours
+        precision: calRoot.live ? SystemClock.Seconds : SystemClock.Minutes
     }
     property var _now: clk.date
 
@@ -38,7 +52,6 @@ ColumnLayout {
     // month IS the current month.
     property int viewMonth: calRoot._todayMonth
     property int viewYear:  calRoot._todayYear
-
     readonly property bool _isThisMonth: viewMonth === _todayMonth && viewYear === _todayYear
 
     property var _firstOfMonth: new Date(viewYear, viewMonth, 1)
@@ -55,264 +68,472 @@ ColumnLayout {
         calRoot.viewYear  = y
     }
 
-    // ISO-8601 week number (mockup: "WEEK 37")
-    function _isoWeek(d) {
-        var t = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-        t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7))
-        var week1 = new Date(t.getFullYear(), 0, 4)
-        return 1 + Math.round(((t - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
+    // ── weather ──────────────────────────────────────────────────────────────
+    readonly property bool _wxData: Clock.WeatherService.wx && Clock.WeatherService.wx.available
+    readonly property bool _wxLive: ctx
+        && Clock.WeatherService.showWeather
+        && (calRoot._wxData
+            || Clock.WeatherService.state === "loading"
+            || Clock.WeatherService.state === "error")
+
+    // The hour cards' slice — re-evaluated as the clock ticks so "now"
+    // advances while the panel sits open.
+    readonly property var _hours: calRoot._wxData
+        ? Wx.sliceAhead(Clock.WeatherService.wx.hourly, Clock.WeatherService.nowStamp(clk.date), 8)
+        : []
+
+    // 12h label for an hour row ("22" → "10 PM") — the hero clock's idiom.
+    function _hourLabel(row) {
+        var hh = Number(String(row.t).slice(11, 13))
+        var ap = hh >= 12 ? "PM" : "AM"
+        var h12 = hh % 12; if (h12 === 0) h12 = 12
+        return h12 + " " + ap
     }
 
-    // Day-of-year (mockup: "DAY 255 OF 365"). Math.round, not floor — DST
-    // makes some local days 23h, which floor turns into an off-by-one.
-    function _dayOfYear(d) {
-        var start = new Date(d.getFullYear(), 0, 0)
-        return Math.round((d - start) / 86400000)
+    // Zone-shifted hero clock (same zone setting as the bar pill).
+    readonly property var _shifted: Tz.wallClock(calRoot._now, ctx ? ctx.settings.get("zone", "Local") : "Local")
+    // 12-hour hero (upstream's style). Qt's "h" only goes 12h when AP is in
+    // the SAME format string — "h:mm" plus a separate "AP" text yields
+    // "19:01 PM", so the hour is converted by hand.
+    readonly property int _heroHour12: (calRoot._shifted.getHours() % 12) === 0
+                                       ? 12 : calRoot._shifted.getHours() % 12
+
+    component Card: Rectangle {
+        radius: 12
+        color: "transparent"
+        border.width: 1
+        border.color: calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.14) : "#222"
     }
 
-    function _daysInYear(y) {
-        return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365
-    }
+    // ═══ LEFT — month calendar card ══════════════════════════════════════════
+    Card {
+        id: calCard
 
-    // TZ label for the eyebrow — the clock's configured zone.
-    readonly property string _tzLabel: {
-        var z = ctx ? ctx.settings.get("zone", "Local") : "Local"
-        return Tz.isLocalZone(z) ? "LOCAL" : Tz.zoneCity(z).toUpperCase()
-    }
+        Layout.preferredWidth: 236
+        Layout.preferredHeight: 300
+        Layout.fillHeight: true   // stretch to the right column's height — bottoms align
 
-    // Cell metrics — 7 columns across the panel body.
-    readonly property real cellW: (calRoot.width - 6 * 4) / 7   // 4px column spacing
-    readonly property real cellH: 30
+        readonly property real pad: 14
+        readonly property real cellW: (width - 2 * pad - 6 * 3) / 7
+        readonly property real cellH: 27
 
-    // ── HEADER — eyebrow · headline · meta · nav ─────────────────────────────
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.bottomMargin: 10
-        spacing: 8
+        Column {
+            anchors.fill: parent
+            anchors.margins: parent.pad
 
-        ColumnLayout {
-            spacing: 2
-
-            // Eyebrow — TEMPORAL MAP :: Q3 // TZ
-            Row {
-                spacing: 6
-                Text {
-                    text: "TEMPORAL MAP"
-                    color: ctx ? ctx.theme.colors.primary : "#7aa2f7"
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 2.2
-                }
-                Text {
-                    text: "::"
-                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.text, 0.18) : "#243242"
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 9; font.bold: true
-                }
-                Text {
-                    text: "Q" + (Math.floor(calRoot.viewMonth / 3) + 1) + " // " + calRoot._tzLabel
-                    color: ctx ? ctx.theme.colors.textDim : "#666"
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.2
-                }
-            }
-
-            // Headline — SEPTEMBER <dim>2026</dim>
-            Row {
-                spacing: 7
-                Text {
-                    text: Qt.formatDateTime(calRoot._firstOfMonth, "MMMM").toUpperCase()
-                    color: ctx ? ctx.theme.colors.text : "#ddd"
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 22; font.weight: Font.DemiBold
-                    font.letterSpacing: 3
-                }
-                Text {
-                    text: String(calRoot.viewYear)
-                    color: ctx ? ctx.theme.colors.textDim : "#888"
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 21; font.weight: Font.Light
-                }
-            }
-
-            // Meta — WEEK 37 • DAY 255 OF 365
-            Text {
-                text: {
-                    var d = new Date(calRoot._todayYear, calRoot._todayMonth, calRoot._todayDay)
-                    return "WEEK " + calRoot._isoWeek(d) +
-                           " • DAY " + calRoot._dayOfYear(d) +
-                           " OF " + calRoot._daysInYear(d.getFullYear())
-                }
-                color: ctx ? ctx.theme.colors.textDim : "#666"
-                font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                font.pixelSize: 9; font.letterSpacing: 0.8
-            }
-        }
-
-        Item { Layout.fillWidth: true }
-
-        // Prev / Next month chevrons — precision terminal buttons
-        Row {
-            spacing: 6
-
-            Repeater {
-                model: [ -1, 1 ]
-
-                delegate: Rectangle {
-                    width: 28; height: 28; radius: 6
-                    color: navMa.containsMouse
-                           ? (ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "#111")
-                           : (ctx ? ctx.theme.withAlpha(ctx.theme.colors.surface, 0.6) : "#07090d")
-                    border.color: navMa.containsMouse
-                                  ? (ctx ? ctx.theme.colors.primary : "#7aa2f7")
-                                  : (ctx ? ctx.theme.colors.outlineVariant : "#222")
-                    border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Behavior on border.color { ColorAnimation { duration: 120 } }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: modelData < 0 ? "‹" : "›"
-                        color: navMa.containsMouse
-                               ? (ctx ? ctx.theme.colors.primary : "#7aa2f7")
-                               : (ctx ? ctx.theme.colors.textDim : "#999")
-                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                        font.pixelSize: 15; font.bold: true
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-
-                    MouseArea {
-                        id: navMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: calRoot._shiftMonth(modelData)
-                    }
-                }
-            }
-        }
-    }
-
-    // ── WEEK HEADER — accent M-F, dim S S, hairline below ────────────────────
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 0
-
-        Grid {
-            id: weekRow
-            columns: 7
-            columnSpacing: 4
-            Layout.fillWidth: true
-
-            Repeater {
-                model: ["M", "T", "W", "T", "F", "S", "S"]
-
-                delegate: Item {
-                    width: calRoot.cellW
-                    height: 18
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: modelData
-                        // Weekends dim (mockup: S S in textDim), weekdays accent.
-                        color: index < 5
-                               ? (ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.8) : "#7aa2f7")
-                               : (ctx ? ctx.theme.colors.textDim : "#666")
-                        font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                        font.pixelSize: 10; font.bold: true; font.letterSpacing: 1
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.text, 0.08) : "#141b24"
-        }
-    }
-
-    // ── DAY GRID — fixed 6 rows, ghost adjacent months, today reticle ────────
-    GridLayout {
-        columns: 7
-        rows: 6
-        columnSpacing: 4
-        rowSpacing: 4
-        Layout.fillWidth: true
-        Layout.topMargin: 6
-
-        Repeater {
-            model: calRoot._cellCount
-
-            delegate: Item {
-                // GridLayout sizes children by IMPLICIT dimensions — setting
-                // width/height is ignored and every cell collapses to 0.
-                implicitWidth: calRoot.cellW
-                implicitHeight: calRoot.cellH
-
-                readonly property int  dayNum:      index - calRoot._startOffset + 1
-                readonly property bool isActualDay: dayNum > 0 && dayNum <= calRoot._daysInMonth
-                readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay && calRoot._isThisMonth
-                // MON-start grid → columns 5 (SAT) & 6 (SUN) are the weekend.
-                readonly property bool isWeekend:   (index % 7 === 5) || (index % 7 === 6)
-
-                // Today — primary reticle box: soft outer glow (mockup's
-                // box-shadow), tint fill, 1.5px border, bold primary text.
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: -3
-                    radius: 6
-                    visible: parent.isToday
-                    color: "transparent"
-                    border.width: 4
-                    border.color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "transparent"
-                }
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 4
-                    visible: parent.isToday
-                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.10) : "#0a1220"
-                    border.width: 1.5
-                    border.color: ctx ? ctx.theme.colors.primary : "#7aa2f7"
-                    Behavior on border.color { ColorAnimation { duration: 160 } }
-                }
-
-                // Hover wash — every real day (mockup hover idiom)
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 4
-                    visible: parent.isActualDay && !parent.isToday && cellMa.containsMouse
-                    color: ctx ? ctx.theme.withAlpha(ctx.theme.colors.primary, 0.07) : "#0d121a"
-                }
+            // ‹ OCTOBER 2026 ›
+            Item {
+                width: parent.width
+                height: 26
 
                 Text {
                     anchors.centerIn: parent
-                    // Adjacent-month ghost days stay visible (mockup fidelity).
-                    // JS Date normalizes out-of-range day numbers, so the raw
-                    // (possibly negative or overflowing) dayNum rolls into the
-                    // neighbouring month on its own.
-                    text: parent.isActualDay ? parent.dayNum
-                        : new Date(calRoot.viewYear, calRoot.viewMonth, parent.dayNum).getDate()
-                    font.family: ctx ? ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 13
-                    font.bold: parent.isToday
-                    color: {
-                        var th = ctx ? ctx.theme : null
-                        if (!th) return "#888"
-                        if (parent.isToday) return th.colors.primary
-                        if (!parent.isActualDay) return th.withAlpha(th.colors.text, 0.16)   // ghost
-                        if (cellMa.containsMouse) return th.colors.primary
-                        return parent.isWeekend ? th.colors.textDim : th.colors.text
+                    text: Qt.formatDateTime(calRoot._firstOfMonth, "MMMM").toUpperCase()
+                          + "  " + calRoot.viewYear
+                    color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                    font.pixelSize: 12; font.bold: true; font.letterSpacing: 2
+                }
+                Repeater {
+                    model: [-1, 1]
+                    delegate: Text {
+                        x: index === 0 ? 0 : parent.width - width
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: index === 0 ? "‹" : "›"
+                        color: navMa.containsMouse
+                               ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                               : (calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666")
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 15; font.bold: true
+
+                        MouseArea {
+                            id: navMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: calRoot._shiftMonth(modelData)
+                        }
                     }
-                    opacity: (parent.isWeekend && parent.isActualDay && !parent.isToday) ? 0.75 : 1.0
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+            }
+
+            // MO .. SU
+            Grid {
+                columns: 7
+                columnSpacing: 3
+                rowSpacing: 0
+                width: parent.width
+
+                Repeater {
+                    model: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+                    delegate: Item {
+                        width: calCard.cellW
+                        height: 20
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData
+                            color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.5
+                        }
+                    }
+                }
+            }
+
+            // Day grid — adjacent-month cells are BLANK (upstream's minimalism)
+            Grid {
+                columns: 7
+                columnSpacing: 3
+                rowSpacing: 3
+                width: parent.width
+
+                Repeater {
+                    model: calRoot._cellCount
+
+                    delegate: Item {
+                        width: calCard.cellW
+                        height: calCard.cellH
+
+                        readonly property int  dayNum:      index - calRoot._startOffset + 1
+                        readonly property bool isActualDay: dayNum > 0 && dayNum <= calRoot._daysInMonth
+                        readonly property bool isToday:     isActualDay && dayNum === calRoot._todayDay && calRoot._isThisMonth
+
+                        // Today — filled accent circle with a black numeral
+                        // (ephemeral popup: the one place doctrine allows it).
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 24; height: 24; radius: 12
+                            visible: parent.isToday
+                            color: calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff"
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: parent.isActualDay
+                            text: parent.dayNum
+                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.pixelSize: 11
+                            font.bold: parent.isToday
+                            color: parent.isToday
+                                ? "#000000"
+                                : (dayMa.containsMouse
+                                   ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                                   : (calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"))
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+
+                        MouseArea {
+                            id: dayMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                            enabled: parent.isActualDay
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ═══ RIGHT — clock hero · weather + metrics · hourly curve ══════════════
+    ColumnLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.alignment: Qt.AlignTop
+        spacing: 12
+
+        // ── Clock hero ────────────────────────────────────────────────────────
+        Card {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 92
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                spacing: 8
+
+                Text {
+                    text: String(calRoot._heroHour12).padStart(2, "0") + ":" + Qt.formatDateTime(calRoot._shifted, "mm")
+                    color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                    font.pixelSize: 34; font.weight: Font.DemiBold
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Column {
+                    spacing: 0
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: Qt.formatDateTime(calRoot._shifted, "AP")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 11; font.bold: true
+                    }
+                    Text {
+                        text: ":" + Qt.formatDateTime(calRoot._shifted, "ss")
+                        color: calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.4) : "#555"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 13
+                    }
                 }
 
-                MouseArea {
-                    id: cellMa
+                Item { Layout.fillWidth: true }
+
+                Column {
+                    spacing: 1
+                    Text {
+                        anchors.right: parent.right
+                        text: Qt.formatDateTime(calRoot._shifted, "dddd")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 14; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        anchors.right: parent.right
+                        text: Qt.formatDateTime(calRoot._shifted, "MMMM d")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 10
+                    }
+                }
+            }
+        }
+
+        // ── Weather + metrics row (only while the weather block is live) ─────
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            visible: calRoot._wxLive
+
+            // Loading / error states take the whole row
+            Text {
+                visible: !calRoot._wxData && Clock.WeatherService.state === "loading"
+                Layout.fillWidth: true
+                text: "CONTACTING OPEN-METEO …"
+                color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                font.pixelSize: 10; font.letterSpacing: 1.5
+            }
+            Text {
+                visible: !calRoot._wxData && Clock.WeatherService.state === "error"
+                Layout.fillWidth: true
+                text: "WEATHER OFFLINE · RETRIES ON NEXT OPEN"
+                color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                font.pixelSize: 10; font.letterSpacing: 1.5
+            }
+
+            // Current conditions
+            Card {
+                visible: calRoot._wxData
+                Layout.fillWidth: true
+                Layout.preferredHeight: 104
+
+                ColumnLayout {
                     anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                    enabled: parent.isActualDay
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    anchors.topMargin: 12
+                    anchors.bottomMargin: 12
+                    spacing: 2
+
+                    Row {
+                        spacing: 10
+                        Text {
+                            text: Clock.WeatherService.glyph
+                            color: calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff"
+                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.pixelSize: 30
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: Clock.WeatherService.wx ? Clock.WeatherService.wx.tempNow + "°" : ""
+                            color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.pixelSize: 30; font.weight: Font.DemiBold
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    Text {
+                        text: Clock.WeatherService.wx ? Clock.WeatherService.wx.condition : ""
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 11
+                    }
+                    Text {
+                        text: Clock.WeatherService.placeLabel
+                              + (Clock.WeatherService.state === "stale" ? "  ·  STALE" : "")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.pixelSize: 9
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            // Metrics 2×2 — WIND / HUMIDITY / RAIN / FEELS
+            Card {
+                id: metricsCard
+
+                visible: calRoot._wxData
+                Layout.preferredWidth: 128
+                Layout.preferredHeight: 104
+
+                Grid {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    columns: 2
+                    columnSpacing: 10
+                    rowSpacing: 8
+
+                    Repeater {
+                        model: [
+                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.wind : "", l: "WIND" },
+                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.humidity + "%" : "", l: "HUMIDITY" },
+                            { v: calRoot._hours.length > 1 ? calRoot._hours[1].precip + "%"
+                                : (calRoot._hours.length ? calRoot._hours[0].precip + "%" : ""), l: "RAIN" },
+                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.feels + "°" : "", l: "FEELS" }
+                        ]
+                        delegate: Column {
+                            width: (metricsCard.width - 24 - 10) / 2
+                            Text {
+                                text: modelData.v
+                                color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.pixelSize: 14; font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: modelData.l
+                                color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.pixelSize: 8; font.letterSpacing: 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Hourly curve — next 8 hours from the current one ─────────────────
+        Card {
+            id: curveCard
+            visible: calRoot._wxData
+            Layout.fillWidth: true
+            Layout.preferredHeight: 118
+
+            property var slice: calRoot._hours
+
+            onSliceChanged: curve.requestPaint()
+
+            Canvas {
+                id: curve
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                anchors.topMargin: 8
+                anchors.bottomMargin: 34
+                antialiasing: true
+
+                onPaint: {
+                    var ctx2 = getContext("2d")
+                    ctx2.reset()
+                    var rows = curveCard.slice
+                    if (rows.length < 2) return
+                    var w = width, h = height
+                    var n = rows.length
+                    var min = rows[0].temp, max = rows[0].temp
+                    for (var i = 1; i < n; i++) {
+                        if (rows[i].temp < min) min = rows[i].temp
+                        if (rows[i].temp > max) max = rows[i].temp
+                    }
+                    var pad = 14
+                    var span = (max - min) || 1
+                    var pts = []
+                    for (var j = 0; j < n; j++) {
+                        pts.push({
+                            x: (j + 0.5) * w / n,
+                            y: pad + (1 - (rows[j].temp - min) / span) * (h - 2 * pad)
+                        })
+                    }
+                    // gradient fill under the line — derived from the accent
+                    // TOKEN (themes vary; a hardcoded teal goes wrong under
+                    // every non-teal accent)
+                    var acc = calRoot.ctx ? calRoot.ctx.theme.colors.accent : Qt.color("#00dce5")
+                    var grad = ctx2.createLinearGradient(0, 0, 0, h)
+                    grad.addColorStop(0, Qt.rgba(acc.r, acc.g, acc.b, 0.16))
+                    grad.addColorStop(1, Qt.rgba(acc.r, acc.g, acc.b, 0.0))
+                    ctx2.beginPath()
+                    ctx2.moveTo(pts[0].x, pts[0].y)
+                    for (var k = 1; k < n; k++) ctx2.lineTo(pts[k].x, pts[k].y)
+                    ctx2.lineTo(pts[n - 1].x, h)
+                    ctx2.lineTo(pts[0].x, h)
+                    ctx2.closePath()
+                    ctx2.fillStyle = grad
+                    ctx2.fill()
+                    // the line
+                    ctx2.beginPath()
+                    ctx2.moveTo(pts[0].x, pts[0].y)
+                    for (var m = 1; m < n; m++) ctx2.lineTo(pts[m].x, pts[m].y)
+                    ctx2.strokeStyle = acc
+                    ctx2.lineWidth = 1.5
+                    ctx2.stroke()
+                    // point dot + temp labels above
+                    ctx2.fillStyle = acc
+                    ctx2.beginPath()
+                    ctx2.arc(pts[0].x, pts[0].y, 2.5, 0, Math.PI * 2)
+                    ctx2.fill()
+                    ctx2.fillStyle = calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                    ctx2.font = "600 8px " + (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
+                    ctx2.textAlign = "center"
+                    for (var t = 0; t < n; t++) {
+                        ctx2.fillText(rows[t].temp + "°", pts[t].x, Math.max(8, pts[t].y - 6))
+                    }
+                }
+
+                Connections {
+                    target: calRoot
+                    function onWxDataChanged() { curve.requestPaint() }
+                }
+                onWidthChanged: requestPaint()
+            }
+
+            // hour row — glyph + label under each curve point
+            Row {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                height: 30
+
+                Repeater {
+                    model: curveCard.slice
+
+                    delegate: Item {
+                        width: curveCard.slice.length
+                               ? curve.width / curveCard.slice.length : 0
+                        height: 30
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 1
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: Wx.nerdFor(modelData.code, modelData.isDay)
+                                color: calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.accent, 0.7) : "#0aa"
+                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.pixelSize: 11
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: calRoot._hourLabel(modelData)
+                                color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
+                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.pixelSize: 8
+                            }
+                        }
+                    }
                 }
             }
         }

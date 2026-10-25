@@ -1,5 +1,7 @@
 // =============================================================================
-// ArchLogo.qml — Arch Linux icon with fastfetch action
+// ArchLogo.qml — Arch Linux logo; left click = bar-settings reveal,
+// right click = fastfetch overlay (the logo's original action, kept one
+// click away when the reveal took over the left button — C4).
 // =============================================================================
 
 import QtQuick
@@ -10,9 +12,10 @@ Item {
     width: Config.BarConfig.iconSize
     height: Config.BarConfig.iconSize
 
-    // Emitted on click → shell.qml wires it to FastfetchOverlay.toggle().
-    // (Replaces the old inline kitty fastfetch launcher — see FastfetchOverlay.qml.)
+    // Left click → the bar-settings reveal (velocity.bar-settings).
     signal triggered()
+    // Right click → the fastfetch overlay (kept from the pre-C4 left click).
+    signal altTriggered()
 
     // Two pre-encoded Arch SVGs (text-colour + accent). Baking both up front
     // means a hover only flips opacity between two already-decoded textures —
@@ -58,8 +61,12 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.PointingHandCursor
-        onClicked: icon.triggered()
+        onClicked: function (mouse) {
+            if (mouse.button === Qt.RightButton) icon.altTriggered()
+            else icon.triggered()
+        }
     }
 
     // Tooltip on hover
@@ -67,7 +74,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.bottom
         anchors.topMargin: 4
-        text: "System Info"
+        text: "Bar Settings ·  right: System Info"
         font.family: Config.BarConfig.fontFamily
         font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
         color: Config.ThemeConfig.colors.textDim

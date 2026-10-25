@@ -15,4 +15,5 @@ module.exports = {
   'shared/components/Sparkline.qml': ['settings/components/Sparkline.qml'],
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
+  'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs'],
 }

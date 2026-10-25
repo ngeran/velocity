@@ -4,5 +4,8 @@ import "../../components" as Components
 
 Components.ArchLogo {
     property var ctx: null
-    onTriggered: if (ctx && ctx.host) ctx.host.toggleOverlay("velocity.fastfetch")
+    // Left click: the bar-settings reveal (C4). Right click: the fastfetch
+    // overlay — the logo's original action, kept one click away.
+    onTriggered: if (ctx && ctx.host) ctx.host.toggleOverlay("velocity.bar-settings")
+    onAltTriggered: if (ctx && ctx.host) ctx.host.toggleOverlay("velocity.fastfetch")
 }

@@ -4,7 +4,7 @@
   "id": "velocity.logo",
   "name": "Logo",
   "version": "1.0.0",
-  "description": "Built-in: logo — click toggles the fastfetch overlay.",
+  "description": "Built-in: logo — left click opens the bar-settings reveal, right click toggles the fastfetch overlay.",
   "author": "velocity",
   "license": "MIT",
   "kinds": [

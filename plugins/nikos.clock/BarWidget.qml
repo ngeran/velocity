@@ -10,11 +10,24 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Ui
 import "lib/tz.mjs" as Tz
+import "." as Clock
 
 Item {
     id: root
 
     property var ctx: null
+
+    // Weather refresh is open-gated (idle-zero at rest): every monitor's
+    // panel funnels into the singleton, whose 15-min gate dedupes. `live`
+    // downgrades the panel's hero clock to Minutes while closed, so its
+    // Seconds-precision SystemClock never ticks at rest.
+    Connections {
+        target: calPanel
+        function onOpenedChanged() {
+            if (panelLoader.item) panelLoader.item.live = calPanel.opened
+            if (calPanel.opened) Clock.WeatherService.panelOpened()
+        }
+    }
 
     // Host IPC (plugins summon/hide) routes through these.
     function toggle() { calPanel.toggle() }
@@ -110,11 +123,12 @@ Item {
         anchorItem: root
         title: "CALENDAR"
         icon: "󰃭"
-        contentWidth: 336
+        contentWidth: 564
         anchorX: "center"
         showHeader: false
 
         Loader {
+            id: panelLoader
             // Defer until ctx lands — the body binds its tokens at creation.
             // NOTE: the LOADER is the layout child — a Layout.fillWidth set
             // inside the loaded file does nothing; stretch it here or the
@@ -122,7 +136,10 @@ Item {
             Layout.fillWidth: true
             active: root.ctx !== null
             source: Qt.resolvedUrl("CalendarPanel.qml")
-            onLoaded: item.ctx = root.ctx
+            onLoaded: {
+                item.ctx = root.ctx
+                item.live = calPanel.opened
+            }
         }
     }
 }
