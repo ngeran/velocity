@@ -141,8 +141,9 @@ Item {
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { scanProc.buffer += data + "\n" } }
         onExited: function(code) {
-            // Final parse of the scan stream (catches the last RSSI updates),
-            // then a paired/info refresh so beacons + signal are current.
+            // Final parse of whatever arrived since the last tick (catches
+            // the last RSSI updates), then the ONE paired/info refresh so
+            // beacons + signal are current (O4: ticks don't refresh).
             root._parseScan(scanProc.buffer)
             scanProc.buffer = ""
             root.scanning = false
@@ -161,11 +162,17 @@ Item {
         onTriggered: {
             if (root.scanSecondsLeft > 0) {
                 root.scanSecondsLeft -= 1
-                // Parse the in-flight scan stream so beacons + RSSI appear LIVE,
-                // then refresh the paired/info probe too.
+                // Consume the scan stream incrementally (O4): the whole
+                // buffer was re-parsed every second — O(n²) over the scan —
+                // and each refresh() re-snapshotted the native model into a
+                // NEW devices array, resetting the list's delegates mid-scan.
+                // SplitParser delivers whole lines, so the buffer only grows
+                // line-aligned; parse the new tail and rebuild once (beacons
+                // + RSSI still show live). The native-model refresh waits
+                // for scan end; the 5s sweep still covers property flips.
                 root._parseScan(scanProc.buffer)
+                scanProc.buffer = ""
                 root._rebuildDevices()
-                root.refresh()
             }
         }
     }
