@@ -158,6 +158,18 @@ Item {
         return (path || "").indexOf(d) === 0
     }
 
+    /// THE preview resolver (§1 dedup): stills use the file itself, engine
+    /// content uses its cached poster frame ("" until extracted — callers
+    /// show a placeholder). The gallery (WallpaperModule.thumbFor) and the
+    /// dashboard card (ActiveWallpaperCard.previewSource) both delegate here
+    /// — the two copies had drifted into near-identical shapes.
+    function previewSourceFor(path: string): string {
+        if (!path) return ""
+        if (!isEngined(path)) return "file://" + path
+        var t = thumbMap[path]
+        return t ? "file://" + t : ""
+    }
+
     // =========================================================================
     // CONFIGURATION PERSISTENCE
     // =========================================================================

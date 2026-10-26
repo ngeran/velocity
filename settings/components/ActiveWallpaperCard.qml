@@ -3,9 +3,10 @@
 // =============================================================================
 // HudCard aesthetic. Shows the live applied wallpaper: a preview thumbnail, the
 // wallpaper file name, and its path (location). Reads SharedState
-// (wallpaperPath / wallpaperName / wallpaperCyclingEnabled) pushed by
-// WallpaperService.applyWallpaper(), so it updates the moment a wallpaper is set
-// from the Wallpaper tab or externally. The preview fills the available cell;
+// (wallpaperPath / wallpaperName) pushed by WallpaperService.applyWallpaper(),
+// so it updates the moment a wallpaper is set from the Wallpaper tab or
+// externally; cycling state binds the service property directly (the SharedState
+// mirror never had a writer). The preview fills the available cell;
 // sourceSize is capped so large wallpapers decode at preview res.
 // =============================================================================
 
@@ -21,14 +22,9 @@ HudCard {
     /// Video (live-library) wallpapers can't be decoded by Qt — show their
     /// cached poster frame from WallpaperService's thumbnail pipeline instead.
     /// "" while no wallpaper is set or the frame hasn't been extracted yet.
+    /// Delegates to the service's canonical resolver (§1 dedup).
     function previewSource() {
-        var p = Config.SharedState.wallpaperPath
-        if (!p) return ""
-        if (Services.WallpaperService.isEngined(p)) {
-            var t = Services.WallpaperService.thumbMap[p]
-            return t ? "file://" + t : ""
-        }
-        return "file://" + p
+        return Services.WallpaperService.previewSourceFor(Config.SharedState.wallpaperPath)
     }
 
     // Mirrors ActiveThemeCard's changeRequested() — clicking the preview
@@ -51,7 +47,9 @@ HudCard {
             }
             Item { Layout.fillWidth: true }
             Rectangle {
-                visible: Config.SharedState.wallpaperCyclingEnabled
+                // Live service property (§1 audit: the SharedState mirror had
+                // no writer — this chip could never show).
+                visible: Services.WallpaperService.cyclingEnabled
                 border.color: Config.ThemeConfig.colors.success; border.width: 1
                 height: 14; width: cycW.implicitWidth + 10
                 Text {

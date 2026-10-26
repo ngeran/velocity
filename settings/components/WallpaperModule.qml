@@ -77,12 +77,10 @@ Item {
     function refreshWallpapers()   { Services.WallpaperService.refreshList() }
     function setLibraryMode(m)     { Services.WallpaperService.setLibraryMode(m) }
 
-    /// Image source for a gallery entry: stills use the file itself, engine
-    /// content uses its cached poster frame ("" until extracted → placeholder).
+    /// Image source for a gallery entry — delegates to the service's canonical
+    /// resolver (§1 dedup; same logic the dashboard card uses).
     function thumbFor(p) {
-        if (!root.isEngined(p)) return "file://" + p
-        var t = root.thumbMap[p]
-        return t ? "file://" + t : ""
+        return Services.WallpaperService.previewSourceFor(p)
     }
 
     /// Anything that plays: still-library gif/apng or any live-library entry.

@@ -27,15 +27,14 @@ QtObject {
     // =========================================================================
     // WALLPAPER STATE & METRICS PIPELINE
     // =========================================================================
+    // Live mirror: WallpaperService.applyWallpaper() pushes through
+    // updateWallpaper() below. Cycling state is NOT mirrored — readers bind
+    // Services.WallpaperService.cyclingEnabled directly (the old
+    // wallpaperCyclingEnabled mirror had no writer, so the card's CYCLE chip
+    // could never show; the other four "restored" fields had no readers at
+    // all after WallpaperInfoCard.qml was deleted — §1 audit, removed).
     property string wallpaperPath:       ""
     property string wallpaperName:       "None"
-
-    // Restored fields to prevent WallpaperInfoCard.qml degradation:
-    property bool   wallpaperCyclingEnabled:  false
-    property int    wallpaperCycleInterval:   900
-    property int    wallpaperCountdown:       900
-    property string wallpaperTransitionType:  "simple"
-    property int    wallpaperCount:           0
 
     // =========================================================================
     // SYSTEM RESOURCE TRACKING
