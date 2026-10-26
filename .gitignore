@@ -20,6 +20,15 @@ stylix-palette.json
 
 # Quickshell runtime state
 wallpaper-config.json
+# runtime-owned state at the repo root — the repo IS the deployed config
+# dir (tools/deploy-link), so the bar/settings write these in place:
+/dnd.flag
+/notifications.cleared
+/plugins-state.json
+/custom-themes.json
+/deepcool-config.json
+# nix build result symlink
+/result
 
 # IDE and editor files
 .vscode/
