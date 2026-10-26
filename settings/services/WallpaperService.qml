@@ -313,94 +313,80 @@ Item {
     // =========================================================================
 
     // --- still library (unchanged behaviour) ---------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {
         id: scanner
+        timeoutMs: 10000
+        maxBytes: 262144
 
-        property string buf: ""
+        onDone: function(out, err, code) {
+            root.scanInProgress = false
 
-        stdout: SplitParser {
-            onRead: data => { scanner.buf += data + "\n" }
-        }
-
-        onRunningChanged: {
-            if (!running) {
-                root.scanInProgress = false
-
-                var lines = scanner.buf.trim().split("\n").filter(function(l) {
-                    return l.trim().length > 0
-                })
-
-                // Sort for deterministic ordering
-                lines.sort()
-                root.stillList = lines
-                scanner.buf = ""
-
-                if (lines.length === 0 && root.wallpaperDir.length > 0) {
-                    console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
-                    console.warn("[WallpaperService] Check that the directory exists and contains image files")
-                } else {
-                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Found", root.stillList.length, "still wallpaper(s)")
-                }
-
-                // First run / boot restore. A saved still is re-applied so the
-                // fresh awww daemon doesn't sit on a black screen until the
-                // first cycle tick.
-                if (root.stillList.length > 0 && root.currentWallpaper.length === 0) {
-                    applyWallpaper(selectRandomWallpaper())
-                } else if (root.currentWallpaper.length > 0
-                           && !root.isEngined(root.currentWallpaper)
-                           && !root.bootRestored) {
-                    root.bootRestored = true
-                    applyWallpaper(root.currentWallpaper)
-                }
-            }
-        }
-
-        onExited: function(exitCode) {
-            if (exitCode !== 0) {
-                console.warn("[WallpaperService] Directory scan failed with exit code:", exitCode)
+            if (code !== 0) {
+                console.warn("[WallpaperService] Directory scan failed with exit code:", code)
                 console.warn("[WallpaperService] Check directory path and permissions:", root.wallpaperDir)
+            }
+
+            // A failed scan reads as empty (previous behaviour: the exit-code
+            // warn plus the "No wallpapers found" pair).
+            var lines = code === 0
+                        ? out.trim().split("\n").filter(function(l) { return l.trim().length > 0 })
+                        : []
+
+            // Sort for deterministic ordering
+            lines.sort()
+            root.stillList = lines
+
+            if (lines.length === 0 && root.wallpaperDir.length > 0) {
+                console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
+                console.warn("[WallpaperService] Check that the directory exists and contains image files")
+            } else {
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Found", root.stillList.length, "still wallpaper(s)")
+            }
+
+            // First run / boot restore. A saved still is re-applied so the
+            // fresh awww daemon doesn't sit on a black screen until the
+            // first cycle tick.
+            if (root.stillList.length > 0 && root.currentWallpaper.length === 0) {
+                applyWallpaper(selectRandomWallpaper())
+            } else if (root.currentWallpaper.length > 0
+                       && !root.isEngined(root.currentWallpaper)
+                       && !root.bootRestored) {
+                root.bootRestored = true
+                applyWallpaper(root.currentWallpaper)
             }
         }
     }
 
     // --- live library (engine content) ---------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {
         id: liveScanner
+        timeoutMs: 10000
+        maxBytes: 262144
 
-        property string buf: ""
+        onDone: function(out, err, code) {
+            var lines = code === 0
+                        ? out.trim().split("\n").filter(function(l) { return l.trim().length > 0 })
+                        : []
 
-        stdout: SplitParser {
-            onRead: data => { liveScanner.buf += data + "\n" }
-        }
+            lines.sort()
+            root.liveList = lines
 
-        onRunningChanged: {
-            if (!running) {
-                var lines = liveScanner.buf.trim().split("\n").filter(function(l) {
-                    return l.trim().length > 0
-                })
+            if (lines.length === 0) {
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Live library empty:", root.liveDir)
+            } else {
+                console.log("[WallpaperService] Found", root.liveList.length, "live wallpaper(s)")
+                startThumbWorker()
+            }
 
-                lines.sort()
-                root.liveList = lines
-                liveScanner.buf = ""
-
-                if (lines.length === 0) {
-                    if (Config.DebugConfig.debugService) console.log("[WallpaperService] Live library empty:", root.liveDir)
-                } else {
-                    console.log("[WallpaperService] Found", root.liveList.length, "live wallpaper(s)")
-                    startThumbWorker()
-                }
-
-                // Boot restore for engine content (video survives reboots only
-                // if something re-issues the `set` — the engine daemon starts
-                // intentionally empty in integrated mode).
-                if (root.currentWallpaper.length > 0
-                        && root.isEngined(root.currentWallpaper)
-                        && root.engineAvailable
-                        && !root.bootRestored) {
-                    root.bootRestored = true
-                    applyWallpaper(root.currentWallpaper)
-                }
+            // Boot restore for engine content (video survives reboots only
+            // if something re-issues the `set` — the engine daemon starts
+            // intentionally empty in integrated mode).
+            if (root.currentWallpaper.length > 0
+                    && root.isEngined(root.currentWallpaper)
+                    && root.engineAvailable
+                    && !root.bootRestored) {
+                root.bootRestored = true
+                applyWallpaper(root.currentWallpaper)
             }
         }
     }
@@ -417,8 +403,10 @@ Item {
         }
 
         root.scanInProgress = true
+        // -L: symlinked libraries/files must scan like the thumbnail worker
+        // (which already used -L) — they used to silently disagree.
         scanner.command = [
-            "find", root.wallpaperDir,
+            "find", "-L", root.wallpaperDir,
             "-maxdepth", "1",
             "-type",     "f",
             "(", "-iname", "*.jpg",
@@ -429,13 +417,13 @@ Item {
                  "-o", "-iname", "*.apng",
             ")"
         ]
-        scanner.running = true
+        scanner.run()
     }
 
     function startLiveScan() {
         if (root.liveDir.length === 0) return
         liveScanner.command = [
-            "find", root.liveDir,
+            "find", "-L", root.liveDir,
             "-maxdepth", "1",
             "-type",     "f",
             "(", "-iname", "*.mp4",
@@ -447,7 +435,7 @@ Item {
                  "-o", "-iname", "*.apng",
             ")"
         ]
-        liveScanner.running = true
+        liveScanner.run()
     }
 
     // =========================================================================
@@ -489,7 +477,7 @@ Item {
 
     function startThumbWorker() {
         thumbWorker.buf = ""
-        thumbWorker.command = ["/run/current-system/sw/bin/bash", "-c",
+        thumbWorker.command = ["bash", "-c",
             'd="$1"; c="$2"; mkdir -p "$c"; find -L "$d" -maxdepth 1 -type f ' +
             '\\( -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mkv" -o -iname "*.mov" ' +
             '-o -iname "*.gif" -o -iname "*.webp" -o -iname "*.apng" \\) -print0 | ' +
@@ -644,7 +632,7 @@ Item {
                 engineAct(["resume"])
             } else {
                 pauseCtl.command = ["awww", "unpause"]
-                pauseCtl.running = true
+                pauseCtl.run()
             }
             root.animationPaused = false
         }
@@ -694,23 +682,28 @@ Item {
             Services.ThemeService.applyDynamicTheme(t)
             return
         }
-        // Frame not cached yet — extract it now, then theme.
+        // Frame not cached yet — extract it now, then theme. Positional sh
+        // args ($0 = cache dir, $1 = source): no quoting traps on odd paths,
+        // the cache dir is created on demand (the thumbnail worker may not
+        // have run yet), and ffmpeg resolves from the service PATH.
         frameExtractor.targetPath = path
-        frameExtractor.command = ["/run/current-system/sw/bin/ffmpeg", "-nostdin", "-loglevel", "error", "-y",
-                                  "-ss", "1", "-i", path, "-frames:v", "1",
-                                  "-vf", "scale=640:-2", root.thumbCacheDir + "/matugen-frame.png"]
-        frameExtractor.running = true
+        frameExtractor.command = ["sh", "-c",
+            'mkdir -p "$0" && exec ffmpeg -nostdin -loglevel error -y -ss 1 -i "$1" -frames:v 1 -vf scale=640:-2 "$0/matugen-frame.png"',
+            root.thumbCacheDir, path]
+        frameExtractor.run()
     }
 
-    Process {   // unbounded-ok: one-shot frame extraction, error-level logs only
+    BoundedProcess {
         id: frameExtractor
+        timeoutMs: 15000
+        maxBytes: 65536
 
         property string targetPath: ""
 
-        onExited: function(exitCode) {
-            if (exitCode === 0 && Services.SettingsConfigService.matugenOnWallpaperChange) {
+        onDone: function(out, err, code) {
+            if (code === 0 && Services.SettingsConfigService.matugenOnWallpaperChange) {
                 Services.ThemeService.applyDynamicTheme(root.thumbCacheDir + "/matugen-frame.png")
-            } else if (exitCode !== 0) {
+            } else if (code !== 0) {
                 console.warn("[WallpaperService] matugen frame extraction failed for", targetPath)
             }
         }
@@ -742,13 +735,14 @@ Item {
     // can never stomp a pending img apply on the shared awwwProcess.
     // =========================================================================
 
-    Process {   // unbounded-ok: one-shot daemon control command
+    BoundedProcess {
         id: pauseCtl
-        running: false
+        timeoutMs: 8000
+        maxBytes: 4096
 
-        onExited: function(exitCode) {
-            if (exitCode !== 0)
-                console.warn("[WallpaperService] awww pause/unpause failed with exit code:", exitCode)
+        onDone: function(out, err, code) {
+            if (code !== 0)
+                console.warn("[WallpaperService] awww pause/unpause failed with exit code:", code)
         }
     }
 
@@ -761,7 +755,7 @@ Item {
             engineAct([paused ? "pause" : "resume"])
         } else {
             pauseCtl.command = ["awww", paused ? "pause" : "unpause"]
-            pauseCtl.running = true
+            pauseCtl.run()
         }
     }
 
