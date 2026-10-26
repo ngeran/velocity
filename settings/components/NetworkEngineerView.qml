@@ -12,6 +12,7 @@ import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
+import "../lib/units.mjs" as Units
 
 Item {
     id: viewRoot
@@ -324,11 +325,8 @@ Item {
         color: Config.ThemeConfig.colors.textDim
     }
 
-    function fmtBytes(b) {
-        if (b === undefined || b === null) return "—"
-        if (b < 1024) return b + " B"
-        if (b < 1048576) return (b / 1024).toFixed(1) + " KB"
-        if (b < 1073741824) return (b / 1048576).toFixed(1) + " MB"
-        return (b / 1073741824).toFixed(2) + " GB"
-    }
+    // Binary byte size — the shared units.mjs formatter (DU8; this used to be
+    // a third copy with slightly different precision). formatBytes renders
+    // undefined/null as "—" itself, matching the old guard.
+    function fmtBytes(b) { return Units.formatBytes(b) }
 }

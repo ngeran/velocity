@@ -33,7 +33,7 @@ import QtQuick.Layouts
 import Quickshell.Networking
 import "../services" as Services
 import "../config" as Config
-import "../services/NetworkModel.js" as Model
+import "../services/NetworkModel.mjs" as Model
 
 ColumnLayout {
     id: body

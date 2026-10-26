@@ -2,7 +2,7 @@
 // LogModel.js — pure journalctl -o json parsing + client-side filtering
 // =============================================================================
 // No Qt imports (Node-testable via the module.exports guard — same convention
-// as NetworkModel.js).
+// as NetworkModel.mjs).
 //
 // journalctl JSON quirks this parser handles (all observed in this machine's
 // own journal):

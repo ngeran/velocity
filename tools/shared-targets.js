@@ -18,5 +18,6 @@ module.exports = {
   'shared/orbit.mjs': ['bar/lib/orbit.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
   'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs', 'settings/lib/weather.mjs'],
+  'shared/units.mjs': ['bar/lib/units.mjs', 'settings/lib/units.mjs'],
   'shared/storage.mjs': ['plugins/nikos.storage/lib/storage.mjs'],
 }

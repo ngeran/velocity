@@ -2,7 +2,7 @@
 // NetworkControlModel.js — pure connect-failure classification
 // =============================================================================
 // No Qt imports (Node-testable via the module.exports guard, mirroring the
-// bar's NetworkModel.js). Maps nmcli's failure stderr to a stable reason key
+// bar's NetworkModel.mjs). Maps nmcli's failure stderr to a stable reason key
 // + a human label; the key drives the WifiListView wrong-password reprompt.
 // =============================================================================
 

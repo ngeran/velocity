@@ -1,15 +1,19 @@
 // =============================================================================
-// NetworkModel.js — pure parsing/formatting for NetworkService
+// NetworkModel.mjs — pure parsing/formatting for NetworkService
 // =============================================================================
 // No Qt imports on purpose: the same file runs under Node, so parsers can be
 // unit-tested against sample nmcli/ip/ping/sysfs output without launching the
-// bar (new parsers land here per the incremental Model.js adoption — see the
-// Omarchy Quattro analysis).
+// bar. ES module (DU8 refactor from .js): byte formatting lives in the shared
+// units.mjs (synced copy at ../lib/units.mjs), everything else stays here.
 // =============================================================================
+
+import { formatBytes, formatRate } from "../lib/units.mjs"
+
+export { formatBytes, formatRate }
 
 // Two whitespace-separated counters: rx_bytes tx_bytes (from `cat` over both
 // sysfs statistics files). Returns {rx, tx} ints or null when unreadable.
-function parseStats(raw) {
+export function parseStats(raw) {
     var f = (raw || "").trim().split(/\s+/)
     if (f.length < 2) return null
     var rx = parseInt(f[0], 10)
@@ -18,26 +22,12 @@ function parseStats(raw) {
     return { rx: rx, tx: tx }
 }
 
-function formatBytes(n) {
-    if (isNaN(n) || n < 0) return "—"
-    if (n < 1024) return n + " B"
-    var kb = n / 1024
-    if (kb < 1024) return (kb < 10 ? kb.toFixed(1) : Math.round(kb)) + " KB"
-    var mb = kb / 1024
-    if (mb < 1024) return (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + " MB"
-    return (mb / 1024).toFixed(1) + " GB"
-}
-
-function formatRate(bytesPerSec) {
-    return formatBytes(Math.max(0, Math.round(bytesPerSec))) + "/s"
-}
-
 // Pure state fold (Omarchy throughputState shape): given the previous sample,
 // the new counters and a timestamp, return the rates/totals to display and the
 // sample to carry forward. Guards: an iface change or a backwards counter
 // (interface re-incarnated) yields no rate rather than a fake spike — the next
 // tick re-baselines.
-function throughputState(prev, iface, rx, tx, nowMs) {
+export function throughputState(prev, iface, rx, tx, nowMs) {
     var next = { iface: iface, rx: rx, tx: tx, t: nowMs }
     var out = {
         rxRate: "", txRate: "",
@@ -71,12 +61,12 @@ function throughputState(prev, iface, rx, tx, nowMs) {
 // (enhanced open) — joins with no secrets, so it counts as open here.
 var _OPEN_SECURITY = { Open: true, Unknown: true, Owe: true }
 
-function secured(secName) {
+export function secured(secName) {
     return !_OPEN_SECURITY[secName]
 }
 
 // Best-per-SSID, strongest first, connected row filtered out.
-function groupAps(rawList, activeSsid) {
+export function groupAps(rawList, activeSsid) {
     var best = {}
     var list = rawList || []
     for (var i = 0; i < list.length; i++) {
@@ -103,7 +93,7 @@ function groupAps(rawList, activeSsid) {
 
 // Content signature for the view's diff gate (the wifi list has regressed
 // twice to Repeater resets — frozenAps only reassigns when this CHANGES).
-function apsSignature(grouped) {
+export function apsSignature(grouped) {
     var parts = []
     for (var i = 0; i < grouped.length; i++)
         parts.push(grouped[i].name + ":" + grouped[i].pct + ":" +
@@ -112,7 +102,7 @@ function apsSignature(grouped) {
 }
 
 // Wifi-strength glyph (the settings WifiListView table, shared).
-function sigGlyph(pct) {
+export function sigGlyph(pct) {
     return pct >= 70 ? "\u{f0928}"   // wifi-strong
          : pct >= 40 ? "\u{f0925}"   // wifi-good
          : pct >= 20 ? "\u{f0922}"   // wifi-weak
@@ -121,13 +111,13 @@ function sigGlyph(pct) {
 
 // Median of a numeric sample array (the speed test reports the median, not
 // the max — a single stalled sample must not read as a faster link).
-function median(values) {
+export function median(values) {
     var sorted = (values || []).slice().sort(function(a, b) { return a - b })
     return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0
 }
 
 // ConnectionFailReason → the row's inline error line.
-function failLabel(reasonName) {
+export function failLabel(reasonName) {
     switch (reasonName) {
         case "NoSecrets":               return "Password required"
         case "WifiClientFailed":        return "Wrong password or rejected"
@@ -135,20 +125,5 @@ function failLabel(reasonName) {
         case "WifiNetworkLost":         return "Network disappeared"
         case "WifiClientDisconnected":  return "Connection failed"
         default:                        return "Connection failed"
-    }
-}
-
-if (typeof module !== "undefined") {
-    module.exports = {
-        parseStats: parseStats,
-        formatBytes: formatBytes,
-        formatRate: formatRate,
-        throughputState: throughputState,
-        secured: secured,
-        groupAps: groupAps,
-        apsSignature: apsSignature,
-        sigGlyph: sigGlyph,
-        median: median,
-        failLabel: failLabel
     }
 }
