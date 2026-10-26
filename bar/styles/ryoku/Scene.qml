@@ -46,8 +46,7 @@ Item {
             // QD-OLED: the active-workspace plate flashes on switch, then
             // decays exponentially to the faint settled tint — no binary
             // flip. Bright exposure stays strictly below the old flat 45s
-            // pattern (strength crosses the 2% floor at ~24s, tau = 6s), and
-            // the timer only ticks while there is anything left to decay.
+            // pattern (strength crosses the 2% floor at ~24s, tau = 6s).
             // The decay is an energy-budget pattern, not a motion token — it
             // deliberately ignores reduceMotion.
             property real plateStrength: 0
@@ -61,19 +60,26 @@ Item {
                                a.b + (b.b - a.b) * s, a.a + (b.a - a.a) * s)
             }
 
-            Timer {
-                interval: 200
-                running: panelWindow.plateStrength > 0.02
-                repeat: true
-                onTriggered: {
-                    panelWindow.plateStrength *= Math.exp(-0.2 / 6)
-                    if (panelWindow.plateStrength <= 0.02) panelWindow.plateStrength = 0
-                }
+            // O2: the decay is ONE animation driven by the animation driver,
+            // not a 5 Hz JS Timer (118 callbacks per switch, staircase steps
+            // on the blend). OutExpo over 42s reproduces the old curve
+            // exactly: value = 2^(-10t/D) ≡ e^(-t/6), the 2% floor lands at
+            // the same ~24s, and it settles on exact 0. restart() on a switch
+            // snaps to 1 mid-decay and re-runs — the old snap semantics.
+            NumberAnimation {
+                id: plateDecay
+                target: panelWindow
+                property: "plateStrength"
+                to: 0
+                duration: 42000
+                easing.type: Easing.OutExpo
+                onStopped: panelWindow.plateStrength = 0
             }
             Connections {
                 target: Services.HyprlandService
                 function onActiveWorkspaceChanged() {
                     panelWindow.plateStrength = 1   // bright = feedback only
+                    plateDecay.restart()
                 }
             }
 
