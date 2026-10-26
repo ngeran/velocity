@@ -153,7 +153,14 @@ Item {
 
     function reloadHypridle() {
         var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        p.command = ["sh", "-c", "pkill -x hypridle; sleep 0.3; nohup hypridle -c " + root.configFilePath + " >> " + root.homeDir + "/.local/state/hypr/hypridle.log 2>&1 &"]
+        // mkdir before the redirect: nothing else creates ~/.local/state/hypr,
+        // and a failed redirect aborts the whole sh line — the old hypridle was
+        // already killed, so on a fresh machine the relaunch silently never
+        // happened (no idle lock). Positional args keep odd paths quotable.
+        p.command = ["sh", "-c",
+            'pkill -x hypridle; sleep 0.3; mkdir -p "$1/.local/state/hypr" || exit 1; ' +
+            'nohup hypridle -c "$2" >> "$1/.local/state/hypr/hypridle.log" 2>&1 &',
+            "sh", root.homeDir, root.configFilePath]
         p.onExited.connect(function() { p.destroy() })  // free the one-shot wrapper (was leaked per reload)
         p.running = true
         console.log("[HypridleService] Reloading hypridle (kill + relaunch with -c)")
@@ -174,7 +181,10 @@ Item {
     // =========================================================================
 
     Component.onCompleted: {
-        readProcess.command = ["sh", "-c", "mkdir -p " + root.homeDir + "/.cache/hypr && cp -n " + root.templatePath + " " + root.configFilePath + " 2>/dev/null || true; chmod u+w " + root.configFilePath + " 2>/dev/null || true; cat " + root.configFilePath]
+        readProcess.command = ["sh", "-c",
+            'mkdir -p "$1/.cache/hypr"; cp -n "$2" "$3" 2>/dev/null || true; ' +
+            'chmod u+w "$3" 2>/dev/null || true; cat "$3"',
+            "sh", root.homeDir, root.templatePath, root.configFilePath]
         readProcess.running = true
     }
 }
