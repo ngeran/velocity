@@ -149,9 +149,13 @@ Item {
     /// True for anything in the live library — routed to wallpaper-engine
     /// (mpvpaper), awww fallback if the engine is unavailable. Directory-based
     /// (not extension-based) so existing still-library content, including
-    /// gif/apng/webp, keeps its current awww behaviour untouched.
+    /// gif/apng/webp, keeps its current awww behaviour untouched. Prefix
+    /// matches against the SLASHED dir: a liveDir without its trailing slash
+    /// used to also claim sibling folders (Live-Wallpapers-old).
     function isEngined(path: string): bool {
-        return root.liveDir.length > 0 && (path || "").indexOf(root.liveDir) === 0
+        if (root.liveDir.length === 0) return false
+        var d = root.liveDir.endsWith("/") ? root.liveDir : root.liveDir + "/"
+        return (path || "").indexOf(d) === 0
     }
 
     // =========================================================================
@@ -767,31 +771,36 @@ Item {
     // ENGINE CONTROL (wallpaper-engine CLI)
     // =========================================================================
 
-    property var _pendingEngineArgs: null
+    // FIFO, not a single slot: applyWallpaper sends `resume` then `set` when
+    // the animation is paused — with one queued slot the `set` overwrote the
+    // `resume` and the new video started frozen. Capped (oldest dropped):
+    // entries are idempotent state commands, the newest wins either way.
+    readonly property int _engineQueueMax: 4
+    property var _engineQueue: []
 
-    Process {   // unbounded-ok: local IPC control command
+    BoundedProcess {
         id: engineActProc
-        running: false
+        timeoutMs: 8000
+        maxBytes: 65536
 
-        onExited: function(exitCode) {
-            var next = root._pendingEngineArgs
-            root._pendingEngineArgs = null
-            if (exitCode !== 0) {
-                console.warn("[WallpaperService] wallpaper-engine command failed (exit " + exitCode + ")")
+        onDone: function(out, err, code) {
+            if (code !== 0) {
+                console.warn("[WallpaperService] wallpaper-engine command failed (exit " + code + ")")
             }
             pollEngineStatus()
-            if (next !== null) engineAct(next)
+            if (root._engineQueue.length > 0) engineAct(root._engineQueue.shift())
         }
     }
 
-    /// Fire a wallpaper-engine subcommand; one queued slot if busy.
+    /// Fire a wallpaper-engine subcommand; FIFO queue while busy.
     function engineAct(args) {
         if (!root.engineAvailable) {
             console.warn("[WallpaperService] engineAct ignored (engine unavailable):", args.join(" "))
             return
         }
         if (engineActProc.running) {
-            root._pendingEngineArgs = args
+            if (root._engineQueue.length >= root._engineQueueMax) root._engineQueue.shift()
+            root._engineQueue.push(args)
             return
         }
         engineActProc.command = [root.engineBin].concat(args)
@@ -893,7 +902,9 @@ Item {
             return
         }
         root.cycleInterval  = seconds * 1000
-        cycleTimer.interval = root.cycleInterval
+        // cycleTimer.interval is BOUND to root.cycleInterval — assigning the
+        // timer's property directly broke that binding permanently (a later
+        // config load / save round-trip would stop updating the timer).
         console.log("[WallpaperService] Interval set to", seconds,
                     "seconds (", root.cycleInterval, "ms)")
         saveConfig()
@@ -1044,6 +1055,7 @@ Item {
         /// Set auto-cycling state explicitly
         function setCyclingEnabled(enabled: bool) {
             root.cyclingEnabled = enabled
+            saveConfig()   // the toggle path saves; the IPC setter used not to
             console.log("[WallpaperService] IPC: setCyclingEnabled ->", enabled)
         }
 
