@@ -16,6 +16,6 @@ module.exports = {
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
   'shared/orbit.mjs': ['bar/lib/orbit.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
-  'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs'],
+  'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs', 'settings/lib/weather.mjs'],
   'shared/storage.mjs': ['plugins/nikos.storage/lib/storage.mjs'],
 }

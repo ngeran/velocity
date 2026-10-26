@@ -24,7 +24,8 @@
   "ipc": [
     "toggle",
     "open",
-    "close"
+    "close",
+    "refresh"
   ],
   "settings": {
     "zone": {
