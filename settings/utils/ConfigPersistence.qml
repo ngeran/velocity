@@ -17,6 +17,8 @@ import QtQuick
 import Quickshell.Io
 
 QtObject {
+    id: persistence
+
     // Config file path (set by user)
     property string configPath: ""
 
@@ -30,6 +32,12 @@ QtObject {
     // SAVE CONFIGURATION
     // =========================================================================
 
+    // Latest-wins slot: save() while a write is in flight used to be a silent
+    // no-op (Process.running = true on a busy Process does nothing) — the last
+    // config change of a burst could be lost. The queued write flushes from
+    // onExited.
+    property var pendingSave: null
+
     property Process saveProcess: Process {
         command: []
         running: false
@@ -37,6 +45,11 @@ QtObject {
         onExited: function(exitCode) {
             if (typeof onSaved === 'function')
                 onSaved(exitCode === 0)
+            if (persistence.pendingSave !== null) {
+                var next = persistence.pendingSave
+                persistence.pendingSave = null
+                persistence._write(next)
+            }
         }
     }
 
@@ -45,14 +58,21 @@ QtObject {
             console.log("[ConfigPersistence] No config path set")
             return false
         }
+        if (saveProcess.running) {
+            pendingSave = data
+            return true
+        }
+        _write(data)
+        return true
+    }
 
+    function _write(data) {
         var json = JSON.stringify(data, null, 2)
         // Atomic write: render to a per-PID tmp file, then rename. A crash
         // mid-write leaves the OLD file intact (only an orphaned .tmp.$$ behind)
         // — never a truncated/half-written config. Mirrors ThemeService._atomicWrite.
         saveProcess.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > \"" + configPath + ".tmp.$$\" && mv -f \"" + configPath + ".tmp.$$\" \"" + configPath + "\""]
         saveProcess.running = true
-        return true
     }
 
     // =========================================================================
@@ -72,15 +92,25 @@ QtObject {
         }
 
         onRunningChanged: {
-            if (!running && loadProcess.buffer.length > 0) {
-                try {
-                    var data = JSON.parse(loadProcess.buffer)
-                    if (typeof onLoaded === 'function')
-                        onLoaded(data)
-                } catch (e) {
-                    console.log("[ConfigPersistence] Failed to parse config:", e)
-                }
+            if (!running) {
+                var buf = loadProcess.buffer
                 loadProcess.buffer = ""
+
+                var data = null
+                if (buf.trim().length > 0) {
+                    try {
+                        data = JSON.parse(buf)
+                    } catch (e) {
+                        console.log("[ConfigPersistence] Failed to parse config:", e)
+                    }
+                }
+                // A missing (first run) / unreadable / unparseable config reads
+                // as {} — onLoaded is the boot-sequencing signal for callers
+                // (WallpaperService starts its scans from it) and must fire
+                // exactly once per load() even with no file on disk.
+                if (data === null || typeof data !== "object") data = {}
+                if (typeof onLoaded === 'function')
+                    onLoaded(data)
             }
         }
     }

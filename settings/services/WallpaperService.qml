@@ -176,10 +176,25 @@ Item {
             if (data.libraryMode !== undefined) {
                 root.libraryMode = data.libraryMode
             }
+            // Writers add the trailing slash, but a hand-edited or older
+            // config may not have it — isEngined() prefix-matches with "/".
+            if (root.wallpaperDir.length > 0 && !root.wallpaperDir.endsWith("/"))
+                root.wallpaperDir += "/"
+            if (root.liveDir.length > 0 && !root.liveDir.endsWith("/"))
+                root.liveDir += "/"
+
             // Sync the loaded wallpaper into SharedState so dashboard widgets
             // (e.g. the Active Wallpaper preview) show it immediately on
             // startup — not only after a wallpaper is freshly applied.
             Config.SharedState.updateWallpaper(root.currentWallpaper)
+
+            // STEP 2 — boot sequence, now that saved state is in place.
+            if (!root._bootScansStarted) {
+                root._bootScansStarted = true
+                startScan()
+                startLiveScan()
+                probeEngine()
+            }
         }
 
         onSaved: function(success) {
@@ -211,46 +226,34 @@ Item {
     Component.onCompleted: {
         console.log("[WallpaperService] Starting — cycle interval:",
                     root.cycleInterval / 1000, "s, transition:", root.transitionType)
-        homeGetter.running = true
+        initFromHome()
     }
 
     // =========================================================================
-    // STEP 1 — Resolve $HOME (+ engine availability probe)
+    // STEP 1 — Resolve $HOME defaults, then load the saved config.
     // =========================================================================
+    // The scans, engine probe and daemon guard DO NOT start here: the config
+    // load is async, and starting them with default dirs / an empty
+    // currentWallpaper let a random pick override the saved wallpaper and
+    // ignored the saved liveDir. They start from onLoaded (exactly once).
 
-    Process {   // unbounded-ok: trivial local check — no hang risk
-        id: homeGetter
-        command: ["sh", "-c", "echo $HOME"]
-
-        property string buf: ""
-
-        stdout: SplitParser {
-            onRead: data => { homeGetter.buf += data + "\n" }
+    function initFromHome() {
+        var home = Quickshell.env("HOME")
+        if (root.wallpaperDir.length === 0) {
+            root.wallpaperDir = home + "/Pictures/Wallpapers/"
         }
-
-        onRunningChanged: {
-            if (!running) {
-                var home = homeGetter.buf.trim()
-                homeGetter.buf = ""
-
-                // If config didn't set the dirs, use defaults
-                if (root.wallpaperDir.length === 0) {
-                    root.wallpaperDir = home + "/Pictures/Wallpapers/"
-                }
-                if (root.liveDir.length === 0) {
-                    root.liveDir = home + "/Pictures/Live-Wallpapers/"
-                }
-                console.log("[WallpaperService] Wallpaper dir:", root.wallpaperDir)
-                console.log("[WallpaperService] Live dir:", root.liveDir)
-
-                // Load saved config
-                configPersister.load()
-                startScan()
-                startLiveScan()
-                probeEngine()
-            }
+        if (root.liveDir.length === 0) {
+            root.liveDir = home + "/Pictures/Live-Wallpapers/"
         }
+        console.log("[WallpaperService] Wallpaper dir:", root.wallpaperDir)
+        console.log("[WallpaperService] Live dir:", root.liveDir)
+
+        configPersister.load()
     }
+
+    /// Guards the STEP-2 kick: onLoaded fires exactly once per load(), but the
+    /// flag makes the boot sequence explicitly single-shot.
+    property bool _bootScansStarted: false
 
     /// One-shot probe: is the wallpaper-engine CLI installed? (It appears once
     /// services.wallpaperEngine is enabled in the NixOS config.) Re-probed
