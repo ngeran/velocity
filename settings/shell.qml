@@ -222,7 +222,6 @@ ShellRoot {
                 return "error: style name must match [a-z0-9-]"
             Services.SettingsConfigService.barStyle = String(name)
             Services.SettingsConfigService.saveSettings()
-            Services.SettingsConfigService.scanBarStyles()
             return "ok"
         }
 

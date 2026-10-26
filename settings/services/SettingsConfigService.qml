@@ -50,7 +50,6 @@ Item {
     // Bar edge (UA 2.6 stage 1): "top" | "bottom" — mirrors bar-config.json;
     // the bar flips scenes/popovers live via BarConfig's ingest.
     property string barPosition: "top"
-    property var barStyles: ["vector"]          // scanned from bar/styles/
     property int workspaceCount: 5             // 3, 5, 7, 9
 
     // Auto-regenerate the palette from the active wallpaper via matugen
@@ -260,30 +259,9 @@ Item {
         }
     }
 
-    // ── bar style discovery ────────────────────────────────────────────────
-    // A style = a folder under ~/.config/quickshell/bar/styles/ with a
-    // Scene.qml. Scanned at service init and on every BAR STYLE pick (new
-    // style folders appear without restarting the settings shell).
-    function scanBarStyles() {
-        styleScanProc.running = true
-    }
-
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: styleScanProc
-        command: ["sh", "-c",
-            "ls -1d '" + StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles/'*/Scene.qml 2>/dev/null | sed 's|.*/styles/||; s|/Scene.qml||' | sort"]
-        // SplitParser delivers lines WITHOUT newlines (the documented trap) —
-        // accumulating `buffer += data` concatenated style names into one
-        // bogus "ryokuvector" entry. Collect per-line into an array instead.
-        property var lines: []
-        stdout: SplitParser { onRead: function(data) { styleScanProc.lines.push(String(data).trim()) } }
-        onStarted: lines = []
-        onExited: {
-            var found = styleScanProc.lines.filter(function(l) { return l.length > 0 })
-            styleScanProc.lines = []
-            if (found.length > 0) root.barStyles = found
-        }
-    }
+    // (Bar style discovery lived here for the Settings ▸ Bar pane's pick
+    // cards; the pane was consolidated away — the bar's overlay scans the
+    // styles itself in its own process.)
 
     // =========================================================================
     // INITIALIZATION
@@ -292,6 +270,5 @@ Item {
     Component.onCompleted: {
         loadSettings()
         barConfigRead.running = true
-        scanBarStyles()
     }
 }

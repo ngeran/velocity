@@ -9,10 +9,11 @@
 // ModernDashboard's inline ~730-line
 // Flickable block; every write path is byte-identical:
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
-//   BAR        — bar height, workspace dots       (SettingsConfigService + saveSettings)
 //   IDLE & LOCK— dim/lock/off timeouts, suspend   (HypridleService + saveConfig)
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
+// (The BAR pane was consolidated away — the logo's velocity.bar-settings
+// overlay is the one bar-settings surface; T23/T24.)
 // =============================================================================
 
 import QtQuick
@@ -24,12 +25,7 @@ import "../services" as Services
 Item {
     id: root
 
-    // Style folders appear without a settings restart: rescan whenever the
-    // BAR section is entered (the init-time scan only knows styles that
-    // existed when the settings shell started).
     onActiveChanged: {
-        if (active === "bar")
-            Services.SettingsConfigService.scanBarStyles()
         // The DESKTOP pane follows Hyprland instead of trusting the store —
         // poll only while it is the pane on screen.
         Services.HyprSettingsService.watching = (active === "desktop")
@@ -50,7 +46,6 @@ Item {
 
     readonly property var navItems: [
         { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
-        { key: "bar",        label: "BAR",        icon: "󰖬" },
         { key: "desktop",    label: "DESKTOP",    icon: "󰍹" },
         { key: "idle",       label: "IDLE & LOCK", icon: "󰌾" }
     ]
@@ -328,122 +323,6 @@ Item {
                         text: "Tab to navigate · Space/Enter to activate · Escape to close"
                         color: Config.ThemeConfig.colors.textDim; opacity: 0.7
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
-                }
-            }
-        }
-
-        // ── BAR ────────────────────────────────────────────────────────
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Config.ControlConfig.space4
-            visible: root.active === "bar"
-            spacing: Config.ControlConfig.space4
-
-            SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Bar"
-                subtitle: "Bar style, top-bar height and workspace dots" }
-
-            CoreCard {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                accent: Config.ControlConfig.accent
-                // ScrollColumn, not a bare ColumnLayout: four style cards plus
-                // four rows exceed the card (and at the 480px floor the window)
-                // — unclipped, the WORKSPACE DOTS pills painted BELOW the card,
-                // on the backdrop (same failure ScrollColumn exists for).
-                ScrollColumn {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    SettingRow {
-                        label: "BAR STYLE"
-                        section: "bar"
-                        keywords: "theme vector look"
-                        value: Services.SettingsConfigService.barStyle.toUpperCase()
-                        // Bar form cards (Shibumi pattern): every scanned
-                        // style, live preview, swaps the bar live on pick.
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: 2
-                            rowSpacing: Config.ControlConfig.space2
-                            columnSpacing: Config.ControlConfig.space2
-                            Repeater {
-                                model: Services.SettingsConfigService.barStyles
-                                delegate: BarFormCard {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    styleName: modelData
-                                    active: Services.SettingsConfigService.barStyle === modelData
-                                    onPicked: {
-                                        Services.SettingsConfigService.barStyle = modelData
-                                        Services.SettingsConfigService.saveSettings()
-                                        Services.SettingsConfigService.scanBarStyles()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        visible: Services.SettingsConfigService.barStyle === "island"
-                        label: "OLED BURN GUARD"
-                        section: "bar"
-                        keywords: "island oled burn in pixel shift dim qd-oled"
-                        value: Services.SettingsConfigService.islandBurnGuard ? "ON" : "OFF"
-                        Repeater {
-                            model: [true, false]
-                            delegate: OptSeg {
-                                text: modelData ? "ON" : "OFF"
-                                active: Services.SettingsConfigService.islandBurnGuard === modelData
-                                onPicked: {
-                                    Services.SettingsConfigService.islandBurnGuard = modelData
-                                    Services.SettingsConfigService.saveSettings()
-                                }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "BAR HEIGHT"
-                        section: "bar"
-                        keywords: "bar height size scale"
-                        value: Services.SettingsConfigService.barHeight + "px"
-                        Slider {
-                            Layout.fillWidth: true
-                            from: 18; to: 64; stepSize: 1
-                            value: Services.SettingsConfigService.barHeight
-                            onMoved: {
-                                Services.SettingsConfigService.barHeight = Math.round(value)
-                                Services.SettingsConfigService.saveSettings()
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "BAR POSITION"
-                        section: "bar"
-                        keywords: "bar position top bottom edge screen"
-                        value: Services.SettingsConfigService.barPosition.toUpperCase()
-                        Repeater {
-                            model: ["top", "bottom"]
-                            delegate: OptSeg {
-                                text: modelData.toUpperCase()
-                                active: Services.SettingsConfigService.barPosition === modelData
-                                onPicked: {
-                                    Services.SettingsConfigService.barPosition = modelData
-                                    Services.SettingsConfigService.saveSettings()
-                                }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "WORKSPACE DOTS"
-                        section: "bar"
-                        value: Services.SettingsConfigService.workspaceCount + " dots"
-                        Repeater {
-                            model: [3, 5, 7, 9]
-                            delegate: OptSeg {
-                                text: modelData
-                                active: Services.SettingsConfigService.workspaceCount === modelData
-                                onPicked: { Services.SettingsConfigService.workspaceCount = modelData; Services.SettingsConfigService.saveSettings() }
-                            }
-                        }
-                    }
                 }
             }
         }
