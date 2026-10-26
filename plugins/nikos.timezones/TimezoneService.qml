@@ -45,7 +45,7 @@ QtObject {
 
     function zoneOffsetMinutes(zone, d) { return Tz.zoneOffsetMinutes(zone, d) }
 
-    function pad2(n) { return (n < 10 ? "0" : "") + n }
+    function pad2(n) { return Tz.pad2(n) }
 
     // Hover pill: "ATHENS 01:07".
     readonly property string compactLabel: Tz.zoneCity(root.pillZone).toUpperCase() + " "

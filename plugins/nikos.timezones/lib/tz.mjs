@@ -116,7 +116,9 @@ export function zoneAbbr(zone, t) {
     return dst ? z.abbr[1] : z.abbr[0]
 }
 
-function pad2(n) { return (n < 10 ? "0" : "") + n }
+// Shared zero-pad idiom (DU12: TimezoneService.qml delegates here; the
+// module's own formatters below use it too).
+export function pad2(n) { return (n < 10 ? "0" : "") + n }
 
 // "hh:mm:ss" wall clock in `zone` ("" = system zone). Never Intl.
 export function formatInZone(t, zone) {
