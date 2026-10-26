@@ -30,6 +30,7 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
 import "../config" as Config
+import "../lib/theme-core.mjs" as ThemeCore
 
 Item {
     id: themeService
@@ -89,40 +90,18 @@ Item {
     // =========================================================================
     readonly property var defaultBundle: Config.ThemeSchema.defaults
 
+    // ── theme core (DU2/DU3): the implementations live in shared/theme-core.mjs
+    // (synced to settings/lib + bar/lib, node-tested) — these shims keep the
+    // QML call sites stable. clampOLED stays THE single clamp in this process:
+    // all apply paths still route through it, only the math is shared.
     // Relative luminance (0..1, sRGB) of a "#rrggbb" string; invalid → 0.
     function luminance(hex) {
-        var h = (hex || "#000000").replace("#", "")
-        if (h.length !== 6) return 0
-        var ch = function (s) {
-            var v = parseInt(s, 16) / 255
-            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * ch(h.substring(0, 2)) + 0.7152 * ch(h.substring(2, 4)) + 0.0722 * ch(h.substring(4, 6))
+        return ThemeCore.luminance(hex)
     }
 
     // Canonical 16-token bundle from a raw/partial color object.
     function normalizeBundle(raw) {
-        var d = themeService.defaultBundle
-        var has = function (k) { return raw && typeof raw[k] === "string" && raw[k].charAt(0) === "#" }
-        var pick = function (k, fb) { return has(k) ? raw[k] : fb }
-        return {
-            background:       pick("background", d.background),
-            surface:          pick("surface", d.surface),
-            surfaceVariant:   pick("surfaceVariant", d.surfaceVariant),
-            surfaceContainer: pick("surfaceContainer", has("surfaceVariant") ? raw.surfaceVariant : d.surfaceContainer),
-            text:             pick("text", d.text),
-            textDim:          pick("textDim", d.textDim),
-            border:           pick("border", d.border),
-            outline:          pick("outline", d.outline),
-            outlineVariant:   pick("outlineVariant", d.outlineVariant),
-            primary:          pick("primary", d.primary),
-            secondary:        pick("secondary", d.secondary),
-            accent:           pick("accent", d.accent),
-            success:          pick("success", d.success),
-            warning:          pick("warning", d.warning),
-            error:            pick("error", d.error),
-            info:             pick("info", d.info)
-        }
+        return ThemeCore.normalizeBundle(raw, themeService.defaultBundle)
     }
 
     /**
@@ -130,21 +109,7 @@ Item {
      * The ONLY clamp in the settings process. All apply paths route through it.
      */
     function clampOLED(bundle, clamp) {
-        if (!clamp) {
-            return bundle;
-        }
-        // Force ONLY the four surface tokens to pure black
-        bundle.background = "#000000";
-        bundle.surface = "#000000";
-        bundle.surfaceVariant = "#000000";
-        bundle.surfaceContainer = "#000000";
-        // Pure-black bg: guarantee text legibility. If the source palette's text
-        // is too dim to read on #000, fall back to the default light tokens.
-        if (themeService.luminance(bundle.text) < 0.18)
-            bundle.text = themeService.defaultBundle.text;
-        if (themeService.luminance(bundle.textDim) < 0.12)
-            bundle.textDim = themeService.defaultBundle.textDim;
-        return bundle;
+        return ThemeCore.clampOLED(bundle, clamp, themeService.defaultBundle)
     }
 
     // =========================================================================

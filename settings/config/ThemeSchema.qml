@@ -21,6 +21,7 @@
 pragma Singleton
 
 import QtQuick
+import "../lib/theme-core.mjs" as ThemeCore
 
 Item {
     id: root
@@ -33,14 +34,10 @@ Item {
         "primary", "secondary", "accent", "success", "warning", "error", "info"
     ]
 
-    // The default seed palette ("OLED Pure Black").
-    readonly property var defaults: ({
-        background: "#000000", surface: "#0a0a0a", surfaceVariant: "#111111",
-        surfaceContainer: "#111111", text: "#e0e0e0", textDim: "#808080",
-        border: "#1a1a1a", outline: "#2a2a2a", outlineVariant: "#1a1a1a",
-        primary: "#7c6bf0", secondary: "#00dce5", accent: "#f87171",
-        success: "#34d399", warning: "#fbbf24", error: "#f87171", info: "#00dce5"
-    })
+    // The default seed palette ("OLED Pure Black") — delegates to
+    // shared/theme-core.mjs DEFAULT_BUNDLE (the ONE seed copy; the bar's
+    // defensive clamp rescues from the same values this exposes).
+    readonly property var defaults: ThemeCore.DEFAULT_BUNDLE
 
     // A fresh bundle object seeded from defaults (safe to mutate in place).
     function emptyBundle() {

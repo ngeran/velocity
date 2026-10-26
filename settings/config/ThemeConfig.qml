@@ -59,7 +59,8 @@
 // identical (bar + settings are separate processes). Divergences are INTENTIONAL:
 // settings has isUserInitiated (it's the WRITER — ThemeService mutates in-process)
 // and DELEGATES the OLED clamp to ThemeService; the bar has no isUserInitiated
-// (read-only) + an inline defensive clamp equivalent to ThemeService.clampOLED +
+// (read-only) + a defensive clamp on ingest that calls the SHARED
+// shared/theme-core.mjs clampOLED (the same module ThemeService delegates to) +
 // a poll intake. Both clamps produce the same result (verified).
 // =============================================================================
 

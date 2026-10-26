@@ -16,9 +16,10 @@
 // metadata defaults, updateColorToken(), and applyTheme()'s token-mapping MUST
 // stay identical (bar + settings are separate processes). Divergences here are
 // INTENTIONAL (don't "fix" them): no isUserInitiated (the bar is READ-ONLY — it
-// only reads colors.json that settings wrote), an inline OLED clamp as defense
-// (equivalent to ThemeService.clampOLED: 4 bg tokens → #000, luminance <0.18
-// text / <0.12 textDim → #e0e0e0 / #808080), and a zero-fork hybrid intake:
+// only reads colors.json that settings wrote), a defensive OLED clamp on ingest
+// that calls the SHARED theme-core clampOLED (same module as ThemeService —
+// 4 bg tokens → #000, luminance-rescued text/textDim → DEFAULT_BUNDLE), and a
+// zero-fork hybrid intake:
 // FileView.watchChanges (instant on same-inode writes), the theme.reload
 // nudge, plus a 15s fallback reload() Timer. Plain watchChanges alone missed tmp+mv inode swaps
 // cross-process (see git history); reload() re-reads by path in C++, so it
@@ -32,6 +33,7 @@ import Qt.labs.platform
 import Quickshell.Io
 import "." as Config
 import "../lib/theme-mix.mjs" as Mix
+import "../lib/theme-core.mjs" as ThemeCore
 
 Item {
     id: root
@@ -193,16 +195,11 @@ Item {
         root.colors = next
     }
 
-    // Relative luminance (0..1, sRGB) of a "#rrggbb" string — mirrors
-    // ThemeService.luminance (the bar is a separate process and can't import it).
+    // Relative luminance (0..1, sRGB) of a "#rrggbb" string — the math lives
+    // in shared/theme-core.mjs (DU2/DU3: the same module settings' ThemeService
+    // uses; the fork this used to be could silently diverge).
     function luminance(hex) {
-        var h = (hex || "#000000").replace("#", "")
-        if (h.length !== 6) return 0
-        var ch = function (s) {
-            var v = parseInt(s, 16) / 255
-            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * ch(h.substring(0, 2)) + 0.7152 * ch(h.substring(2, 4)) + 0.0722 * ch(h.substring(4, 6))
+        return ThemeCore.luminance(hex)
     }
 
     // =========================================================================
@@ -284,14 +281,12 @@ Item {
         // QD-OLED Safe: force pure-black backgrounds. Clamped IN PLACE on the
         // mapped palette BEFORE the cross-fade, so the fade target is final
         // (fading toward a color that then snaps to the clamp would flicker).
-        // Defense only — ThemeService is the sole pre-clamping writer.
+        // Defense only — ThemeService is the sole pre-clamping writer. The
+        // clamp is the SHARED theme-core one (its text rescue falls back to
+        // DEFAULT_BUNDLE — the same hardcoded #e0e0e0/#808080 this block used
+        // to carry, now divergence-proof).
         if (next && root.metadata.oledClamp) {
-            next.background = "#000000"
-            next.surface = "#000000"
-            next.surfaceVariant = "#000000"
-            next.surfaceContainer = "#000000"
-            if (root.luminance(next.text) < 0.18) next.text = "#e0e0e0"
-            if (root.luminance(next.textDim) < 0.12) next.textDim = "#808080"
+            ThemeCore.clampOLED(next, true, ThemeCore.DEFAULT_BUNDLE)
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] OLED clamp applied")
         }
 
