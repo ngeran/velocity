@@ -57,7 +57,7 @@ asynchronously — a run can legitimately watch the raw count decay. The bar
 unit's MainPID filter is the zombie-immune open/close signal.
 (currently: unit-less dev `-p` mode degrades `.alive` to the raw count).
 
-## Suite inventory (16)
+## Suite inventory (17)
 
 | Scenario | What it proves |
 |----------|----------------|
@@ -75,6 +75,7 @@ unit's MainPID filter is the zombie-immune open/close signal.
 | `storage-toggle-cycle` | the storage popup (drive click, C2) maps exactly one alive surface and closes clean; the headless service mounted and warmed the inventory (journal); local `lsblk` serves ≥1 block device |
 | `network-toggle-cycle` | the NETWORK tray card (C3, `plugins call velocity.network toggle`) maps exactly one alive surface and closes clean; card renders hero + AP list + speed row (shot) |
 | `wallpaper-noop-set` | re-setting the current wallpaper is a render exercise with zero state drift |
+| `wallpaper-engine-live` | with the engine installed: daemon reports running, a live-library video routes to mpvpaper (instance count ≥ 1), the service state follows, and the previous wallpaper is restored. **SKIPs until the engine binary lands (post-rebuild)** — restart `quickshell-settings` once first so the engine probe re-runs |
 | `settings-search-index` | search index serves well-formed query hits (title/tab/section) |
 | `keybinds-via-keybind` | the REAL SUPER+K keybind end-to-end through the compositor — **SKIPs until wtype lands in the flake** |
 

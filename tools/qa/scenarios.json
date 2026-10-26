@@ -144,6 +144,36 @@
    ]
   },
   {
+   "id": "wallpaper-engine-live",
+   "name": "The engine plays a live wallpaper and the service routes it end to end",
+   "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-settings once so the engine probe re-runs",
+   "requires": [
+    "wallpaper-engine"
+   ],
+   "steps": [
+    "ipc settings wallpaper-service getEngineStatus",
+    "ipc settings wallpaper-service getCurrentInfo",
+    "sh qs -c settings ipc call wallpaper-service getList | grep -E '\\.(mp4|webm|mkv|mov)$' | head -1",
+    "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-sh.out)\"",
+    "sleep 3",
+    "ipc settings wallpaper-service getEngineStatus",
+    "ipc settings wallpaper-service getCurrentInfo",
+    "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\"",
+    "sleep 1",
+    "ipc settings wallpaper-service getCurrentInfo"
+   ],
+   "asserts": [
+    "jq -e '.running == true' $QA_EV/01-wallpaper-service-getEngineStatus.out",
+    "test -s $QA_EV/03-sh.out",
+    "jq -e '.running == true and .instances >= 1' $QA_EV/06-wallpaper-service-getEngineStatus.out",
+    "diff $QA_EV/03-sh.out $QA_EV/07-wallpaper-service-getCurrentInfo.out",
+    "diff $QA_EV/02-wallpaper-service-getCurrentInfo.out $QA_EV/10-wallpaper-service-getCurrentInfo.out"
+   ],
+   "teardown": [
+    "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\" >/dev/null 2>&1"
+   ]
+  },
+  {
    "id": "settings-search-index",
    "name": "Search index answers queries with well-formed hits",
    "covers": "dashboard search index (query path used by truth probes)",
