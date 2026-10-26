@@ -17,5 +17,5 @@
     "defaultSection": "right"
   },
   "commands": [],
-  "ipc": []
+  "ipc": ["toggle"]
 }

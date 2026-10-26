@@ -50,6 +50,16 @@ Item {
     property real offY: 0
     property bool opened: false
     property bool hoverClose: false
+    // Typing guard (C3 network card): while a password field is focused the
+    // hover-out close is HELD — the cursor resting outside the card must not
+    // kill a half-typed password. Flipping this on also cancels a pending
+    // hover-out timer.
+    property bool hoverPause: false
+    // Layer-keyboard request (C3): hosts bind their window's
+    // WlrLayershell.keyboardFocus to OnDemand while this is true so the
+    // embedded/floating body can take text input (island embeds read it off
+    // the presented client; TrayCard reads it off its body directly).
+    property bool keyboardWanted: false
     // Hosts whose open state lives elsewhere (e.g. TrayCard's activeTray):
     // bind `opened`, set externalState, and handle dismissRequested — the
     // backdrop / hover-out / timers ASK instead of writing (a write would
@@ -267,11 +277,17 @@ Item {
                 if (hovered) {
                     hoverCloseTimer.stop()
                     pop._hoverEntered = true
-                } else if (pop.opened
+                } else if (pop.opened && !pop.hoverPause
                            && (!pop.hoverCloseNeedsEntry || pop._hoverEntered)) {
                     hoverCloseTimer.restart()
                 }
             }
+        }
+        // A pause landing mid-count (cursor outside when a field gains focus)
+        // must also stop the timer already running.
+        Connections {
+            target: pop
+            function onHoverPauseChanged() { if (pop.hoverPause) hoverCloseTimer.stop() }
         }
         Timer {
             id: hoverCloseTimer

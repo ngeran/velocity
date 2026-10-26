@@ -35,6 +35,11 @@ PanelWindow {
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     aboveWindows: true
+    // On-demand layer keyboard ONLY while the network body's password field
+    // is focused (C3): a half-typed Wi-Fi password needs keys; every other
+    // tray body stays keyboard-inert (ryoku finding — None by default).
+    WlrLayershell.keyboardFocus: networkBody.keyboardWanted
+        ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     property string activeTray: ""
     // Hairline width, snapped to device pixels (PopupMetrics.hairline) — one
@@ -156,6 +161,10 @@ PanelWindow {
         onDismissRequested: card.closeRequested()
         hoverClose: true
         hoverCloseNeedsEntry: true
+        // Hold the hover-out close while a password row is open (C3) — the
+        // cursor resting outside the card must not kill a half-typed PSK.
+        hoverPause: networkBody.keyboardWanted
+        keyboardWanted: networkBody.keyboardWanted
         showBorder: false
         padding: 0
         gap: 0
@@ -284,178 +293,12 @@ PanelWindow {
                 return 0
             }
 
-            // ── Network ──
-            ColumnLayout {
+            // ── Network ── (C3: signal hero · AP list · inline password ·
+            // speed test — see NetworkCardBody.qml header)
+            NetworkCardBody {
                 id: networkBody
-                Layout.fillWidth: true
-                Layout.margins: Config.PopupMetrics.px(16)
-                spacing: 0
-
-                // nmcli absent — dim dash instead of a misleading "DISCONNECTED" pill
-                Text {
-                    visible: !Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "—"
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: Config.PopupMetrics.px(28)
-                    color: Config.BarConfig.colorTextDim
-                }
-
-                RowLayout {
-                    visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(6)
-                    Rectangle {
-                        width: connLbl.implicitWidth + 18; height: Config.PopupMetrics.px(24)
-                        radius: Config.PopupMetrics.px(5)
-                        color: Services.NetworkService.isConnected ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
-                        border.color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: card.hair
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        Text { id: connLbl; anchors.centerIn: parent
-                            text: Services.NetworkService.isConnected ? "CONNECTED" : "DISCONNECTED"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5
-                            color: Services.NetworkService.isConnected ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Item { height: 12; visible: Services.NetworkService.hasNetwork }
-                // Named state (Omarchy): radio-off otherwise reads as a broken
-                // "everything empty" popup — say why it's empty.
-                Text {
-                    visible: Services.NetworkService.hasNetwork && !Services.NetworkService.wifiRadio && !Services.NetworkService.isConnected
-                    Layout.fillWidth: true
-                    text: "Wi-Fi radio is off — enable it below"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10); font.italic: true
-                    color: Config.BarConfig.colorTextDim
-                }
-                // ── detail rows — label left · value RIGHT (mockup) ──
-                component NetRow: Item {
-                    property string label: ""
-                    property string value: "—"
-                    property bool valueBold: true
-                    property color valueColor: Config.BarConfig.colorText
-                    // content-based width: the card sizes itself from these
-                    implicitWidth: lblTxt.implicitWidth + valTxt.implicitWidth + 16
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Config.PopupMetrics.px(28)
-                    Text {
-                        id: lblTxt
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: parent.label
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                        font.letterSpacing: 1
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Text {
-                        id: valTxt
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: parent.value
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(13)
-                        font.bold: parent.valueBold
-                        color: parent.valueColor
-                        elide: Text.ElideMiddle
-                        width: Math.min(implicitWidth, parent.width * 0.7)
-                        horizontalAlignment: Text.AlignRight
-                    }
-                }
-
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "SSID"
-                    value: Services.NetworkService.ssid
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "IP"
-                    value: Services.NetworkService.ipAddress !== "" ? Services.NetworkService.ipAddress : "—"
-                }
-                // SIGNAL row — % + 4-bar meter on the right (mockup)
-                RowLayout {
-                    visible: Services.NetworkService.isConnected && Services.NetworkService.connectionType === "wifi"
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Config.PopupMetrics.px(28)
-                    spacing: 0
-                    Text {
-                        text: "SIGNAL"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                        font.letterSpacing: 1
-                        color: Config.BarConfig.colorTextDim
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: Services.NetworkService.signalStrength + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(13); font.bold: true
-                        color: Config.BarConfig.colorText
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    Item { width: 10 }
-                    Item {
-                        Layout.preferredWidth: sigBars.implicitWidth
-                        Layout.preferredHeight: Config.PopupMetrics.px(16)
-                        Layout.alignment: Qt.AlignVCenter
-                        Row {
-                            id: sigBars
-                            anchors.bottom: parent.bottom
-                            spacing: Config.PopupMetrics.px(2)
-                            Repeater {
-                                model: 4
-                                Rectangle {
-                                    width: Config.PopupMetrics.px(4)
-                                    height: Config.PopupMetrics.px(5) + index * 3
-                                    color: Services.NetworkService.signalStrength > index * 25
-                                           ? Config.ThemeConfig.colors.primary
-                                           : Config.ThemeConfig.hairlineSoft
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-                                }
-                            }
-                        }
-                    }
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "↓ DOWNLOAD"
-                    value: Services.NetworkService.rxRate === "" ? "—"
-                          : Services.NetworkService.rxRate + "  ·  " + Services.NetworkService.rxTotal
-                    valueBold: false
-                }
-                NetRow {
-                    visible: Services.NetworkService.isConnected
-                    label: "↑ UPLOAD"
-                    value: Services.NetworkService.txRate === "" ? "—"
-                          : Services.NetworkService.txRate + "  ·  " + Services.NetworkService.txTotal
-                    valueBold: false
-                }
-                Item { height: Config.PopupMetrics.px(4); visible: Services.NetworkService.isConnected }
-                Rectangle { visible: Services.NetworkService.isConnected; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-                Item { height: Config.PopupMetrics.px(8); visible: Services.NetworkService.isConnected }
-                // ── Wi-Fi radio on/off toggle (mockup: full-width pill) ──
-                Item { height: 10; visible: Services.NetworkService.hasNetwork }
-                Rectangle {
-                    visible: Services.NetworkService.hasNetwork
-                    Layout.fillWidth: true; height: Config.PopupMetrics.px(34); radius: Config.PopupMetrics.px(6)
-                    color: {
-                        if (wifiBtnArea.containsMouse)
-                            return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillHover : Config.ThemeConfig.accentTint
-                        return Services.NetworkService.wifiRadio ? Config.ThemeConfig.fillRest : Config.ThemeConfig.accentTintSoft
-                    }
-                    border.color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorBorder : Config.BarConfig.colorAccent
-                    border.width: card.hair
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
-                        Text { text: Services.NetworkService.wifiRadio ? "󰖲" : "󰖩"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
-                        Text { text: Services.NetworkService.wifiRadio ? "DISABLE WI-FI" : "ENABLE WI-FI"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Services.NetworkService.wifiRadio ? Config.BarConfig.colorTextDim : Config.BarConfig.colorAccent }
-                    }
-                    MouseArea { id: wifiBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.NetworkService.toggleRadio() }
-                }
-
-                SettingsLink { visible: Services.NetworkService.hasNetwork; verb: "openControlNetwork"; onActivated: function(v) { card.openSettings(v) } }
-                Item { Layout.fillHeight: true; visible: Services.NetworkService.hasNetwork }
+                tray: card
+                onSettingsRequested: function(verb) { card.openSettings(verb) }
             }
 
 

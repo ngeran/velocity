@@ -11,4 +11,10 @@ Components.NetworkIcon {
 
     isActive: !!host && host.trayOpenOn(ctx.window, "network")
     onTrayRequested: if (host) host.toggleTray(ctx.window, "network", root)
+
+    // IPC parity with the plugin pills: `qs -c bar ipc call plugins call
+    // velocity.network toggle ""` (QA scenarios open the card this way).
+    function toggle() {
+        if (host) host.toggleTray(ctx.window, "network", root)
+    }
 }

@@ -499,7 +499,10 @@ Item {
             exclusionMode: ExclusionMode.Normal
             exclusiveZone: barH
             WlrLayershell.namespace: "velocity-island"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            // On-demand keys ONLY while the presented card wants text input
+            // (C3: the network body's password field) — otherwise None.
+            WlrLayershell.keyboardFocus: (win.client && win.client.keyboardWanted)
+                ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
             mask: Region { item: island }
 
             // =================================================================

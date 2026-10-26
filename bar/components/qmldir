@@ -8,6 +8,7 @@ BluetoothIcon 1.0 BluetoothIcon.qml
 VolumeIcon 1.0 VolumeIcon.qml
 TrayCard 1.0 TrayCard.qml
 ControlCenterBody 1.0 ControlCenterBody.qml
+NetworkCardBody 1.0 NetworkCardBody.qml
 NotificationCenter 1.0 NotificationCenter.qml
 FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml

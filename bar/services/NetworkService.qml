@@ -88,6 +88,14 @@ Item {
     property bool wifiRadio: Networking.wifiEnabled
     function toggleRadio() { Networking.wifiEnabled = !Networking.wifiEnabled }
 
+    // ── Scanned access points (C3 AP list) ────────────────────────────────
+    // Raw live WifiNetwork QObjects, only meaningful while the scanner lease
+    // (above) is held. Grouping/filtering is pure Model.groupAps, applied in
+    // the card body — the service just exposes the scan; the view owns the
+    // freeze/diff discipline (the wifi-list array-identity law).
+    readonly property var aps: (wifiDev && wifiDev.networks)
+        ? (wifiDev.networks.values || []) : []
+
     // When the connection drops, clear the popup diagnostics and SSID cache.
     onIsConnectedChanged: if (!isConnected) { root._lastSsid = ""; root._reset() }
 
@@ -166,6 +174,8 @@ Item {
             root.txRate = ""
             root.rxTotal = ""
             root.txTotal = ""
+            // The speed test is panel-gated: closing aborts mid-flight.
+            root.cancelSpeedTest()
             return
         }
         // Fetch-on-open: no waiting for the next timer tick.
@@ -174,6 +184,107 @@ Item {
         // iface is known (fixes the empty-iface race that showed no data).
         if (isConnected) getIP()
         if (isConnected) gwProc.run()
+    }
+
+    // ── Panel-gated speed test (C3) ───────────────────────────────────────
+    // Mechanism adapted from qsbar's CloudflareSpeedTest.qml (MIT, upstream
+    // Ryoku): plain XHR against speed.cloudflare.com — no process, no daemon.
+    // Compact ladder for a popup row: 2×5 MB downloads + 2×1 MB uploads,
+    // median reported. The generation counter invalidates every in-flight
+    // callback of a cancelled/finished run (qsbar's runGeneration guard).
+    property string speedPhase: "idle"     // idle|download|upload|done|error|cancelled
+    property real speedDownMbps: 0
+    property real speedUpMbps: 0
+    property int _speedGen: 0
+    property var _speedXhr: null
+
+    function runSpeedTest() {
+        if (speedPhase === "download" || speedPhase === "upload") return
+        if (!isConnected) return
+        root._speedGen++
+        var gen = root._speedGen
+        speedDownMbps = 0
+        speedUpMbps = 0
+        speedPhase = "download"
+        root._speedLadder(gen, "GET",
+            "https://speed.cloudflare.com/__down?bytes=5000000", null, true, [],
+            function(samples) {
+                if (gen !== root._speedGen) return
+                speedDownMbps = Model.median(samples)
+                speedPhase = "upload"
+                var up = "0".repeat(1000000)
+                root._speedLadder(gen, "POST",
+                    "https://speed.cloudflare.com/__up", up, false, [],
+                    function(upSamples) {
+                        if (gen !== root._speedGen) return
+                        speedUpMbps = Model.median(upSamples)
+                        speedPhase = "done"
+                    })
+            })
+    }
+
+    // Run `repeats+1` requests, collecting Mbps samples, then onSuccess.
+    function _speedLadder(gen, method, url, body, binary, samples, onSuccess) {
+        if (gen !== root._speedGen) return
+        var xhr = new XMLHttpRequest()
+        var headersAt = 0
+        root._speedXhr = xhr
+        xhr.onreadystatechange = function() {
+            if (gen !== root._speedGen) return
+            if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED && headersAt === 0)
+                headersAt = Date.now()
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            root._speedXhr = null
+            speedReaper.stop()
+            if (xhr.status !== 200 || headersAt === 0) {
+                speedPhase = "error"
+                return
+            }
+            var bytes = binary && xhr.response ? (xhr.response.byteLength || 0) : (body ? body.length : 0)
+            var transferMs = Date.now() - headersAt
+            var mbps = bytes * 8 / transferMs / 1000
+            if (!(bytes > 0) || !(transferMs > 0) || !isFinite(mbps) || mbps <= 0) {
+                speedPhase = "error"
+                return
+            }
+            samples.push(mbps)
+            if (samples.length < 2) {
+                root._speedLadder(gen, method, url, body, binary, samples, onSuccess)
+            } else {
+                onSuccess(samples)
+            }
+        }
+        xhr.open(method, url, true)
+        if (binary) xhr.responseType = "arraybuffer"
+        if (method === "POST") xhr.setRequestHeader("Content-Type", "application/octet-stream")
+        xhr.send(body)
+        // Per-request reaper (qsbar's requestTimer): a stalled probe ends the
+        // run instead of pinning "testing…" forever. The callback rides a
+        // root property — signal handlers are never assigned from JS here.
+        root._speedReap = function() {
+            if (gen !== root._speedGen) return
+            if (speedPhase !== "download" && speedPhase !== "upload") return
+            if (root._speedXhr) root._speedXhr.abort()
+            root._speedXhr = null
+            speedPhase = "error"
+        }
+        speedReaper.restart()
+    }
+
+    function cancelSpeedTest() {
+        if (speedPhase !== "download" && speedPhase !== "upload") return
+        root._speedGen++
+        if (root._speedXhr) { root._speedXhr.abort(); root._speedXhr = null }
+        speedPhase = "cancelled"
+    }
+
+    property var _speedReap: null
+    Timer {
+        id: speedReaper
+        interval: 10000
+        running: false
+        repeat: false
+        onTriggered: if (root._speedReap) root._speedReap()
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────
