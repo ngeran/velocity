@@ -18,6 +18,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 
 Item {
@@ -55,7 +56,12 @@ Item {
     // and a missing/garbage file fails safe: nothing hidden.
     // -------------------------------------------------------------------------
     property real clearedAt: 0
-    readonly property string clearedPath: "~/.config/quickshell/notifications.cleared"
+    // ABSOLUTE paths (B7 corollary): these used to be "~/.config/..." and only
+    // worked because every consumer pasted them into a `sh -c` string where the
+    // shell expanded the tilde. The argv forms pass them literally — so resolve
+    // the home prefix here instead and keep the argv shapes safe.
+    readonly property string homeDir: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "")
+    readonly property string clearedPath: root.homeDir + "/.config/quickshell/notifications.cleared"
     property ListModel clearedModel: ListModel {}
     readonly property int clearedCount: clearedModel.count
 
@@ -100,7 +106,7 @@ Item {
     onPanelOpenChanged: if (panelOpen) root.now = Date.now()
     // True while some row can auto-expire (read, not critical) — gates the sweep.
     property bool _hasExpiring: false
-    readonly property string _dndFlag: "~/.config/quickshell/dnd.flag"
+    readonly property string _dndFlag: root.homeDir + "/.config/quickshell/dnd.flag"
 
     // -------------------------------------------------------------------------
     // PERSISTENCE — notifications.jsonl through the bar's write funnel
@@ -112,7 +118,7 @@ Item {
     // Soft-cleared rows persist on disk too — the reader routes them by
     // timestamp vs clearedAt (see SOFT CLEAR above).
     // -------------------------------------------------------------------------
-    readonly property string storePath: "~/.config/quickshell/notifications.jsonl"
+    readonly property string storePath: root.homeDir + "/.config/quickshell/notifications.jsonl"
     readonly property int storeMax: 200
     readonly property int storeMaxBytes: 262144   // reader input cap (256 KiB)
 
@@ -145,12 +151,16 @@ Item {
             _clearedReader.buffer = ""
             // The store read ROUTES on clearedAt, so it starts here — not in
             // Component.onCompleted — to keep the two async reads ordered.
-            _storeReader.command = ["sh", "-c", "head -c " + root.storeMaxBytes + " " + root.storePath + " 2>/dev/null || true"]
+            // tail (not head): disk is oldest-first, so the NEWEST lines live
+            // at the tail — a head cap kept the oldest data and silently
+            // dropped every notification past the cap. A mid-line cut at the
+            // block's head lands as one tolerated corrupt row.
+            _storeReader.command = ["sh", "-c", 'tail -c "$1" "$2" 2>/dev/null || true', "sh", String(root.storeMaxBytes), root.storePath]
             _storeReader.running = true
         }
     }
 
-    Process {   // unbounded-ok: one-shot byte-capped store read (head -c), exits at EOF
+    Process {   // unbounded-ok: one-shot byte-capped store read (tail -c), exits at EOF
         id: _storeReader
         command: []
         running: false
@@ -219,7 +229,7 @@ Item {
     function setDnd(on) {
         root.dnd = on
         var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        w.command = ["sh", "-c", "printf '%s' '" + (on ? "1" : "0") + "' > " + root._dndFlag]
+        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh", on ? "1" : "0", root._dndFlag]
         w.onExited.connect(function() { w.destroy() })  // free the one-shot wrapper (was leaked per toggle)
         w.running = true
     }
@@ -407,7 +417,7 @@ Item {
 
     function _writeCleared() {
         var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        w.command = ["sh", "-c", "printf '%s' '" + root.clearedAt + "' > " + root.clearedPath]
+        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh", String(root.clearedAt), root.clearedPath]
         w.onExited.connect(function() { w.destroy() })
         w.running = true
     }
@@ -446,9 +456,9 @@ Item {
     }
 
     Component.onCompleted: {
-        _dndReader.command = ["sh", "-c", "cat " + root._dndFlag + " 2>/dev/null || true"]
+        _dndReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._dndFlag]
         _dndReader.running = true
-        _clearedReader.command = ["sh", "-c", "cat " + root.clearedPath + " 2>/dev/null || true"]
+        _clearedReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root.clearedPath]
         _clearedReader.running = true   // chains the store read (routing needs clearedAt)
     }
 }
