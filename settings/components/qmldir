@@ -13,10 +13,7 @@ WifiListRow 1.0 WifiListRow.qml
 BtDeviceListView 1.0 BtDeviceListView.qml
 BtDeviceRow 1.0 BtDeviceRow.qml
 SinkListView 1.0 SinkListView.qml
-SinkRow 1.0 SinkRow.qml
-SinkInputRow 1.0 SinkInputRow.qml
 SourceListView 1.0 SourceListView.qml
-SourceRow 1.0 SourceRow.qml
 DisplayControlView 1.0 DisplayControlView.qml
 CalendarWidget 1.0 CalendarWidget.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml

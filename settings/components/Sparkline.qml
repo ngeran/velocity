@@ -2,7 +2,6 @@
 // Sparkline.qml — rolling-value line chart (stroke + low-alpha area fill)
 // =============================================================================
 // CANONICAL FILE — lives in shared/, synced byte-identical into
-//   bar/Ui/Sparkline.qml                (bar internals + plugins: qs.Ui)
 //   settings/components/Sparkline.qml   (Core telemetry)
 // by tools/sync-shared; drift fails tools/check-shared. Edit here only.
 //
