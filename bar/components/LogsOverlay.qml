@@ -56,6 +56,9 @@ PanelWindow {
         shown = true
         Services.LogService.open()
         clockTimer.restart()
+        // Entries that arrived while hidden were never scanned (O3: the
+        // append Connections is shown-gated) — catch up synchronously once.
+        recomputeMatches()
     }
     function close() {
         shown = false
@@ -119,8 +122,10 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
-        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
+        // ≥0 clamp: while the window is hidden the parent reports 0 size and
+        // the unclamped subtraction goes negative (grid-repeat models → -2).
+        width: Math.max(0, Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48)))
+        height: Math.max(0, Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48)))
         // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
         color: "#000000"
         radius: Config.PopupMetrics.px(18)
@@ -543,7 +548,10 @@ PanelWindow {
     }
 
     // Coalesce model bursts: a 500-line backfill = ONE match scan (~4/s max
-    // while following).
+    // while following). Gated on shown (O3): appends while the overlay is
+    // closed restarted this timer for nothing — the scan only matters while
+    // the overlay is up. open() recomputes once so entries that arrived
+    // while hidden are reflected immediately.
     Timer {
         id: matchTimer
         interval: 250
@@ -551,6 +559,7 @@ PanelWindow {
     }
     Connections {
         target: Services.LogService.entries
+        enabled: root.shown
         function onCountChanged() { matchTimer.restart() }
     }
 
