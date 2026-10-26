@@ -14,26 +14,25 @@
 // intentionally avoided: `show` is a quickshell ipc CLI subcommand and never
 // parses as a function name (see ModernDashboard). Toggle is also honest UX:
 // click the gear when open → closes.
+//
+// The hover-pill shell is the shared HoverGlyph base (DU10) with
+// rightClickEnabled — click policy stays here.
 // =============================================================================
 
 import QtQuick
 import Quickshell.Io
-import "../config" as Config
 
-Item {
+HoverGlyph {
     id: root
-    implicitWidth: iconRow.implicitWidth
-    height: Config.BarConfig.barHeight
-    clip: true
-    Behavior on implicitWidth { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+    glyph: "\u{F0493}"   // nf-md-cog — the SOLID gear (F0492 is cog_outline, reads as a ring at bar size)
+    label: "SETTINGS"
+    rightClickEnabled: true
 
     // Rail parity (LogsIcon/NotificationButton carry it); no feedback channel
     // from the settings process exists yet — the bar cannot know its state.
-    property bool isActive: false
     property bool controlCenter: false
     signal controlRequested()
-
-    readonly property bool expanded: mouseArea.containsMouse
 
     Process {   // unbounded-ok: one-shot ipc toggle / detached spawn — exits at once
         id: launcher
@@ -47,39 +46,9 @@ Item {
         launcher.running = true
     }
 
-    Row {
-        id: iconRow
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: root.expanded ? 6 : 0
-
-        Text {
-            text: "\u{F0493}"   // nf-md-cog — the SOLID gear (F0492 is cog_outline, reads as a ring at bar size)
-            font.family: Config.BarConfig.fontNerd
-            font.pixelSize: Config.BarConfig.fontSizeIcon
-            color: (mouseArea.containsMouse || root.isActive) ? Config.ThemeConfig.colors.accent : Config.BarConfig.colorText
-            anchors.verticalCenter: parent.verticalCenter
-            Behavior on color { ColorAnimation { duration: 120 } }
-        }
-        Text {
-            visible: root.expanded
-            text: "SETTINGS"
-            font.family: Config.BarConfig.fontFamily
-            font.pixelSize: Config.BarConfig.fontSizeLabel
-            color: Config.ThemeConfig.colors.text
-            anchors.verticalCenter: parent.verticalCenter
-        }
+    onTriggered: {
+        if (root.controlCenter) root.controlRequested()
+        else root.activate()
     }
-
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onClicked: function(mouse) {
-            if (root.controlCenter && mouse.button === Qt.LeftButton) root.controlRequested()
-            else root.activate()
-        }
-    }
+    onRightTriggered: root.activate()
 }
