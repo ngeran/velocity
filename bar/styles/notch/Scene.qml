@@ -34,6 +34,7 @@ import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
+import "../../components" as Bar
 import "../../config" as Config
 import "../../engine" as Engine
 
@@ -44,35 +45,18 @@ Item {
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
-    // BARS — one PanelWindow per real output (Variants; hotplug-safe)
+    // BARS — one StripWindow per real output (Variants; hotplug-safe). The
+    // lifecycle chrome (modelData/validScreen/userHidden/edge remap/tray
+    // close) lives in Bar.StripWindow (DU1); this block is notch geometry +
+    // the transparent strip the lobe paints into.
     // =========================================================================
     Variants {
         id: bars
         model: Quickshell.screens
 
-        PanelWindow {
+        Bar.StripWindow {
             id: panelWindow
-
-            // Plain modelData (NEVER `required property` — breaks re-attach
-            // after DPMS off/on on JS-array models; see vector).
-            property var modelData: null
-            screen: modelData
-
-            readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
-            property bool userHidden: false
-            // B5: layer-shell anchors only re-read on (re)map — when the
-            // configured edge changes, cycle the window (brief flicker) so
-            // the lobe lands on the new edge live, no restart. The cycle
-            // flag is written imperatively; `visible` stays a binding.
-            property bool edgeApplied: true
-            readonly property string edgeKey: Config.BarConfig.barPosition
-            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
-            Timer {
-                id: edgeRemap
-                interval: 150
-                onTriggered: panelWindow.edgeApplied = true
-            }
-            visible: validScreen && !userHidden && edgeApplied
+            host: sceneRoot.host
 
             // ── NOTCH GEOMETRY (tunables; Shibumi baseline barH=33) ────────────
             readonly property int barH: Config.BarConfig.barHeight
@@ -161,27 +145,14 @@ Item {
             // (margins.top on a top bar, margins.bottom on a bottom one) and
             // the wedge tip overlaps 1px into that band.
             // =========================================================================
-            // B5: the lobe hangs off the configured edge — top (screen-edge
-            // side up) or bottom (mirrored shape, breathing slit above).
-            anchors {
-                top: !Config.BarConfig.barAtBottom
-                bottom: Config.BarConfig.barAtBottom
-                left: true
-                right: true
-            }
+            // B5: the lobe hangs off the configured edge — the anchors block
+            // (edge + sides) is StripWindow's; only the height/colour/mask
+            // are style-owned here.
             implicitHeight: barH + breathing
             color: "transparent"
             // Input confined to the lobe bbox — the transparent side bands and
             // the breathing slit pass clicks through to the desktop.
             mask: Region { item: lobe }
-
-            // Click on the lobe (outside content) closes the tray card this
-            // bar opened.
-            MouseArea {
-                anchors.fill: parent
-                enabled: !!host && host.trayOwner === panelWindow && host.activeTray !== ""
-                onClicked: host.closeTray()
-            }
 
             // =========================================================================
             // THE LOBE — silhouette + hairline + caret wedge, content on top
@@ -360,6 +331,6 @@ Item {
                                      panelWindow.width / 2 - lobe.x - implicitWidth / 2))
                 }
             }
-        }
+        }   // StripWindow (per-output bar)
     }   // Variants (per-output bars)
 }

@@ -21,6 +21,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import "../../components" as Bar
 import "../../config" as Config
 import "../../engine" as Engine
 
@@ -31,55 +32,18 @@ Item {
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
-    // BARS — one PanelWindow per real output (Variants; hotplug-safe)
+    // BARS — one StripWindow per real output (Variants; hotplug-safe). The
+    // lifecycle chrome (modelData/validScreen/userHidden/edge remap/tray
+    // close) lives in Bar.StripWindow (DU1); this block is appearance +
+    // content only.
     // =========================================================================
     Variants {
         id: bars
         model: Quickshell.screens
 
-        PanelWindow {
+        Bar.StripWindow {
             id: panelWindow
-
-            // Variants REQUIRE the delegate to declare the model item slot:
-            // without `modelData` (plain property — a `required property`
-            // breaks on JS-array models), delegate recreation fails initial-
-            // property assignment and the window NEVER re-attaches to an
-            // output. Symptom: after lock/DPMS off-on the bar is gone for
-            // good ("PanelWindow does not have a property called modelData").
-            property var modelData: null
-            screen: modelData
-
-
-            // Placeholder/zero-sized screens (connector hotplug churn) must
-            // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
-            // userHidden keeps the IPC toggle out of the binding (assignment
-            // would break it).
-            readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
-            property bool userHidden: false
-            // B5: layer-shell anchors only re-read on (re)map — when the
-            // configured edge changes, cycle the window (brief flicker) so
-            // the strip lands on the new edge live, no restart. The cycle
-            // flag is written imperatively; `visible` stays a binding.
-            property bool edgeApplied: true
-            readonly property string edgeKey: Config.BarConfig.barPosition
-            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
-            Timer {
-                id: edgeRemap
-                interval: 150
-                onTriggered: panelWindow.edgeApplied = true
-            }
-            visible: validScreen && !userHidden && edgeApplied
-
-            // =========================================================================
-            // POSITIONING
-            // =========================================================================
-
-            anchors {
-                top: !Config.BarConfig.barAtBottom
-                bottom: Config.BarConfig.barAtBottom
-                left: true
-                right: true
-            }
+            host: sceneRoot.host
 
         // =========================================================================
         // APPEARANCE (from config)
@@ -156,6 +120,6 @@ Item {
             gap: 14
             fitMap: panelWindow.fitPlan.maps.center
         }
+        }   // StripWindow (per-output bar)
     }
-    }   // Variants (per-output bars)
 }

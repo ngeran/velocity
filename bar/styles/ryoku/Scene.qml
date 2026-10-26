@@ -18,6 +18,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import "../../components" as Bar
 import "../../config" as Config
 import "../../engine" as Engine
 import "../../services" as Services
@@ -29,30 +30,19 @@ Item {
     // The host's barToggle IPC iterates the per-output windows.
     property var instances: bars.instances
 
-    // BARS — one PanelWindow per real output (Variants; hotplug-safe)
+    // BARS — one StripWindow per real output (Variants; hotplug-safe). The
+    // lifecycle chrome (modelData/validScreen/userHidden/edge remap/tray
+    // close) lives in Bar.StripWindow (DU1); this block is ryoku's plate
+    // state + appearance + content.
     // =========================================================================
     Variants {
         id: bars
         model: Quickshell.screens
 
-        PanelWindow {
+        Bar.StripWindow {
             id: panelWindow
+            host: sceneRoot.host
 
-            // Variants REQUIRE the delegate to declare the model item slot:
-            // without `modelData` (plain property — a `required property`
-            // breaks on JS-array models), delegate recreation fails initial-
-            // property assignment and the window NEVER re-attaches to an
-            // output. Symptom: after lock/DPMS off-on the bar is gone for
-            // good ("PanelWindow does not have a property called modelData").
-            property var modelData: null
-            screen: modelData
-
-
-            // Placeholder/zero-sized screens (connector hotplug churn) must
-            // not spawn ghost bars (Shibumi BarPanel.validScreen pattern).
-            // userHidden keeps the IPC toggle out of the binding (assignment
-            // would break it).
-            readonly property bool validScreen: screen !== null && screen.name !== "" && screen.width > 0
             // QD-OLED: the active-workspace plate flashes on switch, then
             // decays exponentially to the faint settled tint — no binary
             // flip. Bright exposure stays strictly below the old flat 45s
@@ -71,12 +61,6 @@ Item {
                                a.b + (b.b - a.b) * s, a.a + (b.a - a.a) * s)
             }
 
-            property bool userHidden: false
-            // `visible` is bound ONCE, in the B5 block below
-            // (validScreen && !userHidden && edgeApplied) — a second binding
-            // here is a hard compile error ("Property value set multiple
-            // times") and silently drops the whole style to vector.
-
             Timer {
                 interval: 200
                 running: panelWindow.plateStrength > 0.02
@@ -93,48 +77,12 @@ Item {
                 }
             }
 
-            // =========================================================================
-            // POSITIONING
-            // =========================================================================
-
-            // B5: layer-shell anchors only re-read on (re)map — when the
-            // configured edge changes, cycle the window (brief flicker) so
-            // the strip lands on the new edge live, no restart. The cycle
-            // flag is written imperatively; `visible` stays a binding.
-            property bool edgeApplied: true
-            readonly property string edgeKey: Config.BarConfig.barPosition
-            onEdgeKeyChanged: { edgeApplied = false; edgeRemap.restart() }
-            Timer {
-                id: edgeRemap
-                interval: 150
-                onTriggered: panelWindow.edgeApplied = true
-            }
-            visible: validScreen && !userHidden && edgeApplied
-
-            anchors {
-                top: !Config.BarConfig.barAtBottom
-                bottom: Config.BarConfig.barAtBottom
-                left: true
-                right: true
-            }
-
         // =========================================================================
         // APPEARANCE (from config)
         // =========================================================================
 
         implicitHeight: Config.BarConfig.barHeight
         color: Config.BarConfig.colorBackground
-
-        // =========================================================================
-        // MAIN LAYOUT — three engine sections
-        // =========================================================================
-
-        // Click on empty bar area closes the tray card this bar opened.
-        MouseArea {
-            anchors.fill: parent
-            enabled: !!host && host.trayOwner === panelWindow && host.activeTray !== ""
-            onClicked: host.closeTray()
-        }
 
         RowLayout {
             anchors.fill: parent
@@ -278,6 +226,6 @@ Item {
             gap: 14
             fitMap: panelWindow.fitPlan.maps.center
         }
+        }   // StripWindow (per-output bar)
     }
-    }   // Variants (per-output bars)
 }
