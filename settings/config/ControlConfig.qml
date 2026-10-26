@@ -67,6 +67,15 @@ QtObject {
         { key: "plugins",   label: "PLUGINS",    icon: "󰏗" }
     ]
 
+    // --- Core console sections (CoreEngineTab side-nav + the search seed) ---
+    // Lives here, not in the tab, so the search catalog can list the sections
+    // before the O1 lazy tab is ever visited.
+    readonly property var coreSections: [
+        { key: "system", label: "SYSTEM",    icon: "󰇅" },
+        { key: "lcd",    label: "LCD",       icon: "󰍹" },
+        { key: "events", label: "EVENTS",    icon: "󰈔" }
+    ]
+
     // --- Console log colors by kind (theme-aware) ---
     readonly property color logInput:   ThemeConfig.colors.secondary
     readonly property color logSuccess: ThemeConfig.colors.success

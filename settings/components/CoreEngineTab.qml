@@ -18,22 +18,11 @@ Item {
 
     // Telemetry session (Shibumi consumer-refcount, single-consumer case):
     // this tab's Loader instantiation IS the CoreEngine/Gpu/Thermal gate.
-    Component.onCompleted: {
-        Services.CoreEngineService.coreVisible = true
-        // Section-level search entries — keyed, so re-opening the tab
-        // (Loader re-creates this whole subtree) replaces rather than leaks.
-        for (var i = 0; i < root.navItems.length; i++)
-            Services.SearchIndex.register({ key: "core:" + root.navItems[i].key,
-                title: root.navItems[i].label, tab: "core",
-                section: root.navItems[i].key, keywords: "core telemetry", item: null })
-    }
+    // (The core:* search entries are seeded once in ModernDashboard's
+    // _seedSearchCatalog; the nav model itself lives in
+    // Config.ControlConfig.coreSections so the seed and this SideNav share it.)
+    Component.onCompleted: Services.CoreEngineService.coreVisible = true
     Component.onDestruction: Services.CoreEngineService.coreVisible = false
-
-    readonly property var navItems: [
-        { key: "system", label: "SYSTEM",    icon: "󰇅" },
-        { key: "lcd",    label: "LCD",       icon: "󰍹" },
-        { key: "events", label: "EVENTS",    icon: "󰈔" }
-    ]
 
     SideNav {
         id: sideNav
@@ -41,7 +30,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         width: Config.UIScale.compact ? 56 : Config.ControlConfig.sidenavWidth
-        items: root.navItems
+        items: Config.ControlConfig.coreSections
         activeSection: root.active
         onSectionSelected: function(key) { root.active = key }
 

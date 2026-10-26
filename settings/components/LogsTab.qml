@@ -35,8 +35,9 @@ Item {
                                         : Services.LogService.close()
     Component.onCompleted: {
         if (streamWanted) Services.LogService.open()
-        Services.SearchIndex.register({ key: "logs-tab", title: "System Logs",
-                                        tab: "logs", section: "" })
+        // (the logs-tab search entry is seeded once in ModernDashboard's
+        // _seedSearchCatalog — with O1's lazy tabs the index must be whole
+        // before this tab is ever visited.)
     }
     Component.onDestruction: if (Services.LogService.active) Services.LogService.close()
 

@@ -37,6 +37,20 @@ Item {
             ? String(model[root.currentTab].key) : ""
     }
 
+    // O1 lazy tabs: every tab's Loader turns on at its FIRST visit and stays
+    // on for the session (switching back must be instant, and module state —
+    // drafts, scroll, selection — survives). Tab 0 is the landing tab, so it
+    // starts visited. Deep links land here too: every open path assigns
+    // currentTab, and the handler below marks it.
+    property var visitedTabs: [true, false, false, false, false, false, false]
+    onCurrentTabChanged: {
+        if (currentTab < 0 || currentTab >= visitedTabs.length) return
+        if (visitedTabs[currentTab]) return
+        var v = visitedTabs.slice()
+        v[currentTab] = true
+        visitedTabs = v
+    }
+
     // Window-visibility funnel (injected from shell.qml). CRITICAL: this file,
     // like every service, imports "../config", while shell.qml imports "config"
     // — different import URIs, which Quickshell treats as separate singleton
@@ -53,6 +67,26 @@ Item {
     property string coreActiveSection: "system"
     property bool coreDeepLink: false
 
+    Component.onCompleted: {
+        Services.SearchIndex.activated.connect(root._navigate)
+        root._seedSearchCatalog()
+        root._bootWallpaperIpc()
+    }
+
+    // O1: the WALLPAPERS tab is lazy, but WallpaperService must still come up
+    // at startup — its IpcHandler ("wallpaper-service": the QA/scripting
+    // surface, getCount/getList/apply/…) registers only when the singleton
+    // first instantiates, and the eager WallpaperModule used to be what
+    // brought it up. A member READ forces the instantiation (a bare
+    // `property var x: Services.WallpaperService` did NOT — verified live,
+    // getCount stayed "Target not found"); the tab's Loader reuses the same
+    // instance afterwards. (It MUST be touched from this "../services" import
+    // scope: shell.qml's "services" URI is a different singleton instance,
+    // and its handler would lose the duplicate-target registration.)
+    function _bootWallpaperIpc() {
+        var ipcTouch = Services.WallpaperService.wallpaperList
+    }
+
     // ── SEARCH — palette navigation funnel ────────────────────────────────
     // Rows self-register in SearchIndex (see the service); picking a result
     // lands here: switch to the entry's tab + sub-section, then flash the
@@ -64,7 +98,39 @@ Item {
     // run against THIS file's SearchIndex instance: "../services" vs
     // shell.qml's "services" is two singletons (the SharedState trap above).
     // shell.qml calls these through.
-    Component.onCompleted: Services.SearchIndex.activated.connect(root._navigate)
+
+    // Seed the keyed catalog entries once, here — NOT in the tab components.
+    // With O1's lazy tabs a fresh open has no tab instances, so entries that
+    // used to register from ControlDashboard/CoreEngineTab/LogsTab bodies
+    // would be missing until each tab's first visit; the palette (and the
+    // `search` IPC probes, which assert a minimum index size) need the whole
+    // catalog up front. Keyed register() dedupe keeps this idempotent against
+    // any future re-registration. Row-level entries (with `item` refs —
+    // SettingsModule rows) still register per instance when their tab loads.
+    function _seedSearchCatalog() {
+        var S = Services.SearchIndex
+        // Tab-level entry points. Dashboard/themes/wallpapers had NO search
+        // presence before (their rows never self-registered) — with the lazy
+        // tabs they are the only way a query lands on them at all.
+        S.register({ key: "tab:dashboard",  title: "Dashboard Overview", tab: "dashboard",  section: "", keywords: "home bento", item: null })
+        S.register({ key: "tab:themes",     title: "Theme Switcher",    tab: "themes",     section: "", keywords: "theme color palette", item: null })
+        S.register({ key: "tab:wallpapers", title: "Wallpapers",        tab: "wallpapers", section: "", keywords: "wallpaper library cycling", item: null })
+        S.register({ key: "tab:control",    title: "Control",           tab: "control",    section: "", keywords: "control console", item: null })
+        S.register({ key: "tab:core",       title: "Core",              tab: "core",       section: "", keywords: "core engine telemetry oled", item: null })
+        S.register({ key: "tab:settings",   title: "Settings",          tab: "settings",   section: "", keywords: "preferences options", item: null })
+        // Section-level entries (was: registered inside the tab bodies).
+        var secs = Config.ControlConfig.sections
+        for (var i = 0; i < secs.length; i++)
+            S.register({ key: "control:" + secs[i].key,
+                title: secs[i].label, tab: "control",
+                section: secs[i].key, keywords: "control section", item: null })
+        var core = Config.ControlConfig.coreSections
+        for (i = 0; i < core.length; i++)
+            S.register({ key: "core:" + core[i].key,
+                title: core[i].label, tab: "core",
+                section: core[i].key, keywords: "core telemetry", item: null })
+        S.register({ key: "logs-tab", title: "System Logs", tab: "logs", section: "" })
+    }
 
     function searchIpcQuery(q) {
         var hits = Services.SearchIndex.search(q)
@@ -101,9 +167,13 @@ Item {
         var tab = String(entry.tab || "")
         if (tab === "settings") {
             root.openSettingsTab()
-            if (entry.section !== undefined && entry.section !== "")
-                settingsModule.active = entry.section
-            settingsModule.scrollToItem(entry.item)   // scrolled panes: bring the row into view
+            // settingsLoader.item: the O1 lazy tab may have been created by
+            // the openSettingsTab() above (synchronous) — still, guard.
+            if (settingsLoader.item) {
+                if (entry.section !== undefined && entry.section !== "")
+                    settingsLoader.item.active = entry.section
+                settingsLoader.item.scrollToItem(entry.item)   // scrolled panes: bring the row into view
+            }
         } else if (tab === "control") {
             root.openControlTab(entry.section || "network")
         } else if (tab === "core") {
@@ -112,6 +182,10 @@ Item {
             root.openLogsTab()
         } else if (tab === "themes") {
             root.openThemeTab()
+        } else if (tab === "wallpapers") {
+            root.openWallpapersTab()
+        } else if (tab === "dashboard") {
+            root.openDashboardTab()
         }
         if (entry.item) {
             flashTimer.target = entry.item
@@ -152,7 +226,9 @@ Item {
             if (navBar.tabModel[i].key === "control") { idx = i; break }
         }
         if (idx >= 0) root.currentTab = idx
-        controlModule.activeSection = section
+        // The currentTab assignment above marks the tab visited, which
+        // synchronously creates the lazy tab; guard anyway (unfound key).
+        if (controlLoader.item) controlLoader.item.activeSection = section
     }
 
     function openCoreTab(section) {
@@ -174,6 +250,12 @@ Item {
     function openThemeTab() {
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "themes") { root.currentTab = i; break }
+        }
+    }
+
+    function openWallpapersTab() {
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "wallpapers") { root.currentTab = i; break }
         }
     }
 
@@ -255,18 +337,19 @@ Item {
         // =====================================================================
         // TAB 0: DASHBOARD OVERVIEW
         // =====================================================================
+        // O1 lazy-tab pattern (all six eager tabs below follow it): each tab
+        // lives in a Loader that turns on at its first visit (sticky — see
+        // visitedTabs). B11: `visible` follows the opacity animation instead
+        // of currentTab, so the OUTGOING tab stays visible while it fades out
+        // (the old `visible: currentTab === N` cut the exit animation dead).
 
-        Components.DashboardOverviewTab {
-            id: overviewTab
+        Loader {
+            anchors.fill: parent
+            active: root.visitedTabs[0]
 
-            // Animate opacity and position on tab change
-            visible: root.currentTab === 0
+            visible: opacity > 0.01
             opacity: root.currentTab === 0 ? 1.0 : 0.0
             x: root.currentTab === 0 ? 0 : -20
-            anchors.fill: parent
-
-            // Dashboard → tab deep-links (Theme Switcher CHANGE, footer CONFIG)
-            onRequestTab: function(index) { root.currentTab = index }
 
             Behavior on opacity {
                 NumberAnimation {
@@ -280,6 +363,13 @@ Item {
                     duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
+            }
+
+            sourceComponent: Components.DashboardOverviewTab {
+                anchors.fill: parent
+
+                // Dashboard → tab deep-links (Theme Switcher CHANGE, footer CONFIG)
+                onRequestTab: function(index) { root.currentTab = index }
             }
         }
 
@@ -287,14 +377,14 @@ Item {
         // TAB 1: THEME SELECTION
         // =====================================================================
 
-        Components.ThemeModule {
-            id: themeTab
-
-            visible: root.currentTab === 1
-            opacity: root.currentTab === 1 ? 1.0 : 0.0
-            x: root.currentTab === 1 ? 0 : (root.currentTab < 1 ? 20 : -20)
+        Loader {
             anchors.fill: parent
             anchors.margins: 24
+            active: root.visitedTabs[1]
+
+            visible: opacity > 0.01
+            opacity: root.currentTab === 1 ? 1.0 : 0.0
+            x: root.currentTab === 1 ? 0 : (root.currentTab < 1 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -308,6 +398,10 @@ Item {
                     duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
+            }
+
+            sourceComponent: Components.ThemeModule {
+                anchors.fill: parent
             }
         }
 
@@ -315,13 +409,13 @@ Item {
         // TAB 2: WALLPAPER MANAGEMENT
         // =====================================================================
 
-        Components.WallpaperModule {
-            id: wallpaperTab
+        Loader {
+            anchors.fill: parent
+            active: root.visitedTabs[2]
 
-            visible: root.currentTab === 2
+            visible: opacity > 0.01
             opacity: root.currentTab === 2 ? 1.0 : 0.0
             x: root.currentTab === 2 ? 0 : (root.currentTab < 2 ? 20 : -20)
-            anchors.fill: parent
 
             Behavior on opacity {
                 NumberAnimation {
@@ -335,6 +429,10 @@ Item {
                     duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
+            }
+
+            sourceComponent: Components.WallpaperModule {
+                anchors.fill: parent
             }
         }
 
@@ -342,13 +440,14 @@ Item {
         // TAB 3: CONTROL MODULE
         // =====================================================================
 
-        Components.ControlDashboard {
-            id: controlModule
+        Loader {
+            id: controlLoader
+            anchors.fill: parent
+            active: root.visitedTabs[3]
 
-            visible: root.currentTab === 3
+            visible: opacity > 0.01
             opacity: root.currentTab === 3 ? 1.0 : 0.0
             x: root.currentTab === 3 ? 0 : (root.currentTab < 3 ? 20 : -20)
-            anchors.fill: parent
 
             Behavior on opacity {
                 NumberAnimation {
@@ -362,6 +461,10 @@ Item {
                     duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
+            }
+
+            sourceComponent: Components.ControlDashboard {
+                anchors.fill: parent
             }
         }
 
@@ -370,14 +473,14 @@ Item {
         // visibility + window-shown, so an idle tab costs nothing)
         // =====================================================================
 
-        Components.LogsTab {
-            id: logsTab
-
-            visible: root.currentTab === 5
-            opacity: root.currentTab === 5 ? 1.0 : 0.0
-            x: root.currentTab === 5 ? 0 : (root.currentTab < 5 ? 20 : -20)
+        Loader {
             anchors.fill: parent
             anchors.margins: 24
+            active: root.visitedTabs[5]
+
+            visible: opacity > 0.01
+            opacity: root.currentTab === 5 ? 1.0 : 0.0
+            x: root.currentTab === 5 ? 0 : (root.currentTab < 5 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -391,6 +494,10 @@ Item {
                     duration: Config.MotionConfig.animDurationNormal
                     easing.type: Easing.OutCubic
                 }
+            }
+
+            sourceComponent: Components.LogsTab {
+                anchors.fill: parent
             }
         }
 
@@ -401,13 +508,14 @@ Item {
         // HypridleService and persisted on every change.)
         // =====================================================================
 
-        Item {
-            id: settingsTab
+        Loader {
+            id: settingsLoader
+            anchors.fill: parent
+            active: root.visitedTabs[6]
 
-            visible: root.currentTab === 6
+            visible: opacity > 0.01
             opacity: root.currentTab === 6 ? 1.0 : 0.0
             x: root.currentTab === 6 ? 0 : 20
-            anchors.fill: parent
 
             Behavior on opacity {
                 NumberAnimation {
@@ -423,8 +531,7 @@ Item {
                 }
             }
 
-            Components.SettingsModule {
-                id: settingsModule
+            sourceComponent: Components.SettingsModule {
                 anchors.fill: parent
             }
         }
@@ -432,19 +539,20 @@ Item {
         // =====================================================================
         // TAB 4: CORE ENGINE (OLED telemetry dashboard + LCD control)
         // =====================================================================
-        // Lazy-loaded: the Core tab binds to always-on telemetry (CoreEngine 1s,
-        // ThermalService, GpuService) through dozens of Text bindings that would
-        // re-evaluate every second even while the panel is closed. Gating the
-        // Loader on SharedState.dashboardVisible destroys the whole subtree when
-        // the panel is hidden, eliminating that steady-state churn. While open
-        // the tab persists, so the opacity/x slide animation still works.
-        // (coreEngineTab had an unreferenced id — dropped.)
+        // Lazy-loaded on BOTH gates: first visit (O1, like every tab) AND
+        // window visibility — the Core tab binds to always-on telemetry
+        // (CoreEngine 1s, ThermalService, GpuService) through dozens of Text
+        // bindings that would re-evaluate every second even while the panel
+        // is closed. Gating on SharedState.dashboardVisible destroys the
+        // whole subtree when the panel is hidden, eliminating that
+        // steady-state churn. While open the tab persists, so the opacity
+        // fade still plays (B11 pattern, same as the tabs above).
 
         Loader {
             anchors.fill: parent
-            active: Config.SharedState.dashboardVisible
+            active: root.visitedTabs[4] && Config.SharedState.dashboardVisible
 
-            visible: root.currentTab === 4
+            visible: opacity > 0.01
             opacity: root.currentTab === 4 ? 1.0 : 0.0
             x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
 
