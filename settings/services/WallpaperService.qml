@@ -113,12 +113,27 @@ Item {
     property bool   enginePaused: false      // daemon-level pause flag
     property int    engineInstances: 0       // alive mpvpaper instances
 
+    /// True for real video containers — only the engine can display these
+    /// (the awww fallback cannot decode video; gif/webp/apng can stay).
+    function isVideo(path: string): bool {
+        var p = (path || "").toLowerCase()
+        return p.endsWith(".mp4") || p.endsWith(".webm") || p.endsWith(".mkv") || p.endsWith(".mov")
+    }
+
     /// Filtered pick list — rotation, IPC index access and the gallery all
     /// read this, so a mode switch re-scopes everything at once.
     readonly property var wallpaperList: {
+        var live = root.liveList
+        if (!root.engineAvailable) {
+            // Without the engine, what's offered has to be limited to what a
+            // backend on this system can actually show: live videos are
+            // hidden (they used to be pushed to awww every cycle), while
+            // gif/webp/apng remain through the awww fallback.
+            live = live.filter(function(p) { return !root.isVideo(p) })
+        }
         if (root.libraryMode === "still") return root.stillList
-        if (root.libraryMode === "live")  return root.liveList
-        return root.stillList.concat(root.liveList)
+        if (root.libraryMode === "live")  return live
+        return root.stillList.concat(live)
     }
 
     // =========================================================================
@@ -278,6 +293,15 @@ Item {
             if (root.engineAvailable && !had) {
                 console.log("[WallpaperService] wallpaper-engine available — animated backend enabled")
                 pollEngineStatus()
+                // The live boot-restore (liveScanner) ran before this probe
+                // resolved — and skipped because engineAvailable was still
+                // false — and the probe never retried, so a saved video
+                // wallpaper never came back after login. Retry now.
+                if (!root.bootRestored && root.currentWallpaper.length > 0
+                        && root.isEngined(root.currentWallpaper)) {
+                    root.bootRestored = true
+                    applyWallpaper(root.currentWallpaper)
+                }
             } else if (!root.engineAvailable) {
                 if (Config.DebugConfig.debugService) console.log("[WallpaperService] wallpaper-engine not on PATH — live library falls back to awww")
             }
@@ -554,8 +578,52 @@ Item {
             cmd.push("--outputs", root.currentMonitor)
         }
 
+        awwwApply(cmd)
+    }
+
+    // --- awww daemon guard --------------------------------------------------
+    // Nothing on this host starts awww-daemon (no exec-once, no unit): without
+    // a guard, every awww img/pause fails with "socket not found" and the
+    // still library sits black until the first cycle tick. One bounded
+    // probe-and-spawn ahead of the first apply; applies that arrive while the
+    // guard runs are held (latest-wins) and flushed on readiness.
+    property bool _awwwDaemonUp: false
+    property var   _awwwHeldCmd: null
+
+    BoundedProcess {
+        id: awwwGuard
+        timeoutMs: 8000
+        maxBytes: 4096
+        command: ["sh", "-c",
+                  "awww query >/dev/null 2>&1 && exit 0; " +
+                  "nohup awww-daemon >/dev/null 2>&1 & " +
+                  "for _ in $(seq 1 40); do awww query >/dev/null 2>&1 && exit 0; sleep 0.1; done; exit 1"]
+
+        onDone: function(out, err, code) {
+            root._awwwDaemonUp = (code === 0)
+            if (code !== 0)
+                console.warn("[WallpaperService] awww daemon unavailable — stills cannot apply until it starts")
+            var held = root._awwwHeldCmd
+            root._awwwHeldCmd = null
+            if (held !== null) root._awwwSend(held)
+        }
+    }
+
+    /// Ensure the daemon answers, then send cmd. Latest-wins on both stages:
+    /// a newer apply replaces a held one while the guard probes, and
+    /// _awwwSend's run() replaces a queued apply while one is in flight.
+    function awwwApply(cmd) {
+        if (root._awwwDaemonUp) {
+            root._awwwSend(cmd)
+            return
+        }
+        root._awwwHeldCmd = cmd
+        awwwGuard.run()
+    }
+
+    function _awwwSend(cmd) {
         awwwProcess.command = cmd
-        awwwProcess.running  = true
+        awwwProcess.run()
     }
 
     /// Apply a wallpaper by absolute path. Backend is selected by library:
@@ -583,6 +651,10 @@ Item {
 
         if (root.isEngined(path)) {
             if (engined) {
+                // A video supersedes any pending animated→still handoff:
+                // letting the still's `clear` fire after this `set` would kill
+                // the freshly loaded video.
+                root.pendingClear = false
                 // Video → video: loadfile replace, no process restart. The
                 // engine also heals dead instances as part of `set`.
                 engineAct(["set", path])
@@ -644,13 +716,14 @@ Item {
         }
     }
 
-    Process {   // unbounded-ok: platform command — short-lived; timeout migration queued
+    BoundedProcess {
         id: awwwProcess
-        running: false
+        timeoutMs: 20000        // 4K transitions are slow; img itself is quick
+        maxBytes: 65536
 
-        onExited: function(exitCode) {
-            if (exitCode !== 0) {
-                console.warn("[WallpaperService] Wallpaper apply failed with exit code:", exitCode)
+        onDone: function(out, err, code) {
+            if (code !== 0) {
+                console.warn("[WallpaperService] Wallpaper apply failed with exit code:", code)
                 console.warn("[WallpaperService] Make sure awww is installed and the path is valid")
             } else if (root.pendingClear) {
                 // Still applied under the running mpvpaper layer — reveal it.
