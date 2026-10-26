@@ -140,10 +140,28 @@ Item {
     // (1px) rather than riding the palette cross-fade; sourcing from
     // _fadeTarget because root.colors is the frame-0 mix at call time.
     // =========================================================================
+    /// colors.json values get pasted into a Lua string for `hyprctl eval` —
+    /// anything that isn't a plain 6-digit hex must never reach that string
+    /// (a crafted value could break out of the Lua literal and execute inside
+    /// Hyprland's config interpreter), and 8-digit #rrggbbaa plus the appended
+    /// alpha below would form an invalid colour anyway. Returns "" to signal
+    /// "skip this eval".
+    function _hex6(v: string): string {
+        var h = String(v || "").trim().replace(/^#/, "").toLowerCase()
+        return /^[0-9a-f]{6}$/.test(h) ? h : ""
+    }
+
     function applyHyprlandBorders() {
         var c = root._fadeTarget || root.colors
-        var active = "rgba(" + String(c.secondary || "").replace("#", "").toLowerCase() + "88)"
-        var inactive = "rgba(" + String(c.border || "").replace("#", "").toLowerCase() + "66)"
+        var active = _hex6(c.secondary)
+        var inactive = _hex6(c.border)
+        if (active.length === 0 || inactive.length === 0) {
+            console.warn("[Bar ThemeConfig] border colours not plain #rrggbb — skipping hyprctl eval",
+                         JSON.stringify([c.secondary, c.border]))
+            return
+        }
+        active = "rgba(" + active + "88)"
+        inactive = "rgba(" + inactive + "66)"
         var lua = "hl.config({ general = { col = { active_border = \"" + active
                 + "\", inactive_border = \"" + inactive + "\" } } })"
         if (borderProc.running) borderProc.running = false
