@@ -70,5 +70,6 @@ ui_refresh/
 *.svg
 
 # third-party converted plugin (runtime pool; big — not for the repo)
-bar-config.json
-settings-config.json
+# (root-anchored: the test fixture bar/engine/lib/fixtures/bar-config.json is tracked)
+/bar-config.json
+/settings-config.json

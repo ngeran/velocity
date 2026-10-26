@@ -85,7 +85,15 @@ ok("migrate: no/garbage rightLayout → legacy default, nothing disabled", () =>
 })
 
 ok("migrate: state stays schema-2-valid with no stale ids; legacy config still migrates clean", () => {
-    const cfg = JSON.parse(readFileSync(join(root, "bar-config.json"), "utf8"))
+    // Legacy-config leg reads a COMMITTED fixture: the repo-root
+    // bar-config.json is runtime state (gitignored — clean clones, and
+    // therefore `nix flake check`, don't have it), and a test pinned to
+    // mutable runtime state breaks the moment the live config drifts.
+    // The schema-2 leg keeps reading the tracked plugins-state.json: that
+    // file IS the bar's committed arrangement and the stale-id gate is
+    // deliberately live.
+    const here = dirname(fileURLToPath(import.meta.url))
+    const cfg = JSON.parse(readFileSync(join(here, "fixtures", "bar-config.json"), "utf8"))
     const state = JSON.parse(readFileSync(join(root, "plugins-state.json"), "utf8"))
     assert.equal(state.schemaVersion, 2)
 
