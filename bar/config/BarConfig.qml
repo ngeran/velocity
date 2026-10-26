@@ -45,6 +45,10 @@ Item {
     // Strip styles' QD-OLED guard: content orbit (BurnOrbit) on
     // vector/ryoku/notch so no static pixel column sits long enough to burn.
     property bool stripBurnGuard: true
+    // Popup/dashboard scale (0.75–2.0). PopupMetrics mirrors this — BarConfig
+    // is the one bar-config.json reader (DU13: this file used to carry its own
+    // FileView + 15s timer for a single key).
+    property real uiScale: 1.0
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
     // read once by the engine's schema-2 migration and ignored after.
@@ -89,6 +93,10 @@ Item {
                 islandBurnGuard = data.islandBurnGuard
             if (typeof data.stripBurnGuard === "boolean")
                 stripBurnGuard = data.stripBurnGuard
+            if (data.uiScale !== undefined) {
+                var s = Number(data.uiScale)
+                if (isFinite(s) && s >= 0.75 && s <= 2.0) uiScale = s
+            }
             console.log("[BarConfig] Hot-reloaded bar-config.json")
         } catch (e) {
             console.log("[BarConfig] Failed to parse config:", e)

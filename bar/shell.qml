@@ -298,7 +298,6 @@ ShellRoot {
         function reload(): string {
             Config.BarConfig.reloadFromDisk()
             Config.MotionConfig.reloadFromDisk()
-            Config.PopupMetrics.reloadFromDisk()
             return "ok"
         }
     }
