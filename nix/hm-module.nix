@@ -20,9 +20,11 @@ let
 
   # The bar forks hyprctl/journalctl/bluetoothctl/wpctl from the system
   # profile; runtimeInputs adds what velocity itself needs on top.
+  # /run/wrappers/bin carries the setuid wrappers (mount, fusermount3, …).
   servicePath = lib.concatStringsSep ":" [
     (lib.makeBinPath cfg.runtimeInputs)
     "/etc/profiles/per-user/%u/bin"
+    "/run/wrappers/bin"
     "/run/current-system/sw/bin"
   ];
 
@@ -74,8 +76,13 @@ in
 
     runtimeInputs = lib.mkOption {
       type = lib.types.listOf lib.types.package;
-      default = with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep ];
-      defaultText = lib.literalExpression "with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep ]";
+      # Tools velocity's services shell out to directly — they must not depend
+      # on happening to be installed system-wide:
+      #   curl (weather) · util-linux (lsblk, storage) · procps (pkill) ·
+      #   bash (thumbnail worker) · awww/ffmpeg (wallpaper backends, poster
+      #   frames) · matugen (wallpaper → palette) · mpvpaper (engine backend)
+      default = with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper ];
+      defaultText = lib.literalExpression "with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper ]";
       description = "Tools on the bar/settings services' PATH (ahead of the user and system profiles).";
     };
 
