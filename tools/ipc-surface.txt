@@ -18,7 +18,7 @@
 # ---- bar process -----------------------------------------------------------
 osd.volume               manual    # external media-key/cli surface
 osd.mute                 manual
-osd.ping                 unused    # health probe, nothing calls it today
+osd.ping                 manual    # health probe (CLI scripting hooks)
 plugins.rescan           manual    # qs -c bar ipc call plugins ... (host mgmt)
 plugins.reload           manual    # (id) — hot-remount one plugin from disk
 plugins.list             manual
@@ -54,18 +54,18 @@ search.open                       manual    # opens the palette pre-filled (deep
 search.list                       manual    # index dump for probes
 search.activateFirst              manual    # probe/scripting: run the top hit for a query
 SettingsWindow.toggle             bound    # SUPER+A
-SettingsWindow.show               unused
-SettingsWindow.hide               unused
+SettingsWindow.show               manual    # CLI window verbs (qs misparses bare 'show'
+SettingsWindow.hide               manual    #  — see settings-ipc quirks; both work)
 SettingsWindow.activeTab          manual   # read-only probe: visible tab key (dashboard-start proof)
 SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
 SettingsWindow.openControlAudio   internal  # TrayCard volume OPEN IN SETTINGS
 SettingsWindow.openControlBluetooth internal  # TrayCard bluetooth OPEN IN SETTINGS
-SettingsWindow.openControlDisplay unused
+SettingsWindow.openControlDisplay manual    # deep-link family; scripted entry, no bind today
 SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
                                             # nikos.example pill that used to call it
                                             # was removed in the R6 cleanup; CLI/scripting
                                             # remains the caller)
-SettingsWindow.openCore           unused
+SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path
 SettingsWindow.openSettings       internal  # Control Center footer
 SettingsWindow.openThemeTab       internal  # Control Center THEME tile
 SettingsWindow.setBarStyle        internal  # velocity.bar-settings style pick — write via the settings funnel (single bar-config writer)
