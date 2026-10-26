@@ -158,12 +158,20 @@ Item {
     //   shell so $$ still expands (PID-unique tmp file).
     // =========================================================================
     function _runSh(script, label, onDone, args) {
-        var p = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        p.command = args ? ["sh", "-c", script].concat(args) : ["sh", "-c", script];
+        var p = Qt.createQmlObject('import Quickshell.Io; Process { stderr: SplitParser {} }', themeService);
+        // POSIX argv layout: `sh -c SCRIPT NAME a1 a2…` → $0=NAME, $1=a1…
+        // The "sh" placeholder is REQUIRED when args follow (B7 regression:
+        // without it $1 consumed the first arg and $n shifted left by one).
+        p.command = args ? ["sh", "-c", script, "sh"].concat(args) : ["sh", "-c", script];
+        var errBuf = "";
+        p.stderr.onRead.connect(function(data) { errBuf += data + "\n" });
         p.onExited.connect(function(code) {
             if (code !== 0) {
                 var msg = (label || "shell") + " failed (exit " + code + ")";
                 console.error("[ThemeService] " + msg);
+                console.error("[ThemeService] cmd:", JSON.stringify(p.command));
+                if (String(errBuf).trim().length > 0)
+                    console.error("[ThemeService] stderr:", String(errBuf).trim());
                 CommandService.pushLog("[ThemeService] " + msg, "error");
             }
             if (onDone) onDone(code === 0);   // before destroy: receiver still valid
