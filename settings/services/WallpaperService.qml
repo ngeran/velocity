@@ -282,7 +282,8 @@ Item {
     readonly property string engineBin: "/run/current-system/sw/bin/wallpaper-engine"
 
     function probeEngine() {
-        engineProbe.command = ["sh", "-c", "[ -x " + root.engineBin + " ] && echo yes"]
+        // argv form, no shell: exit 0 = present+executable (onDone reads the code only)
+        engineProbe.command = ["test", "-x", root.engineBin]
         engineProbe.run()   // latest-wins queue while busy — never drops a probe
     }
 

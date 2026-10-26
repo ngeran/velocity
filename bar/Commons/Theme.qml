@@ -26,8 +26,10 @@ Item {
         "background": "#000000", "surface": "#0a0a0a", "surfaceVariant": "#111111",
         "text": "#c0caf5", "textDim": "#a9b1d6", "border": "#292e42",
         "outline": "#414868", "outlineVariant": "#16161e",
+        // warning/error were inverted (warning red-ish #c5564a, error blue-grey
+        // #4a6b80); proper Tokyo Night tokens: amber warning, red error.
         "primary": "#7aa2f7", "secondary": "#bb9af7", "accent": "#e75a50",
-        "success": "#9ece6a", "warning": "#c5564a", "error": "#4a6b80",
+        "success": "#9ece6a", "warning": "#e0af68", "error": "#f7768e",
         "info": "#7dcfff"
     })
 

@@ -400,7 +400,7 @@ Item {
 
     Process {
         id: startupReader
-        command: ["sh", "-c", "cat " + root.externalCachePath]
+        command: ["sh", "-c", 'cat "$1"', "sh", root.externalCachePath]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { startupReader.buffer += data + "\n" } }
         onRunningChanged: {

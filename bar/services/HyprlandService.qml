@@ -128,7 +128,7 @@ Item {
         OsdService.showWorkspace(idx, "")   // feedback for bar-initiated switches
         // Hyprland 0.55+ Lua config dropped `hyprctl dispatch workspace N`
         // (it now evaluates Lua and errors). Use the Lua dispatcher form.
-        switchProc.command = ["bash", "-c", "hyprctl dispatch 'hl.dsp.focus({ workspace = " + idx + " })' 2>&1"]
+        switchProc.command = ["bash", "-c", 'hyprctl dispatch "hl.dsp.focus({ workspace = $1 })" 2>&1', "bash", String(idx)]
         switchProc.running = true
     }
 

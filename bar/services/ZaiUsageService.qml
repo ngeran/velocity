@@ -43,6 +43,7 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.platform
 import Quickshell.Io
 
 Item {
@@ -51,7 +52,9 @@ Item {
 
     // ---- endpoint + cadence ----
     readonly property string apiUrl: "https://api.z.ai/api/monitor/usage/quota/limit"
-    readonly property string keyFile: "~/.config/secrets/zai_usage_key"
+    // Absolute (B7 corollary — the "~" form only ever worked inside shell
+    // strings; the argv keyCheck passes the path literally).
+    readonly property string keyFile: ("" + StandardPaths.writableLocation(StandardPaths.HomeLocation)).replace("file://", "") + "/.config/secrets/zai_usage_key"
     readonly property int pollIntervalMs: 60000
     readonly property var thresholds: [50, 75, 80, 90, 95, 100]
 
@@ -305,7 +308,7 @@ Item {
     // =========================================================================
     Component.onCompleted: {
         console.log("[ZaiUsageService] started")
-        keyCheck.command = ["sh", "-c", "test -f " + root.keyFile + " && echo 1 || echo 0"]
+        keyCheck.command = ["sh", "-c", 'test -f "$1" && echo 1 || echo 0', "sh", root.keyFile]
         keyCheck.run()
     }
 }

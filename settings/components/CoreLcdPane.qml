@@ -27,7 +27,6 @@ ColumnLayout {
     readonly property string cfgPath: StandardPaths.writableLocation(StandardPaths.ConfigLocation)
                                       .toString().replace("file://", "") + "/quickshell/deepcool-config.json"
 
-    property Process saveProc: Process { command: []; running: false }
     property Process loadProc: Process {
         command: []; running: false
         property string buffer: ""
@@ -53,8 +52,9 @@ ColumnLayout {
             slots: { cpu_temp: root.mainTempSource, gpu_temp: root.gpuTempSource, usage: root.usageSource, ram: root.ramSource, freq: root.freqSource },
             sources: { coolant: true, nvme: true } }
         var json = JSON.stringify(cfg, null, 2)
-        saveProc.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > '" + root.cfgPath + "'"]
-        saveProc.running = true
+        // Shared atomic funnel (tmp + mv): readers (deepcool-py --sink) never
+        // see a half-written file, and the shell string is gone (B7/B8).
+        Services.ThemeService._atomicWrite(root.cfgPath, json)
     }
 
     function tempStr(celsius) { var v = root.unit === "F" ? celsius * 9.0 / 5.0 + 32.0 : celsius; return Math.round(v) + "°" }

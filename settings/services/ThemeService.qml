@@ -151,13 +151,15 @@ Item {
     // ATOMIC I/O HELPERS
     // -------------------------------------------------------------------------
     // _runSh       — one-shot `sh -c` Process; logs failures (no silent errors).
-    // _atomicWrite — write to <path>.tmp.$$ then mv. Readers (bar FileView,
-    //   nvim dofile, rofi) never see a half-written file. Single quotes in the
-    //   payload are escaped; paths are space-free under ~ so left bare for $$.
+    // _atomicWrite — write to <dir>/.tmp.$$ then mv. Readers (bar FileView,
+    //   nvim dofile, rofi) never see a half-written file. Payload and paths
+    //   travel as POSITIONAL ARGS (B7): no quoting of interpolated content or
+    //   paths — even odd paths are safe. The tmp name is built inside the
+    //   shell so $$ still expands (PID-unique tmp file).
     // =========================================================================
-    function _runSh(script, label, onDone) {
+    function _runSh(script, label, onDone, args) {
         var p = Qt.createQmlObject('import Quickshell.Io; Process {}', themeService);
-        p.command = ["sh", "-c", script];
+        p.command = args ? ["sh", "-c", script].concat(args) : ["sh", "-c", script];
         p.onExited.connect(function(code) {
             if (code !== 0) {
                 var msg = (label || "shell") + " failed (exit " + code + ")";
@@ -173,12 +175,11 @@ Item {
 
     function _atomicWrite(path, content, onDone) {
         var dir = path.substring(0, path.lastIndexOf("/"));
-        var safe = String(content).replace(/'/g, "'\\''");
         themeService._runSh(
-            "mkdir -p " + dir + " && printf '%s' '" + safe + "' > " + path + ".tmp.$$ && mv -f " + path + ".tmp.$$ " + path,
+            'mkdir -p "$1" && tmp="$1/.tmp.$$" && printf \'%s\' "$2" > "$tmp" && mv -f "$tmp" "$3"',
             "write " + path,
-            onDone
-        );
+            onDone,
+            [dir, String(content), path]);
     }
 
     /**
@@ -529,7 +530,7 @@ Item {
 
     function loadStylixSeed() {
         var colorsPath = themeService.homeDir + "/.cache/theme/colors.json";
-        stylixChecker.command = ["sh", "-c", "test -f " + colorsPath + " && cat " + colorsPath + " || echo 'NONE'"];
+        stylixChecker.command = ["sh", "-c", 'test -f "$1" && cat "$1" || echo NONE', "sh", colorsPath];
         stylixChecker.running = true;
     }
 
@@ -568,7 +569,7 @@ Item {
     property var customThemeLoader: Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: customLoader
         property string buffer: ""
-        command: ["sh", "-c", "cat " + themeService.customThemesPath + " 2>/dev/null"]
+        command: ["sh", "-c", 'cat "$1" 2>/dev/null', "sh", themeService.customThemesPath]
         stdout: SplitParser { onRead: function(data) { customLoader.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running) {

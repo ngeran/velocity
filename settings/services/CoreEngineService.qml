@@ -107,7 +107,7 @@ Item {
     Component.onCompleted: {
         console.log("[CoreEngine] publishing →", root.metricsPath)
         var dir = root.metricsPath.substring(0, root.metricsPath.lastIndexOf("/"))
-        root.initProc.command = ["sh", "-c", "mkdir -p '" + dir + "'"]
+        root.initProc.command = ["mkdir", "-p", dir]   // argv form — no shell, nothing to quote
         root.initProc.running = true
     }
 

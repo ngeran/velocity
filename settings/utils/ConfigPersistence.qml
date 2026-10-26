@@ -71,7 +71,12 @@ QtObject {
         // Atomic write: render to a per-PID tmp file, then rename. A crash
         // mid-write leaves the OLD file intact (only an orphaned .tmp.$$ behind)
         // — never a truncated/half-written config. Mirrors ThemeService._atomicWrite.
-        saveProcess.command = ["sh", "-c", "printf '%s' '" + json.replace(/'/g, "'\\''") + "' > \"" + configPath + ".tmp.$$\" && mv -f \"" + configPath + ".tmp.$$\" \"" + configPath + "\""]
+        // Payload + paths travel as positional args (B7): no quote escaping,
+        // and $$ is built inside the shell so the tmp name stays PID-unique.
+        var dir = configPath.substring(0, configPath.lastIndexOf("/"))
+        saveProcess.command = ["sh", "-c",
+            'tmp="$1/.tmp.$$"; printf \'%s\' "$2" > "$tmp" && mv -f "$tmp" "$3"',
+            "sh", dir, json, configPath]
         saveProcess.running = true
     }
 
