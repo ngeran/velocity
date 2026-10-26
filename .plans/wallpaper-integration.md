@@ -1,5 +1,10 @@
 # Wallpaper Picker & Shuffler Integration Plan
 
+> **SUPERSEDED (2026-10-26):** this plan describes the awww-only era. The shipped design is the
+> wallpaper-engine (mpvpaper) backend driven by WallpaperService — see the header of
+> `settings/services/WallpaperService.qml` and `.plans/progress/velocity-review-20261026-progress.md`.
+> Phases 5–6 below completed long ago; kept for history only.
+
 **Project:** Integrate wallpaper picker/shuffler functionality into QuickShell Settings
 **Source:** `/home/nikos/.config/quickshell-pill/`
 **Target:** `/home/nikos/.config/quickshell/`
