@@ -13,12 +13,22 @@
 //             state reads the bar's own BarConfig — disk truth, never an
 //             optimistic guess.
 //   POSITION  top/bottom edge pills, same routing (`setBarPosition`).
+//   HEIGHT    slider (drafts locally, commits on release — one fork per
+//             drag, not per tick), routed via `setBarHeight`.
+//   DOTS      workspace-count pills, routed via `setWorkspaceCount`.
+//   GUARD     QD-OLED burn-guard pills — STRIPS (`setBurnGuard strip …`,
+//             the shared BurnOrbit on vector/notch/ryoku) and ISLAND (its
+//             own dim+orbit knob, shown only while the island style is
+//             active). Both routed through the same funnel.
 //   MODULES   the plugin engine is IN this process: enable/disable and section
 //             placement call PluginRegistry directly (the bar is
 //             plugins-state.json's only writer — no fork, no drift). Rows are
 //             rebuilt imperatively after every action (array-identity law).
 //   PLUGINS › deep link to Settings ▸ Plugins for ordering, per-plugin
 //             settings forms and everything beyond quick toggles.
+//
+// This is the ONE bar-settings surface (the Settings ▸ Bar pane was removed
+// in the consolidation) — everything bar-shaped lives here.
 //
 // Window chrome is the KeybindsOverlay pattern: dim backdrop, centered black
 // card, Esc/outside-click close, focusable while mapped. Ephemeral — still no
@@ -27,6 +37,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Qt.labs.platform
 import "../config" as Config
@@ -41,6 +52,7 @@ PanelWindow {
     function open() {
         _scanStyles()
         _refresh()
+        _heightDraft = Config.BarConfig.barHeight
         visible = true
         shown = true
     }
@@ -59,6 +71,9 @@ PanelWindow {
     // ---- state (rebuilt imperatively — no cross-object bindings) ----
     property var _styles: []
     property var _rows: []
+    // Height slider drafts locally (disk truth on open) and commits once on
+    // release — onMoved fires per tick and each commit is a settings fork.
+    property int _heightDraft: Config.BarConfig.barHeight
 
     readonly property string _stylesDir: StandardPaths.writableLocation(
         StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles"
@@ -114,6 +129,9 @@ PanelWindow {
 
     function _pickStyle(name) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarStyle", name]) }
     function _pickPosition(p) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarPosition", p]) }
+    function _pickHeight(h) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarHeight", String(h)]) }
+    function _pickDots(n) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setWorkspaceCount", String(n)]) }
+    function _pickGuard(scope, on) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBurnGuard", scope, on ? "on" : "off"]) }
     function _openPlugins() {
         _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "openControlPlugins"], false)
         root.close()   // the settings window takes over; free the screen + keys
@@ -373,6 +391,113 @@ PanelWindow {
                             label: "BOTTOM"
                             active: Config.BarConfig.barPosition === "bottom"
                             onPicked: root._pickPosition("bottom")
+                        }
+                    }
+
+                    // ---- HEIGHT ----
+                    SectionLabel { text: "HEIGHT" }
+                    RowLayout {
+                        spacing: Config.PopupMetrics.px(10)
+                        Text {
+                            text: root._heightDraft + "px"
+                            horizontalAlignment: Text.AlignRight
+                            Layout.preferredWidth: Config.PopupMetrics.px(34)
+                            color: Config.ThemeConfig.colors.text
+                            font.pixelSize: Config.PopupMetrics.px(11)
+                            font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                        }
+                        Slider {
+                            id: heightSlider
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Config.PopupMetrics.px(24)
+                            from: 18; to: 64; stepSize: 1
+                            value: root._heightDraft
+                            onMoved: root._heightDraft = value
+                            // AbstractSlider has no released() — commit when
+                            // the press drops (drag end or click).
+                            onPressedChanged: if (!pressed) root._pickHeight(root._heightDraft)
+                            background: Rectangle {
+                                x: heightSlider.leftPadding
+                                y: heightSlider.topPadding + heightSlider.availableHeight / 2 - height / 2
+                                width: heightSlider.availableWidth; implicitHeight: Config.PopupMetrics.px(6)
+                                radius: height / 2
+                                color: Config.ThemeConfig.hairlineSoft
+                                Rectangle {
+                                    width: heightSlider.visualPosition * parent.width; height: parent.height
+                                    radius: parent.radius
+                                    color: Config.BarConfig.colorAccent
+                                }
+                            }
+                            handle: Rectangle {
+                                x: heightSlider.leftPadding + heightSlider.visualPosition * (heightSlider.availableWidth - width)
+                                y: heightSlider.topPadding + heightSlider.availableHeight / 2 - height / 2
+                                width: Config.PopupMetrics.px(14); height: width; radius: width / 2
+                                color: Config.ThemeConfig.colors.text
+                                scale: heightSlider.pressed ? 1.15 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 90 } }
+                            }
+                        }
+                    }
+
+                    // ---- WORKSPACE DOTS ----
+                    SectionLabel { text: "WORKSPACE DOTS" }
+                    RowLayout {
+                        spacing: Config.PopupMetrics.px(8)
+                        Repeater {
+                            model: [3, 5, 7, 9]
+                            delegate: SegPill {
+                                label: String(modelData)
+                                active: Config.BarConfig.workspaceCount === modelData
+                                onPicked: root._pickDots(modelData)
+                            }
+                        }
+                    }
+
+                    // ---- QD-OLED GUARD ----
+                    SectionLabel { text: "QD-OLED GUARD — sub-perceptual orbit" }
+                    RowLayout {
+                        spacing: Config.PopupMetrics.px(8)
+                        Text {
+                            text: "STRIPS"
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: Config.PopupMetrics.px(9)
+                            font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                            font.letterSpacing: 1.5
+                        }
+                        SegPill {
+                            label: "ON"
+                            active: Config.BarConfig.stripBurnGuard
+                            onPicked: root._pickGuard("strip", true)
+                        }
+                        SegPill {
+                            label: "OFF"
+                            active: !Config.BarConfig.stripBurnGuard
+                            onPicked: root._pickGuard("strip", false)
+                        }
+                        // The island's guard also drives its dim clock — a
+                        // separate knob, shown only while it can apply.
+                        Text {
+                            visible: Config.BarConfig.barStyle === "island"
+                            text: "ISLAND"
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: Config.PopupMetrics.px(9)
+                            font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                            font.letterSpacing: 1.5
+                        }
+                        SegPill {
+                            visible: Config.BarConfig.barStyle === "island"
+                            label: "ON"
+                            active: Config.BarConfig.islandBurnGuard
+                            onPicked: root._pickGuard("island", true)
+                        }
+                        SegPill {
+                            visible: Config.BarConfig.barStyle === "island"
+                            label: "OFF"
+                            active: !Config.BarConfig.islandBurnGuard
+                            onPicked: root._pickGuard("island", false)
                         }
                     }
 

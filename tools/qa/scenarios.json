@@ -146,7 +146,7 @@
     {
       "id": "wallpaper-engine-live",
       "name": "The engine plays a live wallpaper and the service routes it end to end",
-      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-settings once so the engine probe re-runs",
+      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. PRECONDITION: libraryMode must be all|live — under the saved 'still' mode getList hides videos and step 3 greps empty. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-settings once so the engine probe re-runs",
       "requires": [
         "wallpaper-engine"
       ],

@@ -233,6 +233,43 @@ ShellRoot {
             Services.SettingsConfigService.saveSettings()
             return "ok"
         }
+
+        // Consolidation: the logo overlay (velocity.bar-settings) is THE one
+        // bar-settings surface — these are its remaining writes (the Settings
+        // ▸ Bar pane was removed). Same funnel: set → saveSettings →
+        // saveBarConfig → atomic write → `config reload` nudge.
+        function setBarHeight(h: string): string {
+            var v = Math.round(Number(h))
+            if (!(v >= 18 && v <= 64))
+                return "error: height must be an int 18..64"
+            Services.SettingsConfigService.barHeight = v
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        function setWorkspaceCount(n: string): string {
+            var v = Math.round(Number(n))
+            if ([3, 5, 7, 9].indexOf(v) === -1)
+                return "error: workspace count must be 3|5|7|9"
+            Services.SettingsConfigService.workspaceCount = v
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        // scope: "strip" (vector/notch/ryoku BurnOrbit) | "island" (island
+        // dim/orbit clock) — two knobs because the island's guard also dims.
+        function setBurnGuard(scope: string, val: string): string {
+            if (scope !== "strip" && scope !== "island")
+                return "error: scope must be strip|island"
+            if (val !== "on" && val !== "off")
+                return "error: val must be on|off"
+            if (scope === "strip")
+                Services.SettingsConfigService.stripBurnGuard = (val === "on")
+            else
+                Services.SettingsConfigService.islandBurnGuard = (val === "on")
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
     }
 
     // =========================================================================

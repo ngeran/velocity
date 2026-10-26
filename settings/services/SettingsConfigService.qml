@@ -44,6 +44,9 @@ Item {
     property string barStyle: "vector"
     // Island style QD-OLED guard (bar-config.json islandBurnGuard).
     property bool islandBurnGuard: true
+    // Strip styles' QD-OLED orbit guard (bar-config.json stripBurnGuard) —
+    // vector/notch/ryoku ride the shared BurnOrbit tick.
+    property bool stripBurnGuard: true
     // Bar edge (UA 2.6 stage 1): "top" | "bottom" — mirrors bar-config.json;
     // the bar flips scenes/popovers live via BarConfig's ingest.
     property string barPosition: "top"
@@ -171,6 +174,8 @@ Item {
             root.workspaceCount = data.workspaceCount
         if (typeof data.islandBurnGuard === "boolean")
             root.islandBurnGuard = data.islandBurnGuard
+        if (typeof data.stripBurnGuard === "boolean")
+            root.stripBurnGuard = data.stripBurnGuard
     }
 
     function saveBarConfig() {
@@ -192,7 +197,8 @@ Item {
             workspaceCount: root.workspaceCount,
             barStyle: root.barStyle,
             barPosition: root.barPosition,
-            islandBurnGuard: root.islandBurnGuard
+            islandBurnGuard: root.islandBurnGuard,
+            stripBurnGuard: root.stripBurnGuard
         }
         // Merge back bar-owned keys this service does not model (motionScale,
         // reduceMotion, …) so a save doesn't reset them.
@@ -229,7 +235,7 @@ Item {
                     // clockCity/clockOffset (now the nikos.clock plugin's `zone` setting).
                     var dropped = ["schemaVersion", "barHeight", "workspaceCount",
                                    "clockCity", "clockOffset", "barStyle", "barPosition",
-                                   "islandBurnGuard", "rightLayout"]
+                                   "islandBurnGuard", "stripBurnGuard", "rightLayout"]
                     var extras = {}
                     for (var k in data) {
                         if (Object.prototype.hasOwnProperty.call(data, k)

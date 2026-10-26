@@ -70,6 +70,9 @@ SettingsWindow.openSettings       internal  # Control Center footer
 SettingsWindow.openThemeTab       internal  # Control Center THEME tile
 SettingsWindow.setBarStyle        internal  # velocity.bar-settings style pick — write via the settings funnel (single bar-config writer)
 SettingsWindow.setBarPosition     internal  # velocity.bar-settings bar-edge pick — same funnel
+SettingsWindow.setBarHeight       internal  # velocity.bar-settings height slider (commits on release) — same funnel
+SettingsWindow.setWorkspaceCount  internal  # velocity.bar-settings workspace-dots pills — same funnel
+SettingsWindow.setBurnGuard       internal  # velocity.bar-settings QD-OLED guard pills (strip|island on|off) — same funnel
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P
