@@ -30,12 +30,11 @@
 // This is the ONE bar-settings surface (the Settings ▸ Bar pane was removed
 // in the consolidation) — everything bar-shaped lives here.
 //
-// Window chrome is the KeybindsOverlay pattern: dim backdrop, centered black
-// card, Esc/outside-click close, focusable while mapped. Ephemeral — still no
-// bright fills: the accent appears as text and borders only (QD-OLED doctrine).
+// Window chrome is the shared OverlayShell (DU11 — was the KeybindsOverlay
+// pattern inline): dim backdrop, centered black card, Esc/outside-click close,
+// focusable while mapped. Ephemeral — still no bright fills: the accent
+// appears as text and borders only (QD-OLED doctrine).
 // =============================================================================
-import Quickshell
-import Quickshell.Wayland
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -44,29 +43,17 @@ import "../config" as Config
 import "../engine" as Engine
 import "../services" as Services
 
-PanelWindow {
+OverlayShell {
     id: root
 
-    property bool shown: false
-    visible: false
-    function open() {
+    cardWidth: 560
+    cardHeight: 640
+
+    onAboutToOpen: {
         _scanStyles()
         _refresh()
         _heightDraft = Config.BarConfig.barHeight
-        visible = true
-        shown = true
     }
-    function close() { shown = false; hideTimer.restart() }
-    function toggle() { shown ? close() : open() }
-
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
-    aboveWindows: true
-    focusable: true
-    exclusionMode: ExclusionMode.Ignore
-
-    onShownChanged: if (!shown) hideTimer.restart()
-    Timer { id: hideTimer; interval: 220; onTriggered: if (!root.shown) root.visible = false }
 
     // ---- state (rebuilt imperatively — no cross-object bindings) ----
     property var _styles: []
@@ -148,32 +135,8 @@ PanelWindow {
     }
     function _scanStyles() { scanProc.run() }
 
-    // ---- dim backdrop (click-outside = close) ----
-    Rectangle {
-        anchors.fill: parent
-        color: Config.ThemeConfig.colors.background
-        opacity: root.shown ? 0.45 : 0.0
-        visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        MouseArea { anchors.fill: parent; onClicked: root.close() }
-    }
-
-    // ---- centered card ----
-    Rectangle {
-        id: card
-        anchors.centerIn: parent
-        width: Math.min(Config.PopupMetrics.px(560), parent.width - Config.PopupMetrics.px(48))
-        height: Math.min(Config.PopupMetrics.px(640), parent.height - Config.PopupMetrics.px(48))
-        color: "#000000"
-        radius: Config.PopupMetrics.px(18)
-        clip: true
-        opacity: root.shown ? 1.0 : 0.0
-        scale: root.shown ? 1.0 : 0.96
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        Behavior on scale { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
-
-        Keys.onEscapePressed: root.close()
-        MouseArea { anchors.fill: parent }   // stop click-through to the backdrop
+    // (backdrop + centered card shell are OverlayShell's; 560×640 card set
+    //  via cardWidth/cardHeight. Interior below.)
 
         // ---- pills ----------------------------------------------------------
         component SegPill: Rectangle {
@@ -606,5 +569,4 @@ PanelWindow {
                 }
             }
         }
-    }
 }

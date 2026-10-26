@@ -21,23 +21,18 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-PanelWindow {
+// Shared overlay chrome (DU11): backdrop/Esc/card/timer live in OverlayShell;
+// this file contributes the HUD interior + the service side effects.
+OverlayShell {
     id: root
 
-    property bool shown: false
-    visible: false
-    function open()  { visible = true; shown = true; Services.ZaiUsageService.active = true; if (!Services.ZaiUsageService.loading) Services.ZaiUsageService.refresh() }
-    function close() { shown = false; hideTimer.restart(); Services.ZaiUsageService.active = false }
-    function toggle() { shown ? close() : open() }
+    backdropDim: 0.55
 
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
-    aboveWindows: true
-    focusable: true
-    exclusionMode: ExclusionMode.Ignore
-
-    onShownChanged: if (!shown) hideTimer.restart()
-    Timer { id: hideTimer; interval: 220; onTriggered: if (!root.shown) root.visible = false }
+    onAboutToOpen: {
+        Services.ZaiUsageService.active = true
+        if (!Services.ZaiUsageService.loading) Services.ZaiUsageService.refresh()
+    }
+    onDismissed: Services.ZaiUsageService.active = false
 
     // ---- theme-tinted HUD palette (live — recolors with ThemeConfig) ----
     readonly property color cBg:     Config.ThemeConfig.colors.background
@@ -168,51 +163,22 @@ PanelWindow {
     }
     Component.onCompleted: root.updateZaiMultiplier()
 
-    // =========================================================================
-    // DIM BACKDROP (click-outside = close)
-    // =========================================================================
-    Rectangle {
-        anchors.fill: parent
-        color: root.cBg
-        opacity: root.shown ? 0.55 : 0.0
-        visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        MouseArea { anchors.fill: parent; onClicked: root.close() }
-    }
+    // (backdrop + centered card shell are OverlayShell's; interior below.
+    //  backdropDim keeps this overlay's slightly stronger 0.55 dim.)
 
-    // =========================================================================
-    // CENTERED CARD (≤900×≤680 clamped — same as KeybindsOverlay)
-    // =========================================================================
-    Rectangle {
-        id: card
-        anchors.centerIn: parent
-        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
-        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
-        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
-        color: "#000000"
-        radius: Config.PopupMetrics.px(18)
-        clip: true
-        opacity: root.shown ? 1.0 : 0.0
-        scale: root.shown ? 1.0 : 0.96
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        Behavior on scale { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
-
-        Keys.onEscapePressed: root.close()
-        MouseArea { anchors.fill: parent }   // swallow clicks so they don't close the overlay
-
-        // ----- (decoration) grid background — dim, behind everything -----
-        Item {
+    // ----- (decoration) grid background — dim, behind everything -----
+    Item {
             id: gridBg
             anchors.fill: parent
             opacity: 0.22
             z: 0
             Repeater {
-                model: Math.floor(card.width / Config.PopupMetrics.px(40))
-                Rectangle { width: Config.PopupMetrics.hairline(parent); height: card.height; x: index * Config.PopupMetrics.px(40); color: root.cBorder }
+                model: Math.floor(root.cardItem.width / Config.PopupMetrics.px(40))
+                Rectangle { width: Config.PopupMetrics.hairline(parent); height: root.cardItem.height; x: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
             Repeater {
-                model: Math.floor(card.height / Config.PopupMetrics.px(40))
-                Rectangle { height: Config.PopupMetrics.hairline(parent); width: card.width; y: index * Config.PopupMetrics.px(40); color: root.cBorder }
+                model: Math.floor(root.cardItem.height / Config.PopupMetrics.px(40))
+                Rectangle { height: Config.PopupMetrics.hairline(parent); width: root.cardItem.width; y: index * Config.PopupMetrics.px(40); color: root.cBorder }
             }
         }
 
@@ -224,8 +190,8 @@ PanelWindow {
                 width: Config.PopupMetrics.px(14); height: Config.PopupMetrics.px(14)
                 opacity: 0.55
                 z: 0
-                x: (index === 0 || index === 2) ? 0 : (card.width - 14)
-                y: (index === 0 || index === 1) ? 0 : (card.height - 14)
+                x: (index === 0 || index === 2) ? 0 : (root.cardItem.width - 14)
+                y: (index === 0 || index === 1) ? 0 : (root.cardItem.height - 14)
                 property bool isRight: (index === 1 || index === 3)
                 property bool isBottom: (index === 2 || index === 3)
                 Rectangle {   // horizontal arm
@@ -750,5 +716,4 @@ PanelWindow {
                 }
             }
         }
-    }
 }

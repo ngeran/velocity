@@ -13,53 +13,12 @@ import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
 
-PanelWindow {
+// Shared overlay chrome (DU11): backdrop/Esc/card/timer live in OverlayShell;
+// this file contributes the card interior + keybind model.
+OverlayShell {
     id: root
 
-    property bool shown: false
-    visible: false
-    function open()  { visible = true; shown = true }
-    function close() { shown = false; hideTimer.restart() }
-    function toggle() { shown ? close() : open() }
-
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
-    aboveWindows: true
-    focusable: true
-    exclusionMode: ExclusionMode.Ignore
-
-    onShownChanged: if (!shown) hideTimer.restart()
-    Timer { id: hideTimer; interval: 220; onTriggered: if (!root.shown) root.visible = false }
-
-    // ---- dim backdrop (click-outside = close) ----
-    Rectangle {
-        anchors.fill: parent
-        color: Config.ThemeConfig.colors.background
-        opacity: root.shown ? 0.45 : 0.0
-        visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        MouseArea { anchors.fill: parent; onClicked: root.close() }
-    }
-
-    // ---- centered card ----
-    Rectangle {
-        id: card
-        anchors.centerIn: parent
-        width: Math.min(Config.PopupMetrics.px(900), parent.width - Config.PopupMetrics.px(48))
-        height: Math.min(Config.PopupMetrics.px(680), parent.height - Config.PopupMetrics.px(48))
-        // Island look: pure black (pixels off on QD-OLED), rounded, no stroke.
-        color: "#000000"
-        radius: Config.PopupMetrics.px(18)
-        clip: true
-        opacity: root.shown ? 1.0 : 0.0
-        scale: root.shown ? 1.0 : 0.96
-        Behavior on opacity { NumberAnimation { duration: Config.MotionConfig.swap } }
-        Behavior on scale { NumberAnimation { duration: Config.MotionConfig.swap; easing.type: Config.MotionConfig.ease } }
-
-        Keys.onEscapePressed: root.close()
-        MouseArea { anchors.fill: parent }   // stop click-through to the backdrop
-
-        ColumnLayout {
+    ColumnLayout {
             anchors.fill: parent
             anchors.margins: Config.PopupMetrics.px(24)
             spacing: Config.PopupMetrics.px(12)
@@ -160,7 +119,6 @@ PanelWindow {
                 }
             }
         }
-    }
 
     // ---- keybinds data (mirrors configs/hypr/keybindings.lua) ----
     property var keybindModel: [
