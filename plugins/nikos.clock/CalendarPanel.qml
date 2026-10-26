@@ -23,6 +23,7 @@ import QtQuick.Layouts
 import Quickshell
 import "lib/tz.mjs" as Tz
 import "lib/weather.mjs" as Wx
+import "lib/calendar.mjs" as Cal
 import "." as Clock
 
 RowLayout {
@@ -55,17 +56,16 @@ RowLayout {
     readonly property bool _isThisMonth: viewMonth === _todayMonth && viewYear === _todayYear
 
     property var _firstOfMonth: new Date(viewYear, viewMonth, 1)
-    readonly property int _startOffset: (calRoot._firstOfMonth.getDay() + 6) % 7   // MON-start
-    readonly property int _daysInMonth: new Date(viewYear, viewMonth + 1, 0).getDate()
-    readonly property int _cellCount: 42   // fixed 6-row grid
+    // Grid math lives in shared/calendar.mjs (DU6 — the settings Dashboard
+    // hero calendar runs the same module; this used to be an identical fork).
+    readonly property int _startOffset: Cal.startOffset(viewYear, viewMonth)
+    readonly property int _daysInMonth: Cal.daysInMonth(viewYear, viewMonth)
+    readonly property int _cellCount: Cal.CELL_COUNT
 
     function _shiftMonth(delta) {
-        var m = calRoot.viewMonth + delta
-        var y = calRoot.viewYear
-        if (m < 0)       { m = 11; y -= 1 }
-        else if (m > 11) { m = 0;  y += 1 }
-        calRoot.viewMonth = m
-        calRoot.viewYear  = y
+        var r = Cal.shiftMonth(calRoot.viewYear, calRoot.viewMonth, delta)
+        calRoot.viewYear  = r.year
+        calRoot.viewMonth = r.month
     }
 
     // ── weather ──────────────────────────────────────────────────────────────
