@@ -84,6 +84,46 @@ Item {
         implicitHeight: Config.BarConfig.barHeight
         color: Config.BarConfig.colorBackground
 
+        // Overflow plan (engine lib/fit.mjs): measured cell widths + collapse
+        // priorities in; compact/collapse maps and the clamped center x out.
+        readonly property var fitPlan: Engine.PluginRegistry.planFit({
+            width: panelWindow.width,
+            pad: Config.BarConfig.barPadding,
+            gap: 10,
+            slack: 8,
+            left: leftSection.cellInfos,
+            center: centerSection.cellInfos,
+            right: rightSection.cellInfos
+        })
+
+        // ── RYOKU FRAME EDGE — 1px under the bar. Static full-width line, so
+        // the alpha is deliberately BELOW the theme hairline token (~4.5% ink
+        // ≈ a couple of nits on QD-OLED — dimmer than the rounding-AA it
+        // replaces). Deliberately OUTSIDE the orbit wrapper: an edge-flush
+        // line that drifted 1-2px would show a gap against the screen edge.
+        Rectangle {
+            // Edge tint line rides the desktop-facing edge — flips with the bar.
+            anchors.bottom: Config.BarConfig.barAtBottom ? null : parent.bottom
+            anchors.top: Config.BarConfig.barAtBottom ? parent.top : null
+            width: parent.width
+            height: 1
+            color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)
+        }
+
+        Bar.BurnOrbit {
+            id: guard
+            active: panelWindow.visible && Config.BarConfig.stripBurnGuard
+        }
+
+        // QD-OLED strip guard (T20): content orbits (workspaces numbers, ink
+        // text) — see vector for the wrapper rationale.
+        Item {
+            anchors.fill: parent
+            Item {
+                id: orbitContent
+                width: parent.width; height: parent.height
+                x: guard.offset.x; y: guard.offset.y
+
         RowLayout {
             anchors.fill: parent
             spacing: 0
@@ -189,31 +229,6 @@ Item {
             }
         }
 
-        // ── RYOKU FRAME EDGE — 1px under the bar. Static full-width line, so
-        // the alpha is deliberately BELOW the theme hairline token (~4.5% ink
-        // ≈ a couple of nits on QD-OLED — dimmer than the rounding-AA it
-        // replaces). ────────────────────────────────────────────────────────
-        Rectangle {
-            // Edge tint line rides the desktop-facing edge — flips with the bar.
-            anchors.bottom: Config.BarConfig.barAtBottom ? null : parent.bottom
-            anchors.top: Config.BarConfig.barAtBottom ? parent.top : null
-            width: parent.width
-            height: 1
-            color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)
-        }
-
-        // Overflow plan (engine lib/fit.mjs): measured cell widths + collapse
-        // priorities in; compact/collapse maps and the clamped center x out.
-        readonly property var fitPlan: Engine.PluginRegistry.planFit({
-            width: panelWindow.width,
-            pad: Config.BarConfig.barPadding,
-            gap: 10,
-            slack: 8,
-            left: leftSection.cellInfos,
-            center: centerSection.cellInfos,
-            right: rightSection.cellInfos
-        })
-
         // Center section: x from the plan — dead-center ideal, clamped
         // between the rails (anchors.centerIn used to overlap them on narrow
         // windows). Empty center = nothing drawn.
@@ -226,6 +241,8 @@ Item {
             gap: 14
             fitMap: panelWindow.fitPlan.maps.center
         }
+            }   // orbitContent
+        }   // strip content wrapper
         }   // StripWindow (per-output bar)
     }
 }

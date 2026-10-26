@@ -129,18 +129,11 @@ export function panelBudget(m) {
 }
 
 // ── QD-OLED burn-in guard ──────────────────────────────────────────────────
-// A slow orbit through 9 sub-perceptual offsets (one step per period). x
-// moves the whole island; y only nudges content (the shape's flat edge must
-// stay on the screen edge). amp 0 disables.
-var ORBIT = [[0, 0], [1, 0], [2, 1], [1, 1], [0, 1], [-1, 1], [-2, 0], [-1, -1], [1, -1]]
-
-export function orbitOffset(tick, amp) {
-    var a = Math.max(0, Math.min(4, Math.round(num(amp, 2))))
-    if (a === 0) return { x: 0, y: 0 }
-    var i = ((Math.floor(num(tick, 0)) % ORBIT.length) + ORBIT.length) % ORBIT.length
-    var p = ORBIT[i]
-    return { x: Math.round(p[0] * a / 2), y: Math.max(-1, Math.min(1, p[1])) }
-}
+// The orbit math went shared (T20): canonical in shared/orbit.mjs, synced to
+// bar/lib/orbit.mjs. Re-exported here so island.test.mjs and the Scene keep
+// their single import.
+import { orbitOffset } from "../../../lib/orbit.mjs"
+export { orbitOffset }
 
 // Rest text alpha: dimmed even when active (never full-white on a static
 // glyph) and dimmer still after `dimAfterMs` without interaction. Expanded

@@ -154,12 +154,22 @@ Item {
             // the breathing slit pass clicks through to the desktop.
             mask: Region { item: lobe }
 
+            // QD-OLED strip guard (T20): the lobe is the strip's one big
+            // static mass (0.94-alpha fill) — it rides the shared orbit on x.
+            // Y stays: the lobe's flat edge must remain flush with the screen
+            // edge. The mask follows the item, and the caret bite reads
+            // lobe.x live, so the cut stays glued to the popover.
+            Bar.BurnOrbit {
+                id: guard
+                active: panelWindow.visible && Config.BarConfig.stripBurnGuard
+            }
+
             // =========================================================================
             // THE LOBE — silhouette + hairline + caret wedge, content on top
             // =========================================================================
             Item {
                 id: lobe
-                x: shellX
+                x: shellX + guard.offset.x
                 // Bottom bar: the breathing slit sits above the lobe (toward
                 // the popovers) instead of below it.
                 y: Config.BarConfig.barAtBottom ? panelWindow.breathing : 0

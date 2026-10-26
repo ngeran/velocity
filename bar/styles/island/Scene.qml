@@ -36,6 +36,7 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
+import "../../components" as Bar
 import "../../config" as Config
 import "../../engine" as Engine
 import "../../services" as Services
@@ -355,22 +356,19 @@ Item {
             }
 
             // =================================================================
-            // QD-OLED BURN-IN GUARD — one 30s tick: idle clock + orbit step
+            // QD-OLED BURN-IN GUARD — the shared BurnOrbit tick (T20). The
+            // orbit math/table live in lib/orbit.mjs via the component; this
+            // host only feeds its rest-state dim clock from the same
+            // heartbeat. The dim curve stays island-specific on purpose.
             // =================================================================
             property real idleMs: 0
-            property int orbitTick: 0
-            property int _guardTicks: 0
             function _touch() { win.idleMs = 0 }
-            Timer {
-                interval: 30000; repeat: true
-                running: win.visible && win.burnGuard
-                onTriggered: {
-                    if (win.islandState === Isl.REST) win.idleMs += interval
-                    win._guardTicks++
-                    if (win._guardTicks % 6 === 0) win.orbitTick++   // one step / 3 min
-                }
+            Bar.BurnOrbit {
+                id: guardTick
+                active: win.visible && win.burnGuard
+                onStepped: if (win.islandState === Isl.REST) win.idleMs += 30000
             }
-            readonly property var orbit: Isl.orbitOffset(orbitTick, burnGuard ? 2 : 0)
+            readonly property var orbit: guardTick.offset
             readonly property real restAlpha: Isl.restAlpha(islandState, idleMs, { guard: burnGuard })
 
             // =================================================================

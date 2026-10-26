@@ -42,6 +42,9 @@ Item {
     readonly property bool barAtBottom: root.barPosition === "bottom"
     // Island style QD-OLED guard (orbit drift + idle dim of the rest clock).
     property bool islandBurnGuard: true
+    // Strip styles' QD-OLED guard: content orbit (BurnOrbit) on
+    // vector/ryoku/notch so no static pixel column sits long enough to burn.
+    property bool stripBurnGuard: true
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
     // read once by the engine's schema-2 migration and ignored after.
@@ -84,6 +87,8 @@ Item {
                 barPosition = data.barPosition
             if (typeof data.islandBurnGuard === "boolean")
                 islandBurnGuard = data.islandBurnGuard
+            if (typeof data.stripBurnGuard === "boolean")
+                stripBurnGuard = data.stripBurnGuard
             console.log("[BarConfig] Hot-reloaded bar-config.json")
         } catch (e) {
             console.log("[BarConfig] Failed to parse config:", e)

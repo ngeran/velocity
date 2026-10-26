@@ -52,17 +52,6 @@ Item {
         implicitHeight: Config.BarConfig.barHeight
         color: Config.BarConfig.colorBackground
 
-        // =========================================================================
-        // MAIN LAYOUT — three engine sections
-        // =========================================================================
-
-        // Click on empty bar area closes the tray card this bar opened.
-        MouseArea {
-            anchors.fill: parent
-            enabled: !!host && host.trayOwner === panelWindow && host.activeTray !== ""
-            onClicked: host.closeTray()
-        }
-
         // Overflow plan (engine lib/fit.mjs): the sections' measured cell
         // widths + collapse priorities go in; compact/collapse maps and the
         // clamped center x come out. The full stage demands slack headroom so
@@ -76,6 +65,23 @@ Item {
             center: centerRow.cellInfos,
             right: rightRail.cellInfos
         })
+
+        Bar.BurnOrbit {
+            id: guard
+            active: panelWindow.visible && Config.BarConfig.stripBurnGuard
+        }
+
+        // QD-OLED strip guard (T20): the bright CONTENT orbits through the
+        // shared BurnOrbit offsets; the window's black fill stays put (off
+        // pixels can't burn). The wrapper carries the integer offsets so the
+        // anchored layout itself is untouched. (The tray-close MouseArea
+        // lives in StripWindow, beneath this wrapper.)
+        Item {
+            anchors.fill: parent
+            Item {
+                id: orbitContent
+                width: parent.width; height: parent.height
+                x: guard.offset.x; y: guard.offset.y
 
         RowLayout {
             anchors.fill: parent
@@ -120,6 +126,8 @@ Item {
             gap: 14
             fitMap: panelWindow.fitPlan.maps.center
         }
+            }   // orbitContent
+        }   // strip content wrapper
         }   // StripWindow (per-output bar)
     }
 }
