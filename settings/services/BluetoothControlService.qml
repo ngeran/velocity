@@ -3,9 +3,12 @@
 // =============================================================================
 //
 // STATE (Quickshell.Bluetooth, T10 patterns): powered = adapter.enabled
-// (event-driven); devices rebuilt from the Bluetooth.devices model on a
-// dashboard-gated 5s sweep — ZERO forked processes for state (the old code
-// forked `bluetoothctl show` + a per-device info loop every 5s).
+// (event-driven); devices rebuilt from the Bluetooth.devices model — H9 made
+// this fully event-driven: the list's valuesChanged re-arms one Connections
+// per member device, and each device's own property NOTIFY signals
+// (connected/battery/…) trigger the rebuild. No sweep timer. ZERO forked
+// processes for state (the old-old code forked `bluetoothctl show` + a
+// per-device info loop every 5s).
 //
 // ADAPTER IDENTITY (address/alias/version/class — static per boot) comes from
 // ONE `bluetoothctl show` at construction: the native adapter object exposes
@@ -60,7 +63,7 @@ Item {
 
     Component.onCompleted: {
         identityProc.running = true
-        _collectDevices()
+        _resyncDeviceWatches()
     }
 
     // -------------------------------------------------------------------------
@@ -111,20 +114,43 @@ Item {
         root._rebuildDevices()
     }
 
-    // Registry enumeration is async — collect again when the model changes.
+    // Registry enumeration is async — resync when the model changes, and
+    // re-arm the per-device watchers: a member device's PROPERTY flip
+    // (connected/battery/trusted/…) fires that device's own NOTIFY signal,
+    // not the list's valuesChanged — the list object didn't change. This is
+    // what the 5s sweep used to paper over (H9: no rebuild timer; a native
+    // property signal costs nothing while idle).
     Connections {
         target: Bluetooth.devices
-        function onValuesChanged() { root._collectDevices() }
+        function onValuesChanged() { root._resyncDeviceWatches() }
     }
 
-    // 5s sweep while the dashboard is open: catches per-device property flips
-    // (connected/battery) — a rebuild from live native objects, ZERO processes.
-    Timer {
-        interval: 5000
-        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root._collectDevices()
+    property var _watchers: []   // per-device Connections, one per member device
+
+    Component {
+        id: deviceWatchComp
+        Connections {
+            function onConnectedChanged()        { root._collectDevices() }
+            function onPairedChanged()           { root._collectDevices() }
+            function onTrustedChanged()          { root._collectDevices() }
+            function onNameChanged()             { root._collectDevices() }
+            function onDeviceNameChanged()       { root._collectDevices() }
+            function onIconChanged()             { root._collectDevices() }
+            function onBatteryChanged()          { root._collectDevices() }
+            function onBatteryAvailableChanged() { root._collectDevices() }
+        }
+    }
+
+    function _resyncDeviceWatches() {
+        for (var i = 0; i < root._watchers.length; i++)
+            if (root._watchers[i]) root._watchers[i].destroy()
+        root._watchers = []
+        root._collectDevices()
+        var devs = Bluetooth.devices.values || []
+        for (var j = 0; j < devs.length; j++) {
+            var w = deviceWatchComp.createObject(root, { target: devs[j] })
+            if (w) root._watchers.push(w)
+        }
     }
 
     function refresh() { root._collectDevices() }
@@ -169,7 +195,8 @@ Item {
                 // SplitParser delivers whole lines, so the buffer only grows
                 // line-aligned; parse the new tail and rebuild once (beacons
                 // + RSSI still show live). The native-model refresh waits
-                // for scan end; the 5s sweep still covers property flips.
+                // for scan end; property flips propagate via the per-device
+                // watchers (H9), not this parser.
                 root._parseScan(scanProc.buffer)
                 scanProc.buffer = ""
                 root._rebuildDevices()
