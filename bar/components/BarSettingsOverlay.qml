@@ -417,8 +417,8 @@ OverlayShell {
                         }
                     }
 
-                    // ---- QD-OLED GUARD ----
-                    SectionLabel { text: "QD-OLED GUARD — sub-perceptual orbit" }
+                    // ---- BAR BURN GUARD (H2 rename) ----
+                    SectionLabel { text: "BAR BURN GUARD — sub-perceptual orbit" }
                     RowLayout {
                         spacing: Config.PopupMetrics.px(8)
                         Text {

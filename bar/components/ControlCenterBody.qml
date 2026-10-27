@@ -116,6 +116,7 @@ ColumnLayout {
     component LevelSlider: RowLayout {
         id: lvl
         property string glyph: ""
+        property string label: ""          // optional micro-caption (H2: BACKLIGHT)
         property bool dim: false
         property real value: 0
         property string drillTo: ""
@@ -136,6 +137,14 @@ ColumnLayout {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: lvl.glyphClicked()
             }
+        }
+        Text {
+            visible: lvl.label !== ""
+            text: lvl.label
+            font.family: Config.BarConfig.fontFamily
+            font.pixelSize: Config.PopupMetrics.px(8)
+            color: Config.BarConfig.colorTextDim
+            Layout.alignment: Qt.AlignVCenter
         }
         Slider {
             id: s
@@ -269,6 +278,7 @@ ColumnLayout {
     LevelSlider {
         visible: Services.BrightnessService.available
         glyph: "󰃟"
+        label: "BACKLIGHT"               // H2: named here, hidden with no backlight/DDC device
         value: Services.BrightnessService.percent
         onMoved: function(v) { Services.BrightnessService.setPercent(v) }
     }

@@ -4,8 +4,8 @@
 //   header        breadcrumb · Display Manager · count + sync badges · actions
 //   canvas        arrangement tiles (click to TARGET a monitor) · identify
 //   telemetry     selected panel summary + status pills + 6-tile spec grid
-//   config grid   MODE (res/refresh/orientation) · SCALE · HDR & COLOR ·
-//                 VRR + QD-OLED GUARD (burn-in safe preset, blank timer)
+//   config grid   MODE (res/refresh/orientation) · SCALE · HDR SDR LEVEL ·
+//                 VRR + PANEL CHECKLIST (burn-in safe preset, blank timer)
 //   persistence   stage live settings → desc-keyed rules in ~/.config/hypr/monitors.lua
 //
 // All applies ride MonitorService's verified `hyprctl eval hl.monitor({...})`
@@ -484,7 +484,7 @@ ColumnLayout {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 5. CONFIG ROW — MODE · SCALE · HDR & COLOR · VRR + QD-OLED GUARD.
+    // 5. CONFIG ROW — MODE · SCALE · HDR SDR LEVEL · VRR + PANEL CHECKLIST.
     // Single row of fill-height cards: SettingsCard sizes to content, so
     // stacked rows collapsed and painted over each other — one row can't.
     // ═════════════════════════════════════════════════════════════════════════
@@ -692,7 +692,7 @@ ColumnLayout {
             }
         }
 
-        // ── C: HDR & COLOR ───────────────────────────────────────────────────
+        // ── C: HDR SDR LEVEL ──────────────────────────────────────────────────
         SettingsCard {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -706,7 +706,7 @@ ColumnLayout {
 
                 PanelSectionHeader {
                     Layout.fillWidth: true
-                    label: "HDR & COLOR"
+                    label: "HDR SDR LEVEL"
                     value: view.hdrOn ? "HDR " + (view.mon ? view.mon.colorPreset.toUpperCase() : "") : "SDR"
                     color: view.hdrOn ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim
                 }
@@ -816,7 +816,7 @@ ColumnLayout {
             }
         }
 
-        // ── D: VRR + QD-OLED GUARD ──────────────────────────────────────────
+        // ── D: VRR + PANEL CHECKLIST ─────────────────────────────────────────
         SettingsCard {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -829,7 +829,7 @@ ColumnLayout {
 
                 PanelSectionHeader {
                     Layout.fillWidth: true
-                    label: "VRR · OLED GUARD"
+                    label: "VRR · PANEL CHECKLIST"
                     value: view.guardOk + "/" + view.guardItems.length + " PASS"
                     color: view.guardOk === view.guardItems.length
                            ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
