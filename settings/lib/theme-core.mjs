@@ -1,3 +1,4 @@
+// GENERATED from shared/theme-core.mjs by tools/sync-shared — do not edit
 // theme-core.mjs — pure theme logic shared by the bar and settings (DU2/DU3)
 // =============================================================================
 // CANONICAL: shared/theme-core.mjs (tools/sync-shared -> bar/lib + settings/lib).

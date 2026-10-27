@@ -1,3 +1,4 @@
+// GENERATED from shared/weather.mjs by tools/sync-shared — do not edit
 // Pure weather model: parses Open-Meteo + ipwho.is responses, maps WMO weather
 // codes to glyphs and condition labels, and formats temperature. No QML and no
 // network here, so the WeatherService singleton stays a thin fetch wrapper and

@@ -58,16 +58,22 @@ function suite(mod, label) {
 
 suite(canonical, "shared")
 
-ok("bar copy byte-identical to canonical", () => {
+// Copies carry a line-1 GENERATED stamp (I3); compare everything after it.
+// The global stamp-aware gate is tools/check-shared — these stay as the
+// theme-mix-local redundancy.
+const withoutStamp = (text) =>
+    text.startsWith("// GENERATED from shared/") ? text.slice(text.indexOf("\n") + 1) : text
+
+ok("bar copy byte-identical to canonical (past stamp)", () => {
     const a = readFileSync(here + "theme-mix.mjs", "utf8")
     const b = readFileSync(here + "../../shared/theme-mix.mjs", "utf8")
-    assert.equal(a, b)
+    assert.equal(withoutStamp(a), b)
 })
 
-ok("settings copy byte-identical to canonical", () => {
+ok("settings copy byte-identical to canonical (past stamp)", () => {
     const a = readFileSync(here + "../../settings/lib/theme-mix.mjs", "utf8")
     const b = readFileSync(here + "../../shared/theme-mix.mjs", "utf8")
-    assert.equal(a, b)
+    assert.equal(withoutStamp(a), b)
 })
 
 console.log("theme-mix: " + n + " assertions passed (canonical + 2 copies)")

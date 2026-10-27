@@ -1,3 +1,4 @@
+// GENERATED from shared/units.mjs by tools/sync-shared — do not edit
 // =============================================================================
 // shared/units.mjs — byte/rate formatting (DU8: the ONE binary formatter)
 // =============================================================================

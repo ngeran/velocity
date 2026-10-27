@@ -1,3 +1,4 @@
+// GENERATED from shared/orbit.mjs by tools/sync-shared — do not edit
 // shared/orbit.mjs — QD-OLED burn-in orbit math (canonical; byte-synced into
 // bar/lib/orbit.mjs by tools/sync-shared; drift fails tools/check-shared).
 //

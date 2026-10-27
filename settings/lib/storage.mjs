@@ -1,3 +1,4 @@
+// GENERATED from shared/storage.mjs by tools/sync-shared — do not edit
 // Pure storage model: parses `lsblk -J -b` output into drive records and
 // formats capacities. No QML and no processes here, so the StorageService
 // singleton stays a thin fetch wrapper and node can exercise the parsing

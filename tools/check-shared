@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // check-shared — the shared/ sync gate: every registered per-root copy must
-// be byte-identical to its canonical file (see shared/README.md). Drift means
-// someone edited a root copy directly; fix is `tools/sync-shared`, never a
-// hand-edit of the copy.
+// be byte-identical to its canonical file after skipping the copy's line-1
+// GENERATED stamp (see shared/README.md). Drift means someone edited a root
+// copy directly; fix is `tools/sync-shared`, never a hand-edit of the copy.
+// A missing/wrong stamp is itself a failure (I3).
 'use strict'
 const fs = require('fs')
 const path = require('path')
@@ -13,6 +14,9 @@ const root = path.resolve(__dirname, '..')
 // The one registration table, shared with tools/sync-shared.
 const TARGETS = require('./shared-targets.js')
 
+const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
+const stampFor = (src) => `// GENERATED from ${src} by tools/sync-shared — do not edit`
+
 let failures = 0
 for (const [src, dsts] of Object.entries(TARGETS)) {
   const srcPath = path.join(root, src)
@@ -21,7 +25,7 @@ for (const [src, dsts] of Object.entries(TARGETS)) {
     failures++
     continue
   }
-  const canon = crypto.createHash('sha256').update(fs.readFileSync(srcPath)).digest('hex')
+  const canon = sha256(fs.readFileSync(srcPath))
   for (const dst of dsts) {
     const dstPath = path.join(root, dst)
     if (!fs.existsSync(dstPath)) {
@@ -29,8 +33,15 @@ for (const [src, dsts] of Object.entries(TARGETS)) {
       failures++
       continue
     }
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(dstPath)).digest('hex')
-    if (hash !== canon) {
+    const buf = fs.readFileSync(dstPath)
+    const firstNl = buf.indexOf(10)
+    const firstLine = (firstNl === -1 ? buf : buf.slice(0, firstNl)).toString('utf8')
+    if (firstLine !== stampFor(src)) {
+      console.error(`check-shared: ${dst} missing GENERATED stamp (line 1) — run tools/sync-shared`)
+      failures++
+      continue
+    }
+    if (sha256(buf.slice(firstNl + 1)) !== canon) {
       console.error(`check-shared: DRIFT ${dst} differs from ${src} — run tools/sync-shared`)
       failures++
     }

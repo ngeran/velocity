@@ -1,3 +1,4 @@
+// GENERATED from shared/DebugConfig.qml by tools/sync-shared — do not edit
 // =============================================================================
 // shared/DebugConfig.qml — Debug Logging Configuration (canonical, synced copy)
 // =============================================================================

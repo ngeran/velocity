@@ -1,3 +1,4 @@
+// GENERATED from shared/LogService.qml by tools/sync-shared — do not edit
 // =============================================================================
 // LogService.qml — active-gated system journal tail (CANONICAL — shared/)
 // =============================================================================

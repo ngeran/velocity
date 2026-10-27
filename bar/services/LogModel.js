@@ -1,3 +1,4 @@
+// GENERATED from shared/LogModel.js by tools/sync-shared — do not edit
 // =============================================================================
 // LogModel.js — pure journalctl -o json parsing + client-side filtering
 // =============================================================================

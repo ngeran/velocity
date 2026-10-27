@@ -1,3 +1,4 @@
+// GENERATED from shared/components/Sparkline.qml by tools/sync-shared — do not edit
 // =============================================================================
 // Sparkline.qml — rolling-value line chart (stroke + low-alpha area fill)
 // =============================================================================

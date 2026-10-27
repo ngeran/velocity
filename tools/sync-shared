@@ -23,6 +23,10 @@ for (const [src, dsts] of Object.entries(TARGETS)) {
     continue
   }
   const body = fs.readFileSync(srcPath)
+  // I3: every copy carries a GENERATED stamp on line 1 (check-shared skips
+  // that line when comparing and fails when it is missing) so nobody mistakes
+  // a root copy for an editable source.
+  const stamp = Buffer.from(`// GENERATED from ${src} by tools/sync-shared — do not edit\n`)
   for (const dst of dsts) {
     const dstPath = path.join(root, dst)
     const dir = path.dirname(dstPath)
@@ -31,7 +35,7 @@ for (const [src, dsts] of Object.entries(TARGETS)) {
       failures++
       continue
     }
-    fs.writeFileSync(dstPath, body)
+    fs.writeFileSync(dstPath, Buffer.concat([stamp, body]))
     console.log(`sync-shared: ${src} -> ${dst}`)
   }
 }

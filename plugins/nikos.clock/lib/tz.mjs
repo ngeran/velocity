@@ -1,3 +1,4 @@
+// GENERATED from shared/tz.mjs by tools/sync-shared — do not edit
 // tz.mjs — zone / DST math without tzdata. Pure; node-tested (tz.test.mjs).
 // =============================================================================
 // This host's tz database is untrusted (`TZ=Europe/Athens date` renders UTC),

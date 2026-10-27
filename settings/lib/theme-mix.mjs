@@ -1,3 +1,4 @@
+// GENERATED from shared/theme-mix.mjs by tools/sync-shared — do not edit
 // =============================================================================
 // theme-mix.mjs — palette cross-fade math (pure, node-testable)
 // =============================================================================

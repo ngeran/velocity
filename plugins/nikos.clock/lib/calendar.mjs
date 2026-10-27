@@ -1,3 +1,4 @@
+// GENERATED from shared/calendar.mjs by tools/sync-shared — do not edit
 // =============================================================================
 // shared/calendar.mjs — month-grid math (DU6: the ONE calendar grid module)
 // =============================================================================

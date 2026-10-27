@@ -1,3 +1,4 @@
+// GENERATED from shared/MotionConfig.qml by tools/sync-shared — do not edit
 // =============================================================================
 // shared/MotionConfig.qml — Motion token singleton (canonical, synced copy)
 // =============================================================================

@@ -1,3 +1,4 @@
+// GENERATED from shared/BoundedProcess.qml by tools/sync-shared — do not edit
 // =============================================================================
 // BoundedProcess.qml — the ONE way services shell out (xray config.py +
 // omasettings capture(), distilled to velocity's QML-native form).
