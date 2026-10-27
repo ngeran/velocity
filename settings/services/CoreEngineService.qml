@@ -76,6 +76,25 @@ Item {
     property bool lcdPresent: false                      // deepcool reader probe
     readonly property bool telemetryWanted: coreVisible || lcdPresent
 
+    // ── H7 lease renewal — keep the BAR's metrics poll alive while we read ──
+    // The bar's SystemInfoService polls /proc + the GPU prober only under a
+    // lease; this service (the Core tab's 1s engine AND the deepcool LCD's
+    // feed) renews every 10s with a 30s grant, so the file this process's
+    // GpuService reads stays fresh while telemetryWanted, and the bar goes
+    // silent ≤30s after the last consumer closes.
+    BoundedProcess {
+        id: leaseRenewProc
+        timeoutMs: 5000
+        command: ["qs", "-c", "bar", "ipc", "call", "metrics", "lease", "30"]
+    }
+    Timer {
+        interval: 10000
+        repeat: true
+        running: root.telemetryWanted
+        triggeredOnStart: true
+        onTriggered: leaseRenewProc.run()
+    }
+
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: lcdProbe
         // [d]eepcool regex self-match guard: pgrep -f scans full command

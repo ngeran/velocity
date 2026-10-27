@@ -27,6 +27,7 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config

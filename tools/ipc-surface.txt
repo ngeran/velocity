@@ -49,6 +49,8 @@ zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
 network.speedtest        internal  # settings' RUN IN BAR → the bar's XHR ladder;
                                    # result persists to $XDG_STATE_HOME/velocity/speedtest.json
+metrics.lease            internal  # settings Core + dashboard Pulse renew every 10s
+                                   # while visible → gates the bar's live-metrics poll (H7)
 
 # ---- settings process ------------------------------------------------------
 search.query                      manual    # scripting/truth probe (dashboard search index)

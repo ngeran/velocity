@@ -8,7 +8,7 @@
 // full-width Software & OS strip.
 //
 // All data comes from Services.SystemInfoService (fastfetch JSON profile +
-// live /proc/meminfo / /proc/uptime / nvidia-smi + geo). Every accent is bound
+// live metrics engine (lease-gated) + geo). Every accent is bound
 // to Config.ThemeConfig.colors.* so the whole panel recolors with the live
 // theme, and it deliberately uses ALL accent tokens (secondary/primary/success/
 // warning/error/info/accent) rather than one.

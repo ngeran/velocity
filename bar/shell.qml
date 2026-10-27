@@ -313,6 +313,17 @@ ShellRoot {
         }
     }
 
+    // metrics lease — H7: settings (Core tab, dashboard System Pulse) renew
+    // every 10s while visible; the bar's live-metrics poll runs only while a
+    // lease is live. Clamp ≤ 30s lives in lib/lease.mjs.
+    IpcHandler {
+        target: "metrics"
+        function lease(seconds: int): string {
+            Services.SystemInfoService.extendLease(seconds)
+            return "ok"
+        }
+    }
+
     // Bar visibility toggle (for Hyprland keybind)
     IpcHandler {
         id: barToggleIpc

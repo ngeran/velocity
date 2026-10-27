@@ -1,27 +1,33 @@
 // =============================================================================
-// GpuService.qml — GPU telemetry, single vendor-aware module
+// GpuService.qml — GPU telemetry, file-fed (H7)
 // =============================================================================
 //
-// The ONE place the shell shells out for GPU data. All GPU consumers
-// (CoreGpuSection, the CoreEngineService deepcool-LCD feed) bind to the
-// properties below — they never call nvidia-smi themselves. (The bar's
-// SystemInfoService keeps a separate legacy amdgpu reader.)
+// The GPU consumers (CoreGpuSection, the CoreEngineService deepcool-LCD feed)
+// bind to the properties below. Since H7 the bar's SystemInfoService is the
+// ONE repo-side GPU prober: it publishes
+// $XDG_RUNTIME_DIR/velocity/metrics.json (atomic tmp+mv, lease-gated) and this
+// service READS it — no GPU fork in this process anymore. The 2s
+// reload Timer below (lease-gated by CoreEngineService) is the reader, not a
+// poll of the GPU.
 //
-// VENDOR FLAG — `vendor` selects the backend. Only "nvidia" is implemented
-// today (nvidia-smi). When the GPU changes (e.g. back to AMD), add an "amd"
-// branch below using rocm-smi / sysfs (/sys/class/drm/card*/device/
-// gpu_busy_percent + amdgpu gpu_metrics) and point `vendor` at it; the public
-// property set above each branch stays identical, so CoreGpuSection and the
-// LCD feed don't change. nvtop is a TUI (not scriptable) — the per-process
-// list comes from nvidia-smi's --query-compute-apps, which exposes the same
-// data nvtop shows.
+// watchChanges stays FALSE: the bar writes via tmp+mv, and FileView's watch
+// does not fire on renames (EventsReader lesson) — the timer reload is the
+// delivery mechanism.
 //
-// Process + SplitParser + Timer idiom mirrors SysInfoService.qml.
+// VENDOR FLAG — `vendor` names the expected backend shape. Only "nvidia"
+// fields are published today. On a GPU swap, the BAR's prober grows the new
+// branch (rocm-smi / sysfs) and keeps publishing this same file schema; the
+// properties below stay identical, so CoreGpuSection and the LCD feed don't
+// change.
+//
+// The static GPU NAME still comes from the bar's fastfetch profile (overlay
+// opens) — this file carries live fields only.
 // =============================================================================
 
 pragma Singleton
 
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import "../config" as Config
 import "History.js" as History
@@ -29,12 +35,9 @@ import "History.js" as History
 Item {
     id: root
 
-    // ── VENDOR SELECTOR ───────────────────────────────────────────────────
-    // "nvidia" (nvidia-smi) today. Add "amd"/"intel" branches in refresh()
-    // on a GPU swap — the public property set below stays the same shape.
     property string vendor: "nvidia"
 
-    property string name: ""        // e.g. "NVIDIA GeForce RTX 5080"
+    property string name: ""        // static — bar's fastfetch profile (may stay "")
     property real temp: 0           // °C
     property real util: 0           // %
     property real vramUsedGB: 0
@@ -43,126 +46,55 @@ Item {
     property real powerW: 0
     property real fanPct: 0
     property real clockMHz: 0
-    property bool present: false    // backend returned parseable data
+    property bool present: false    // file carried a gpu object
     property var processes: []      // [{ pid, name, memMiB }] desc by mem, capped
 
     // ── 2-min rolling utilisation history ({time,value}) for the Core chart —
     // singleton-owned so it survives the dashboard Loader teardown on close.
     property var gpuHistory: []
 
-    // ── NVIDIA backend — telemetry ────────────────────────────────────────
-    // Fields: temp.gpu, util.gpu, mem.used, mem.total, power.draw, fan.speed,
-    // clocks.gr, name. memory.* are MiB → /1024 for GB. power/fan can be [N/A]
-    // → NaN → 0. name is a trailing string field (rejoined in case a GPU name
-    // ever contained a comma).
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: gpuProc
-        command: [
-            "nvidia-smi",
-            "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed,clocks.gr,name",
-            "--format=csv,noheader,nounits"
-        ]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { gpuProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && gpuProc.buffer.length > 0) {
-                var raw = gpuProc.buffer.trim().split("\n")[0].split(",")
-                var f = []
-                for (var i = 0; i < 7; i++) f.push(parseFloat((raw[i] || "").trim()))
-                var nameStr = raw.length > 7 ? raw.slice(7).join(",").trim() : ""
-                if (f.length >= 7 && !isNaN(f[0])) {
-                    root.name = nameStr || root.name
-                    root.temp = f[0]
-                    root.util = isNaN(f[1]) ? 0 : f[1]
-                    root.vramUsedGB = +(f[2] / 1024).toFixed(2)
-                    root.vramTotalGB = +(f[3] / 1024).toFixed(2)
-                    root.vramPct = root.vramTotalGB > 0
-                        ? +(root.vramUsedGB / root.vramTotalGB * 100).toFixed(1) : 0
-                    root.powerW = isNaN(f[4]) ? 0 : f[4]
-                    root.fanPct = isNaN(f[5]) ? 0 : f[5]
-                    root.clockMHz = isNaN(f[6]) ? 0 : f[6]
-                    root.present = true
-                    root.gpuHistory = History.appendHistory(root.gpuHistory, Date.now(), root.util,
-                                                             120000, 130)
-                }
-                gpuProc.buffer = ""
-            }
-        }
+    readonly property string metricsPath:
+        (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/" + (Quickshell.env("UID") || "1000"))
+        + "/velocity/metrics.json"
+
+    FileView {
+        id: metricsFile
+        path: root.metricsPath
+        watchChanges: false          // tmp+mv renames don't fire it — Timer reloads
+        printErrors: false
+        onTextChanged: root._ingest(text())
     }
 
-    // ── NVIDIA backend — per-process GPU consumers (nvtop-equivalent) ─────
-    // Fields: pid, process_name, used_memory. process_name is an exe path →
-    // basenamed. used_memory is the LAST field; the path sits between pid and
-    // it (slice defensively handles any comma in the path). Sorted desc by
-    // mem, capped to 6.
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: appsProc
-        command: [
-            "nvidia-smi",
-            "--query-compute-apps=pid,process_name,used_memory",
-            "--format=csv,noheader,nounits"
-        ]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { appsProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && appsProc.buffer.length > 0) {
-                var lines = appsProc.buffer.trim().split("\n")
-                var procs = []
-                for (var i = 0; i < lines.length; i++) {
-                    var line = lines[i]
-                    if (!line.trim()) continue
-                    var parts = line.split(",")
-                    if (parts.length < 3) continue
-                    var pid = parseInt(parts[0].trim(), 10)
-                    var mem = parseFloat(parts[parts.length - 1].trim())
-                    var pathStr = parts.slice(1, -1).join(",").trim()
-                    var base = pathStr ? pathStr.split("/").pop() : "process"
-                    if (pid && !isNaN(mem)) procs.push({ pid: pid, name: base, memMiB: mem })
-                }
-                procs.sort(function(a, b) { return b.memMiB - a.memMiB })
-                root.processes = procs.slice(0, 6)
-                appsProc.buffer = ""
-            } else if (!running && appsProc.buffer.length === 0) {
-                // nvidia-smi returns no rows when nothing is using the GPU.
-                root.processes = []
-            }
-        }
+    function _ingest(raw) {
+        var v = null
+        try { v = JSON.parse(raw) } catch (e) { v = null }
+        var g = v && typeof v === "object" ? v.gpu : null
+        if (!g || typeof g !== "object") { root.present = false; return }
+        root.present = true
+        root.temp = typeof g.tempC === "number" ? g.tempC : 0
+        root.util = typeof g.pct === "number" ? g.pct : 0
+        root.vramUsedGB = +(g.memUsedB / 1073741824).toFixed(2)
+        root.vramTotalGB = +(g.memTotalB / 1073741824).toFixed(2)
+        root.vramPct = root.vramTotalGB > 0
+            ? +(root.vramUsedGB / root.vramTotalGB * 100).toFixed(1) : 0
+        root.powerW = typeof g.powerW === "number" ? g.powerW : 0
+        root.fanPct = typeof g.fanPct === "number" ? g.fanPct : 0
+        root.clockMHz = typeof g.clockMHz === "number" ? g.clockMHz : 0
+        root.processes = Array.isArray(g.processes) ? g.processes : []
+        // Chart samples only while a consumer actually watches (idle-file
+        // rewrites must not churn properties with the dashboard closed).
+        if (CoreEngineService.telemetryWanted)
+            root.gpuHistory = History.appendHistory(root.gpuHistory, Date.now(), root.util,
+                                                     120000, 130)
     }
-
-    // ── AMD / Intel backend (FUTURE) ──────────────────────────────────────
-    // Not implemented. On a GPU swap, add the branch here (rocm-smi --json or
-    // sysfs gpu_metrics) feeding the same root.* properties, and gate the two
-    // Processes above on vendor === "nvidia" so only the active backend polls.
-    // ----------------------------------------------------------------------
 
     function refresh() {
-        if (root.vendor === "nvidia") {
-            if (!gpuProc.running) gpuProc.running = true
-            // appsProc (per-process list) feeds only the Core tab's
-            // TOP_GPU_PROCESSES Repeater — not the deepcool-LCD metrics.json
-            // feed — so skip the second nvidia-smi fork while the panel is closed.
-            if (Config.SharedState.dashboardVisible && !appsProc.running) appsProc.running = true
-        }
-        // else: future amd/intel branch
+        metricsFile.reload()         // ASYNC — parse lands in onTextChanged
     }
 
-    // Hung-process reaper: nvidia-smi can hang on driver hiccups — a stuck
-    // Process would silently kill the feed forever because the guards above
-    // skip every refresh while it reports running. Anything still alive at
-    // this sweep (normal reads finish in well under a second) is stuck.
-    Timer {
-        interval: 15000
-        repeat: true
-        running: CoreEngineService.telemetryWanted
-        onTriggered: {
-            if (gpuProc.running)  gpuProc.running = false
-            if (appsProc.running) appsProc.running = false
-        }
-    }
-
-    // Runs only while a consumer wants telemetry (Core tab open or the
-    // deepcool LCD daemon alive — CoreEngineService owns the gate; it is
-    // NOT always-on anymore).
+    // Reader cadence: 2s while a consumer wants telemetry (Core tab open or
+    // the deepcool LCD daemon alive — CoreEngineService owns the gate). The
+    // BAR's poll underneath is lease-gated; CoreEngineService renews it.
     Timer {
         interval: 2000
         running: CoreEngineService.telemetryWanted

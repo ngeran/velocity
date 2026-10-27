@@ -1,24 +1,28 @@
-/** Version: 1.0 - Themed system-info telemetry service **/
+/** Version: 2.0 - Themed system-info telemetry + H7 metrics publisher **/
 // =============================================================================
-// SystemInfoService.qml — data backbone for the System Info dashboard
+// SystemInfoService.qml — data backbone for the System Info dashboard AND the
+// ONE cross-process metrics producer (H7).
 // =============================================================================
 // Aggregates a hardware/OS profile + live metrics for the FastfetchOverlay
-// (the "SYSTEM INFO" popup opened from the Arch logo). The overlay stays pure
+// (the "SYSTEM INFO" popup opened from the logo). The overlay stays pure
 // layout; all gathering/parsing lives here.
 //
 //   STATIC PROFILE   fastfetch --format json   (CPU/GPU/OS/kernel/packages/disks)
-//   LIVE METRICS     /proc/meminfo + /proc/uptime + nvidia-smi  (polled while shown)
+//   LIVE METRICS     /proc/meminfo + /proc/uptime + /proc/stat + df + nvidia-smi
+//                    (polled ONLY while a lease is live — see LEASE below)
 //   NETWORK / GEO    ip-api.com once per session (graceful "—" on failure)
-//
-// The overlay sets `active = true` while shown → liveTimer (2s) polls live
-// metrics. Paused when closed (CPU + OLED burn-in). Every metric degrades to
-// "—"/0 when its source is absent, so no card ever breaks the layout.
+//   METRICS FILE     $XDG_RUNTIME_DIR/velocity/metrics.json (atomic tmp+mv)
+//                    — settings' Core GPU sections and the dashboard System
+//                    Pulse card read it (FileView) and renew the lease every
+//                    10s while visible. Nothing polls without a lease.
 // =============================================================================
 
 pragma Singleton
 
 import QtQuick
+import Quickshell
 import Quickshell.Io
+import "../lib/lease.mjs" as Lease
 
 Item {
     id: root
@@ -74,6 +78,47 @@ Item {
 
     property bool active: false             // overlay drives this with shown-state
     property bool loading: false
+
+    // ── LEASE (H7) — live polling happens only while a consumer holds one ──
+    // Two grant sources: the overlay's shown-state (`active`) and IPC
+    // `metrics lease <seconds>` (clamped ≤ 30s, bar/lib/lease.mjs). Settings
+    // renewers tick every 10s, so a 30s grant outlives one missed renewal.
+    // A shorter grant never shortens a live lease (max wins). The poll timer
+    // self-clears: on the first tick past expiry it zeroes _leaseUntil, which
+    // flips its own running binding false — no watchdog timer needed.
+    property real _leaseUntil: 0
+    function extendLease(seconds) {
+        var e = Lease.acquire(seconds, Date.now())
+        if (e > root._leaseUntil) root._leaseUntil = e
+    }
+    function _leaseLive() { return root.active || root._leaseUntil > Date.now() }
+
+    // ── METRICS FILE (H7) — aggregate snapshot for cross-process readers ────
+    // {schema:1, ts, cpu:{pct}, mem:{usedB,totalB},
+    //  gpu:null|{pct,memUsedB,memTotalB,tempC,powerW,fanPct,clockMHz,processes},
+    //  disk:{usedB,totalB}}
+    // gpu.processes = per-process compute consumers (moved here from settings'
+    // GpuService so nvidia-smi is shelled from exactly ONE file repo-wide).
+    // Field set is a superset of the ledger schema: powerW/fanPct/clockMHz/
+    // processes/disk are additive (H4's card renders disk; the Core GPU
+    // sections keep fan/clock/process rows alive through the file).
+    readonly property string _runtimeDir:
+        (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/" + (Quickshell.env("UID") || "1000"))
+        + "/velocity"
+    property bool _gpuSeen: false           // nvidia-smi answered at least once
+    property var gpuProcesses: []           // [{pid,name,memMiB}] desc by mem, cap 6
+    property int gpuMemUsedMiB: 0
+    property int gpuMemTotalMiB: 0
+    property real gpuFanPct: 0
+    property real gpuClockMHz: 0
+
+    // CPU% delta state — /proc/stat is cumulative jiffies; pct needs the
+    // previous sample (same math CoreEngineService runs settings-side).
+    property real _cpuPrevBusy: 0
+    property real _cpuPrevTotal: 0
+    property int cpuPct: 0                  // 0..100, 0 until the 2nd sample
+    property real diskUsedB: 0
+    property real diskTotalB: 0
 
     // =========================================================================
     // CONTROL
@@ -287,12 +332,12 @@ Item {
     }
 
     // =========================================================================
-    // LIVE METRICS — /proc/meminfo + /proc/uptime in one read
+    // LIVE METRICS — /proc/meminfo + /proc/uptime + /proc/stat + df in one read
     // =========================================================================
     Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
         id: liveProc
         property string buffer: ""
-        command: ["sh", "-c", "cat /proc/meminfo /proc/uptime"]
+        command: ["sh", "-c", "cat /proc/meminfo /proc/uptime; head -1 /proc/stat; df -kP /"]
         stdout: SplitParser { onRead: function(data) { liveProc.buffer += data + "\n" } }
         onRunningChanged: if (!running) {
             var lines = liveProc.buffer.split("\n")
@@ -306,6 +351,27 @@ Item {
                 if (ma) { memAvail = parseInt(ma[1], 10); continue }
                 var uu = ln.match(/^(\d+\.\d+)\s+\d+\.\d+/)
                 if (uu) up = parseFloat(uu[1])
+                // cumulative CPU jiffies (H7: cross-process cpu.pct)
+                var cs = ln.match(/^cpu\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/)
+                if (cs) {
+                    var user = +cs[1], nice = +cs[2], sys = +cs[3], idle = +cs[4]
+                    var iow = +cs[5], irq = +cs[6], sirq = +cs[7], steal = +cs[8]
+                    var busy = user + nice + sys + irq + sirq + steal
+                    var total = busy + idle + iow
+                    var dBusy = busy - root._cpuPrevBusy
+                    var dTotal = total - root._cpuPrevTotal
+                    if (dTotal > 0)
+                        root.cpuPct = Math.max(0, Math.min(100, Math.round(dBusy / dTotal * 100)))
+                    root._cpuPrevBusy = busy
+                    root._cpuPrevTotal = total
+                    continue
+                }
+                // root-fs capacity for the metrics file (df -kP: POSIX, kB units)
+                var df = ln.match(/^[^\s]+\s+(\d+)\s+(\d+)\s+\d+\s+\d+%\s+\/$/)
+                if (df) {
+                    root.diskTotalB = +df[1] * 1024
+                    root.diskUsedB = +df[2] * 1024
+                }
             }
             // values from /proc/meminfo are kB
             if (memTotal > 0) {
@@ -318,26 +384,64 @@ Item {
                 root.uptimeSeconds = up
                 root.uptimeStr = root.fmtUptime(up)
             }
+            root._publishMetrics()
         }
     }
 
-    // GPU temp / power / usage (NVIDIA). No GPU or no driver → stays 0 → "—".
+    // GPU temp/power/usage/vram/fan/clock (NVIDIA) — the ONE nvidia-smi
+    // telemetry fork in the repo (H7): settings' GpuService now reads the
+    // metrics file instead of shelling out itself. Fields can be [N/A] on
+    // some drivers → NaN → 0.
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: nvidiaProc
-        command: ["nvidia-smi", "--query-gpu=temperature.gpu,power.draw,utilization.gpu", "--format=csv,noheader,nounits"]
+        command: ["nvidia-smi",
+                  "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed,clocks.gr",
+                  "--format=csv,noheader,nounits"]
         stdout: SplitParser {
             onRead: function(data) {
                 var s = (data || "").trim()
                 if (!s) return
-                var parts = s.split(", ")
-                if (parts.length < 3) return
-                var t = parseInt(parts[0], 10)
-                var p = parseFloat(parts[1])
-                var u = parseInt(parts[2], 10)
+                var f = s.split("\n")[0].split(",")
+                var t = parseInt(f[0], 10), u = parseInt(f[1], 10)
+                var mu = parseInt(f[2], 10), mt = parseInt(f[3], 10)
+                var p = parseFloat(f[4]), fan = parseFloat(f[5]), clk = parseFloat(f[6])
                 if (!isNaN(t)) root.gpuTempC = t
-                if (!isNaN(p)) root.gpuPowerW = Math.round(p * 100) / 100
                 if (!isNaN(u)) root.gpuUsagePct = u
+                if (!isNaN(mu)) root.gpuMemUsedMiB = mu
+                if (!isNaN(mt)) root.gpuMemTotalMiB = mt
+                if (!isNaN(p)) root.gpuPowerW = Math.round(p * 100) / 100
+                if (!isNaN(fan)) root.gpuFanPct = fan
+                if (!isNaN(clk)) root.gpuClockMHz = clk
+                if (!isNaN(t) || !isNaN(mt)) root._gpuSeen = true
             }
+        }
+    }
+
+    // Per-process GPU consumers (nvtop-equivalent) — moved here from settings'
+    // GpuService (H7): same parse, one repo-wide nvidia-smi file. No rows is
+    // a valid answer (nothing using the GPU) → empty list.
+    BoundedProcess {
+        id: gpuAppsProc
+        timeoutMs: 6000
+        command: ["nvidia-smi",
+                  "--query-compute-apps=pid,process_name,used_memory",
+                  "--format=csv,noheader,nounits"]
+        onDone: function(out, err, code) {
+            var lines = (out || "").trim().split("\n")
+            var procs = []
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i]
+                if (!line.trim()) continue
+                var parts = line.split(",")
+                if (parts.length < 3) continue
+                var pid = parseInt(parts[0].trim(), 10)
+                var mem = parseFloat(parts[parts.length - 1].trim())
+                var pathStr = parts.slice(1, -1).join(",").trim()
+                var base = pathStr ? pathStr.split("/").pop() : "process"
+                if (pid && !isNaN(mem)) procs.push({ pid: pid, name: base, memMiB: mem })
+            }
+            procs.sort(function(a, b) { return b.memMiB - a.memMiB })
+            root.gpuProcesses = procs.slice(0, 6)
         }
     }
 
@@ -367,13 +471,57 @@ Item {
     }
 
     // =========================================================================
-    // LIVE POLL TIMER (runs only while the overlay is shown)
+    // METRICS FILE PUBLISHER (H7) — atomic tmp+mv after every live tick
+    // =========================================================================
+    BoundedProcess {
+        id: metricsWriter
+        timeoutMs: 5000
+    }
+    function _publishMetrics() {
+        var gpu = null
+        if (root._gpuSeen) {
+            gpu = {
+                pct: root.gpuUsagePct,
+                memUsedB: root.gpuMemUsedMiB * 1048576,
+                memTotalB: root.gpuMemTotalMiB * 1048576,
+                tempC: root.gpuTempC,
+                powerW: root.gpuPowerW,
+                fanPct: root.gpuFanPct,
+                clockMHz: root.gpuClockMHz,
+                processes: root.gpuProcesses
+            }
+        }
+        var payload = JSON.stringify({
+            schema: 1,
+            ts: Date.now(),
+            cpu: { pct: root.cpuPct },
+            mem: { usedB: Math.round(root.memUsedGiB * 1073741824),
+                   totalB: Math.round(root.memTotalGiB * 1073741824) },
+            gpu: gpu,
+            disk: { usedB: Math.round(root.diskUsedB), totalB: Math.round(root.diskTotalB) }
+        })
+        // positional argv ($1 dir, $2 payload) — the T23a "$0" lesson
+        metricsWriter.command = ["sh", "-c",
+            "mkdir -p -- \"$1\" && printf '%s' \"$2\" > \"$1/metrics.json.tmp\" && mv -f \"$1/metrics.json.tmp\" \"$1/metrics.json\"",
+            "sh", root._runtimeDir, payload]
+        metricsWriter.run()
+    }
+
+    // =========================================================================
+    // LIVE POLL TIMER — lease-gated (H7). Two grant sources: the overlay's
+    // shown-state and the IPC lease. Polls every 2s while EITHER is live;
+    // the first tick past lease expiry zeroes _leaseUntil, which flips this
+    // timer's own running binding false — no watchdog, no orphan polling.
     // =========================================================================
     Timer {
         id: liveTimer
         interval: 2000
         repeat: true
-        running: root.active
-        onTriggered: root.pollLive()
+        running: root.active || root._leaseUntil > 0
+        onTriggered: {
+            if (!root._leaseLive()) { root._leaseUntil = 0; return }
+            root.pollLive()
+            if (!gpuAppsProc.running) gpuAppsProc.run()
+        }
     }
 }
