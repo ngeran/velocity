@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert"
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { normalize, place, remove, move, prune, sectionOf, ensurePlaced, resolve, migrate, BUILTIN_IDS } from "./layout.mjs"
+import { normalize, place, remove, move, prune, sectionOf, ensurePlaced, resolve, migrate, BUILTIN_IDS, pruneGrace, diffIdLists, PRUNE_GRACE } from "./layout.mjs"
 import { parseManifest } from "./manifest.mjs"
 
 let n = 0
@@ -108,6 +108,104 @@ ok("migrate: committed state fixture stays schema-2-valid; legacy config still m
     // The legacy path still migrates clean from the committed bar-config.
     const { disabled } = migrate({ rightLayout: cfg.rightLayout, order: [], plugins: repoPlugins() })
     assert.deepEqual(disabled, [])
+})
+
+// ── pruneGrace (S4): unknown ids survive PRUNE_GRACE consecutive scans ──────
+ok("pruneGrace: miss tally, drop at grace, reset on return", () => {
+    const en = { "a.live": true, "z.gone": true }
+    const lay = { left: [], center: [], right: ["a.live", "z.gone"] }
+
+    // Scan 1: z.gone missing → miss 1, everything survives.
+    let g = pruneGrace(en, lay, ["a.live"], {})
+    assert.equal(PRUNE_GRACE, 3)
+    assert.deepEqual(g.dropped, [])
+    assert.deepEqual(g.misses, { "z.gone": 1 })
+    assert.deepEqual(g.enabled, en)
+    assert.deepEqual(g.layout, lay)
+
+    // Scan 2: miss 2, still survives.
+    g = pruneGrace(en, lay, ["a.live"], g.misses)
+    assert.deepEqual(g.dropped, [])
+    assert.deepEqual(g.misses, { "z.gone": 2 })
+
+    // Scan 3: grace exhausted → dropped from enabled AND layout.
+    g = pruneGrace(en, lay, ["a.live"], g.misses)
+    assert.deepEqual(g.dropped, ["z.gone"])
+    assert.deepEqual(g.enabled, { "a.live": true })
+    assert.deepEqual(g.layout, { left: [], center: [], right: ["a.live"] })
+    assert.deepEqual(g.misses, {})
+
+    // The plugin returns → tally resets (misses map forgets it entirely).
+    g = pruneGrace(en, lay, ["a.live", "z.gone"], { "z.gone": 2 })
+    assert.deepEqual(g.dropped, [])
+    assert.deepEqual(g.misses, {})
+    assert.deepEqual(g.enabled, en)
+})
+
+ok("pruneGrace: layout-only ids tracked too; enabled+layout union counts ONE miss", () => {
+    // Placed but never in enabledMap (e.g. disabled rows keep their place).
+    let g = pruneGrace({}, { left: [], center: [], right: ["solo"] }, [], {})
+    assert.deepEqual(g.misses, { solo: 1 })
+    // Same id in enabled AND layout: one tally entry, not two.
+    g = pruneGrace({ duo: true }, { left: [], center: [], right: ["duo"] }, [], {})
+    assert.deepEqual(g.misses, { duo: 1 })
+    // Grace parameter override: 1 = drop on the first miss.
+    g = pruneGrace({ x: true }, { left: [], center: [], right: ["x"] }, [], {}, 1)
+    assert.deepEqual(g.dropped, ["x"])
+    assert.deepEqual(g.enabled, {})
+})
+
+// ── diffIdLists (P1): minimal apply-in-order ops for the BarSection model ───
+function applyOps(list, ops) {
+    const out = list.slice()
+    for (const o of ops) {
+        if (o.op === "remove") out.splice(o.index, 1)
+        else out.splice(o.index, 0, o.id)
+    }
+    return out
+}
+ok("diffIdLists: identity-blind, no-op on equal content", () => {
+    assert.deepEqual(diffIdLists(["a", "b"], ["a", "b"]), [])
+    assert.deepEqual(diffIdLists([], []), [])
+    assert.deepEqual(diffIdLists(null, []), [])
+    // Same ids in fresh record wrappers → still no ops (id comparison).
+    const ids = diffIdLists(["a", "b"], ["a", "b"].map(x => x + ""))
+    assert.deepEqual(ids, [])
+})
+
+ok("diffIdLists: append / prepend / remove / middle insert", () => {
+    let ops = diffIdLists(["a"], ["a", "b"])
+    assert.deepEqual(applyOps(["a"], ops), ["a", "b"])
+    ops = diffIdLists(["a"], ["z", "a"])
+    assert.deepEqual(applyOps(["a"], ops), ["z", "a"])
+    ops = diffIdLists(["a", "b", "c"], ["a", "c"])
+    assert.deepEqual(applyOps(["a", "b", "c"], ops), ["a", "c"])
+    ops = diffIdLists(["a", "c"], ["a", "b", "c"])
+    assert.deepEqual(applyOps(["a", "c"], ops), ["a", "b", "c"])
+})
+
+ok("diffIdLists: moves land as remove+insert, any distance", () => {
+    for (const [from, to] of [
+        [["a", "b", "c"], ["c", "a", "b"]],
+        [["a", "b", "c", "d"], ["d", "c", "b", "a"]],
+        [["a", "b", "c"], ["b", "a", "c"]],
+        [["a"], ["a"]],
+        [[], ["x", "y"]],
+        [["x", "y"], []],
+    ]) {
+        const ops = diffIdLists(from, to)
+        assert.deepEqual(applyOps(from, ops), to, JSON.stringify({ from, to, ops }))
+    }
+})
+
+ok("diffIdLists: remove+insert combined churn stays correct", () => {
+    const from = ["a", "dead", "b", "c"]
+    const to = ["c", "new", "a", "b"]
+    const ops = diffIdLists(from, to)
+    assert.deepEqual(applyOps(from, ops), to)
+    // Removes all come before inserts in the op stream.
+    const firstInsert = ops.findIndex(o => o.op === "insert")
+    assert.ok(ops.slice(0, firstInsert).every(o => o.op === "remove"), "removes precede inserts")
 })
 
 console.log(`layout.test: ${n} passed`)

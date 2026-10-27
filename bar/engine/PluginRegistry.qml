@@ -204,13 +204,15 @@ Item {
         // the whole state.
         if (!root._scanned) return
         // Prune ids no longer on disk — removed plugins would otherwise leave
-        // zombie entries forever.
+        // zombie entries forever. S4: ids still under the grace tally (missed
+        // 1-2 consecutive scans) survive — the keep-list is known ∪ _misses.
         var pruned = {}
         var known = []
         for (var i = 0; i < root.plugins.length; i++) known.push(root.plugins[i].id)
+        var keep = known.concat(Object.keys(root._misses))
         for (var k in root.enabledMap)
-            if (known.indexOf(k) !== -1) pruned[k] = root.enabledMap[k]
-        root.layout = Layout.prune(root.layout, known)
+            if (keep.indexOf(k) !== -1) pruned[k] = root.enabledMap[k]
+        root.layout = Layout.prune(root.layout, keep)
         stateWriter.command = ["sh", "-c",
             'mkdir -p "$(dirname "$1")" && printf "%s" "$2" > "$1.tmp" && mv "$1.tmp" "$1"',
             "sh", root.statePath, JSON.stringify({ schemaVersion: 2, enabled: pruned, layout: root.layout })]
@@ -295,6 +297,10 @@ Item {
     // id → bool set before a scan knew the id; survives the rescan's state
     // reload, then gets placed + persisted once the scan lands.
     property var _pending: ({})
+    // S4 prune grace: id → consecutive missed scans (Layout.pruneGrace owns
+    // the math). Refreshed once per scan in _absorbScan; _persistState keeps
+    // ids still under grace so one scan blip can't wipe their state.
+    property var _misses: ({})
     property bool _rescanQueued: false
 
     function rescan() {
@@ -326,13 +332,29 @@ Item {
         var migrating = root._legacyOrder !== null
         if (migrating) root._migrate(list)
         root.plugins = root._applyStateToList(list)
+        var known = []
+        for (var i = 0; i < root.plugins.length; i++) known.push(root.plugins[i].id)
         var settle = Object.keys(root._pending)
         root._pending = ({})
         for (var i = 0; i < settle.length; i++) {
             var p = root.plugin(settle[i])
             if (p && root.enabledMap[p.id] === true) root.layout = Layout.ensurePlaced(root.layout, p)
         }
-        if (migrating || settle.length > 0) root._persistState()
+        // S4 prune grace: refresh the miss tally against THIS scan's ids
+        // (cadence is scans, not saves). Ids that hit the grace limit drop
+        // from enabled + layout here; ids still under grace stay in the maps
+        // and in _misses for _persistState's keep-list.
+        var g = Layout.pruneGrace(root.enabledMap, root.layout, known, root._misses)
+        root._misses = g.misses
+        var graceDropped = g.dropped.length > 0
+        if (graceDropped) {
+            root.enabledMap = g.enabled
+            root.layout = g.layout
+            for (var x = 0; x < g.dropped.length; x++)
+                console.log("[PluginRegistry] pruned " + g.dropped[x] +
+                            " after " + Layout.PRUNE_GRACE + " missed scans")
+        }
+        if (migrating || settle.length > 0 || graceDropped) root._persistState()
         if (root._rescanQueued) { root._rescanQueued = false; Qt.callLater(root.rescan) }
     }
 

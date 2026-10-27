@@ -77,6 +77,60 @@ export function prune(layout, knownIds) {
     return l
 }
 
+// S4 prune grace: an enabled/layout id absent from a scan collects one miss;
+// at PRUNE_GRACE consecutive missed scans it is dropped for good. A deploy
+// sync blip or a half-finished install no longer wipes a plugin's state on
+// the first look. Returns { enabled, layout, misses, dropped }: new maps;
+// `misses` holds only ids still under grace (missed ≥1×, not yet dropped);
+// `dropped` lists the ids this call gave up on.
+export const PRUNE_GRACE = 3
+export function pruneGrace(enabled, layout, knownIds, misses, grace = PRUNE_GRACE) {
+    const known = new Set(knownIds || [])
+    const prev = misses || {}
+    const l = normalize(layout)
+    // Union of enabled keys + placed ids — an id present in both counts ONE miss.
+    const ids = Object.keys(enabled || {})
+    for (const s of SECTIONS)
+        for (const id of l[s]) if (ids.indexOf(id) === -1) ids.push(id)
+    const next = {}
+    const survive = {}
+    const dropped = []
+    for (const id of ids) {
+        if (known.has(id)) { survive[id] = true; continue }
+        const m = (prev[id] || 0) + 1
+        if (m < grace) { next[id] = m; survive[id] = true }
+        else dropped.push(id)
+    }
+    const en = {}
+    for (const k in enabled || {})
+        if (Object.prototype.hasOwnProperty.call(enabled, k) && survive[k]) en[k] = enabled[k]
+    for (const s of SECTIONS) l[s] = l[s].filter(id => survive[id])
+    return { enabled: en, layout: l, misses: next, dropped: dropped }
+}
+
+// Minimal id-list transform a→b as apply-in-order ops:
+//   [{ op: "remove", index }, { op: "insert", index, id }]
+// Indexes are positions in the working list AT APPLY TIME (removes first,
+// descending; then left→right inserts). Identity-blind by design — compare
+// ids, not record objects, so a re-resolved sections row with the same id
+// diffs to nothing. Assumes no duplicate ids (normalize guarantees it).
+export function diffIdLists(a, b) {
+    const src = Array.isArray(a) ? a : []
+    const want = Array.isArray(b) ? b : []
+    const ops = []
+    const work = src.slice()
+    for (let i = work.length - 1; i >= 0; i--)
+        if (want.indexOf(work[i]) === -1) { ops.push({ op: "remove", index: i }); work.splice(i, 1) }
+    for (let j = 0; j < want.length; j++) {
+        if (work[j] === want[j]) continue
+        const cur = work.indexOf(want[j])   // ≥ j+1: matches left of j already aligned
+        if (cur !== -1) { ops.push({ op: "remove", index: cur }); work.splice(cur, 1) }
+        ops.push({ op: "insert", index: j, id: want[j] })
+        work.splice(j, 0, want[j])
+    }
+    return ops
+}
+
 function isBarWidget(p) {
     return p && Array.isArray(p.kinds) && p.kinds.indexOf("bar-widget") !== -1
 }

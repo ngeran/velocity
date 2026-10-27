@@ -24,6 +24,10 @@
 
 import QtQuick
 import QtQuick.Layouts
+// NB: NOT `as Layout` — that name is the QtQuick.Layouts attached property
+// every delegate cell uses (Layout.alignment / Layout.leftMargin); shadowing
+// it breaks the whole BarSection type ("Expected type name").
+import "lib/layout.mjs" as LayoutLib
 
 RowLayout {
     id: section
@@ -53,13 +57,57 @@ RowLayout {
         if (item && item.ctx && item.ctx.fit !== state) item.ctx.fit = state
     }
 
+    // P1: the cells live in a ListModel diffed against
+    // PluginRegistry.sections (Layout.diffIdLists), NOT in the sections
+    // array itself. `sections` is a readonly var — every toggle/place/move
+    // re-resolves it into a NEW array, and a Repeater on that resets every
+    // delegate: toggling one plugin remounted the whole bar. With the
+    // diffed model, only the changed cells are inserted/removed; surviving
+    // icons keep their state. Roles: `id` (string, the diff key) and `pw`
+    // (the plugin record).
+    ListModel { id: cells }
+
+    Connections {
+        target: PluginRegistry
+        function onSectionsChanged() { section._syncCells() }
+    }
+
+    Component.onCompleted: section._syncCells()
+
+    function _pw(list, id) {
+        for (var i = 0; i < list.length; i++)
+            if (list[i].id === id) return list[i]
+        return null
+    }
+
+    function _syncCells() {
+        var want = PluginRegistry.sections[section.name] || []
+        var wantIds = []
+        for (var i = 0; i < want.length; i++) wantIds.push(want[i].id)
+        var haveIds = []
+        for (var j = 0; j < cells.count; j++) haveIds.push(cells.get(j).id)
+        var ops = LayoutLib.diffIdLists(haveIds, wantIds)
+        if (ops.length === 0) {
+            // Same ids, re-resolved records: refresh `pw` in place so
+            // hot-reload revs (entryUrl ?rev=N) still reach the slots —
+            // setProperty only re-fires bindings, no delegate is rebuilt.
+            for (var u = 0; u < want.length; u++) cells.setProperty(u, "pw", want[u])
+            return
+        }
+        for (var k = 0; k < ops.length; k++) {
+            var o = ops[k]
+            if (o.op === "remove") cells.remove(o.index)
+            else cells.insert(o.index, { id: o.id, pw: _pw(want, o.id) })
+        }
+    }
+
     Repeater {
         id: rep
-        model: PluginRegistry.sections[section.name] || []
+        model: cells
 
         Item {
             id: cell
-            readonly property var plugin: modelData
+            readonly property var plugin: model.pw
             readonly property Component override: section.overrides[cell.plugin.id] || null
             readonly property string fitState: section.fitMap[cell.plugin.id] || "full"
             // Cells the plan collapsed: out of the layout entirely (a hidden
