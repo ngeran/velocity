@@ -69,17 +69,17 @@ RowLayout {
     }
 
     // ── weather ──────────────────────────────────────────────────────────────
-    readonly property bool _wxData: Clock.WeatherService.wx && Clock.WeatherService.wx.available
+    readonly property bool _weatherData: Clock.WeatherService.weather && Clock.WeatherService.weather.available
     readonly property bool _wxLive: ctx
         && Clock.WeatherService.showWeather
-        && (calRoot._wxData
+        && (calRoot._weatherData
             || Clock.WeatherService.state === "loading"
             || Clock.WeatherService.state === "error")
 
     // The hour cards' slice — re-evaluated as the clock ticks so "now"
     // advances while the panel sits open.
-    readonly property var _hours: calRoot._wxData
-        ? Wx.sliceAhead(Clock.WeatherService.wx.hourly, Clock.WeatherService.nowStamp(clk.date), 8)
+    readonly property var _hours: calRoot._weatherData
+        ? Wx.sliceAhead(Clock.WeatherService.weather.hourly, Clock.WeatherService.nowStamp(clk.date), 8)
         : []
 
     // 12h label for an hour row ("22" → "10 PM") — the hero clock's idiom.
@@ -307,7 +307,7 @@ RowLayout {
 
             // Loading / error states take the whole row
             Text {
-                visible: !calRoot._wxData && Clock.WeatherService.state === "loading"
+                visible: !calRoot._weatherData && Clock.WeatherService.state === "loading"
                 Layout.fillWidth: true
                 text: "CONTACTING OPEN-METEO …"
                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
@@ -315,7 +315,7 @@ RowLayout {
                 font.pixelSize: 10; font.letterSpacing: 1.5
             }
             Text {
-                visible: !calRoot._wxData && Clock.WeatherService.state === "error"
+                visible: !calRoot._weatherData && Clock.WeatherService.state === "error"
                 Layout.fillWidth: true
                 text: "WEATHER OFFLINE · RETRIES ON NEXT OPEN"
                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
@@ -325,7 +325,7 @@ RowLayout {
 
             // Current conditions
             Card {
-                visible: calRoot._wxData
+                visible: calRoot._weatherData
                 Layout.fillWidth: true
                 Layout.preferredHeight: 104
 
@@ -347,7 +347,7 @@ RowLayout {
                             anchors.verticalCenter: parent.verticalCenter
                         }
                         Text {
-                            text: Clock.WeatherService.wx ? Clock.WeatherService.wx.tempNow + "°" : ""
+                            text: Clock.WeatherService.weather ? Clock.WeatherService.weather.tempNow + "°" : ""
                             color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
                             font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
                             font.pixelSize: 30; font.weight: Font.DemiBold
@@ -355,7 +355,7 @@ RowLayout {
                         }
                     }
                     Text {
-                        text: Clock.WeatherService.wx ? Clock.WeatherService.wx.condition : ""
+                        text: Clock.WeatherService.weather ? Clock.WeatherService.weather.condition : ""
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
                         font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
                         font.pixelSize: 11
@@ -376,7 +376,7 @@ RowLayout {
             Card {
                 id: metricsCard
 
-                visible: calRoot._wxData
+                visible: calRoot._weatherData
                 Layout.preferredWidth: 128
                 Layout.preferredHeight: 104
 
@@ -389,11 +389,11 @@ RowLayout {
 
                     Repeater {
                         model: [
-                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.wind : "", l: "WIND" },
-                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.humidity + "%" : "", l: "HUMIDITY" },
+                            { v: Clock.WeatherService.weather ? Clock.WeatherService.weather.wind : "", l: "WIND" },
+                            { v: Clock.WeatherService.weather ? Clock.WeatherService.weather.humidity + "%" : "", l: "HUMIDITY" },
                             { v: calRoot._hours.length > 1 ? calRoot._hours[1].precip + "%"
                                 : (calRoot._hours.length ? calRoot._hours[0].precip + "%" : ""), l: "RAIN" },
-                            { v: Clock.WeatherService.wx ? Clock.WeatherService.wx.feels + "°" : "", l: "FEELS" }
+                            { v: Clock.WeatherService.weather ? Clock.WeatherService.weather.feels + "°" : "", l: "FEELS" }
                         ]
                         delegate: Column {
                             width: (metricsCard.width - 24 - 10) / 2
@@ -418,7 +418,7 @@ RowLayout {
         // ── Hourly curve — next 8 hours from the current one ─────────────────
         Card {
             id: curveCard
-            visible: calRoot._wxData
+            visible: calRoot._weatherData
             Layout.fillWidth: true
             Layout.preferredHeight: 118
 

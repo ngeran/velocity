@@ -61,8 +61,8 @@ Item {
             // ── NOTCH GEOMETRY (tunables; Shibumi baseline barH=33) ────────────
             readonly property int barH: Config.BarConfig.barHeight
             readonly property int breathing: 3            // window = barH+3, lobe = barH (Shibumi 33/36)
-            readonly property real sc: barH / 33.0
-            readonly property int wing: Math.round(14 * sc)                    // shoulder horizontal span
+            readonly property real contentScale: barH / 33.0
+            readonly property int wing: Math.round(14 * contentScale)                    // shoulder horizontal span
             readonly property int shoulderR: Math.max(10, Math.min(16, Math.round(barH * 0.45)))
             readonly property int inset: wing + shoulderR // bottom-edge inset per side
             readonly property real kappa: 0.55228475      // circle-approximation constant
@@ -70,8 +70,8 @@ Item {
 
             // Lobe fill: the QD-OLED-clamped background token at Shibumi's
             // 0.94 alpha (withAlpha is hex-string-only — Qt.rgba on the color).
-            readonly property color bg: Config.BarConfig.colorBackground
-            readonly property color lobeFill: Qt.rgba(bg.r, bg.g, bg.b, 0.94)
+            readonly property color background: Config.BarConfig.colorBackground
+            readonly property color lobeFill: Qt.rgba(background.r, background.g, background.b, 0.94)
 
             // ── ACTIVE NOTCH state (per output) ─────────────────────────────
             // fed by PopupCoordinator.connected {owner, screen, caretX}
@@ -115,7 +115,7 @@ Item {
             // feet never walk under the shoulder curves (a bare 13px clamp
             // self-intersects the path when inset > 13).
             readonly property real cxPad: Math.max(13, inset + 2) + 9 * cutReveal
-            readonly property real cx: Math.max(cxPad,
+            readonly property real centerX: Math.max(cxPad,
                     Math.min(lobe.width - cxPad,
                              (lastCaretX >= 0 ? lastCaretX : lobe.width / 2) - lobe.x))
 
@@ -213,18 +213,18 @@ Item {
                             x: lobe.width - panelWindow.inset;           y: panelWindow.barH
                         }
                         // bottom edge → bite right foot
-                        PathLine { x: panelWindow.cx + panelWindow.biteHalfW; y: panelWindow.barH }
+                        PathLine { x: panelWindow.centerX + panelWindow.biteHalfW; y: panelWindow.barH }
                         // bite right flank, rising to the apex
                         PathCubic {
-                            control1X: panelWindow.cx + panelWindow.biteCtlH; control1Y: panelWindow.barH
-                            control2X: panelWindow.cx;                        control2Y: panelWindow.barH - panelWindow.biteCtlV
-                            x: panelWindow.cx;                                y: panelWindow.barH - panelWindow.biteDepth
+                            control1X: panelWindow.centerX + panelWindow.biteCtlH; control1Y: panelWindow.barH
+                            control2X: panelWindow.centerX;                        control2Y: panelWindow.barH - panelWindow.biteCtlV
+                            x: panelWindow.centerX;                                y: panelWindow.barH - panelWindow.biteDepth
                         }
                         // bite left flank, falling back to the edge
                         PathCubic {
-                            control1X: panelWindow.cx;                        control1Y: panelWindow.barH - panelWindow.biteCtlV
-                            control2X: panelWindow.cx - panelWindow.biteCtlH; control2Y: panelWindow.barH
-                            x: panelWindow.cx - panelWindow.biteHalfW;        y: panelWindow.barH
+                            control1X: panelWindow.centerX;                        control1Y: panelWindow.barH - panelWindow.biteCtlV
+                            control2X: panelWindow.centerX - panelWindow.biteCtlH; control2Y: panelWindow.barH
+                            x: panelWindow.centerX - panelWindow.biteHalfW;        y: panelWindow.barH
                         }
                         // bottom edge → left shoulder foot
                         PathLine { x: panelWindow.inset; y: panelWindow.barH }
@@ -252,16 +252,16 @@ Item {
                                                                        control2Y: panelWindow.barH
                             x: panelWindow.inset;                      y: panelWindow.barH
                         }
-                        PathLine { x: panelWindow.cx - panelWindow.biteHalfW; y: panelWindow.barH }
+                        PathLine { x: panelWindow.centerX - panelWindow.biteHalfW; y: panelWindow.barH }
                         PathCubic {
-                            control1X: panelWindow.cx - panelWindow.biteCtlH; control1Y: panelWindow.barH
-                            control2X: panelWindow.cx;                        control2Y: panelWindow.barH - panelWindow.biteCtlV
-                            x: panelWindow.cx;                                y: panelWindow.barH - panelWindow.biteDepth
+                            control1X: panelWindow.centerX - panelWindow.biteCtlH; control1Y: panelWindow.barH
+                            control2X: panelWindow.centerX;                        control2Y: panelWindow.barH - panelWindow.biteCtlV
+                            x: panelWindow.centerX;                                y: panelWindow.barH - panelWindow.biteDepth
                         }
                         PathCubic {
-                            control1X: panelWindow.cx;                        control1Y: panelWindow.barH - panelWindow.biteCtlV
-                            control2X: panelWindow.cx + panelWindow.biteCtlH; control2Y: panelWindow.barH
-                            x: panelWindow.cx + panelWindow.biteHalfW;        y: panelWindow.barH
+                            control1X: panelWindow.centerX;                        control1Y: panelWindow.barH - panelWindow.biteCtlV
+                            control2X: panelWindow.centerX + panelWindow.biteCtlH; control2Y: panelWindow.barH
+                            x: panelWindow.centerX + panelWindow.biteHalfW;        y: panelWindow.barH
                         }
                         PathLine { x: lobe.width - panelWindow.inset; y: panelWindow.barH }
                         PathCubic {
@@ -282,17 +282,17 @@ Item {
                     ShapePath {
                         fillColor: Config.BarConfig.colorBackground
                         strokeColor: "transparent"
-                        startX: panelWindow.cx - panelWindow.wedgeHalfW; startY: panelWindow.barH + 1
+                        startX: panelWindow.centerX - panelWindow.wedgeHalfW; startY: panelWindow.barH + 1
 
                         PathCubic {
-                            control1X: panelWindow.cx - panelWindow.wedgeCtlH; control1Y: panelWindow.barH + 1
-                            control2X: panelWindow.cx;                         control2Y: panelWindow.barH + 1 - panelWindow.wedgeCtlV
-                            x: panelWindow.cx;                                 y: panelWindow.barH - panelWindow.wedgeDepth
+                            control1X: panelWindow.centerX - panelWindow.wedgeCtlH; control1Y: panelWindow.barH + 1
+                            control2X: panelWindow.centerX;                         control2Y: panelWindow.barH + 1 - panelWindow.wedgeCtlV
+                            x: panelWindow.centerX;                                 y: panelWindow.barH - panelWindow.wedgeDepth
                         }
                         PathCubic {
-                            control1X: panelWindow.cx;                         control1Y: panelWindow.barH + 1 - panelWindow.wedgeCtlV
-                            control2X: panelWindow.cx + panelWindow.wedgeCtlH; control2Y: panelWindow.barH + 1
-                            x: panelWindow.cx + panelWindow.wedgeHalfW;        y: panelWindow.barH + 1
+                            control1X: panelWindow.centerX;                         control1Y: panelWindow.barH + 1 - panelWindow.wedgeCtlV
+                            control2X: panelWindow.centerX + panelWindow.wedgeCtlH; control2Y: panelWindow.barH + 1
+                            x: panelWindow.centerX + panelWindow.wedgeHalfW;        y: panelWindow.barH + 1
                         }
                     }
                 }

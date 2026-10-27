@@ -159,7 +159,7 @@ ColumnLayout {
                         Item { Layout.fillWidth: true }
                         PowerPill {
                             Layout.alignment: Qt.AlignVCenter
-                            on: Services.BluetoothControlService.powered
+                            isOn: Services.BluetoothControlService.powered
                             onClicked: Services.BluetoothControlService.togglePower()
                         }
                     }

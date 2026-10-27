@@ -17,7 +17,7 @@ Row {
     property string label: ""
     property string kind: "accent"
 
-    readonly property color c: kind === "ok"     ? Config.ThemeConfig.colors.success
+    readonly property color kindColor: kind === "ok"     ? Config.ThemeConfig.colors.success
                              : kind === "warn"   ? Config.ThemeConfig.colors.warning
                              : kind === "err"    ? Config.ThemeConfig.colors.error
                              : kind === "idle"   ? Config.ThemeConfig.colors.textDim
@@ -27,7 +27,7 @@ Row {
 
     Rectangle {
         width: 6; height: 6; radius: 3
-        color: root.c
+        color: root.kindColor
         anchors.verticalCenter: parent.verticalCenter
     }
 
@@ -37,7 +37,7 @@ Row {
         font.pixelSize: 10
         font.bold: true
         font.letterSpacing: 0.6
-        color: root.c
+        color: root.kindColor
         anchors.verticalCenter: parent.verticalCenter
     }
 }

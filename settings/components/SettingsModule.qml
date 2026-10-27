@@ -210,7 +210,7 @@ Item {
                     section: "desktop", keywords: keywords, item: hyprToggleRow })
             Component.onDestruction: Services.SearchIndex.unregister(hyprToggleRow)
             PowerPill {
-                on: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
+                isOn: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
                 enabled: Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== undefined
                 onClicked: Services.HyprSettingsService.set(
                     hyprToggleRow.def.key,
@@ -463,7 +463,7 @@ Item {
                         value: Services.HypridleService.suspendEnabled
                                ? (Services.HypridleService.suspendTimeout / 60) + " min" : "OFF"
                         PowerPill {
-                            on: Services.HypridleService.suspendEnabled
+                            isOn: Services.HypridleService.suspendEnabled
                             onClicked: {
                                 Services.HypridleService.suspendEnabled = !Services.HypridleService.suspendEnabled
                                 Services.HypridleService.saveConfig()

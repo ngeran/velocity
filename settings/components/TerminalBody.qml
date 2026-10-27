@@ -56,9 +56,9 @@ Rectangle {
                     Layout.preferredWidth: tabLbl.implicitWidth + 24
                     Layout.preferredHeight: 24
                     radius: height / 2
-                    readonly property bool on: body.netPage === modelData.key
-                    color: on ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.14) : "transparent"
-                    border.color: on ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.outlineVariant
+                    readonly property bool isOn: body.netPage === modelData.key
+                    color: isOn ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.14) : "transparent"
+                    border.color: isOn ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 120 } }
                     Text {
@@ -69,7 +69,7 @@ Rectangle {
                         font.pixelSize: 9
                         font.bold: true
                         font.letterSpacing: 0.8
-                        color: parent.on ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                        color: parent.isOn ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
                     }
                     MouseArea {
                         anchors.fill: parent

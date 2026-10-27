@@ -127,7 +127,7 @@ ColumnLayout {
                         font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; Layout.preferredWidth: 80 }
                     Item { Layout.fillWidth: true }
                     PowerPill {
-                        on: root.lcdEnabled
+                        isOn: root.lcdEnabled
                         onClicked: { root.lcdEnabled = !root.lcdEnabled; root.save() }
                     }
                 }

@@ -35,9 +35,9 @@ HudCard {
 
     // ── state (from the plugin cache; "—" until the first read lands) ──
     property string _place: ""
-    property var _wx: null              // Wx.parseForecast output
+    property var _weather: null              // Wx.parseForecast output
     property double _fetchedAt: 0       // ms epoch; 0 = coords-only cache
-    readonly property bool _has: _wx !== null && _wx.available === true
+    readonly property bool _has: _weather !== null && _weather.available === true
     readonly property int _ageMin: _fetchedAt > 0
                                   ? Math.floor((Date.now() - _fetchedAt) / 60000) : -1
     // Past the plugin's own 15-min refresh gate the data is officially old.
@@ -74,7 +74,7 @@ HudCard {
             var wxp = Wx.parseForecast(c.raw, root._unit)
             if (!wxp.available) return
             root._place = (typeof c.place === "string") ? c.place : ""
-            root._wx = wxp
+            root._weather = wxp
             root._fetchedAt = c.fetchedAt
         }
     }
@@ -182,7 +182,7 @@ HudCard {
 
                     Text {
                         anchors.centerIn: parent
-                        text: root._has ? Wx.nerdFor(root._wx.code, root._wx.isDay) : "—"
+                        text: root._has ? Wx.nerdFor(root._weather.code, root._weather.isDay) : "—"
                         font.family: Config.ControlConfig.fontNerd
                         font.pixelSize: 30
                         color: Config.ThemeConfig.colors.info
@@ -194,7 +194,7 @@ HudCard {
                     Layout.alignment: Qt.AlignVCenter
 
                     Text {
-                        text: root._has ? root._wx.temp : "—"
+                        text: root._has ? root._weather.temp : "—"
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily
                         font.pixelSize: 38; font.weight: Font.Light
@@ -228,7 +228,7 @@ HudCard {
                 spacing: 10
 
                 Text {
-                    text: root._has ? root._wx.condition : ""
+                    text: root._has ? root._weather.condition : ""
                     color: Config.ThemeConfig.colors.info
                     font.family: Config.SettingsConfig.fontFamily
                     font.pixelSize: 15; font.bold: true
@@ -246,16 +246,16 @@ HudCard {
                     // HI/LO where PRES used to live.
                     Repeater {
                         model: root._has ? [
-                            { l: "RH",    v: root._wx.humidity + "%" },
-                            { l: "WIND",  v: String(root._wx.wind) },
-                            { l: "RAIN",  v: (root._wx.hourly.length > 1
-                                              ? root._wx.hourly[1].precip
-                                              : (root._wx.hourly.length
-                                                 ? root._wx.hourly[0].precip : "")) + "%" },
-                            { l: "FEELS", v: root._wx.feels + "°" },
-                            { l: "HI/LO", v: (root._wx.daily.length > 0)
-                                             ? root._wx.daily[0].hi + "° / "
-                                               + root._wx.daily[0].lo + "°" : "" }
+                            { l: "RH",    v: root._weather.humidity + "%" },
+                            { l: "WIND",  v: String(root._weather.wind) },
+                            { l: "RAIN",  v: (root._weather.hourly.length > 1
+                                              ? root._weather.hourly[1].precip
+                                              : (root._weather.hourly.length
+                                                 ? root._weather.hourly[0].precip : "")) + "%" },
+                            { l: "FEELS", v: root._weather.feels + "°" },
+                            { l: "HI/LO", v: (root._weather.daily.length > 0)
+                                             ? root._weather.daily[0].hi + "° / "
+                                               + root._weather.daily[0].lo + "°" : "" }
                         ] : []
                         delegate: RowLayout {
                             spacing: 8

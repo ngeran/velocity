@@ -588,14 +588,14 @@ Item {
         for (var i = 0; i < backups.length; i++) if (backups[i].id === id) { known = true; break }
         if (!known) return
         if (restoreProc.running) return
-        restoreProc.id = id
+        restoreProc.backupId = id
         lastBackupAction = "Restoring " + id + "…"
         restoreProc.running = true
     }
     Process {   // unbounded-ok: one-shot local perl restore
         id: restoreProc
         command: []
-        property string id: ""
+        property string backupId: ""
         property string buffer: ""
         stderr: SplitParser { onRead: function(d) { restoreProc.buffer += d + "\n" } }
         onRunningChanged: {

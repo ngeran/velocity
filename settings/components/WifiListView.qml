@@ -38,9 +38,9 @@ Item {
         anchors.fill: parent
         spacing: Config.ControlConfig.space2
 
-    readonly property var cs: Services.NetworkControlService.connectionStatus
+    readonly property var connectionState: Services.NetworkControlService.connectionStatus
     readonly property var svc: Services.NetworkControlService
-    readonly property bool linkUp: view.cs.connected === true
+    readonly property bool linkUp: view.connectionState.connected === true
     // "↓ 234.1 · ↑ 41.2 Mbps · 2h ago" — last bar-run speed test (H1 file).
     readonly property string lastTestLine: {
         const t = view.svc.lastTest
@@ -62,11 +62,11 @@ Item {
 
     // Status line under the SSID — band • security • link speed.
     readonly property string statusLine: {
-        if (!view.linkUp) return view.cs.wifiEnabled ? "not connected" : "wifi radio off"
+        if (!view.linkUp) return view.connectionState.wifiEnabled ? "not connected" : "wifi radio off"
         var parts = []
-        if (view.cs.band !== "") parts.push(view.cs.band.replace(" ", "").toUpperCase())
-        if (view.cs.security !== "") parts.push(view.cs.security.toUpperCase())
-        if (view.cs.linkSpeed !== "") parts.push(view.cs.linkSpeed.toUpperCase())
+        if (view.connectionState.band !== "") parts.push(view.connectionState.band.replace(" ", "").toUpperCase())
+        if (view.connectionState.security !== "") parts.push(view.connectionState.security.toUpperCase())
+        if (view.connectionState.linkSpeed !== "") parts.push(view.connectionState.linkSpeed.toUpperCase())
         return parts.length ? parts.join("  •  ") : "connected"
     }
 
@@ -147,7 +147,7 @@ Item {
             border.color: Config.ThemeConfig.colors.outlineVariant; border.width: 1
             Text {
                 anchors.centerIn: parent
-                text: view.cs.wifiEnabled ? view.sigIcon(view.cs.signal) : "󰤭"
+                text: view.connectionState.wifiEnabled ? view.sigIcon(view.connectionState.signal) : "󰤭"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 20
                 color: view.linkUp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim
             }
@@ -160,7 +160,7 @@ Item {
             RowLayout {
                 spacing: 8
                 Text {
-                    text: view.cs.ssid !== "" ? view.cs.ssid : (view.cs.iface !== "" ? view.cs.iface : "No connection")
+                    text: view.connectionState.ssid !== "" ? view.connectionState.ssid : (view.connectionState.iface !== "" ? view.connectionState.iface : "No connection")
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 14
                     font.bold: true; color: Config.ThemeConfig.colors.text
                     elide: Text.ElideRight
@@ -219,7 +219,7 @@ Item {
 
         // Wi-Fi power toggle
         ToggleSwitch {
-            checked: view.cs.wifiEnabled
+            checked: view.connectionState.wifiEnabled
             Layout.alignment: Qt.AlignVCenter
             onToggled: Services.NetworkControlService.toggleWifi()
         }
@@ -258,9 +258,9 @@ Item {
         TelemetryCell { label: "UPLOADED"
             value: view.fmtTotal(view.svc.txTotalMB) }
         TelemetryCell { label: "IP ADDRESS"
-            value: view.cs.ip !== "" ? view.cs.ip : "—" }
+            value: view.connectionState.ip !== "" ? view.connectionState.ip : "—" }
         TelemetryCell { label: "GATEWAY"
-            value: view.cs.gateway !== "" ? view.cs.gateway : "—" }
+            value: view.connectionState.gateway !== "" ? view.connectionState.gateway : "—" }
     }
 
     Hairline {}
@@ -301,15 +301,15 @@ Item {
                     // Inline-literal model → implicit modelData (the required-
                     // property form breaks with JS-array models — memory note).
                     readonly property var seg: modelData
-                    readonly property bool on: view.svc.dnsMode === seg.key
+                    readonly property bool isOn: view.svc.dnsMode === seg.key
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
                     radius: Config.ControlConfig.radiusSmall
-                    color: on ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.9)
+                    color: isOn ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.9)
                               : segMa.containsMouse
                                 ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5)
                                 : "transparent"
-                    border.color: on ? Config.ControlConfig.accent
+                    border.color: isOn ? Config.ControlConfig.accent
                                      : Config.ThemeConfig.colors.outlineVariant
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -469,7 +469,7 @@ Item {
             spacing: 10
 
             Text {
-                text: view.sigIcon(view.cs.signal)
+                text: view.sigIcon(view.connectionState.signal)
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 15
                 color: Config.ThemeConfig.colors.success
             }
@@ -479,7 +479,7 @@ Item {
             Column {
                 spacing: 1
                 Text {
-                    text: view.cs.ssid
+                    text: view.connectionState.ssid
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 11
                     font.bold: true; color: Config.ThemeConfig.colors.text
                     elide: Text.ElideRight; width: Math.min(implicitWidth, 320)

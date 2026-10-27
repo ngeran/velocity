@@ -49,7 +49,7 @@ Item {
     // stale = showing last-known data while a refresh is in flight or after
     // one failed (the panel keeps rendering; a small tag marks it).
     property string state: "idle"
-    property var wx: null               // Wx.parseForecast output (available-checked)
+    property var weather: null               // Wx.parseForecast output (available-checked)
     property var _raw: null             // un-parsed forecast, for the state cache
     property date lastFetch: new Date(0)
     readonly property int _maxAgeMs: 15 * 60 * 1000
@@ -61,9 +61,9 @@ Item {
 
     // ── derived, panel-facing ────────────────────────────────────────────────
     readonly property string placeLabel: placeSetting !== "" ? placeSetting : detectedPlace
-    readonly property string glyph: (wx && wx.available) ? Wx.nerdFor(wx.code, wx.isDay) : ""
-    readonly property string hiLo: (wx && wx.available && wx.daily.length > 0)
-                                   ? wx.daily[0].hi + "° / " + wx.daily[0].lo + "°" : ""
+    readonly property string glyph: (weather && weather.available) ? Wx.nerdFor(weather.code, weather.isDay) : ""
+    readonly property string hiLo: (weather && weather.available && weather.daily.length > 0)
+                                   ? weather.daily[0].hi + "° / " + weather.daily[0].lo + "°" : ""
 
     // ── state cache ($XDG_STATE_HOME/velocity/plugins/nikos.clock-weather.json)
     readonly property string _cachePath:
@@ -89,7 +89,7 @@ Item {
         var wxp = Wx.parseForecast(c.raw, root.unit)
         if (wxp.available) {
             root._raw = c.raw
-            root.wx = wxp
+            root.weather = wxp
             root.lastFetch = new Date(typeof c.fetchedAt === "number" ? c.fetchedAt : 0)
             root.state = "stale"
         }
@@ -101,7 +101,7 @@ Item {
     }
 
     function _writeCache() {
-        if (!root.wx || !root.wx.available) return
+        if (!root.weather || !root.weather.available) return
         cacheWriter.command = ["sh", "-c",
             'mkdir -p "$(dirname "$1")" && printf "%s" "$2" > "$1.tmp" && mv "$1.tmp" "$1"',
             "write", root._cachePath,
@@ -131,14 +131,14 @@ Item {
     function panelOpened() {
         if (!root.showWeather || root._busy) return
         var age = new Date() - root.lastFetch
-        if (root.wx && root.wx.available && age >= 0 && age < root._maxAgeMs) return
+        if (root.weather && root.weather.available && age >= 0 && age < root._maxAgeMs) return
         root.refresh()
     }
 
     function refresh() {
         if (!root.showWeather || root._busy) return
         root._busy = true
-        root.state = (root.wx && root.wx.available) ? "stale" : "loading"
+        root.state = (root.weather && root.weather.available) ? "stale" : "loading"
         root._resolveAndFetch()
     }
 
@@ -185,7 +185,7 @@ Item {
 
     function _fail(reason) {
         root._busy = false
-        root.state = (root.wx && root.wx.available) ? "stale" : "error"
+        root.state = (root.weather && root.weather.available) ? "stale" : "error"
         console.log("[nikos.clock] weather fetch failed: " + reason)
     }
 
@@ -258,7 +258,7 @@ Item {
             var wxp = Wx.parseForecast(json, root.unit)
             if (wxp.available) {
                 root._raw = json
-                root.wx = wxp
+                root.weather = wxp
                 root.lastFetch = new Date()
                 root.state = "ok"
                 root._writeCache()

@@ -5,7 +5,7 @@
 // px(n) applies uiScale and rounds, so every migrated value equals its old
 // literal at the default scale 1.0 — migrating a popup (TrayCard,
 // NotificationCenter, overlays) means replacing its pixel literals with
-// Pm.px(n) (one-off derivations may use `Pm.s` directly). The optional key
+// Pm.px(n) (one-off derivations may use `Pm.scale` directly). The optional key
 // "uiScale" (0.75–2.0) lives in bar-config.json; BarConfig is the one reader
 // of that file (DU13 — this used to be a second FileView + 15s timer for a
 // single key) and this singleton just mirrors its parsed property, so a
@@ -28,8 +28,8 @@ Item {
 
     // Mirror of BarConfig.uiScale (the validated 0.75–2.0 intake lives there).
     property real uiScale: Config.BarConfig.uiScale
-    // Shorthand for bindings: `width: Pm.s * 320` etc. Read-only mirror.
-    readonly property real s: root.uiScale
+    // Shorthand for bindings: `width: Pm.scale * 320` etc. Read-only mirror.
+    readonly property real scale: root.uiScale
 
     function px(n) {
         return Math.round((Number(n) || 0) * root.uiScale)

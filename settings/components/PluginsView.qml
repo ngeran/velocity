@@ -50,20 +50,20 @@ ColumnLayout {
         var q = view.search.toLowerCase()
         var ps = view.mgr.plugins
         for (var i = 0; i < ps.length; i++) {
-            var p = ps[i]
-            if (view.statusFilter === "enabled" && !p.enabled) continue
-            if (view.statusFilter === "disabled" && p.enabled) continue
+            var plugin = ps[i]
+            if (view.statusFilter === "enabled" && !plugin.enabled) continue
+            if (view.statusFilter === "disabled" && plugin.enabled) continue
             // ERROR catches both "error" (load failed in the bar) and
             // "invalid" (manifest rejected at scan) — the row dot paints
             // both red.
-            if (view.statusFilter === "error" && p.status !== "error" && p.status !== "invalid") continue
-            if (q !== "" && (p.id + " " + p.name + " " + (p.description || "")).toLowerCase().indexOf(q) === -1) continue
-            out.push(p)
+            if (view.statusFilter === "error" && plugin.status !== "error" && plugin.status !== "invalid") continue
+            if (q !== "" && (plugin.id + " " + plugin.name + " " + (plugin.description || "")).toLowerCase().indexOf(q) === -1) continue
+            out.push(plugin)
         }
         // Bar order: sections left → center → right, then unplaced/headless.
-        var rank = function(p) {
-            var s = view.sections.indexOf(p.section || "")
-            return (s === -1 ? 3 : s) * 1000 + (p.position >= 0 ? p.position : 999)
+        var rank = function(plugin) {
+            var s = view.sections.indexOf(plugin.section || "")
+            return (s === -1 ? 3 : s) * 1000 + (plugin.position >= 0 ? plugin.position : 999)
         }
         return out.sort(function(a, b) { return rank(a) - rank(b) || (a.id < b.id ? -1 : 1) })
     }
@@ -78,11 +78,11 @@ ColumnLayout {
         return n
     }
 
-    function isBarWidget(p) { return p.kinds.indexOf("bar-widget") !== -1 }
-    function hasSettings(p) { return p.settings && Object.keys(p.settings).length > 0 }
-    function removable(p) { return p.source === "user" || p.source === "bundled" }
-    function nextSection(p) {
-        var i = view.sections.indexOf(p.section || p.defaultSection || "right")
+    function isBarWidget(plugin) { return plugin.kinds.indexOf("bar-widget") !== -1 }
+    function hasSettings(plugin) { return plugin.settings && Object.keys(plugin.settings).length > 0 }
+    function removable(plugin) { return plugin.source === "user" || plugin.source === "bundled" }
+    function nextSection(plugin) {
+        var i = view.sections.indexOf(plugin.section || plugin.defaultSection || "right")
         return view.sections[(i + 1) % view.sections.length]
     }
 
@@ -499,9 +499,9 @@ ColumnLayout {
 
                     Rectangle {
                         id: row
-                        readonly property var p: modelData
-                        readonly property bool isErr: p.status === "error" || p.status === "invalid"
-                        readonly property bool formOpen: view.settingsOpen === p.id
+                        readonly property var plugin: modelData
+                        readonly property bool isErr: plugin.status === "error" || plugin.status === "invalid"
+                        readonly property bool formOpen: view.settingsOpen === plugin.id
                         width: rows.width
                         height: 34 + (formOpen ? formLoader.implicitHeight + 10 : 0)
                         radius: Config.ControlConfig.radiusSmall
@@ -522,22 +522,22 @@ ColumnLayout {
 
                             Rectangle {
                                 width: 7; height: 7; radius: 3.5
-                                color: row.p.enabled
+                                color: row.plugin.enabled
                                        ? (row.isErr ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.success)
                                        : Config.ThemeConfig.colors.textDim
                             }
 
                             Text {
-                                text: row.p.name + "  " + row.p.version
+                                text: row.plugin.name + "  " + row.plugin.version
                                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                                font.bold: row.p.enabled
-                                color: row.p.enabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                                font.bold: row.plugin.enabled
+                                color: row.plugin.enabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                                 elide: Text.ElideRight
                                 Layout.maximumWidth: 180
                                 Layout.minimumWidth: 0
                             }
                             Text {
-                                text: row.p.id
+                                text: row.plugin.id
                                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
                                 color: Config.ThemeConfig.colors.textDim
                                 elide: Text.ElideRight
@@ -546,14 +546,14 @@ ColumnLayout {
                             }
                             // where it comes from: user / system / bundled / builtin
                             Text {
-                                text: (row.p.source || "").toUpperCase()
+                                text: (row.plugin.source || "").toUpperCase()
                                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true
                                 font.letterSpacing: 0.8
-                                color: row.p.source === "builtin" ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
+                                color: row.plugin.source === "builtin" ? Config.ControlConfig.accent : Config.ThemeConfig.colors.textDim
                             }
                             Text {
-                                visible: row.p.commands.length > 0
-                                text: "⌗ " + row.p.commands.join(" ")
+                                visible: row.plugin.commands.length > 0
+                                text: "⌗ " + row.plugin.commands.join(" ")
                                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
                                 color: Config.ThemeConfig.colors.warning
                                 elide: Text.ElideRight
@@ -562,7 +562,7 @@ ColumnLayout {
                             }
                             Text {
                                 visible: row.isErr
-                                text: row.p.error
+                                text: row.plugin.error
                                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
                                 color: Config.ThemeConfig.colors.error
                                 elide: Text.ElideMiddle
@@ -574,34 +574,34 @@ ColumnLayout {
 
                             // bar section — click moves it to the next one (appended)
                             Pill {
-                                visible: view.isBarWidget(row.p)
-                                text: (row.p.section || row.p.defaultSection || "right").toUpperCase()
-                                onActivated: view.mgr.place(row.p.id, view.nextSection(row.p))
+                                visible: view.isBarWidget(row.plugin)
+                                text: (row.plugin.section || row.plugin.defaultSection || "right").toUpperCase()
+                                onActivated: view.mgr.place(row.plugin.id, view.nextSection(row.plugin))
                             }
                             // reorder within the section (the bar clamps at the edges)
-                            Pill { visible: view.isBarWidget(row.p) && !!row.p.section; text: "▲"; onActivated: view.mgr.move(row.p.id, -1) }
-                            Pill { visible: view.isBarWidget(row.p) && !!row.p.section; text: "▼"; onActivated: view.mgr.move(row.p.id, 1) }
+                            Pill { visible: view.isBarWidget(row.plugin) && !!row.plugin.section; text: "▲"; onActivated: view.mgr.move(row.plugin.id, -1) }
+                            Pill { visible: view.isBarWidget(row.plugin) && !!row.plugin.section; text: "▼"; onActivated: view.mgr.move(row.plugin.id, 1) }
 
                             Pill {
-                                visible: view.hasSettings(row.p)
+                                visible: view.hasSettings(row.plugin)
                                 text: "⚙"
                                 accentStyle: row.formOpen
-                                onActivated: view.settingsOpen = row.formOpen ? "" : row.p.id
+                                onActivated: view.settingsOpen = row.formOpen ? "" : row.plugin.id
                             }
 
                             ToggleSwitch {
-                                checked: row.p.enabled
+                                checked: row.plugin.enabled
                                 Layout.alignment: Qt.AlignVCenter
-                                onToggled: view.mgr.setEnabled(row.p.id, !row.p.enabled)
+                                onToggled: view.mgr.setEnabled(row.plugin.id, !row.plugin.enabled)
                             }
 
                             // DEL → trash (two-step confirm); built-in/system can't be removed
                             ConfirmDialog {
-                                visible: view.removable(row.p)
+                                visible: view.removable(row.plugin)
                                 label: "DEL"
                                 confirmLabel: "SURE?"
                                 Layout.alignment: Qt.AlignVCenter
-                                onConfirmed: view.mgr.remove(row.p.id)
+                                onConfirmed: view.mgr.remove(row.plugin.id)
                             }
                         }
 
@@ -610,7 +610,7 @@ ColumnLayout {
                             x: 28; y: 38
                             width: parent.width - 40
                             active: row.formOpen
-                            sourceComponent: SettingsForm { pluginId: row.p.id }
+                            sourceComponent: SettingsForm { pluginId: row.plugin.id }
                         }
                     }
                 }

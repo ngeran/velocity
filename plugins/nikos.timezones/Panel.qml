@@ -109,24 +109,24 @@ Item {
                         Rectangle {
                             width: gridRoot.cellW; height: gridRoot.cellH
                             radius: 3
-                            readonly property var c: TZ.TimezoneService.cellAt(
+                            readonly property var cell: TZ.TimezoneService.cellAt(
                                 index, gridRoot.dayStart,
                                 TZ.TimezoneService.zoneOffsetMinutes(modelData.zone, TZ.TimezoneService.now))
                             readonly property bool hot: index === gridRoot.hoverCol
-                            color: c.tint === "work" ? Qt.alpha(hostBar.colorAccent, hot ? 0.50 : 0.28)
-                                                 : c.tint === "day"  ? Qt.alpha(hostTheme.colors.text, hot ? 0.24 : 0.10)
+                            color: cell.tint === "work" ? Qt.alpha(hostBar.colorAccent, hot ? 0.50 : 0.28)
+                                                 : cell.tint === "day"  ? Qt.alpha(hostTheme.colors.text, hot ? 0.24 : 0.10)
                                                  : Qt.alpha(hostTheme.colors.text, hot ? 0.16 : 0.035)
                             Behavior on color { ColorAnimation { duration: 100 } }
                             Text {
                                 anchors.centerIn: parent
                                 horizontalAlignment: Text.AlignHCenter
                                 lineHeight: 0.85
-                                text: parent.c.isMidnight ? parent.c.dayLabel.replace(" ", "\n")
-                                                          : String(parent.c.hour)
+                                text: parent.cell.isMidnight ? parent.cell.dayLabel.replace(" ", "\n")
+                                                          : String(parent.cell.hour)
                                 font.family: hostBar.fontFamily
-                                font.pixelSize: parent.c.isMidnight ? 6 : 8
-                                font.bold: parent.c.isMidnight
-                                color: parent.c.isMidnight || parent.c.tint !== "night"
+                                font.pixelSize: parent.cell.isMidnight ? 6 : 8
+                                font.bold: parent.cell.isMidnight
+                                color: parent.cell.isMidnight || parent.cell.tint !== "night"
                                        ? hostBar.colorText
                                        : hostBar.colorTextDim
                             }

@@ -174,8 +174,8 @@ Item {
 
                     Rectangle {
                         id: wsCell
-                        readonly property int ws: index + 1
-                        readonly property bool active: Services.HyprlandService.activeWorkspace === ws
+                        readonly property int workspaceCount: index + 1
+                        readonly property bool active: Services.HyprlandService.activeWorkspace === workspaceCount
                         // Hover intent (press grammar, #5): the hover fill
                         // lands after a short entry delay so sweeping the
                         // row doesn't shimmer; exit is instant.
@@ -201,7 +201,7 @@ Item {
                         Text {
                             id: wsNum
                             anchors.centerIn: parent
-                            text: wsCell.ws < 10 ? "0" + wsCell.ws : "" + wsCell.ws
+                            text: wsCell.workspaceCount < 10 ? "0" + wsCell.workspaceCount : "" + wsCell.workspaceCount
                             font.family: Config.BarConfig.fontFamily
                             font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
                             font.letterSpacing: 1.2
@@ -223,7 +223,7 @@ Item {
                                 if (containsMouse) wsHotDelay.restart()
                                 else { wsHotDelay.stop(); wsCell.hot = false }
                             }
-                            onClicked: Services.HyprlandService.switchTo(wsCell.ws)
+                            onClicked: Services.HyprlandService.switchTo(wsCell.workspaceCount)
                         }
                         Timer {
                             id: wsHotDelay

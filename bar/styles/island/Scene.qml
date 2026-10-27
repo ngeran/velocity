@@ -52,21 +52,21 @@ Item {
     // LEFT side of a top bar; mirrored by transforms for the other cases.
     component Fillet: Shape {
         id: fil
-        property real r: 10
+        property real cornerRadius: 10
         property color fill: "black"
-        width: r; height: r
+        width: cornerRadius; height: cornerRadius
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
             fillColor: fil.fill
             strokeColor: "transparent"
             startX: 0; startY: 0
-            PathLine { x: fil.r; y: 0 }
-            PathLine { x: fil.r; y: fil.r }
-            // quarter circle centred at (0, r): (r, r) → (0, 0)
+            PathLine { x: fil.cornerRadius; y: 0 }
+            PathLine { x: fil.cornerRadius; y: fil.cornerRadius }
+            // quarter circle centred at (0, cornerRadius)
             PathCubic {
-                control1X: fil.r;                 control1Y: fil.r - 0.55228475 * fil.r
-                control2X: 0.55228475 * fil.r;    control2Y: 0
-                x: 0;                             y: 0
+                control1X: fil.cornerRadius;                    control1Y: fil.cornerRadius - 0.55228475 * fil.cornerRadius
+                control2X: 0.55228475 * fil.cornerRadius;       control2Y: 0
+                x: 0;                                           y: 0
             }
         }
     }
@@ -510,10 +510,10 @@ Item {
                 id: island
                 width: win.target.w
                 height: win.target.h
-                x: Math.round((win.width - width) / 2) + ox
+                x: Math.round((win.width - width) / 2) + orbitOffsetX
                 y: win.atBottom ? win.height - height : 0
 
-                property real r: win.targetR
+                property real cornerRadius: win.targetR
 
                 Behavior on width {
                     enabled: !win.reduceMotion
@@ -533,7 +533,7 @@ Item {
                         epsilon: Isl.SPRING_OPEN.epsilon
                     }
                 }
-                Behavior on r {
+                Behavior on cornerRadius {
                     enabled: !win.reduceMotion
                     SpringAnimation {
                         spring: win.growing ? Isl.SPRING_OPEN.spring : Isl.SPRING_CLOSE.spring
@@ -544,8 +544,8 @@ Item {
                 }
                 // The orbit is a 1–2px step every few minutes: glide only the
                 // offset (never x itself — width/screen changes must snap).
-                property real ox: win.orbit.x
-                Behavior on ox {
+                property real orbitOffsetX: win.orbit.x
+                Behavior on orbitOffsetX {
                     enabled: !win.reduceMotion
                     NumberAnimation { duration: 2400; easing.type: Easing.InOutSine }   // motion-ok: burn-in glide, not UI motion
                 }
@@ -582,22 +582,22 @@ Item {
                     anchors.fill: parent
                     color: win.fill
                     antialiasing: true
-                    topLeftRadius: win.atBottom ? island.r : 0
-                    topRightRadius: win.atBottom ? island.r : 0
-                    bottomLeftRadius: win.atBottom ? 0 : island.r
-                    bottomRightRadius: win.atBottom ? 0 : island.r
+                    topLeftRadius: win.atBottom ? island.cornerRadius : 0
+                    topRightRadius: win.atBottom ? island.cornerRadius : 0
+                    bottomLeftRadius: win.atBottom ? 0 : island.cornerRadius
+                    bottomRightRadius: win.atBottom ? 0 : island.cornerRadius
                 }
                 Fillet {
-                    r: win.fillet; fill: win.fill
-                    x: -r
-                    y: win.atBottom ? island.height - r : 0
+                    cornerRadius: win.fillet; fill: win.fill
+                    x: -cornerRadius
+                    y: win.atBottom ? island.height - cornerRadius : 0
                     transform: Scale { origin.x: win.fillet / 2; origin.y: win.fillet / 2
                                        xScale: 1; yScale: win.atBottom ? -1 : 1 }
                 }
                 Fillet {
-                    r: win.fillet; fill: win.fill
+                    cornerRadius: win.fillet; fill: win.fill
                     x: island.width
-                    y: win.atBottom ? island.height - r : 0
+                    y: win.atBottom ? island.height - cornerRadius : 0
                     transform: Scale { origin.x: win.fillet / 2; origin.y: win.fillet / 2
                                        xScale: -1; yScale: win.atBottom ? -1 : 1 }
                 }
@@ -750,8 +750,8 @@ Item {
                     // Edge light: the activity's value as a thin accent line on
                     // the island's far edge (transient — never at rest).
                     Rectangle {
-                        readonly property real span: Math.max(0, island.width - 2 * island.r)
-                        x: island.r
+                        readonly property real span: Math.max(0, island.width - 2 * island.cornerRadius)
+                        x: island.cornerRadius
                         y: win.atBottom ? 0 : island.height - height
                         height: 2
                         width: span * Math.max(0, Math.min(100, Services.OsdService.value)) / 100
@@ -803,10 +803,10 @@ Item {
                                     width: parent.width
                                     height: Math.round(win.barH * 0.72)
                                     radius: height / 2
-                                    readonly property color a: Config.BarConfig.colorAccent
-                                    readonly property color t: Config.BarConfig.colorText
-                                    color: seg.current ? Qt.rgba(a.r, a.g, a.b, 0.16)
-                                         : segHover.hovered ? Qt.rgba(t.r, t.g, t.b, 0.06)
+                                    readonly property color accentColor: Config.BarConfig.colorAccent
+                                    readonly property color textColor: Config.BarConfig.colorText
+                                    color: seg.current ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.16)
+                                         : segHover.hovered ? Qt.rgba(textColor.r, textColor.g, textColor.b, 0.06)
                                          : "transparent"
                                     Behavior on color {
                                         enabled: !win.reduceMotion

@@ -48,20 +48,20 @@ Item {
     readonly property bool _gpuPresent: _gpu !== null
 
     // ── weather cache state (same file as WeatherCard) ────────────────────
-    property var _wx: null               // Wx.parseForecast output
+    property var _weather: null               // Wx.parseForecast output
     property double _fetchedAt: 0
-    readonly property bool _wxHas: _wx !== null && _wx.available === true
-    readonly property bool _wxStale: _fetchedAt > 0
+    readonly property bool _weatherHas: _weather !== null && _weather.available === true
+    readonly property bool _weatherStale: _fetchedAt > 0
         && (Date.now() - _fetchedAt) >= 15 * 60000
 
-    readonly property string _wxUnit: Wx.unitFor(
+    readonly property string _weatherUnit: Wx.unitFor(
         Quickshell.env("LC_ALL") || Quickshell.env("LANG") || "")
 
     readonly property string _metricsPath:
         (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/" + (Quickshell.env("UID") || "1000"))
         + "/velocity/metrics.json"
 
-    readonly property string _wxPath:
+    readonly property string _weatherPath:
         (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") || "~") + "/.local/state")
         + "/velocity/plugins/nikos.clock-weather.json"
 
@@ -86,9 +86,9 @@ Item {
         try { c = Wx.parseJson(raw) } catch (e) { c = null }
         if (!c || typeof c.fetchedAt !== "number") return   // no cache yet
         var wxp = null
-        try { wxp = Wx.parseForecast(c.raw, _wxUnit) } catch (e) { wxp = null }
+        try { wxp = Wx.parseForecast(c.raw, _weatherUnit) } catch (e) { wxp = null }
         if (!wxp || !wxp.available) return
-        _wx = wxp
+        _weather = wxp
         _fetchedAt = c.fetchedAt
     }
 
@@ -224,13 +224,13 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true
-            visible: root._wxHas
+            visible: root._weatherHas
             spacing: 6
 
             Text {   // glyph needs the nerd face — mono has no PUA coverage
-                visible: root._wxHas
-                text: root._wxHas ? Wx.nerdFor(root._wx.code, root._wx.isDay) : ""
-                color: root._wxStale
+                visible: root._weatherHas
+                text: root._weatherHas ? Wx.nerdFor(root._weather.code, root._weather.isDay) : ""
+                color: root._weatherStale
                     ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.info
                 font.family: Config.ControlConfig.fontNerd
                 font.pixelSize: 10
@@ -238,10 +238,10 @@ Item {
             Text {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
-                text: root._wxHas ? root._wx.temp + "  " + root._wx.condition : ""
-                color: root._wxStale
+                text: root._weatherHas ? root._weather.temp + "  " + root._weather.condition : ""
+                color: root._weatherStale
                     ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.text
-                opacity: root._wxStale ? 0.55 : 0.85
+                opacity: root._weatherStale ? 0.55 : 0.85
                 font.family: Config.ControlConfig.fontMono
                 font.pixelSize: 7; font.letterSpacing: 0.5
             }
@@ -258,7 +258,7 @@ Item {
     }
     FileView {
         id: wxFile
-        path: root._wxPath
+        path: root._weatherPath
         watchChanges: false          // plugin cache writes are also atomic
         printErrors: false
         onTextChanged: root._ingestWx(text())

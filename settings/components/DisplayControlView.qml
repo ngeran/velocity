@@ -80,15 +80,15 @@ ColumnLayout {
 
     // ── QD-OLED burn-in guard — live-computed checklist ────────────────────
     readonly property var guardItems: [
-        { label: "10-BIT COLOR DEPTH", ok: view.mon ? Services.MonitorService.liveBitdepth() === 10 : false },
-        { label: "VRR ENABLED", ok: Services.MonitorService.vrrMode !== 0 },
-        { label: "AUTO BLANK ≤ 10 MIN", ok: Services.HypridleService.displayOffTimeout <= 600 },
-        { label: "HDR SDR-WHITE ≤ 250 NITS", ok: !view.hdrOn || view.mon.sdrMaxLuminance <= 250 },
-        { label: "SDR BRIGHTNESS ≤ 1.2", ok: !view.hdrOn || (view.mon.sdrBrightness || 1) <= 1.2 }
+        { label: "10-BIT COLOR DEPTH", probeOk: view.mon ? Services.MonitorService.liveBitdepth() === 10 : false },
+        { label: "VRR ENABLED", probeOk: Services.MonitorService.vrrMode !== 0 },
+        { label: "AUTO BLANK ≤ 10 MIN", probeOk: Services.HypridleService.displayOffTimeout <= 600 },
+        { label: "HDR SDR-WHITE ≤ 250 NITS", probeOk: !view.hdrOn || view.mon.sdrMaxLuminance <= 250 },
+        { label: "SDR BRIGHTNESS ≤ 1.2", probeOk: !view.hdrOn || (view.mon.sdrBrightness || 1) <= 1.2 }
     ]
     readonly property int guardOk: {
         var n = 0
-        for (var i = 0; i < view.guardItems.length; i++) if (view.guardItems[i].ok) n++
+        for (var i = 0; i < view.guardItems.length; i++) if (view.guardItems[i].probeOk) n++
         return n
     }
 
@@ -172,14 +172,14 @@ ColumnLayout {
 
     component GuardRow: RowLayout {
         property string label: ""
-        property bool ok: false
+        property bool probeOk: false
         spacing: 6
-        Text { text: parent.ok ? "✓" : "✗"
+        Text { text: parent.probeOk ? "✓" : "✗"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true
-            color: parent.ok ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error }
+            color: parent.probeOk ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.error }
         Text { text: parent.label
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
-            color: parent.ok ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.warning }
+            color: parent.probeOk ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.warning }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -320,12 +320,12 @@ ColumnLayout {
                         required property var modelData
                         readonly property bool selected: Services.MonitorService.selectedName === modelData.name
                                                          || (Services.MonitorService.selectedName === "" && modelData.focused)
-                        readonly property real lw: modelData.w / modelData.scale
-                        readonly property real lh: modelData.h / modelData.scale
+                        readonly property real logicalW: modelData.w / modelData.scale
+                        readonly property real logicalH: modelData.h / modelData.scale
                         x: (canvasArea.width - spanW * view.canvasK) / 2 + modelData.x * view.canvasK
                         y: (canvasArea.height - spanH * view.canvasK) / 2 + modelData.y * view.canvasK
-                        width: Math.max(60, lw * view.canvasK)
-                        height: Math.max(40, lh * view.canvasK)
+                        width: Math.max(60, logicalW * view.canvasK)
+                        height: Math.max(40, logicalH * view.canvasK)
                         radius: 4
                         color: selected ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.info, 0.14)
                                         : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.4)
@@ -863,7 +863,7 @@ ColumnLayout {
                     spacing: 2
                     Repeater {
                         model: view.guardItems
-                        delegate: GuardRow { label: modelData.label; ok: modelData.ok }
+                        delegate: GuardRow { label: modelData.label; probeOk: modelData.probeOk }
                     }
                 }
 
