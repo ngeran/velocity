@@ -105,7 +105,7 @@ ColumnLayout {
             Layout.fillHeight: true
             spacing: Config.ControlConfig.space3
 
-            SettingsCard {
+            Card { variant: "settings";
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.primary
 
@@ -218,7 +218,7 @@ ColumnLayout {
             Layout.fillHeight: true
             spacing: Config.ControlConfig.space3
 
-            SettingsCard {
+            Card { variant: "settings";
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ThemeConfig.colors.primary
@@ -302,7 +302,7 @@ ColumnLayout {
                 }
             }
 
-            SettingsCard {
+            Card { variant: "settings";
                 id: streamsCard
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.secondary

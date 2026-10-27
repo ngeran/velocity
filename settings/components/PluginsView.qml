@@ -273,37 +273,6 @@ ColumnLayout {
         }
     }
 
-    // ── reusable pill ─────────────────────────────────────────────────────────
-    component Pill: Rectangle {
-        id: pill
-        property string text: ""
-        property bool accentStyle: false
-        property bool danger: false
-        signal activated()
-        Layout.alignment: Qt.AlignVCenter
-        width: pillLbl.implicitWidth + 18; height: 24
-        radius: Config.ControlConfig.radiusPill
-        color: danger ? (pma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.22)
-                                           : Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.12))
-                      : accentStyle ? (pma.containsMouse ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.24)
-                                                         : Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.14))
-                      : (pma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
-                                           : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5))
-        border.color: danger ? Config.ThemeConfig.colors.error
-                             : accentStyle ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
-        border.width: 1
-        Behavior on color { ColorAnimation { duration: 100 } }
-        Text {
-            id: pillLbl; anchors.centerIn: parent
-            text: pill.text
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true
-            color: pill.danger ? Config.ThemeConfig.colors.error
-                               : pill.accentStyle ? Config.ControlConfig.accent : Config.ThemeConfig.colors.text
-        }
-        MouseArea { id: pma; anchors.fill: parent; hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor; onClicked: pill.activated() }
-    }
-
     // ═════════════════════════════════════════════════════════════════════════
     // HEADER — breadcrumb · title+count · rescan
     // ═════════════════════════════════════════════════════════════════════════

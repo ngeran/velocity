@@ -15,7 +15,7 @@ import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
 
-HudCard {
+Card { variant: "hud";
     id: root
     accent: Config.ThemeConfig.colors.warning
 

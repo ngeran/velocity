@@ -124,30 +124,6 @@ ColumnLayout {
         }
     }
 
-    component ActionPill: Rectangle {
-        id: pill
-        property string text: ""
-        property bool accentStyle: false
-        signal activated()
-        Layout.alignment: Qt.AlignVCenter
-        width: pillLbl.implicitWidth + 22; height: 26
-        radius: Config.ControlConfig.radiusPill
-        color: accentStyle ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.18)
-                           : (pma.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
-                                                : Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.5))
-        border.color: accentStyle ? Config.ControlConfig.accent : Config.ThemeConfig.colors.outlineVariant
-        border.width: 1
-        Behavior on color { ColorAnimation { duration: 100 } }
-        Text {
-            id: pillLbl; anchors.centerIn: parent
-            text: pill.text
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-            color: pill.accentStyle ? Config.ControlConfig.accent : Config.ThemeConfig.colors.text
-        }
-        MouseArea { id: pma; anchors.fill: parent; hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor; onClicked: pill.activated() }
-    }
-
     component SpecTile: Rectangle {
         id: tile
         property string label: ""
@@ -210,9 +186,9 @@ ColumnLayout {
             return out
         }
 
-        ActionPill { text: "DETECT"; onActivated: Services.MonitorService.refresh() }
-        ActionPill { text: "IDENTIFY"; onActivated: Services.MonitorService.identify() }
-        ActionPill {
+        Pill { text: "DETECT"; onActivated: Services.MonitorService.refresh() }
+        Pill { text: "IDENTIFY"; onActivated: Services.MonitorService.identify() }
+        Pill {
             text: "STAGE & APPLY"
             accentStyle: Services.MonitorService.persistState === "dirty"
             onActivated: Services.MonitorService.stageToNix()
@@ -253,8 +229,8 @@ ColumnLayout {
                     color: Config.ThemeConfig.colors.textDim
                 }
             }
-            ActionPill { text: "KEEP"; accentStyle: true; onActivated: Services.MonitorService.confirmKeep() }
-            ActionPill { text: "REVERT"; onActivated: Services.MonitorService.revertNow() }
+            Pill { text: "KEEP"; accentStyle: true; onActivated: Services.MonitorService.confirmKeep() }
+            Pill { text: "REVERT"; onActivated: Services.MonitorService.revertNow() }
         }
     }
 
@@ -266,7 +242,7 @@ ColumnLayout {
         Layout.preferredHeight: 168
         spacing: Config.ControlConfig.space2
 
-        SettingsCard {
+        Card { variant: "settings";
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.preferredWidth: 1
@@ -408,7 +384,7 @@ ColumnLayout {
         }
     }
 
-        SettingsCard {
+        Card { variant: "settings";
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.preferredWidth: 1.2
@@ -495,7 +471,7 @@ ColumnLayout {
         spacing: Config.ControlConfig.space2
 
         // ── A: MODE — resolution / refresh / orientation ────────────────────
-        SettingsCard {
+        Card { variant: "settings";
             Layout.fillWidth: true
             Layout.fillHeight: true
             accent: Config.ThemeConfig.colors.info
@@ -505,9 +481,9 @@ ColumnLayout {
                 Layout.fillHeight: true
                 spacing: Config.ControlConfig.space2
 
-                PanelSectionHeader {
+                SectionHeader {
                     Layout.fillWidth: true
-                    label: "MODE"
+                    title: "MODE"
                     value: ""
                 }
 
@@ -586,7 +562,7 @@ ColumnLayout {
         }
 
         // ── B: SCALE — stepper + presets + sharpness ────────────────────────
-        SettingsCard {
+        Card { variant: "settings";
             Layout.fillWidth: true
             Layout.fillHeight: true
             accent: Config.ThemeConfig.colors.secondary
@@ -596,11 +572,11 @@ ColumnLayout {
                 Layout.fillHeight: true
                 spacing: Config.ControlConfig.space2
 
-                PanelSectionHeader {
+                SectionHeader {
                     Layout.fillWidth: true
-                    label: "SCALING"
+                    title: "SCALING"
                     value: ""
-                    color: view.mon && view.scaleIsSharp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
+                    valueColor: view.mon && view.scaleIsSharp ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
                 }
 
                 RowLayout {
@@ -694,7 +670,7 @@ ColumnLayout {
         }
 
         // ── C: HDR SDR LEVEL ──────────────────────────────────────────────────
-        SettingsCard {
+        Card { variant: "settings";
             Layout.fillWidth: true
             Layout.fillHeight: true
             accent: Config.ThemeConfig.colors.warning
@@ -705,11 +681,11 @@ ColumnLayout {
                 Layout.fillHeight: true
                 spacing: Config.ControlConfig.space2
 
-                PanelSectionHeader {
+                SectionHeader {
                     Layout.fillWidth: true
-                    label: "HDR SDR LEVEL"
+                    title: "HDR SDR LEVEL"
                     value: view.hdrOn ? "HDR " + (view.mon ? view.mon.colorPreset.toUpperCase() : "") : "SDR"
-                    color: view.hdrOn ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim
+                    valueColor: view.hdrOn ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.textDim
                 }
 
                 PanelDropdown {
@@ -818,7 +794,7 @@ ColumnLayout {
         }
 
         // ── D: VRR + PANEL CHECKLIST ─────────────────────────────────────────
-        SettingsCard {
+        Card { variant: "settings";
             Layout.fillWidth: true
             Layout.fillHeight: true
             accent: Config.ThemeConfig.colors.success
@@ -828,11 +804,11 @@ ColumnLayout {
                 Layout.fillHeight: true
                 spacing: Config.ControlConfig.space2
 
-                PanelSectionHeader {
+                SectionHeader {
                     Layout.fillWidth: true
-                    label: "VRR · PANEL CHECKLIST"
+                    title: "VRR · PANEL CHECKLIST"
                     value: view.guardOk + "/" + view.guardItems.length + " PASS"
-                    color: view.guardOk === view.guardItems.length
+                    valueColor: view.guardOk === view.guardItems.length
                            ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.warning
                 }
 
@@ -892,13 +868,13 @@ ColumnLayout {
                         font.pixelSize: 10
                         color: Config.ThemeConfig.colors.text
                     }
-                    ActionPill {
+                    Pill {
                         text: "IDLE & LOCK ›"
                         onActivated: if (view.dash) view.dash.openSettingsSection("idle")
                     }
                 }
 
-                ActionPill {
+                Pill {
                     Layout.alignment: Qt.AlignHCenter
                     text: "APPLY QD-OLED SAFE PRESET"
                     accentStyle: true
@@ -942,7 +918,7 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
 
-            ActionPill {
+            Pill {
                 text: "STAGE CURRENT SETTINGS"
                 onActivated: Services.MonitorService.stageToNix()
             }

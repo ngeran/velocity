@@ -141,7 +141,7 @@ ColumnLayout {
             Layout.fillHeight: true
             spacing: Config.ControlConfig.space3
 
-            SettingsCard {
+            Card { variant: "settings";
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.primary
 
@@ -157,10 +157,10 @@ ColumnLayout {
                             color: Config.ThemeConfig.colors.textDim
                         }
                         Item { Layout.fillWidth: true }
-                        PowerPill {
+                        ToggleSwitch {
                             Layout.alignment: Qt.AlignVCenter
-                            isOn: Services.BluetoothControlService.powered
-                            onClicked: Services.BluetoothControlService.togglePower()
+                            checked: Services.BluetoothControlService.powered
+                            onToggled: Services.BluetoothControlService.togglePower()
                         }
                     }
 
@@ -233,7 +233,7 @@ ColumnLayout {
             spacing: Config.ControlConfig.space3
 
             // PAIRED DEVICES — up to 4 rows, then a hidden-count footer
-            SettingsCard {
+            Card { variant: "settings";
                 id: pairedCard
                 Layout.fillWidth: true
                 accent: Config.ThemeConfig.colors.primary
@@ -322,7 +322,7 @@ ColumnLayout {
             }
 
             // AVAILABLE DEVICES — fills the remaining height, rows clamped
-            SettingsCard {
+            Card { variant: "settings";
                 id: beaconCard
                 Layout.fillWidth: true
                 Layout.fillHeight: true

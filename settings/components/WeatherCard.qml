@@ -29,7 +29,7 @@ import "../config" as Config
 import "../services" as Services
 import "../lib/weather.mjs" as Wx
 
-HudCard {
+Card { variant: "hud";
     id: root
     accent: Config.ThemeConfig.colors.info
 

@@ -102,7 +102,7 @@ Item {
     // =========================================================================
     // CONTROLS BAR (top) — source path + cycling + interval + effect
     // =========================================================================
-    HudCard {
+    Card { variant: "hud";
         id: controlsBar
         accent: Config.ThemeConfig.colors.primary
         anchors.top: parent.top;    anchors.topMargin: root._margin
@@ -407,7 +407,7 @@ Item {
     // =========================================================================
     // SIDEBAR (left) — real info only (no fake collections/tags)
     // =========================================================================
-    HudCard {
+    Card { variant: "hud";
         id: sidebar
         accent: Config.ThemeConfig.colors.secondary
         anchors.top: controlsBar.bottom;    anchors.topMargin: root._gap
@@ -527,7 +527,7 @@ Item {
     // =========================================================================
     // GALLERY (right) — header + scrollable thumbnail grid
     // =========================================================================
-    HudCard {
+    Card { variant: "hud";
         id: gallery
         accent: Config.ThemeConfig.colors.primary
         anchors.top: controlsBar.bottom;    anchors.topMargin: root._gap

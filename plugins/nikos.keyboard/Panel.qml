@@ -9,6 +9,7 @@
 // =============================================================================
 import QtQuick
 import QtQuick.Layouts
+import qs.Ui
 import "." as KB
 import "./lib/KeyboardLogic.mjs" as Logic
 
@@ -558,7 +559,7 @@ ColumnLayout {
     }
     Item { height: 4 }
 
-    // ── inline toggle component ─────────────────────────────────────────────
+    // ── inline toggle: Ui.Switch + label (I7 — one switch primitive) ────────
     component PanelToggle: Rectangle {
         id: toggleRoot
         property string label: ""
@@ -569,26 +570,21 @@ ColumnLayout {
         signal toggled(bool value)
 
         implicitHeight: 22
-        radius: 4
         color: "transparent"
         opacity: enabled ? 1 : 0.4
         Row {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
-            Rectangle {
-                width: 26; height: 14; radius: 7
+            Switch {
                 anchors.verticalCenter: parent.verticalCenter
-                color: toggleRoot.checked ? (toggleRoot.theme ? toggleRoot.theme.colors.secondary : "#00dce5")
-                                          : (toggleRoot.theme ? toggleRoot.theme.colors.surfaceVariant : "#222")
-                border.width: 1
-                border.color: toggleRoot.checked ? "transparent" : (toggleRoot.theme ? toggleRoot.theme.colors.outline : "#2a2a2a")
-                Rectangle {
-                    x: toggleRoot.checked ? parent.width - width - 2 : 2
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 10; height: 10; radius: 5
-                    color: toggleRoot.checked ? "#000000" : (toggleRoot.theme ? toggleRoot.theme.colors.textDim : "#555")
-                    Behavior on x { NumberAnimation { duration: 100 } }
-                }
+                trackWidth: 26; trackHeight: 14
+                checked: toggleRoot.checked
+                interactive: toggleRoot.enabled
+                onTrackColor: toggleRoot.theme ? toggleRoot.theme.colors.secondary : "#00dce5"
+                offTrackColor: toggleRoot.theme ? toggleRoot.theme.colors.surfaceVariant : "#222222"
+                offBorderColor: toggleRoot.theme ? toggleRoot.theme.colors.outline : "#2a2a2a"
+                knobOffColor: toggleRoot.theme ? toggleRoot.theme.colors.textDim : "#555555"
+                onToggled: toggleRoot.toggled(!toggleRoot.checked)
             }
             Text {
                 text: toggleRoot.label
@@ -597,11 +593,6 @@ ColumnLayout {
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
-        MouseArea {
-            anchors.fill: parent
-            enabled: toggleRoot.enabled
-            cursorShape: Qt.PointingHandCursor
-            onClicked: toggleRoot.toggled(!toggleRoot.checked)
-        }
     }
+
 }

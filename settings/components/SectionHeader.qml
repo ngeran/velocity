@@ -14,6 +14,10 @@ RowLayout {
     id: root
 
     property string title: "SECTION"
+    // Optional live value after the title (right-aligned mono) — absorbed
+    // PanelSectionHeader's role (I7), so one eyebrow component remains.
+    property string value: ""
+    property color valueColor: Config.ThemeConfig.colors.text
 
     width: parent ? parent.width : 400
     spacing: Config.ControlConfig.space2
@@ -36,6 +40,20 @@ RowLayout {
         font.letterSpacing: 1.2
         font.capitalization: Font.AllUppercase
         color: Config.ThemeConfig.colors.textDim
+        Layout.alignment: Qt.AlignVCenter
+    }
+
+    // Live value (right-aligned mono), when set
+    Text {
+        visible: root.value !== ""
+        text: root.value
+        font.family: Config.ControlConfig.fontMono
+        font.pixelSize: 10
+        font.bold: true
+        color: root.valueColor
+        elide: Text.ElideRight
+        Layout.fillWidth: true
+        horizontalAlignment: Text.AlignRight
         Layout.alignment: Qt.AlignVCenter
     }
 

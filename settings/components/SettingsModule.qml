@@ -161,7 +161,7 @@ Item {
 
         // ── DESKTOP (Hyprland) row helpers ─────────────────────────────
         // One row per catalog entry; choices become pills, bools become a
-        // PowerPill. Values read live from Hyprland (one batched getoption),
+        // ToggleSwitch. Values read live from Hyprland (one batched getoption),
         // writes apply instantly through hl.config eval — "…" means the
         // readback has not landed, never a fallback number.
         component HyprRow: SettingRow {
@@ -209,10 +209,10 @@ Item {
                 Services.SearchIndex.register({ title: def.label, tab: "settings",
                     section: "desktop", keywords: keywords, item: hyprToggleRow })
             Component.onDestruction: Services.SearchIndex.unregister(hyprToggleRow)
-            PowerPill {
-                isOn: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
+            ToggleSwitch {
+                checked: Services.HyprSettingsService.effective(hyprToggleRow.def.key) === true
                 enabled: Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== undefined
-                onClicked: Services.HyprSettingsService.set(
+                onToggled: Services.HyprSettingsService.set(
                     hyprToggleRow.def.key,
                     Services.HyprSettingsService.effective(hyprToggleRow.def.key) !== true)
             }
@@ -281,7 +281,7 @@ Item {
             SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Appearance"
                 subtitle: "Animation cadence and corner rounding" }
 
-            CoreCard {
+            Card { variant: "core";
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ControlConfig.accent
@@ -337,7 +337,7 @@ Item {
             SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Desktop"
                 subtitle: "Hyprland blur, shadows, gaps, borders, rounding, opacity — applied live" }
 
-            CoreCard {
+            Card { variant: "core";
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ControlConfig.accent
@@ -407,7 +407,7 @@ Item {
             SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Idle & Lock"
                 subtitle: "Hypridle timeouts — applied to hypridle.conf on save" }
 
-            CoreCard {
+            Card { variant: "core";
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: Config.ThemeConfig.colors.warning
@@ -462,9 +462,9 @@ Item {
                         keywords: "sleep memory"
                         value: Services.HypridleService.suspendEnabled
                                ? (Services.HypridleService.suspendTimeout / 60) + " min" : "OFF"
-                        PowerPill {
-                            isOn: Services.HypridleService.suspendEnabled
-                            onClicked: {
+                        ToggleSwitch {
+                            checked: Services.HypridleService.suspendEnabled
+                            onToggled: {
                                 Services.HypridleService.suspendEnabled = !Services.HypridleService.suspendEnabled
                                 Services.HypridleService.saveConfig()
                             }

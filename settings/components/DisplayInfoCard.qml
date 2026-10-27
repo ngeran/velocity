@@ -15,7 +15,7 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-HudCard {
+Card { variant: "hud";
     id: root
     accent: Config.ThemeConfig.colors.secondary
 

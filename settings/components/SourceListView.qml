@@ -12,7 +12,7 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
 
-SettingsCard {
+Card { variant: "settings";
     id: view
     accent: Config.ThemeConfig.colors.secondary
     contentSpacing: 0

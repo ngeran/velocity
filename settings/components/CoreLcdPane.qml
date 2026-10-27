@@ -116,7 +116,7 @@ ColumnLayout {
             Layout.fillHeight: true
             spacing: Config.ControlConfig.space3
 
-            CoreCard {
+            Card { variant: "core";
                 contentSpacing: Config.ControlConfig.space2
                 accent: Config.ThemeConfig.colors.warning
                 Layout.fillWidth: true
@@ -126,9 +126,9 @@ ColumnLayout {
                     Text { text: "ENABLED"; color: Config.ThemeConfig.colors.textDim; font.family: Config.ControlConfig.fontSans
                         font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.8; Layout.preferredWidth: 80 }
                     Item { Layout.fillWidth: true }
-                    PowerPill {
-                        isOn: root.lcdEnabled
-                        onClicked: { root.lcdEnabled = !root.lcdEnabled; root.save() }
+                    ToggleSwitch {
+                        checked: root.lcdEnabled
+                        onToggled: { root.lcdEnabled = !root.lcdEnabled; root.save() }
                     }
                 }
                 RowLayout { Layout.fillWidth: true; spacing: 6
@@ -157,7 +157,7 @@ ColumnLayout {
                 }
             }
 
-            CoreCard {
+            Card { variant: "core";
                 contentSpacing: Config.ControlConfig.space2
                 accent: Config.ThemeConfig.colors.warning
                 Layout.fillWidth: true
@@ -218,7 +218,7 @@ ColumnLayout {
         }
 
         // ── RIGHT: live rotating LCD preview ───────────────────────────
-        CoreCard {
+        Card { variant: "core";
             accent: Config.ThemeConfig.colors.primary
             Layout.preferredWidth: 226
             Layout.fillHeight: true
