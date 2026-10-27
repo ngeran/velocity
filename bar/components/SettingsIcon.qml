@@ -12,7 +12,7 @@
 // through the host to in-process overlays), the dashboard is a SEPARATE
 // process — there is no host handler to call. The `show` verb is
 // intentionally avoided: `show` is a quickshell ipc CLI subcommand and never
-// parses as a function name (see ModernDashboard). Toggle is also honest UX:
+// parses as a function name (see SettingsWindowShell). Toggle is also honest UX:
 // click the gear when open → closes.
 //
 // The hover-pill shell is the shared HoverGlyph base (DU10) with

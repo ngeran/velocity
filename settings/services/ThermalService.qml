@@ -11,7 +11,7 @@
 //                   sensor to userspace → coolantAvailable stays false and the UI
 //                   shows "N/A". A configurable hwmon path can be wired in later.
 //
-// Process + SplitParser + Timer idiom mirrors SysInfoService.qml.
+// Process + SplitParser + Timer idiom mirrors SystemMetricsService.qml.
 //
 // =============================================================================
 
@@ -99,7 +99,7 @@ Item {
     Timer {
         interval: 15000
         repeat: true
-        running: CoreEngineService.telemetryWanted
+        running: SystemMetricsService.telemetryWanted
         onTriggered: {
             if (cpuTempProc.running)  cpuTempProc.running = false
             if (nvmeProc.running)     nvmeProc.running = false
@@ -108,11 +108,11 @@ Item {
     }
 
     // Temps move slowly; 5s is enough and keeps the hwmon scan cheap. Runs
-    // only while a consumer wants telemetry (CoreEngineService owns the gate
+    // only while a consumer wants telemetry (SystemMetricsService owns the gate
     // — Core tab open or the deepcool LCD daemon alive; NOT always-on).
     Timer {
         interval: 5000
-        running: CoreEngineService.telemetryWanted
+        running: SystemMetricsService.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh()

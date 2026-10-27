@@ -1,12 +1,12 @@
 // =============================================================================
 // SettingsModule.qml — SETTINGS tab (rail + fixed panes, Shibumi viewport-fit)
 // =============================================================================
-// Same architecture as the Control and Core tabs: the shared SideNav (icon
+// Same architecture as the Control and Core tabs: the shared ControlSectionNav (icon
 // chips, active dot, compact collapse) swaps one fixed pane per key. The
 // dense panes (DESKTOP, IDLE) scroll internally via ScrollColumn — they
 // hold more rows than the smallest viewport (480px card floor) can fit;
 // unclipped they used to paint outside the settings window. Extracted from
-// ModernDashboard's inline ~730-line
+// SettingsWindowShell's inline ~730-line
 // Flickable block; every write path is byte-identical:
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
 //   IDLE & LOCK— dim/lock/off timeouts, suspend   (HypridleService + saveConfig)
@@ -50,8 +50,8 @@ Item {
         { key: "idle",       label: "IDLE & LOCK", icon: "󰌾" }
     ]
 
-    // ── left rail — the SHARED SideNav (identical UX to Control / Core) ──
-    SideNav {
+    // ── left rail — the SHARED ControlSectionNav (identical UX to Control / Core) ──
+    ControlSectionNav {
         id: sideNav
         anchors.top: parent.top
         anchors.bottom: parent.bottom

@@ -1,5 +1,5 @@
 // =============================================================================
-// CoreEngineTab.qml — "Core Engine" tab (tab 4): shared SideNav + content swap
+// CoreEngineTab.qml — "Core Engine" tab (tab 4): shared ControlSectionNav + content swap
 // =============================================================================
 // Consolidated nav (user request): SYSTEM (unified CPU+GPU+MEM+drives) is the
 // default pane; GPU (processes detail), LCD, EVENTS remain separate.
@@ -18,13 +18,13 @@ Item {
 
     // Telemetry session (Shibumi consumer-refcount, single-consumer case):
     // this tab's Loader instantiation IS the CoreEngine/Gpu/Thermal gate.
-    // (The core:* search entries are seeded once in ModernDashboard's
+    // (The core:* search entries are seeded once in SettingsWindowShell's
     // _seedSearchCatalog; the nav model itself lives in
-    // Config.ControlConfig.coreSections so the seed and this SideNav share it.)
-    Component.onCompleted: Services.CoreEngineService.coreVisible = true
-    Component.onDestruction: Services.CoreEngineService.coreVisible = false
+    // Config.ControlConfig.coreSections so the seed and this ControlSectionNav share it.)
+    Component.onCompleted: Services.SystemMetricsService.coreVisible = true
+    Component.onDestruction: Services.SystemMetricsService.coreVisible = false
 
-    SideNav {
+    ControlSectionNav {
         id: sideNav
         anchors.top: parent.top
         anchors.bottom: parent.bottom
@@ -49,9 +49,9 @@ Item {
                 spacing: 3
                 Text { text: "SESSION"; color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                Text { text: Services.SysInfoService.userName.toUpperCase(); color: Config.ThemeConfig.colors.text
+                Text { text: Services.SystemMetricsService.userName.toUpperCase(); color: Config.ThemeConfig.colors.text
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width - 8 }
-                Text { text: Services.SysInfoService.hostname.toUpperCase(); color: Config.ThemeConfig.colors.textDim
+                Text { text: Services.SystemMetricsService.hostname.toUpperCase(); color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width - 8 }
             }
         }

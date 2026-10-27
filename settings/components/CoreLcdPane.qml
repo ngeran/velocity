@@ -64,12 +64,12 @@ ColumnLayout {
             case "gpu_temp": return tempStr(Services.GpuService.temp)
             case "coolant_temp": return Services.ThermalService.coolantAvailable ? tempStr(Services.ThermalService.coolantTemp) : "N/A"
             case "nvme_temp": return Services.ThermalService.nvmeTemp > 0 ? tempStr(Services.ThermalService.nvmeTemp) : "N/A"
-            case "cpu_usage": return Math.round(Services.CoreEngineService.cpuUsage) + "%"
+            case "cpu_usage": return Math.round(Services.SystemMetricsService.cpuUsage) + "%"
             case "gpu_usage": return Math.round(Services.GpuService.util) + "%"
-            case "ram_pct": return Math.round(Services.CoreEngineService.ramPct) + "%"
-            case "swap_pct": return Math.round(Services.CoreEngineService.swapPct) + "%"
-            case "disk_pct": return Math.round(Services.CoreEngineService.diskPct) + "%"
-            case "cpu_ghz": return Services.CoreEngineService.cpuGhz.toFixed(2)
+            case "ram_pct": return Math.round(Services.SystemMetricsService.ramPct) + "%"
+            case "swap_pct": return Math.round(Services.SystemMetricsService.swapPct) + "%"
+            case "disk_pct": return Math.round(Services.SystemMetricsService.diskPct) + "%"
+            case "cpu_ghz": return Services.SystemMetricsService.cpuGhz.toFixed(2)
         }
         return "—"
     }

@@ -1,6 +1,5 @@
 singleton ThemeService 1.0 ThemeService.qml
 BoundedProcess 1.0 BoundedProcess.qml
-singleton SysInfoService 1.0 SysInfoService.qml
 singleton NetworkControlService 1.0 NetworkControlService.qml
 singleton BluetoothControlService 1.0 BluetoothControlService.qml
 singleton AudioControlService 1.0 AudioControlService.qml
@@ -11,8 +10,8 @@ singleton HypridleService 1.0 HypridleService.qml
 singleton MonitorService 1.0 MonitorService.qml
 singleton GpuService 1.0 GpuService.qml
 singleton ThermalService 1.0 ThermalService.qml
-singleton CoreEngineService 1.0 CoreEngineService.qml
-singleton EventsReader 1.0 EventsReader.qml
+singleton SystemMetricsService 1.0 SystemMetricsService.qml
+singleton KernelEventReader 1.0 KernelEventReader.qml
 singleton PluginManagerService 1.0 PluginManagerService.qml
 singleton BarWatchService 1.0 BarWatchService.qml
 singleton HyprSettingsService 1.0 HyprSettingsService.qml

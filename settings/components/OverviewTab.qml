@@ -1,5 +1,5 @@
 // =============================================================================
-// DashboardOverviewTab.qml — "SYSTEM PULSE" dashboard
+// OverviewTab.qml — "SYSTEM PULSE" dashboard
 // VERSION: V9.0 — [System Pulse (square) + Weather] | 2×2 identity grid
 // (anchored) — H4: the calendar left the dashboard (dropped decision); its
 // square now carries SystemPulseCard, a read-only window over the bar's H7
@@ -25,7 +25,7 @@
 // Theme, Active Palette, Display Info. All fill their cells (no empty space).
 //
 // Every colour reads from Config.ThemeConfig.colors → recolours live with the
-// active theme. requestTab(int) bubbles to ModernDashboard (Theme CHANGE → Themes).
+// active theme. requestTab(int) bubbles to SettingsWindowShell (Theme CHANGE → Themes).
 // =============================================================================
 
 import QtQuick
@@ -39,7 +39,7 @@ Item {
 
     readonly property string layoutVersion: "V9.0"
 
-    // Bubble a tab-switch request up to ModernDashboard.
+    // Bubble a tab-switch request up to SettingsWindowShell.
     signal requestTab(int index)
 
     // ── Geometry ────────────────────────────────────────────────────────────

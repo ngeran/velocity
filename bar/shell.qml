@@ -89,7 +89,7 @@ ShellRoot {
         return !!ov && ov.shown === true
     }
 
-    // EventService must be EAGER: QML singletons construct lazily on first
+    // KernelEventRecorder must be EAGER: QML singletons construct lazily on first
     // DEREFERENCE — and a never-read property binding may never evaluate.
     // Touching it imperatively at shell start guarantees construction (the
     // collector's journal tail + generation watcher depend on it).
@@ -98,9 +98,9 @@ ShellRoot {
         // changes; this covers the first load).
         effectiveStyle = requestedStyle
         // Member access (not a bare reference — those never evaluate) to
-        // force EventService construction: QML singletons build lazily and
+        // force KernelEventRecorder construction: QML singletons build lazily and
         // nothing else references the collector until a panel binds it.
-        console.log("[shell] EventService online:", Services.EventService.events.count, "events")
+        console.log("[shell] KernelEventRecorder online:", Services.KernelEventRecorder.events.count, "events")
     }
 
     // TRAY STATE — one tray card for all outputs. trayOwner = the bar window

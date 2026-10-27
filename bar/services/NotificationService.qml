@@ -110,7 +110,7 @@ Item {
 
     // -------------------------------------------------------------------------
     // PERSISTENCE — notifications.jsonl through the bar's write funnel
-    // (EventService._atomicWrite). The model survives bar restarts: read-marks
+    // (KernelEventRecorder._atomicWrite). The model survives bar restarts: read-marks
     // (read/readAt), DnD-silent marks and unread rows all persist (read rows
     // still expire by tier once their clock ran out before the restart).
     // Restored rows get clickId=0 — the previous session's DBus action ids
@@ -136,7 +136,7 @@ Item {
             lines.push(root._storeLine(root.model.get(i)))         // oldest first on disk
         for (var j = root.clearedModel.count - 1; j >= 0 && lines.length < root.storeMax; j--)
             lines.push(root._storeLine(root.clearedModel.get(j)))  // visible rows win the cap
-        EventService._atomicWrite(root.storePath, lines.join("\n") + "\n")
+        KernelEventRecorder._atomicWrite(root.storePath, lines.join("\n") + "\n")
     }
 
     Process {   // unbounded-ok: one-shot 32-byte read, exits at EOF

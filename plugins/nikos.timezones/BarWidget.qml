@@ -17,7 +17,7 @@ Item {
     implicitWidth: pill.implicitWidth
     implicitHeight: pill.height
 
-    // Configuration lives in Service.qml (entryPoints.service): one headless
+    // Configuration lives in ServiceRoot.qml (entryPoints.service): one headless
     // root per bar process pushes settings into TZ.TimezoneService. This
     // view only binds the singleton — safe on any number of outputs.
 

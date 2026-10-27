@@ -13,7 +13,7 @@ import Qt.labs.platform
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
-import "../Commons"
+import "../quattro-compat"
 
 PanelWindow {
     id: panelRoot

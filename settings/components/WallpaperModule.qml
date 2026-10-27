@@ -481,14 +481,14 @@ Item {
                     Layout.fillWidth: true
                     Text { text: "SYSTEM"; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
                     Item { Layout.fillWidth: true }
-                    Text { text: Math.round(Services.CoreEngineService.ramPct) + "%"; color: Config.ThemeConfig.colors.warning; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
+                    Text { text: Math.round(Services.SystemMetricsService.ramPct) + "%"; color: Config.ThemeConfig.colors.warning; font.family: root.fMono; font.pixelSize: 8; font.bold: true }
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
                 Rectangle {
                     Layout.fillWidth: true; height: 3; color: Config.ThemeConfig.colors.outlineVariant
                     Rectangle {
                         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        width: parent.width * (Math.max(0, Math.min(100, Services.CoreEngineService.ramPct)) / 100)
+                        width: parent.width * (Math.max(0, Math.min(100, Services.SystemMetricsService.ramPct)) / 100)
                         color: Config.ThemeConfig.colors.warning
                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                     }

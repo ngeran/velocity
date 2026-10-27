@@ -50,7 +50,7 @@
 //
 // BACKWARD COMPATIBILITY
 //   Retains the `.colors` and `.metadata` sub-objects so existing consumers
-//   (ModernDashboard, TopNavBar, FooterBar, WeatherWidget, ThemeModule) keep
+//   (SettingsWindowShell, TopNavBar, FooterBar, WeatherWidget, ThemeModule) keep
 //   resolving Config.ThemeConfig.colors.* and Config.ThemeConfig.metadata.*.
 //
 // =============================================================================

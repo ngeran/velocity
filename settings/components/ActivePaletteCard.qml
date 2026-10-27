@@ -9,7 +9,7 @@
 //
 // NOTE: an earlier version of this comment described a tall swatch-grid
 // layout with a memory usage bar pinned to the bottom (from
-// CoreEngineService.ramPct). That never made it into this file — worth
+// SystemMetricsService.ramPct). That never made it into this file — worth
 // deciding whether it's still wanted before it goes stale again.
 // =============================================================================
 

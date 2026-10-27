@@ -171,7 +171,7 @@ function parseJson(text) {
 }
 
 // Per-volume usage rows for settings' Core STORAGE card (H6 — replaced
-// CoreEngineService's private df fork; this module is the ONE lsblk parse).
+// SystemMetricsService's old private df fork; this module is the ONE lsblk parse).
 // ONE row per mounted VOLUME of every real drive — df (the old probe) lists
 // each source device once even when bind-mounted all over the tree, so the
 // card's row set only stays identical if the same dedupe happens here; the

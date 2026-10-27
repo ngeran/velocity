@@ -64,6 +64,16 @@ velocity-plugin help
 `plugins-state.json` and of each plugin's settings file, so those commands
 need the bar to be running.
 
+## Naming rules
+
+- **Plugin id = `<owner>.<feature>`** — `velocity.*` is reserved for first-party
+  built-ins; your own namespace (`nikos.*`, `acme.*`, …) for everything else.
+  The id is persisted (plugins-state.json, settings files, IPC) — never rename
+  a published one without a migration.
+- Inside a plugin, a headless root is `ServiceRoot.qml` (wired via
+  `entryPoints.service`); IO-owning singletons are `*Service.qml` (e.g. WeatherService.qml — a qmldir singleton name, not a headless root); pure logic
+  goes in `lib/kebab-case.mjs` with a sibling `.test.mjs`.
+
 ## Where plugins come from
 
 Highest precedence first. When two folders share an id, the higher one wins
@@ -214,7 +224,7 @@ Two ways to share state across a plugin's per-output views:
   switch commands that must run exactly once regardless of output count —
   e.g. a `hyprctl` apply).
 
-Reference: `plugins/nikos.timezones` (Service.qml configures the singleton
+Reference: `plugins/nikos.timezones` (ServiceRoot.qml configures the singleton
 from settings; BarWidget/Panel only bind it).
 
 ### Self-installing runtime (service kind)

@@ -2,16 +2,16 @@
 // GpuService.qml — GPU telemetry, file-fed (H7)
 // =============================================================================
 //
-// The GPU consumers (CoreGpuSection, the CoreEngineService deepcool-LCD feed)
+// The GPU consumers (CoreGpuSection, the SystemMetricsService deepcool-LCD feed)
 // bind to the properties below. Since H7 the bar's SystemInfoService is the
 // ONE repo-side GPU prober: it publishes
 // $XDG_RUNTIME_DIR/velocity/metrics.json (atomic tmp+mv, lease-gated) and this
 // service READS it — no GPU fork in this process anymore. The 2s
-// reload Timer below (lease-gated by CoreEngineService) is the reader, not a
+// reload Timer below (lease-gated by SystemMetricsService) is the reader, not a
 // poll of the GPU.
 //
 // watchChanges stays FALSE: the bar writes via tmp+mv, and FileView's watch
-// does not fire on renames (EventsReader lesson) — the timer reload is the
+// does not fire on renames (KernelEventReader lesson) — the timer reload is the
 // delivery mechanism.
 //
 // VENDOR FLAG — `vendor` names the expected backend shape. Only "nvidia"
@@ -83,7 +83,7 @@ Item {
         root.processes = Array.isArray(g.processes) ? g.processes : []
         // Chart samples only while a consumer actually watches (idle-file
         // rewrites must not churn properties with the dashboard closed).
-        if (CoreEngineService.telemetryWanted)
+        if (SystemMetricsService.telemetryWanted)
             root.gpuHistory = History.appendHistory(root.gpuHistory, Date.now(), root.util,
                                                      120000, 130)
     }
@@ -93,11 +93,11 @@ Item {
     }
 
     // Reader cadence: 2s while a consumer wants telemetry (Core tab open or
-    // the deepcool LCD daemon alive — CoreEngineService owns the gate). The
-    // BAR's poll underneath is lease-gated; CoreEngineService renews it.
+    // the deepcool LCD daemon alive — SystemMetricsService owns the gate). The
+    // BAR's poll underneath is lease-gated; SystemMetricsService renews it.
     Timer {
         interval: 2000
-        running: CoreEngineService.telemetryWanted
+        running: SystemMetricsService.telemetryWanted
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh()

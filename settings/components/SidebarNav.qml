@@ -1,22 +1,21 @@
 // =============================================================================
-// settings/components/SidebarNav.qml
-// Vertical Sidebar Navigation — Dashboard | Themes | Wallpapers | Control | Core | Settings
+// settings/components/SidebarNav.qml — the SettingsWindowShell left rail
+// Dashboard | Themes | Wallpapers | Control | Core | Settings
 //
 // PURPOSE:
-//   Drop-in replacement for TopNavBar with the same public API (currentIndex,
-//   tabSelected(index), tabModel), but laid out as a fixed-width (64px) left
-//   sidebar per the SETTINGS_UI_MAP.md mockup, instead of a horizontal bar.
+//   Fixed-width (64px) vertical tab rail of the settings window (per the
+//   SETTINGS_UI_MAP.md mockup). NOT the Control/Core section rail — that is
+//   ControlSectionNav, one level deeper.
 //
-// PUBLIC API (unchanged from TopNavBar):
+// PUBLIC API:
 //   property int currentIndex
 //   signal tabSelected(int index)
 //   readonly property var tabModel
 //
 // OLED / NO-FILLED-HIGHLIGHT POLICY:
-//   Unlike TopNavBar (which fills the active tab background with
-//   colors.primary), the active indicator here is a 2px left border + icon/
-//   label tint only — no filled background at any state. Matches DashboardCard's
-//   existing treatment (border + thin accent line, never a solid fill).
+//   The active indicator is a 2px left border + icon/label tint only — no
+//   filled background at any state. Matches DashboardCard's treatment
+//   (border + thin accent line, never a solid fill).
 // =============================================================================
 
 import QtQuick

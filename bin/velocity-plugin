@@ -287,7 +287,7 @@ function convertQuattro(dir) {
     const m = JSON.parse(fs.readFileSync(mf, "utf8"))
     fs.renameSync(mf, path.join(dir, "manifest.quattro.json"))
     const kinds = (m.kinds || ["bar-widget"]).filter(k => M.KINDS.indexOf(k) !== -1)
-    const defaults = { "bar-widget": "BarWidget.qml", service: "Service.qml", overlay: "Overlay.qml" }
+    const defaults = { "bar-widget": "BarWidget.qml", service: "ServiceRoot.qml", overlay: "Overlay.qml" }
     const eps = {}
     for (const k of kinds) eps[M.entryKey(k)] = (m.entryPoints && m.entryPoints[M.entryKey(k)]) || defaults[k]
     fs.writeFileSync(mf, JSON.stringify({

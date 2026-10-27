@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# {{ID}} runtime installer — run by Service.qml on enable, and via the
+# {{ID}} runtime installer — run by ServiceRoot.qml on enable, and via the
 # `setup` IPC verb. Contract:
 #   serialized         — flock on a state lock; a second run waits, then no-ops
 #   skip-if-unchanged  — a marker records a checksum over runtime/; identical
 #                        content skips straight to exit 0
 #   --force            — re-run the install steps even when unchanged
-#   logged             — Service.qml redirects stdout+stderr to
+#   logged             — ServiceRoot.qml redirects stdout+stderr to
 #                        $XDG_STATE_HOME/velocity/plugins/{{ID}}/install.log
 # Hygiene for anything this script edits OUTSIDE the plugin dir:
 #   backup-once  — "<target>.{{ID}}.bak" is created once, never overwritten

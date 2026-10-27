@@ -11,7 +11,7 @@
   ],
   "entryPoints": {
     "barWidget": "BarWidget.qml",
-    "service": "Service.qml"
+    "service": "ServiceRoot.qml"
   },
   "bar": {
     "defaultSection": "center"

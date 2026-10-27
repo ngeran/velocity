@@ -1,0 +1,4 @@
+# Quattro/Ryoku compat singletons (vendored Theme scale) — path-imported only
+# (`import "../quattro-compat"`); no module URI: hyphens are illegal in QML
+# module names, and nothing imported the old qs.Commons URI.
+singleton Theme 1.0 Theme.qml

@@ -14,7 +14,7 @@
 //     keywords  extra match terms (hyprctl key paths, synonyms)
 //     item      the row Item (highlight target; null for section-level rows)
 //
-// Consumers: the palette in ModernDashboard (input + results) and the
+// Consumers: the palette in SettingsWindowShell (input + results) and the
 // "search" IPC target in shell.qml (scripting/truth probes).
 // =============================================================================
 
@@ -28,7 +28,7 @@ Item {
     // Registry — plain array; reassignments are fine at ~30-entry scale.
     property var entries: []
 
-    // Emitted when the user picks a result; ModernDashboard performs the
+    // Emitted when the user picks a result; SettingsWindowShell performs the
     // navigation (tab switch + sub-section + highlight flash) — this service
     // stays UI-free.
     signal activated(var entry)

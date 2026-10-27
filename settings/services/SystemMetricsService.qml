@@ -1,5 +1,5 @@
 // =============================================================================
-// CoreEngineService.qml — telemetry aggregator + deepcool-py feed publisher
+// SystemMetricsService.qml — telemetry aggregator + deepcool-py feed publisher
 // =============================================================================
 //
 // Single producer of the "Core Engine" dashboard data AND the live values pushed
@@ -9,8 +9,9 @@
 //   3. writes ~/.cache/deepcool/metrics.json (deepcool-py watches this file).
 //
 // Dashboard views bind to these properties (live); deepcool-py reads the file.
-// SysInfoService is left untouched — this service is self-sufficient for the LCD
-// feed to avoid coupling cadence (bar polls 5s; the LCD wants ~1s).
+// Also hosts the dashboard's static host identity (hostname/user/uptime —
+// absorbed from SystemMetricsService in I2 group 5); the bar's SystemInfoService is
+// a different process and stays separate.
 //
 // READER ENGINE (ported from omarchy-system-monitor's Metrics.qml): /proc and
 // /sys are read with FileView.reload() on the timer — ZERO forked processes
@@ -29,6 +30,7 @@ import Qt.labs.platform
 import Quickshell.Io
 import "History.js" as History
 import "../lib/storage.mjs" as Storage
+import "../config" as Config
 
 Item {
     id: root
@@ -129,6 +131,8 @@ Item {
         var dir = root.metricsPath.substring(0, root.metricsPath.lastIndexOf("/"))
         root.initProc.command = ["mkdir", "-p", dir]   // argv form — no shell, nothing to quote
         root.initProc.running = true
+        root.refreshStatic()
+        root.refreshUptime()
     }
 
     // ── CPU aggregate + per-core from /proc/stat (FileView, no fork) ────────
@@ -344,5 +348,91 @@ Item {
         repeat: true
         triggeredOnStart: true
         onTriggered: { if (!diskProc.running) diskProc.running = true }
+    }
+
+    // ── HOST IDENTITY — merged from SystemMetricsService (I2 group 5) ─────────────
+    // hostname / user (static per boot, one-shot reads) + uptime ("up 2 hours,
+    // 15 minutes"; refreshed every 30s while the dashboard is open, and on
+    // CoreSystemPane open). Same C2 trim applies: no board/DMI/kernel fields —
+    // the bar's SystemInfoService owns board identity for FastfetchOverlay.
+    property string hostname: "unknown"
+    property string uptime: "—"
+    property string userName: "user"
+
+    function refreshStatic() {
+        hostnameProc.running = true
+        userProc.running = true
+    }
+
+    function refreshUptime() {
+        uptimeProc.running = true
+    }
+
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+        id: hostnameProc
+        command: ["sh", "-c", "hostnamectl hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || hostname 2>/dev/null"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { hostnameProc.buffer += data + "\n" } }
+        onRunningChanged: {
+            if (!running && hostnameProc.buffer.length > 0) {
+                root.hostname = hostnameProc.buffer.trim()
+                hostnameProc.buffer = ""
+            }
+        }
+    }
+
+    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+        id: userProc
+        command: ["sh", "-c", "whoami"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { userProc.buffer += data + "\n" } }
+        onRunningChanged: {
+            if (!running && userProc.buffer.length > 0) {
+                var u = userProc.buffer.trim()
+                if (u.length > 0)
+                    root.userName = u.charAt(0).toUpperCase() + u.slice(1)
+                userProc.buffer = ""
+            }
+        }
+    }
+
+    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+        id: uptimeProc
+        command: ["sh", "-c", "uptime -p 2>/dev/null | sed 's/^up //' || cat /proc/uptime"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { uptimeProc.buffer += data + "\n" } }
+        onRunningChanged: {
+            if (!running && uptimeProc.buffer.length > 0) {
+                var raw = uptimeProc.buffer.trim()
+                if (raw.length > 0 && raw.indexOf("up") === 0) {
+                    root.uptime = raw
+                } else {
+                    // Fallback: /proc/uptime seconds → human readable
+                    var secs = parseFloat(raw.split(" ")[0])
+                    if (!isNaN(secs) && secs > 0)
+                        root.uptime = root._formatUptime(secs)
+                }
+                uptimeProc.buffer = ""
+            }
+        }
+    }
+
+    function _formatUptime(totalSecs) {
+        var d = Math.floor(totalSecs / 86400)
+        var h = Math.floor((totalSecs % 86400) / 3600)
+        var m = Math.floor((totalSecs % 3600) / 60)
+        var parts = []
+        if (d > 0) parts.push(d + (d === 1 ? " day" : " days"))
+        if (h > 0) parts.push(h + " hour" + (h === 1 ? "" : "s"))
+        if (m > 0) parts.push(m + " min")
+        return parts.length > 0 ? parts.join(", ") : "less than a minute"
+    }
+
+    Timer {
+        interval: 30000
+        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
+        repeat: true
+        triggeredOnStart: false
+        onTriggered: root.refreshUptime()
     }
 }

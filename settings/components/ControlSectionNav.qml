@@ -1,5 +1,5 @@
 // =============================================================================
-// SideNav.qml — vertical section switcher (network / bluetooth / audio / display)
+// ControlSectionNav.qml — vertical section switcher (network / bluetooth / audio / display)
 // =============================================================================
 // NavRailItem pattern: icon chip + label, active tint + dot. Collapses to
 // icon-only (56px) when UIScale reports the compact breakpoint (<1440 logical).

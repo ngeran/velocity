@@ -11,7 +11,7 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell
 import Quickshell.Io
-import "../Commons" as CT
+import "../quattro-compat" as CT
 
 Item {
     id: root

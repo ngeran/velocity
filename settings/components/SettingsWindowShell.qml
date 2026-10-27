@@ -1,5 +1,5 @@
 // =============================================================================
-// settings/components/ModernDashboard.qml
+// settings/components/SettingsWindowShell.qml
 // Bento Grid Dashboard — Main Layout Orchestrator (Obsidian Vertical Edition)
 // =============================================================================
 //
@@ -8,8 +8,8 @@
 //
 // PURPOSE:
 //   Main container for all tabs. Delegates tab-0 (Dashboard) to
-//   DashboardOverviewTab (bento grid layout), other tabs to their
-//   respective modules (ThemeModule, WallpaperModule, ControlDashboard, Settings).
+//   OverviewTab (bento grid layout), other tabs to their
+//   respective modules (ThemeModule, WallpaperModule, ControlTab, Settings).
 //
 // =============================================================================
 
@@ -101,7 +101,7 @@ Item {
 
     // Seed the keyed catalog entries once, here — NOT in the tab components.
     // With O1's lazy tabs a fresh open has no tab instances, so entries that
-    // used to register from ControlDashboard/CoreEngineTab/LogsTab bodies
+    // used to register from ControlTab/CoreEngineTab/LogsTab bodies
     // would be missing until each tab's first visit; the palette (and the
     // `search` IPC probes, which assert a minimum index size) need the whole
     // catalog up front. Keyed register() dedupe keeps this idempotent against
@@ -374,7 +374,7 @@ Item {
                 }
             }
 
-            sourceComponent: Components.DashboardOverviewTab {
+            sourceComponent: Components.OverviewTab {
                 anchors.fill: parent
 
                 // Dashboard → tab deep-links (Theme Switcher CHANGE, footer CONFIG)
@@ -472,7 +472,7 @@ Item {
                 }
             }
 
-            sourceComponent: Components.ControlDashboard {
+            sourceComponent: Components.ControlTab {
                 anchors.fill: parent
                 dash: root   // H3: cross-tab jump links (Display → Idle & Lock)
             }

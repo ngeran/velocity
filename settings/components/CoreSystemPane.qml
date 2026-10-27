@@ -27,7 +27,7 @@ Rectangle {
     border.width: 1
     clip: true
 
-    readonly property int coreCount: Math.max(1, Services.CoreEngineService.perCoreLoad.length)
+    readonly property int coreCount: Math.max(1, Services.SystemMetricsService.perCoreLoad.length)
     function tempTier(t) { return Config.ThemeConfig.tierColor(t, 55, 75) }
     function loadTier(v) { return Config.ThemeConfig.tierColor(v, 50, 85) }
     function diskTier(p) { return Config.ThemeConfig.tierColor(p, 70, 85) }
@@ -52,14 +52,14 @@ Rectangle {
     }
 
     // "UPDATED Ns AGO" — resets whenever live telemetry ticks
-    readonly property string _sig: Services.CoreEngineService.cpuUsage.toFixed(3)
+    readonly property string _sig: Services.SystemMetricsService.cpuUsage.toFixed(3)
     property int _agoSec: 0
     on_SigChanged: _agoSec = 0
     Timer { interval: 1000; repeat: true; running: root.visible; onTriggered: root._agoSec++ }
 
     // Uptime string is pull-based — refresh on every pane entry so the
     // trip-computer line never shows a stale/em-dash value.
-    onVisibleChanged: if (visible) Services.SysInfoService.refreshUptime()
+    onVisibleChanged: if (visible) Services.SystemMetricsService.refreshUptime()
 
     component DashLabel: Text {
         color: Config.ThemeConfig.colors.textDim
@@ -106,13 +106,13 @@ Rectangle {
                 RowLayout { Layout.fillWidth: true
                     DashLabel { text: "CPU LOAD / %" }
                     Item { Layout.fillWidth: true }
-                    Text { text: Services.CoreEngineService.cpuUsage.toFixed(1) + " %"
-                        color: root.loadTier(Services.CoreEngineService.cpuUsage)
+                    Text { text: Services.SystemMetricsService.cpuUsage.toFixed(1) + " %"
+                        color: root.loadTier(Services.SystemMetricsService.cpuUsage)
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                 }
                 CoreDashBand {
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    points: Services.CoreEngineService.cpuHistory
+                    points: Services.SystemMetricsService.cpuHistory
                     columns: 64
                 }
                 RowLayout { Layout.fillWidth: true
@@ -182,7 +182,7 @@ Rectangle {
                 DashLabel { Layout.alignment: Qt.AlignHCenter; text: "PROCESSOR" }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true }
                 RowLayout { Layout.alignment: Qt.AlignHCenter; spacing: 4
-                    Text { text: Services.CoreEngineService.cpuUsage > 0 ? Math.round(Services.CoreEngineService.cpuUsage) : "0"
+                    Text { text: Services.SystemMetricsService.cpuUsage > 0 ? Math.round(Services.SystemMetricsService.cpuUsage) : "0"
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 74; font.bold: true }
                     Text { text: "%"; color: Config.ThemeConfig.colors.primary
@@ -190,11 +190,11 @@ Rectangle {
                         Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 14 }
                 }
                 Text { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 2
-                    text: Services.CoreEngineService.cpuGhz.toFixed(2) + " GHZ / CPU CLOCK"
+                    text: Services.SystemMetricsService.cpuGhz.toFixed(2) + " GHZ / CPU CLOCK"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                 Text { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 4
-                    text: "UPTIME " + Services.SysInfoService.uptime.toUpperCase()
+                    text: "UPTIME " + Services.SystemMetricsService.uptime.toUpperCase()
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true }
@@ -209,14 +209,14 @@ Rectangle {
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
                 DashLabel { Layout.leftMargin: 12; text: "MEMORY UTILIZATION" }
                 RowLayout { Layout.leftMargin: 12; Layout.fillWidth: true; spacing: 2
-                    Text { text: Math.round(Services.CoreEngineService.ramPct)
+                    Text { text: Math.round(Services.SystemMetricsService.ramPct)
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 34; font.bold: true }
                     Text { text: "%"; color: Config.ThemeConfig.colors.success
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true }
                 }
                 Text { Layout.leftMargin: 12
-                    text: Services.CoreEngineService.ramUsedGB.toFixed(1) + " / " + Services.CoreEngineService.ramTotalGB.toFixed(1) + " GiB"
+                    text: Services.SystemMetricsService.ramUsedGB.toFixed(1) + " / " + Services.SystemMetricsService.ramTotalGB.toFixed(1) + " GiB"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                 // 2-min utilization trend — memoryHistory was collected but
@@ -228,17 +228,17 @@ Rectangle {
                     Layout.leftMargin: 12; Layout.rightMargin: 12
                     Layout.topMargin: 8; Layout.bottomMargin: 8
                     samples: {
-                        var h = Services.CoreEngineService.memoryHistory
+                        var h = Services.SystemMetricsService.memoryHistory
                         var out = []
                         for (var i = 0; i < h.length; i++) out.push(Number(h[i].value) || 0)
                         return out
                     }
-                    capacity: Services.CoreEngineService.historyMaxSamples
+                    capacity: Services.SystemMetricsService.historyMaxSamples
                     valueMax: 100
-                    stroke: root.loadTier(Services.CoreEngineService.ramPct)
-                    fill: Config.ThemeConfig.tint(root.loadTier(Services.CoreEngineService.ramPct), 0.12)
+                    stroke: root.loadTier(Services.SystemMetricsService.ramPct)
+                    fill: Config.ThemeConfig.tint(root.loadTier(Services.SystemMetricsService.ramPct), 0.12)
                 }
-                Text { Layout.leftMargin: 12; text: "SWAP " + Services.CoreEngineService.swapUsedGB.toFixed(1) + " / " + Services.CoreEngineService.swapTotalGB.toFixed(0) + " GB"
+                Text { Layout.leftMargin: 12; text: "SWAP " + Services.SystemMetricsService.swapUsedGB.toFixed(1) + " / " + Services.SystemMetricsService.swapTotalGB.toFixed(0) + " GB"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
@@ -317,8 +317,8 @@ Rectangle {
                             model: root.coreCount
                             Rectangle {
                                 width: 9; height: 9; radius: 2
-                                readonly property real _load: Services.CoreEngineService.perCoreLoad.length > index
-                                                              ? Services.CoreEngineService.perCoreLoad[index] : 0
+                                readonly property real _load: Services.SystemMetricsService.perCoreLoad.length > index
+                                                              ? Services.SystemMetricsService.perCoreLoad[index] : 0
                                 color: _load > 0 ? root.loadTier(_load)
                                                  : Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
                                 border.color: Config.ThemeConfig.colors.outlineVariant
@@ -338,14 +338,14 @@ Rectangle {
                 spacing: 3
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "STORAGE" }
-                Text { Layout.leftMargin: 12; text: Services.CoreEngineService.disks.length + " FILESYSTEMS"
+                Text { Layout.leftMargin: 12; text: Services.SystemMetricsService.disks.length + " FILESYSTEMS"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true
                     ColumnLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                         anchors.topMargin: 2; anchors.bottomMargin: 4; spacing: 4
                         Repeater {
-                            model: Services.CoreEngineService.disks
+                            model: Services.SystemMetricsService.disks
                             delegate: ColumnLayout {
                                 id: dsk
                                 required property var modelData
@@ -391,7 +391,7 @@ Rectangle {
                 spacing: 3
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "ENGINE" }
-                Text { Layout.leftMargin: 12; text: Services.SysInfoService.hostname.toUpperCase()
+                Text { Layout.leftMargin: 12; text: Services.SystemMetricsService.hostname.toUpperCase()
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; elide: Text.ElideRight
                     Layout.fillWidth: true; Layout.rightMargin: 12 }

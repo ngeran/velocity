@@ -35,7 +35,7 @@ Item {
                                         : Services.LogService.close()
     Component.onCompleted: {
         if (streamWanted) Services.LogService.open()
-        // (the logs-tab search entry is seeded once in ModernDashboard's
+        // (the logs-tab search entry is seeded once in SettingsWindowShell's
         // _seedSearchCatalog — with O1's lazy tabs the index must be whole
         // before this tab is ever visited.)
     }

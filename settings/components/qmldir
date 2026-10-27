@@ -1,13 +1,13 @@
 PowerMenu 1.0 PowerMenu.qml
 PowerTile 1.0 PowerTile.qml
-ModernDashboard 1.0 ModernDashboard.qml
+SettingsWindowShell 1.0 SettingsWindowShell.qml
 ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 DashboardCard 1.0 DashboardCard.qml
 SystemPulseCard 1.0 SystemPulseCard.qml
-ControlDashboard 1.0 ControlDashboard.qml
-SideNav 1.0 SideNav.qml
+ControlTab 1.0 ControlTab.qml
+ControlSectionNav 1.0 ControlSectionNav.qml
 TerminalBody 1.0 TerminalBody.qml
 WifiListView 1.0 WifiListView.qml
 WifiListRow 1.0 WifiListRow.qml
@@ -16,7 +16,7 @@ BtDeviceRow 1.0 BtDeviceRow.qml
 SinkListView 1.0 SinkListView.qml
 SourceListView 1.0 SourceListView.qml
 DisplayControlView 1.0 DisplayControlView.qml
-DashboardOverviewTab 1.0 DashboardOverviewTab.qml
+OverviewTab 1.0 OverviewTab.qml
 WallpaperModule 1.0 WallpaperModule.qml
 CoreEngineTab 1.0 CoreEngineTab.qml
 CoreCard 1.0 CoreCard.qml

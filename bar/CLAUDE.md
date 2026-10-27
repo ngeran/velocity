@@ -60,10 +60,10 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
    - `BluetoothService` — Native `Quickshell.Bluetooth` (BlueZ): powered/devices/battery as bindings; toggle + disconnect are property writes
    - `NetworkService` — Native `Quickshell.Networking` for bar state (type/SSID/connected); wifi scanner leased to `popupOpen` (the lease keeps live ssid/signal fresh for the card hero — no AP list leaves the service anymore); IP + throughput are popup-gated probes (full diagnostics live in settings). Also owns the speed-test probe (Cloudflare XHR ladder with a generation guard + 10s reaper, `runSpeedTest`/`cancelSpeedTest`) and, since H1, persists each completed result atomically to `$XDG_STATE_HOME/velocity/speedtest.json` (`network speedtest` IPC runs it headless; the settings app reads the file read-only — the bar is the speed test's only runner)
    - `AudioService` — Native `Quickshell.Services.Pipewire`: default sink tracked, volume/mute as bindings
-   - `EventService` — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
+   - `KernelEventRecorder` (was EventService) — always-on kernel incident recorder (`journalctl -f -k`, watchdog-healed) writing `events.jsonl`
    - `SystemInfoService` — fastfetch profile + live metrics for the SYSTEM INFO overlay, and since H7 the ONE cross-process metrics producer: while leased (overlay shown, or `metrics lease <seconds>` IPC — clamp ≤ 30s, math in `lib/lease.mjs`, node-tested) it polls /proc + the GPU prober every 2s and publishes `$XDG_RUNTIME_DIR/velocity/metrics.json` atomically (`{schema:1, ts, cpu:{pct}, mem, gpu|null, disk}`). Settings' GpuService + dashboard System Pulse read the file and renew every 10s while visible; no lease → no polls (timer self-clears at expiry)
-   - Storage: the `nikos.storage` plugin's `StorageService` qmldir singleton + headless `Service.qml` (WeatherService pattern) keep a drive inventory warm for the pill and panel: ONE `lsblk -J -b` probe at mount, open-gated 30 s, plus a 10-min cold tick — no df side-channel, no state cache. Pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`); the parser keeps ALL lsblk mountpoints per volume and prefers the volume hosting `/` (NixOS bind-mounts list "/" last).
-   - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact); its zone is the plugin's `zone` setting (zone math: `lib/tz.mjs`, synced from `shared/tz.mjs`). The today-card panel's weather comes from the plugin-internal `WeatherService` qmldir singleton (like `nikos.timezones`' service): keyless Open-Meteo via one-shot curl, location = explicit lat/lon settings > cached coords > ipwho.is probe, refresh gated to panel-open + 15 min (idle-zero at rest), last-known forecast cached at `$XDG_STATE_HOME/velocity/plugins/nikos.clock-weather.json` and booted back as `stale`. Pure parsing lives in `lib/weather.mjs` (node-tested, synced from `shared/weather.mjs`); configured by the plugin's `Service.qml` headless root.
+   - Storage: the `nikos.storage` plugin's `StorageService` qmldir singleton + headless `ServiceRoot.qml` (WeatherService pattern) keep a drive inventory warm for the pill and panel: ONE `lsblk -J -b` probe at mount, open-gated 30 s, plus a 10-min cold tick — no df side-channel, no state cache. Pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`); the parser keeps ALL lsblk mountpoints per volume and prefers the volume hosting `/` (NixOS bind-mounts list "/" last).
+   - Clock: the built-in ClockWidget was removed — the center clock is the `nikos.clock` plugin, which uses `SystemClock { precision: Minutes }` (zero-poll, boundary-exact); its zone is the plugin's `zone` setting (zone math: `lib/tz.mjs`, synced from `shared/tz.mjs`). The today-card panel's weather comes from the plugin-internal `WeatherService` qmldir singleton (like `nikos.timezones`' service): keyless Open-Meteo via one-shot curl, location = explicit lat/lon settings > cached coords > ipwho.is probe, refresh gated to panel-open + 15 min (idle-zero at rest), last-known forecast cached at `$XDG_STATE_HOME/velocity/plugins/nikos.clock-weather.json` and booted back as `stale`. Pure parsing lives in `lib/weather.mjs` (node-tested, synced from `shared/weather.mjs`); configured by the plugin's `ServiceRoot.qml` headless root.
 
 3. **`components/*.qml`** — UI components. Read from singleton services directly; no imports needed once registered in `qmldir`. Bar icons are mounted through their `builtins/velocity.*` wrappers, never placed by a scene directly.
 
@@ -81,6 +81,18 @@ Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <del
 
 Every directory has a `qmldir` file. Components/services are registered there and resolved automatically. **When adding a new component or service, you must add an entry to the corresponding `qmldir`.**
 
+### Naming convention (report §2.3)
+
+- **Files:** QML types are PascalCase nouns. Pure logic lives in `lib/kebab-case.mjs` with a sibling `.test.mjs` — never in `services/`.
+- **Suffixes:**
+  - `*Service` = singleton that owns IO
+  - `*Model` = pure state or transform
+  - `*View` > `*Tab` > `*Card` > `*Row` = UI from largest to smallest
+  - `*Overlay` = full window
+  - Drop filler words: no `Engine`, `Modern`, `Sys` prefixes/suffixes in new names.
+- **Members:** `_camelCase` = private (never read or bound from outside the file). Public names are full words (≥3 letters, except `x`/`y`). Booleans start with `is`/`has`/`show`. Functions are verbs.
+- **Bar folder layers:** `Ui/` = plugin kit (stateless, D13), `components/` = bar internals, `builtins/` = first-party plugins, `engine/` = plugin host.
+
 ---
 
 ## Icon interactions
@@ -96,7 +108,7 @@ Every directory has a `qmldir` file. Components/services are registered there an
 - **Click**: the TODAY CARD popup (upstream-Ryoku TodayCard adaptation) — LEFT month calendar (‹ › nav, today = filled accent circle, the sanctioned ephemeral fill); RIGHT hero 12-hour clock (seconds tick only while open), weather card, 2×2 metrics (WIND/HUMIDITY/RAIN/FEELS), and the next-8h temperature curve with glyph+hour row (keyless Open-Meteo; `showWeather`/`place`/`lat`/`lon` settings under Settings ▸ Plugins)
 
 ### Storage (nikos.storage)
-- **Click**: the STORAGE popup (upstream-Ryoku StoragePanel adaptation) — ROOT fs card (bar + USED/FREE/TOTAL), then one card per physical drive: class glyph + model + capacity, `MEDIA · FS · MOUNT` line, usage bar + USED/FREE/TOTAL (unmounted drives show state only). Pill shows the root used-% on hover, tinted `warning` past `warnThreshold` (default 85) and `error` at 95+. Data: ONE `lsblk -J -b` probe (no df side-channel) through the plugin-internal `StorageService` singleton + headless `Service.qml` — refresh at mount, on open (30 s gate), plus a 10-min cold tick; pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`)
+- **Click**: the STORAGE popup (upstream-Ryoku StoragePanel adaptation) — ROOT fs card (bar + USED/FREE/TOTAL), then one card per physical drive: class glyph + model + capacity, `MEDIA · FS · MOUNT` line, usage bar + USED/FREE/TOTAL (unmounted drives show state only). Pill shows the root used-% on hover, tinted `warning` past `warnThreshold` (default 85) and `error` at 95+. Data: ONE `lsblk -J -b` probe (no df side-channel) through the plugin-internal `StorageService` singleton + headless `ServiceRoot.qml` — refresh at mount, on open (30 s gate), plus a 10-min cold tick; pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`)
 
 ### Keyboard (US/GR)
 - **Click**: Cycle to the next XKB layout (EN ↔ GR); **right click** opens the layout manager panel (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).

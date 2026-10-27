@@ -2,7 +2,7 @@
 // CoreEventsPane.qml — system event timeline (Core tab; Shibumi viewport-fit)
 // =============================================================================
 // The "what happened, and what changed before it" pane. Reads the log the
-// bar's EventService collector maintains (via EventsReader): GPU Xids, NVRM
+// bar's KernelEventRecorder collector maintains (via KernelEventReader): GPU Xids, NVRM
 // errors, filesystem errors, boots, and nixos-rebuild switches.
 //
 // Fixed composition (§6.1 — no scrolling): spec tiles → event timeline card
@@ -49,17 +49,17 @@ ColumnLayout {
 
         Repeater {
             model: [
-                { label: "LAST GPU XID", value: Services.EventsReader.lastXidText,
-                  sub: Services.EventsReader.lastXidWhen || "no Xid on record",
-                  accent: Services.EventsReader.critCount > 0
+                { label: "LAST GPU XID", value: Services.KernelEventReader.lastXidText,
+                  sub: Services.KernelEventReader.lastXidWhen || "no Xid on record",
+                  accent: Services.KernelEventReader.critCount > 0
                           ? Config.ThemeConfig.colors.error
                           : Config.ControlConfig.accent },
-                { label: "CRITICAL EVENTS", value: "" + Services.EventsReader.critCount,
+                { label: "CRITICAL EVENTS", value: "" + Services.KernelEventReader.critCount,
                   sub: "in tracked history",
-                  accent: Services.EventsReader.critCount > 0
+                  accent: Services.KernelEventReader.critCount > 0
                           ? Config.ThemeConfig.colors.warning
                           : Config.ControlConfig.accent },
-                { label: "LAST SWITCH", value: Services.EventsReader.lastSwitchText
+                { label: "LAST SWITCH", value: Services.KernelEventReader.lastSwitchText
                           .replace(/^.*nixos-btw-/, ""),
                   sub: "generation (nixpkgs)",
                   accent: Config.ThemeConfig.colors.primary }
@@ -96,7 +96,7 @@ ColumnLayout {
         // Rows are 32px; hide beyond capacity (NEVER slice the model — the
         // §6.1 CRITICAL rule; delegates persist, counts stay honest).
         readonly property int capacity: Math.max(3, Math.floor(timelineViewport.height / 32))
-        readonly property int visibleCount: Math.min(Services.EventsReader.events.count, capacity)
+        readonly property int visibleCount: Math.min(Services.KernelEventReader.events.count, capacity)
 
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 8; spacing: Config.ControlConfig.space2
@@ -121,7 +121,7 @@ ColumnLayout {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     Repeater {
-                        model: Services.EventsReader.events
+                        model: Services.KernelEventReader.events
                         delegate: Rectangle {
                             width: parent.width
                             visible: index < timelineCard.capacity
@@ -166,7 +166,7 @@ ColumnLayout {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: !Services.EventsReader.loaded
+                    visible: !Services.KernelEventReader.loaded
                     text: "reading event log…"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
@@ -174,7 +174,7 @@ ColumnLayout {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: Services.EventsReader.loaded && Services.EventsReader.events.count === 0
+                    visible: Services.KernelEventReader.loaded && Services.KernelEventReader.events.count === 0
                     text: "no events on record"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
@@ -183,8 +183,8 @@ ColumnLayout {
 
             Text {
                 Layout.fillWidth: true
-                visible: timelineCard.visibleCount < Services.EventsReader.events.count
-                text: "+ " + (Services.EventsReader.events.count - timelineCard.visibleCount) + " earlier hidden"
+                visible: timelineCard.visibleCount < Services.KernelEventReader.events.count
+                text: "+ " + (Services.KernelEventReader.events.count - timelineCard.visibleCount) + " earlier hidden"
                 color: Config.ThemeConfig.colors.textDim
                 font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                 elide: Text.ElideRight
@@ -196,17 +196,17 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true; spacing: Config.ControlConfig.space3
 
-        Text { text: "TRACKED " + (Services.EventsReader.events.count)
+        Text { text: "TRACKED " + (Services.KernelEventReader.events.count)
                color: Config.ThemeConfig.colors.textDim
                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
-        Text { text: "BOOTS " + Services.EventsReader.bootCount
+        Text { text: "BOOTS " + Services.KernelEventReader.bootCount
                color: Config.ThemeConfig.colors.textDim
                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
-        Text { text: "SWITCHES " + Services.EventsReader.switchCount
+        Text { text: "SWITCHES " + Services.KernelEventReader.switchCount
                color: Config.ThemeConfig.colors.textDim
                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
         Item { Layout.fillWidth: true }
-        Text { text: "collector: bar/EventService · log: events.jsonl"
+        Text { text: "collector: bar/KernelEventRecorder · log: events.jsonl"
                color: Config.ThemeConfig.colors.textDim; opacity: 0.7
                font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
     }

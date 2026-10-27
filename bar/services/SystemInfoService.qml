@@ -113,7 +113,7 @@ Item {
     property real gpuClockMHz: 0
 
     // CPU% delta state — /proc/stat is cumulative jiffies; pct needs the
-    // previous sample (same math CoreEngineService runs settings-side).
+    // previous sample (same math SystemMetricsService runs settings-side).
     property real _cpuPrevBusy: 0
     property real _cpuPrevTotal: 0
     property int cpuPct: 0                  // 0..100, 0 until the 2nd sample

@@ -8,7 +8,7 @@
   "author": "{{AUTHOR}}",
   "license": "MIT",
   "kinds": ["service"],
-  "entryPoints": { "service": "Service.qml" },
+  "entryPoints": { "service": "ServiceRoot.qml" },
   "commands": [],
   "ipc": ["status", "setup"]
 }

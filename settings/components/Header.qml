@@ -2,7 +2,7 @@
 // settings/components/Header.qml
 // Shared Header Bar — compact single-row strip (logs launcher | identity).
 // Spans every tab (Dashboard, Themes, etc.) — sits above contentArea in
-// ModernDashboard.qml.
+// SettingsWindowShell.qml.
 //
 // DEDUPED: the DATE block and the Athens/Local/UTC clock trio were removed —
 // the bar's nikos.clock / nikos.timezones plugins own date and time (since H4
@@ -11,7 +11,7 @@
 // 2026-10-21). What remains is functional: the LOGS launcher (deep-links the
 // in-app LOGS tab) and the identity chip.
 //
-// SIZING: intrinsically ~44px tall. ModernDashboard.qml sets height: 44 —
+// SIZING: intrinsically ~44px tall. SettingsWindowShell.qml sets height: 44 —
 // LOGS + identity sit as one compact cluster on the right; the strip stays
 // quiet and every tab's content keeps the reclaimed vertical room.
 // =============================================================================
@@ -31,7 +31,7 @@ Rectangle {
     radius: 0
 
     // The LOGS launcher deep-links INTO this app (LogsTab, tab index 5) —
-    // ModernDashboard handles it. It no longer toggles the bar process's
+    // SettingsWindowShell handles it. It no longer toggles the bar process's
     // overlay cross-process (that overlay remains for SUPER+T / the bar icon).
     signal logsActivated()
 
@@ -96,7 +96,7 @@ Rectangle {
         spacing: 10
 
         // System Logs launcher — deep-links to the in-app LOGS tab
-        // (ModernDashboard.onLogsActivated → openLogsTab).
+        // (SettingsWindowShell.onLogsActivated → openLogsTab).
         Rectangle {
             width: 34; height: 34
             color: "transparent"

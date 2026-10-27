@@ -1,5 +1,5 @@
 // =============================================================================
-// qs.Commons/Theme.qml — self-contained palette reader for the compat layer
+// quattro-compat/Theme.qml (was qs.Commons/Theme) — palette reader for the compat layer
 // =============================================================================
 // Reads ~/.cache/theme/colors.json directly (the canonical source the bar's
 // ThemeConfig also reads) so the compat layer is theme-reactive WITHOUT

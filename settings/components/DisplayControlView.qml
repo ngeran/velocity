@@ -25,7 +25,7 @@ import "../services" as Services
 ColumnLayout {
     id: view
     spacing: Config.ControlConfig.space2
-    property var dash: null   // the ModernDashboard root — jump link target (H3)
+    property var dash: null   // the SettingsWindowShell root — jump link target (H3)
 
     // The TARGETED monitor (selected on the canvas, else focused/first)
     readonly property var mon: Services.MonitorService.target

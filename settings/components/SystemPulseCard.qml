@@ -2,14 +2,14 @@
 // SystemPulseCard.qml — SYSTEM PULSE (H4: the dashboard calendar's successor)
 // =============================================================================
 // READ-ONLY window over the bar's H7 metrics feed. Sits in the Overview tab's
-// left-column square (DashboardCard wrapper in DashboardOverviewTab provides
+// left-column square (DashboardCard wrapper in OverviewTab provides
 // the brackets); WeatherCard stays below it.
 //
 // Data sources — every one of them is another component's primary, this card
 // only reads:
 //   • $XDG_RUNTIME_DIR/velocity/metrics.json (bar SystemInfoService, lease-
 //     gated) → CPU/MEM/GPU/DISK gauge rows. Same file+idiom as GpuService:
-//     watchChanges stays FALSE (tmp+mv renames don't fire it — EventsReader
+//     watchChanges stays FALSE (tmp+mv renames don't fire it — KernelEventReader
 //     lesson), a 2s visible-gated Timer drives reload() (ASYNC; parse lands
 //     in onTextChanged). gpu:null → the GPU row reads dim "—".
 //   • NetworkControlService.rxRate/txRate (KB/s, its own dashboard-visible-
@@ -19,7 +19,7 @@
 //     → one glyph/temp/condition line, dimmed past the 15-min staleness rule.
 //
 // LEASE: while visible a 10s Timer renews the bar's metrics lease via the
-// `metrics lease 30` IPC (CoreEngineService idiom) — close the dashboard and
+// `metrics lease 30` IPC (SystemMetricsService idiom) — close the dashboard and
 // the bar's poll timer self-clears at expiry; idle cost returns to zero.
 // =============================================================================
 

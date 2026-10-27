@@ -1,12 +1,12 @@
 // =============================================================================
-// ControlDashboard.qml — top-level layout of the terminal command dashboard
+// ControlTab.qml — top-level layout of the terminal command dashboard
 // =============================================================================
 //
 // Owns `activeSection` (network | bluetooth | audio | display). Anchor-based
-// frame: AppBar (top), CommandInputBar (bottom), SideNav (left), content area
+// frame: AppBar (top), CommandInputBar (bottom), ControlSectionNav (left), content area
 // = StatusCardRow + TerminalBody. ScanlineOverlay sits above everything.
 //
-// shell.qml's ControlWindow.open(section) writes activeSection; SideNav writes
+// shell.qml's ControlWindow.open(section) writes activeSection; ControlSectionNav writes
 // it on click. Section content swaps inside TerminalBody.
 // =============================================================================
 
@@ -17,7 +17,7 @@ import "../services" as Services
 Item {
     id: root
     property string activeSection: "network"
-    property var dash: null   // the ModernDashboard root — cross-tab jump links (H3)
+    property var dash: null   // the SettingsWindowShell root — cross-tab jump links (H3)
 
     onActiveSectionChanged: {
         // Publish the active section so services can section-gate their polls
@@ -32,7 +32,7 @@ Item {
     // The section INITIAL value ("network") is set at construction — no change
     // signal fires — so publish it here too, or the section-gated wifi polls
     // never start when the Control tab opens straight to the default section.
-    // (The control:* search entries are seeded once in ModernDashboard's
+    // (The control:* search entries are seeded once in SettingsWindowShell's
     // _seedSearchCatalog — with O1's lazy tabs the index must be whole before
     // this tab is ever visited.)
     Component.onCompleted: {
@@ -45,7 +45,7 @@ Item {
         color: Config.ThemeConfig.colors.background
     }
 
-    SideNav {
+    ControlSectionNav {
         id: sideNav
         anchors.top: parent.top
         anchors.bottom: parent.bottom

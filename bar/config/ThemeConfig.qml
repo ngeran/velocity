@@ -347,7 +347,7 @@ Item {
         onFileChanged: root.ingestThemeText(themeFile.text())
         // Covers the timer's ASYNC reload() completions (a synchronous text()
         // right after reload() returns the stale cache — proven in
-        // CoreEngineService; textChanged fires when a completed read changes
+        // SystemMetricsService; textChanged fires when a completed read changes
         // the cache).
         onTextChanged: root.ingestThemeText(text())
 

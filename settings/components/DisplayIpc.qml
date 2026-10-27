@@ -3,7 +3,7 @@
 // =============================================================================
 // Lives in components/ on purpose: MonitorService is a "../services" singleton,
 // and shell.qml's "services" import is a SEPARATE instance (the SharedState
-// trap — see ModernDashboard). A shell.qml-side handler would probe an empty
+// trap — see SettingsWindowShell). A shell.qml-side handler would probe an empty
 // twin. Declared in tools/ipc-surface.txt.
 //
 //   quickshell ipc -c settings call display status

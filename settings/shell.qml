@@ -6,7 +6,7 @@
 // that animates down from the bar (26px tall). The card's top edge aligns
 // with the bar's bottom when shown.
 //
-// All visual content lives in ModernDashboard.qml — this file only handles
+// All visual content lives in SettingsWindowShell.qml — this file only handles
 // the window geometry, animation, and IPC dispatch.
 //
 // =============================================================================
@@ -29,7 +29,7 @@ ShellRoot {
     property bool shown: false
 
     // Eagerly instantiate the Core Engine publisher. QML singletons are lazy —
-    // nothing references CoreEngineService until the Core tab is opened, but the
+    // nothing references SystemMetricsService until the Core tab is opened, but the
     // deepcool-py LCD feed (~/.cache/deepcool/metrics.json) must publish
     // continuously for the process lifetime. Accessing it here (in onCompleted,
     // which always runs, unlike an unread binding) creates it; a singleton then
@@ -38,7 +38,7 @@ ShellRoot {
         // Reading a property (not a bare reference, which the JS engine treats
         // as dead code) forces the lazy singleton to instantiate so its 1s
         // publish Timer runs for the process lifetime.
-        Services.CoreEngineService.metricsPath
+        Services.SystemMetricsService.metricsPath
         // Shibumi UI-scale — feed the singleton our live logical width (a
         // binding, so output changes propagate). Singletons can't use the
         // Screen attached property (not part of a scene), so the window
@@ -301,7 +301,7 @@ ShellRoot {
     // IPC HANDLER — dashboard search (scripting / truth probes / deep-link).
     // Runs through dashboard.* bridges: the search index singleton lives under
     // the components' "../services" import, a DIFFERENT instance from this
-    // file's "services" (see ModernDashboard — the SharedState trap).
+    // file's "services" (see SettingsWindowShell — the SharedState trap).
     //   quickshell ipc -c settings call search query lock
     // =========================================================================
     IpcHandler {
@@ -375,10 +375,10 @@ ShellRoot {
         // =====================================================================
         // DASHBOARD CARD — centered, animates down from bar
         // =====================================================================
-        Components.ModernDashboard {
+        Components.SettingsWindowShell {
             id: dashboard
 
-            // Injected so ModernDashboard can funnel visibility into the
+            // Injected so SettingsWindowShell can funnel visibility into the
             // SharedState instance the services read (see its windowShown).
             windowShown: root.shown
 

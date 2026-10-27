@@ -52,7 +52,7 @@ QtObject {
     // CoreEngine/Gpu/Thermal stay always-on (they feed the deepcool-py LCD).
     property bool   dashboardVisible:        false
     // Active Control-dashboard section ("network" | "bluetooth" | "audio" | …).
-    // Written by ControlDashboard.onActiveSectionChanged; NetworkControlService
+    // Written by ControlTab.onActiveSectionChanged; NetworkControlService
     // gates its wifi-scan timers on this so the expensive scans only run while
     // the Network section is actually on screen.
     property string controlSection:          ""
