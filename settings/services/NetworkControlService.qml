@@ -304,6 +304,16 @@ Item {
         target: root.wifiDev ? root.wifiDev.networks : null
         function onValuesChanged() { root._collectWifi() }
     }
+    // H4: the Overview tab's System Pulse reads connectionStatus without ever
+    // opening the network section. The native registry can finish enumerating
+    // before the first sync with no further valuesChanged to retrigger one —
+    // sync once per dashboard open so the card never reads a cold-false state.
+    Connections {
+        target: Config.SharedState
+        function onDashboardVisibleChanged() {
+            if (Config.SharedState.dashboardVisible) root._syncNativeStatus()
+        }
+    }
 
     // -------------------------------------------------------------------------
     // STATE SYNC — rebuild the card + list from live native objects (no forks)
