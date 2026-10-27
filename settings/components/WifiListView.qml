@@ -7,7 +7,7 @@
 //                   downloaded · uploaded · ip · gateway
 //   DNS PROVIDER    DHCP | Cloudflare | Google | Custom segmented control
 //                   (nmcli con mod + con up; Custom = inline servers input)
-//   SPEED TEST      label · Run › button · result
+//   SPEED TEST      last bar-run result (state file, read-only) · RUN IN BAR
 //   KNOWN NETWORKS  the connected profile card
 //   OTHER NETWORKS  scan rows — click to connect (secured ⇒ inline password;
 //                   list FROZEN while typing — Repeater array-identity trap)
@@ -22,12 +22,16 @@ import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
+import "../lib/age.mjs" as Age
 
 // Root is an Item SHELL: the layout fills it, and the QR overlay is a
 // SIBLING — a full-view overlay can neither use anchors inside a ColumnLayout
 // nor occupy a layout slot of its own.
 Item {
     id: viewRoot
+
+    // Speed-test results are written by the bar (H1) — refresh on show.
+    onVisibleChanged: if (visible) view.svc.refreshLastTest()
 
     ColumnLayout {
         id: view
@@ -37,6 +41,13 @@ Item {
     readonly property var cs: Services.NetworkControlService.connectionStatus
     readonly property var svc: Services.NetworkControlService
     readonly property bool linkUp: view.cs.connected === true
+    // "↓ 234.1 · ↑ 41.2 Mbps · 2h ago" — last bar-run speed test (H1 file).
+    readonly property string lastTestLine: {
+        const t = view.svc.lastTest
+        if (!t) return "no test yet — runs on the bar"
+        return "↓ " + Number(t.downMbps).toFixed(1) + " · ↑ " + Number(t.upMbps).toFixed(1)
+               + " Mbps · " + Age.ageLabel(t.ts)
+    }
 
     function fmtRate(kbps) {
         return kbps < 1024 ? kbps.toFixed(0) + " KB/s" : (kbps / 1024).toFixed(1) + " MB/s"
@@ -386,7 +397,8 @@ Item {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 4. SPEED TEST — label · result · Run ›
+    // 4. SPEED TEST — the bar owns the test (H1): last result read-only from
+    //    $XDG_STATE_HOME/velocity/speedtest.json · RUN IN BAR forwards one IPC
     // ═════════════════════════════════════════════════════════════════════════
     RowLayout {
         Layout.fillWidth: true
@@ -395,20 +407,14 @@ Item {
         SectionLabel { text: "SPEED TEST" }
         Item { Layout.fillWidth: true }
         Text {
-            visible: view.svc.speedTesting
-            text: "testing…"
+            text: view.lastTestLine
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            color: Config.ThemeConfig.colors.textDim
-        }
-        Text {
-            visible: !view.svc.speedTesting && view.svc.speedTestResult !== ""
-            text: view.svc.speedTestResult
-            font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-            font.bold: true
-            color: Config.ThemeConfig.colors.success
+            font.bold: view.svc.lastTest !== null
+            color: view.svc.lastTest !== null
+                   ? Config.ThemeConfig.colors.success : Config.ThemeConfig.colors.textDim
         }
         Rectangle {
-            Layout.preferredWidth: 74; Layout.preferredHeight: 26
+            Layout.preferredWidth: 108; Layout.preferredHeight: 26
             radius: Config.ControlConfig.radiusSmall
             color: runMa.containsMouse
                    ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.surface, 0.8)
@@ -418,7 +424,7 @@ Item {
                 anchors.centerIn: parent
                 spacing: 5
                 Text {
-                    text: view.svc.speedTesting ? "…" : "Run"
+                    text: "RUN IN BAR"
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                     font.bold: true; color: Config.ThemeConfig.colors.text
                     anchors.verticalCenter: parent.verticalCenter
@@ -433,9 +439,15 @@ Item {
             MouseArea {
                 id: runMa; anchors.fill: parent; hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: view.svc.runSpeedTest()
+                onClicked: view.svc.runSpeedTestInBar()
             }
         }
+    }
+    // The bar writes the result tmp+mv and FileView doesn't fire on rename —
+    // re-read on show plus a slow tick while visible (CoreEngine /proc idiom).
+    Timer {
+        interval: 10000; repeat: true; running: viewRoot.visible
+        onTriggered: view.svc.refreshLastTest()
     }
 
     // ═════════════════════════════════════════════════════════════════════════

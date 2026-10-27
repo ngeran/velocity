@@ -302,6 +302,17 @@ ShellRoot {
         }
     }
 
+    // network speedtest — settings' RUN IN BAR (H1) + scripts: run the bar's
+    // XHR ladder headless. The completed result lands in
+    // $XDG_STATE_HOME/velocity/speedtest.json for the settings view.
+    IpcHandler {
+        target: "network"
+        function speedtest(): string {
+            Services.NetworkService.runSpeedTest()
+            return "ok"
+        }
+    }
+
     // Bar visibility toggle (for Hyprland keybind)
     IpcHandler {
         id: barToggleIpc

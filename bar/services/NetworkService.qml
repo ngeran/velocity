@@ -1,7 +1,9 @@
-/** Version: 26 — native Quickshell.Networking for bar state (zero forks);
- ** popup diagnostics stay as popup-gated one-shot probes (NetworkModel.mjs) **/
+/** Version: 27 — native Quickshell.Networking for bar state (zero forks);
+ ** popup diagnostics stay as popup-gated one-shot probes (NetworkModel.mjs);
+ ** H1: glance-only card (scan/join moved to settings), speed results persist **/
 pragma Singleton
 import QtQuick
+import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config
@@ -88,13 +90,11 @@ Item {
     property bool wifiRadio: Networking.wifiEnabled
     function toggleRadio() { Networking.wifiEnabled = !Networking.wifiEnabled }
 
-    // ── Scanned access points (C3 AP list) ────────────────────────────────
-    // Raw live WifiNetwork QObjects, only meaningful while the scanner lease
-    // (above) is held. Grouping/filtering is pure Model.groupAps, applied in
-    // the card body — the service just exposes the scan; the view owns the
-    // freeze/diff discipline (the wifi-list array-identity law).
-    readonly property var aps: (wifiDev && wifiDev.networks)
-        ? (wifiDev.networks.values || []) : []
+    // ── Scanned access points ─────────────────────────────────────────────
+    // (H1: the raw scan list `aps` moved out — the bar card is glance-only
+    // now; the settings app owns scanning and joining. The scanner LEASE
+    // stays: device.networks (→ activeNet → live ssid/signal for the hero)
+    // only exists while it runs.)
 
     // When the connection drops, clear the popup diagnostics and SSID cache.
     onIsConnectedChanged: if (!isConnected) { root._lastSsid = ""; root._reset() }
@@ -228,6 +228,7 @@ Item {
         if (gen !== root._speedGen) return
         var xhr = new XMLHttpRequest()
         var headersAt = 0
+        var startedAt = 0
         root._speedXhr = xhr
         xhr.onreadystatechange = function() {
             if (gen !== root._speedGen) return
@@ -236,12 +237,16 @@ Item {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             root._speedXhr = null
             speedReaper.stop()
-            if (xhr.status !== 200 || headersAt === 0) {
+            if (xhr.status !== 200 || (method !== "POST" && headersAt === 0)) {
                 speedPhase = "error"
                 return
             }
             var bytes = binary && xhr.response ? (xhr.response.byteLength || 0) : (body ? body.length : 0)
-            var transferMs = Date.now() - headersAt
+            // Qt fires HEADERS_RECEIVED only once the request body is fully
+            // written, so for a POST that stamp times the (tiny) response —
+            // ~0ms on a fast link → Infinity (H1: the upload leg always
+            // measured the wrong window). send→DONE is the honest POST clock.
+            var transferMs = Date.now() - (method === "POST" ? startedAt : headersAt)
             var mbps = bytes * 8 / transferMs / 1000
             if (!(bytes > 0) || !(transferMs > 0) || !isFinite(mbps) || mbps <= 0) {
                 speedPhase = "error"
@@ -257,6 +262,7 @@ Item {
         xhr.open(method, url, true)
         if (binary) xhr.responseType = "arraybuffer"
         if (method === "POST") xhr.setRequestHeader("Content-Type", "application/octet-stream")
+        startedAt = Date.now()
         xhr.send(body)
         // Per-request reaper (qsbar's requestTimer): a stalled probe ends the
         // run instead of pinning "testing…" forever. The callback rides a
@@ -285,6 +291,33 @@ Item {
         running: false
         repeat: false
         onTriggered: if (root._speedReap) root._speedReap()
+    }
+
+    // ── Last-result persistence (H1) ─────────────────────────────────────
+    // A completed run lands atomically (tmp+mv) in the state home so the
+    // settings app can show "last test" and re-trigger via `network
+    // speedtest` without a second fetcher. iface may be "" on headless
+    // (IPC-initiated) runs — written honestly rather than probed for.
+    readonly property string _stateDir:
+        (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") || "~") + "/.local/state")
+        + "/velocity"
+    onSpeedPhaseChanged: if (speedPhase === "done") _persistSpeedTest()
+
+    BoundedProcess {
+        id: speedtestWriter
+    }
+    function _persistSpeedTest() {
+        var payload = JSON.stringify({
+            schema: 1, ts: Date.now(),
+            downMbps: Math.round(speedDownMbps * 10) / 10,
+            upMbps: Math.round(speedUpMbps * 10) / 10,
+            iface: iface, ssid: ssid
+        })
+        // positional argv ($1 dir, $2 payload) — the T23a "$0" lesson
+        speedtestWriter.command = ["sh", "-c",
+            "mkdir -p -- \"$1\" && printf '%s' \"$2\" > \"$1/speedtest.json.tmp\" && mv -f \"$1/speedtest.json.tmp\" \"$1/speedtest.json\"",
+            "sh", root._stateDir, payload]
+        speedtestWriter.run()
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────

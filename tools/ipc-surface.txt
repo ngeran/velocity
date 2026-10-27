@@ -47,6 +47,8 @@ controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
+network.speedtest        internal  # settings' RUN IN BAR → the bar's XHR ladder;
+                                   # result persists to $XDG_STATE_HOME/velocity/speedtest.json
 
 # ---- settings process ------------------------------------------------------
 search.query                      manual    # scripting/truth probe (dashboard search index)

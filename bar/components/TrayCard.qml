@@ -35,11 +35,8 @@ PanelWindow {
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     aboveWindows: true
-    // On-demand layer keyboard ONLY while the network body's password field
-    // is focused (C3): a half-typed Wi-Fi password needs keys; every other
-    // tray body stays keyboard-inert (ryoku finding — None by default).
-    WlrLayershell.keyboardFocus: networkBody.keyboardWanted
-        ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    // Keyboard-inert by default (ryoku finding — None): since H1 no tray body
+    // takes text input; joining lives in the settings app.
 
     property string activeTray: ""
     // Hairline width, snapped to device pixels (PopupMetrics.hairline) — one
@@ -161,10 +158,6 @@ PanelWindow {
         onDismissRequested: card.closeRequested()
         hoverClose: true
         hoverCloseNeedsEntry: true
-        // Hold the hover-out close while a password row is open (C3) — the
-        // cursor resting outside the card must not kill a half-typed PSK.
-        hoverPause: networkBody.keyboardWanted
-        keyboardWanted: networkBody.keyboardWanted
         showBorder: false
         padding: 0
         gap: 0

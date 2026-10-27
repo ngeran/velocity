@@ -944,34 +944,34 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // SPEED TEST — Cloudflare __down endpoint, curl speed_download → Mbps.
+    // SPEED TEST (H1) — the BAR owns the test (XHR ladder, no fork here).
+    // RUN IN BAR forwards one IPC; the result file the bar writes atomically
+    // (tmp+mv) is read back read-only for the "last test" line. One number
+    // for one question — the old curl fetch (down-only) is gone.
     // -------------------------------------------------------------------------
-    property bool speedTesting: false
-    property string speedTestResult: ""
-
-    function runSpeedTest() {
-        if (speedTesting) return
-        speedTesting = true
-        speedTestResult = ""
-        _speedProc.command = ["sh", "-c",
-            "curl -o /dev/null -sS --max-time 25 -w '%{speed_download}' " +
-            "'https://speed.cloudflare.com/__down?bytes=15000000' 2>/dev/null || echo FAIL"]
-        _speedProc.running = true
+    BoundedProcess {
+        id: runInBarProc
+        command: ["qs", "-c", "bar", "ipc", "call", "network", "speedtest"]
     }
+    function runSpeedTestInBar() { runInBarProc.run() }
 
-    property var _speedProc: Process {   // unbounded-ok: waived — see service header
-        command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { root._speedProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var out = root._speedProc.buffer.trim(); root._speedProc.buffer = ""
-            root.speedTesting = false
-            if (out === "" || out.indexOf("FAIL") !== -1) { root.speedTestResult = "failed"; return }
-            var mbps = (parseFloat(out) * 8) / 1e6
-            root.speedTestResult = isNaN(mbps) ? "failed" : "≈ " + mbps.toFixed(1) + " Mbps"
-        }
+    readonly property string lastTestPath:
+        (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") || "~") + "/.local/state")
+        + "/velocity/speedtest.json"
+    property var lastTest: null          // {schema,ts,downMbps,upMbps,iface,ssid} | null
+    FileView {
+        id: lastTestFile
+        path: root.lastTestPath
+        watchChanges: true               // in-place edits only — see the timer note
+        printErrors: false
+        onTextChanged: root._ingestLastTest(text())
     }
+    function _ingestLastTest(raw) {
+        var v = null
+        try { v = JSON.parse(raw) } catch (e) { v = null }
+        root.lastTest = (v && typeof v.ts === "number" && typeof v.downMbps === "number") ? v : null
+    }
+    function refreshLastTest() { lastTestFile.reload() }
 
     // -------------------------------------------------------------------------
     // WI-FI QR — payload WIFI:T:…;S:…;P:…; → qrencode ASCII → 0/1 matrix rows.
