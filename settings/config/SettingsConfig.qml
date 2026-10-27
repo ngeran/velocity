@@ -22,9 +22,9 @@ QtObject {
     readonly property int navbarHeight: 64
     readonly property int cardPadding: 24
 
-    // Bar height (settings is a separate process and can't read BarConfig).
-    // The dashboard card drops down and settles with its top at this offset.
-    readonly property int barHeight: 26
+    // (The bar-height token lived here until H10 — a stale duplicate that
+    // drifted from bar-config.json. The dashboard card now offsets from
+    // SettingsConfigService.barHeight, the live ingest.)
 
     // =========================================================================
     // COLORS — Derive from ThemeConfig (single source of truth)

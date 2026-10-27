@@ -391,7 +391,11 @@ ShellRoot {
 
             // Hidden: y = barHeight - height (above stage)
             // Shown:  y = barHeight (top edge flush with bar bottom)
-            y: root.shown ? Config.SettingsConfig.barHeight : (Config.SettingsConfig.barHeight - height)
+            // H10: the live mirror (ingested from bar-config.json) — the old
+            // hardcoded SettingsConfig.barHeight token drifted the moment the
+            // bar height changed via IPC.
+            y: root.shown ? Services.SettingsConfigService.barHeight
+                          : (Services.SettingsConfigService.barHeight - height)
 
             // Smooth slide animation
             Behavior on y {
