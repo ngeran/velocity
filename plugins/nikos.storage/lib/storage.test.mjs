@@ -3,7 +3,7 @@
 // Expected glyphs are written as \u{…} escapes (astral PUA code points are
 // invisible in editors and diffs — never paste them raw).
 import assert from "node:assert"
-import { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson } from "./storage.mjs"
+import { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson, parseFilesystems } from "./storage.mjs"
 
 let n = 0
 const ok = (name, fn) => { fn(); n++; console.log("  ok " + name) }
@@ -107,6 +107,36 @@ ok("guarded json", () => {
   assert.equal(parseJson(""), null)
   assert.equal(parseJson("nope"), null)
   assert.deepEqual(parseJson('{"a":1}'), { a: 1 })
+})
+
+// ── parseFilesystems (H6: settings Core's df-fork replacement) ───────────
+ok("parseFilesystems: 2 rows — btrfs deduped to its / label + ntfs; vfat/boot, unmounted ext4, pseudo disks dropped", () => {
+  const rows = parseFilesystems(CAPTURED)
+  assert.equal(rows.length, 2)
+  assert.deepEqual(rows.map(r => r.mount), ["/", "/run/media/nikos/BACKUP"])
+})
+ok("parseFilesystems: df-era contract shape + GiB math", () => {
+  const root = parseFilesystems(CAPTURED)[0]
+  assert.equal(root.device, "nvme0n1p2")
+  assert.equal(root.fstype, "btrfs")
+  assert.equal(root.usedGB, 400)          // 429496729600 / 2^30
+  assert.equal(root.availGB, 530.5)       // 569634897920 / 2^30
+  assert.equal(root.totalGB, 930.5)       // used + avail
+  assert.equal(root.pct, 43)
+  const backup = parseFilesystems(CAPTURED)[1]
+  assert.equal(backup.fstype, "ntfs")
+  assert.equal(backup.usedGB, 200)
+  assert.equal(backup.totalGB, 298.1)
+  assert.equal(backup.pct, 67)
+})
+ok("parseFilesystems: malformed body -> []", () => {
+  assert.deepEqual(parseFilesystems(null), [])
+  assert.deepEqual(parseFilesystems({}), [])
+})
+ok("parseFilesystems: root lookup feeds the LCD back-fill math", () => {
+  const root = parseFilesystems(CAPTURED).find(r => r.mount === "/")
+  assert.equal(+(root.usedGB / 1024).toFixed(2), 0.39)   // diskUsedTB path
+  assert.equal(+(root.totalGB / 1024).toFixed(2), 0.91)  // diskTotalTB path
 })
 
 console.log(`storage.test: ${n} assertions passed`)

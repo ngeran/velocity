@@ -20,5 +20,5 @@ module.exports = {
   'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs', 'settings/lib/weather.mjs'],
   'shared/units.mjs': ['bar/lib/units.mjs', 'settings/lib/units.mjs'],
   'shared/calendar.mjs': ['plugins/nikos.clock/lib/calendar.mjs'],
-  'shared/storage.mjs': ['plugins/nikos.storage/lib/storage.mjs'],
+  'shared/storage.mjs': ['plugins/nikos.storage/lib/storage.mjs', 'settings/lib/storage.mjs'],
 }

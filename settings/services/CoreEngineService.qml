@@ -28,6 +28,7 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
 import "History.js" as History
+import "../lib/storage.mjs" as Storage
 
 Item {
     id: root
@@ -244,56 +245,36 @@ Item {
         root.swapPct = st > 0 ? +((st - sf) / st * 100).toFixed(1) : 0
     }
 
-    // ── Disk: all real data filesystems (df → GiB) ─────────────────────────
-    // Parses every mounted filesystem, drops pseudo/boot FS (tmpfs, vfat,
-    // efivarfs, …), and exposes the rest as `disks[]` for the Storage card.
-    // The root "/" entry also back-fills diskUsedTB/diskTotalTB/diskPct so the
-    // deepcool LCD feed keeps working. df's size/used/avail are 1K-blocks →
-    // /1048576 = GiB (the codebase's "GB"). New drives auto-appear.
+    // ── Disk: all real data filesystems (H6: lsblk via shared/storage.mjs) ──
+    // The private df fork is gone — this is the same ONE lsblk parse the
+    // nikos.storage plugin uses (synced copy imported per D2; no cross-root
+    // imports). parseFilesystems keeps the df-era contract shape
+    // {device,fstype,mount,usedGB,availGB,totalGB,pct} (GB = GiB) and its
+    // pseudo/boot skip list, so `disks[]` and the LCD back-fill are
+    // byte-identical to the old probe. The root "/" row still back-fills
+    // diskUsedTB/diskTotalTB/diskPct for the deepcool feed. New drives
+    // auto-appear (same cadence as before — see the disk timer below).
     //
-    // IMPORTANT: SplitParser emits one callback per line WITHOUT the trailing
-    // newline — a multi-line `df` would otherwise collapse into one blob and
-    // split("\n") would yield a single element. Re-append "\n" before splitting.
+    // IMPORTANT: SplitParser emits one callback per chunk WITHOUT the trailing
+    // newline — the JSON blob must be re-joined before Storage.parseJson.
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: diskProc
-        command: ["bash", "-c", "df --output=source,fstype,size,used,avail,pcent,target 2>/dev/null"]
+        command: ["lsblk", "-J", "-b",
+            "-o", "NAME,TYPE,SIZE,FSTYPE,FSUSED,FSAVAIL,FSUSE%,MOUNTPOINTS,MODEL,TRAN,ROTA,RM,HOTPLUG"]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { diskProc.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && diskProc.buffer.trim().length) {
-                var lines = diskProc.buffer.trim().split("\n")
-                // pseudo / virtual / boot filesystems to skip — keep real data FS.
-                var skip = { tmpfs:1, devtmpfs:1, ramfs:1, squashfs:1, overlay:1,
-                    iso9660:1, efivarfs:1, vfat:1, fuseblk:1, autofs:1, mqueue:1,
-                    hugetlbfs:1, "9p":1, fusectl:1, configfs:1, debugfs:1, sysfs:1,
-                    proc:1, cgroup:1, cgroup2:1, nsfs:1, binfmt_misc:1, pstore:1,
-                    securityfs:1, tracefs:1, rpc_pipefs:1, devpts:1 }
-                var disks = []
-                var rootEntry = null
-                for (var i = 1; i < lines.length; i++) {
-                    var f = lines[i].trim().split(/\s+/)
-                    if (f.length < 7) continue
-                    var fstype = f[1]
-                    if (skip[fstype]) continue
-                    var sizeK = parseFloat(f[2]), usedK = parseFloat(f[3]), availK = parseFloat(f[4])
-                    if (isNaN(sizeK) || sizeK <= 0) continue
-                    var pct = parseInt(f[5], 10)
-                    var target = f.slice(6).join(" ")
-                    var d = {
-                        device: f[0], fstype: fstype, mount: target,
-                        usedGB: +(usedK / 1048576).toFixed(1),
-                        availGB: +(availK / 1048576).toFixed(1),
-                        totalGB: +(sizeK / 1048576).toFixed(1),
-                        pct: isNaN(pct) ? 0 : pct
+                var json = Storage.parseJson(diskProc.buffer)
+                var rows = json ? Storage.parseFilesystems(json) : []
+                root.disks = rows
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i].mount === "/") {
+                        root.diskUsedTB = +(rows[i].usedGB / 1024).toFixed(2)
+                        root.diskTotalTB = +(rows[i].totalGB / 1024).toFixed(2)
+                        root.diskPct = rows[i].pct
+                        break
                     }
-                    disks.push(d)
-                    if (target === "/") rootEntry = d
-                }
-                root.disks = disks
-                if (rootEntry) {
-                    root.diskUsedTB = +(rootEntry.usedGB / 1024).toFixed(2)
-                    root.diskTotalTB = +(rootEntry.totalGB / 1024).toFixed(2)
-                    root.diskPct = rootEntry.pct
                 }
                 diskProc.buffer = ""
             }

@@ -46,6 +46,7 @@ function collectVolumes(node, target) {
         var freeText = textValue(node.fsavail);
         var usedText = textValue(node.fsused);
         target.push({
+            name: textValue(node.name),
             fs: fs,
             mounts: mounts,
             mount: mounts.length > 0 ? mounts[0] : "",
@@ -169,8 +170,54 @@ function parseJson(text) {
     return null;
 }
 
-if (typeof module !== "undefined" && module.exports) {
-    module.exports = { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson };
+// Per-volume usage rows for settings' Core STORAGE card (H6 — replaced
+// CoreEngineService's private df fork; this module is the ONE lsblk parse).
+// ONE row per mounted VOLUME of every real drive — df (the old probe) lists
+// each source device once even when bind-mounted all over the tree, so the
+// card's row set only stays identical if the same dedupe happens here; the
+// label prefers "/" when the volume hosts it (the NixOS root fs also carries
+// /nix/store, /home, … and "/" is NOT always the first mountpoint). Shape is
+// the df-era contract: { device, fstype, mount, usedGB, availGB, totalGB,
+// pct } ("GB" = GiB, so the card and the deepcool LCD feed need no
+// re-scaling). The df-era pseudo/boot skip list moves here wholesale —
+// tmpfs-class fs never appear in lsblk anyway, but vfat (ESP), iso9660 and
+// fuseblk do, and they were never "data" rows.
+function parseFilesystems(json) {
+    var SKIP = { tmpfs:1, devtmpfs:1, ramfs:1, squashfs:1, overlay:1,
+        iso9660:1, efivarfs:1, vfat:1, fuseblk:1, autofs:1, mqueue:1,
+        hugetlbfs:1, "9p":1, fusectl:1, configfs:1, debugfs:1, sysfs:1,
+        proc:1, cgroup:1, cgroup2:1, nsfs:1, binfmt_misc:1, pstore:1,
+        securityfs:1, tracefs:1, rpc_pipefs:1, devpts:1 };
+    var rows = [];
+    var devices = json && json.blockdevices;
+    if (!Array.isArray(devices)) return rows;
+    for (var i = 0; i < devices.length; i++) {
+        var device = devices[i];
+        if (!isRealDisk(device)) continue;
+        var volumes = [];
+        collectVolumes(device, volumes);
+        for (var v = 0; v < volumes.length; v++) {
+            var vol = volumes[v];
+            if (SKIP[vol.fs]) continue;
+            if (vol.mounts.length === 0) continue;
+            var used = vol.usedBytes, free = vol.freeBytes;
+            var total = (used >= 0 && free >= 0) ? used + free : -1;
+            rows.push({
+                device: vol.name,   // the fs's own node (df's source column), not the drive
+                fstype: vol.fs,
+                mount: vol.mounts.indexOf("/") >= 0 ? "/" : vol.mounts[0],
+                usedGB: used >= 0 ? +(used / 1073741824).toFixed(1) : 0,
+                availGB: free >= 0 ? +(free / 1073741824).toFixed(1) : 0,
+                totalGB: total >= 0 ? +(total / 1073741824).toFixed(1) : 0,
+                pct: vol.percent >= 0 ? vol.percent : 0
+            });
+        }
+    }
+    return rows;
 }
 
-export { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson };
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson, parseFilesystems };
+}
+
+export { parseInventory, findRoot, nerdFor, formatBytes, formatGiB, parseJson, parseFilesystems };
