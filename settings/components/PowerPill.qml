@@ -1,3 +1,11 @@
+// =============================================================================
+// PowerPill.qml — the small toggle pill (settings' toggle primitive)
+// =============================================================================
+// A 44×24 rounded switch: track tints toward the accent when on, the knob
+// slides between the edges. State is fully caller-owned (isOn in, clicked
+// out) — no internal latching, so bindings stay the source of truth.
+// =============================================================================
+
 import QtQuick
 import "../config" as Config
 
