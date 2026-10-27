@@ -5,10 +5,11 @@
 // ModernDashboard.qml.
 //
 // DEDUPED: the DATE block and the Athens/Local/UTC clock trio were removed —
-// the Dashboard tab's calendar owns the date, and the bar's nikos.clock /
-// nikos.timezones plugins own the time; the header repeating both was pure
-// duplication (user call, 2026-10-21). What remains is functional: the LOGS
-// launcher (deep-links the in-app LOGS tab) and the identity chip.
+// the bar's nikos.clock / nikos.timezones plugins own date and time (since H4
+// the dashboard carries no calendar either — the left square is the System
+// Pulse card); the header repeating them was pure duplication (user call,
+// 2026-10-21). What remains is functional: the LOGS launcher (deep-links the
+// in-app LOGS tab) and the identity chip.
 //
 // SIZING: intrinsically ~44px tall. ModernDashboard.qml sets height: 44 —
 // LOGS + identity sit as one compact cluster on the right; the strip stays

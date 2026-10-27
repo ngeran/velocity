@@ -1,25 +1,28 @@
 // =============================================================================
-// DashboardOverviewTab.qml — "TEMPORAL MAP" dashboard
-// VERSION: V8.10 — [Calendar (square) + Weather] | 2×2 identity grid (anchored)
+// DashboardOverviewTab.qml — "SYSTEM PULSE" dashboard
+// VERSION: V9.0 — [System Pulse (square) + Weather] | 2×2 identity grid
+// (anchored) — H4: the calendar left the dashboard (dropped decision); its
+// square now carries SystemPulseCard, a read-only window over the bar's H7
+// metrics feed (gauges + net rates + last speed test + weather line).
 //
 // The panel clamps to 720×480 on small screens (content area ≈ 656×408), so the
-// calendar column is pinned (min == max) and the 2×2 grid fills the remainder
+// left column is pinned (min == max) and the 2×2 grid fills the remainder
 // with Layout.minimumWidth: 0 on every card + clip:true on the grid. That makes
 // the total width always equal the inner width — content can never spill past
 // the window edge, and card text elides instead of overflowing.
 //
 // LAYOUT (below the shared Header / right of the shared SidebarNav):
 //   ┌────────────┬──────────────────────────┐
-//   │ TEMPORAL   │  ACTIVE       │ ACTIVE   │
-//   │   MAP      │  WALLPAPER    │  THEME   │
+//   │  SYSTEM    │  ACTIVE       │ ACTIVE   │
+//   │  PULSE     │  WALLPAPER    │  THEME   │
 //   ├────────────┼───────────────┼──────────┤
 //   │  WEATHER   │  ACTIVE       │ DISPLAY  │
 //   │            │  PALETTE      │  INFO    │
 //   └────────────┴───────────────┴──────────┘
 //
-// Left column: Calendar (top, perfect square) + Weather (fills the space under
-// it). Right: a 2×2 grid of identity widgets — Active Wallpaper, Active Theme,
-// Active Palette, Display Info. All fill their cells (no empty space).
+// Left column: System Pulse (top, perfect square) + Weather (fills the space
+// under it). Right: a 2×2 grid of identity widgets — Active Wallpaper, Active
+// Theme, Active Palette, Display Info. All fill their cells (no empty space).
 //
 // Every colour reads from Config.ThemeConfig.colors → recolours live with the
 // active theme. requestTab(int) bubbles to ModernDashboard (Theme CHANGE → Themes).
@@ -34,7 +37,7 @@ Item {
     id: root
     anchors.fill: parent
 
-    readonly property string layoutVersion: "V8.09"
+    readonly property string layoutVersion: "V9.0"
 
     // Bubble a tab-switch request up to ModernDashboard.
     signal requestTab(int index)
@@ -50,12 +53,13 @@ Item {
     readonly property real _gap: 12
     readonly property real _innerW: Math.max(0, root.width  - 2 * root._margin)
     readonly property real _innerH: Math.max(0, root.height - 2 * root._margin)
-    // The calendar is a perfect SQUARE — width == height == _calSide — sized to
-    // ~62% of the column height (a proportion the user liked). The left column
-    // is exactly _calSide wide so the square calendar fills it (no gap); weather
-    // fills the strip beneath; the 2×2 grid is anchored to the right and takes
-    // all remaining width. Both sides are ANCHORED (not RowLayout-negotiated) so
-    // the widths are exact and can't collapse during the init layout pass.
+    // The pulse card is a perfect SQUARE — width == height == _calSide — sized
+    // to ~62% of the column height (a proportion the user liked). The left
+    // column is exactly _calSide wide so the square card fills it (no gap);
+    // weather fills the strip beneath; the 2×2 grid is anchored to the right
+    // and takes all remaining width. Both sides are ANCHORED (not
+    // RowLayout-negotiated) so the widths are exact and can't collapse during
+    // the init layout pass.
     readonly property real _calSide: (root.height > 0)
         ? Math.round(root._innerH * 0.62) : 240
 
@@ -66,7 +70,7 @@ Item {
     // init-time collapse that RowLayout kept hitting can't happen here.
     // =========================================================================
 
-    // ── Left half: Calendar (top) + Weather (fills below) ──
+    // ── Left half: System Pulse (top) + Weather (fills below) ──
     ColumnLayout {
         id: leftCol
         anchors.left: parent.left;     anchors.leftMargin: root._margin
@@ -80,7 +84,7 @@ Item {
             showBrackets: true
             Layout.fillWidth: true
             Layout.preferredHeight: root._calSide   // square: width == height
-            Components.CalendarWidget { anchors.fill: parent }
+            Components.SystemPulseCard { anchors.fill: parent }
         }
 
         Components.WeatherCard {

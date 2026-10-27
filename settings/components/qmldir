@@ -5,6 +5,7 @@ ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 DashboardCard 1.0 DashboardCard.qml
+SystemPulseCard 1.0 SystemPulseCard.qml
 ControlDashboard 1.0 ControlDashboard.qml
 SideNav 1.0 SideNav.qml
 TerminalBody 1.0 TerminalBody.qml
@@ -15,7 +16,6 @@ BtDeviceRow 1.0 BtDeviceRow.qml
 SinkListView 1.0 SinkListView.qml
 SourceListView 1.0 SourceListView.qml
 DisplayControlView 1.0 DisplayControlView.qml
-CalendarWidget 1.0 CalendarWidget.qml
 DashboardOverviewTab 1.0 DashboardOverviewTab.qml
 WallpaperModule 1.0 WallpaperModule.qml
 CoreEngineTab 1.0 CoreEngineTab.qml

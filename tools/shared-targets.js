@@ -19,6 +19,6 @@ module.exports = {
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
   'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs', 'settings/lib/weather.mjs'],
   'shared/units.mjs': ['bar/lib/units.mjs', 'settings/lib/units.mjs'],
-  'shared/calendar.mjs': ['plugins/nikos.clock/lib/calendar.mjs', 'settings/lib/calendar.mjs'],
+  'shared/calendar.mjs': ['plugins/nikos.clock/lib/calendar.mjs'],
   'shared/storage.mjs': ['plugins/nikos.storage/lib/storage.mjs'],
 }
