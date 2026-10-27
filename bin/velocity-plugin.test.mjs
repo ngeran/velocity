@@ -15,8 +15,11 @@ writeFileSync(QS, `#!/bin/sh\necho "$*" >> "${LOG}"\necho ok\n`)
 chmodSync(QS, 0o755)
 const ENV = Object.assign({}, process.env, {
     XDG_CONFIG_HOME: join(T, "config"), XDG_DATA_HOME: join(T, "data"),
-    XDG_STATE_HOME: join(T, "state"), XDG_DATA_DIRS: join(T, "sys"), VELOCITY_QS: QS
+    XDG_STATE_HOME: join(T, "state"), XDG_DATA_DIRS: join(T, "sys"), VELOCITY_QS: QS,
+    // State reads come from a temp fixture, never the repo's live runtime file.
+    VELOCITY_STATE_FILE: join(T, "plugins-state.json")
 })
+writeFileSync(ENV.VELOCITY_STATE_FILE, JSON.stringify({ schemaVersion: 2, enabled: { "nikos.clock": true } }))
 const USER = join(T, "config/velocity/plugins")
 const vp = (...args) => spawnSync(CLI, args, { env: ENV, encoding: "utf8" })
 const ipcLog = () => (existsSync(LOG) ? readFileSync(LOG, "utf8").trim().split("\n") : [])

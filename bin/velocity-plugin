@@ -28,7 +28,9 @@ const DATA_HOME = env("XDG_DATA_HOME", path.join(HOME, ".local/share"))
 const STATE_HOME = env("XDG_STATE_HOME", path.join(HOME, ".local/state"))
 const USER_DIR = path.join(CONFIG_HOME, "velocity/plugins")
 const TRASH_DIR = path.join(DATA_HOME, "velocity/plugins-trash")
-const STATE_FILE = path.join(ROOT, "plugins-state.json")
+// Read path only — the bar process stays plugins-state.json's sole writer (D6);
+// the override exists so tests (and exotic checkouts) can point elsewhere.
+const STATE_FILE = env("VELOCITY_STATE_FILE", path.join(ROOT, "plugins-state.json"))
 const TEMPLATES = path.join(ROOT, "tools/templates")
 const QS = env("VELOCITY_QS", "qs")
 const HOST_API = 2

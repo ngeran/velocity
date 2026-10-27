@@ -243,6 +243,37 @@ for (const dir of plugins) {
     checked++
 }
 
+// ── committed state: the LIVE plugins-state.json must not accumulate stale ids ──
+// Moved here from layout.test.mjs (which now reads a committed fixture): the
+// root file is runtime state the bar owns (D6) and clean clones don't have,
+// so this gate skips when it is absent. resolve() tolerates stale ids at
+// runtime, but the bar prunes on its own writes — this keeps the committed
+// arrangement honest.
+const stateFile = path.join(__dirname, "..", "plugins-state.json")
+if (fs.existsSync(stateFile)) {
+    let state = null
+    try { state = JSON.parse(fs.readFileSync(stateFile, "utf8")) }
+    catch { console.log("check-plugins: FAIL plugins-state.json — not valid JSON"); bad++ }
+    if (state) {
+        const known = new Set()
+        for (const dir of plugins) {
+            const mp = path.join(dir, "manifest.json")
+            if (!fs.existsSync(mp)) continue
+            try { const m = JSON.parse(fs.readFileSync(mp, "utf8")); if (m && m.id) known.add(String(m.id)) }
+            catch { /* invalid manifests already reported by the per-plugin pass */ }
+        }
+        const layout = state.layout || {}
+        for (const s of ["left", "center", "right"]) {
+            const ids = Array.isArray(layout[s]) ? layout[s] : []
+            for (const id of ids)
+                if (!known.has(String(id))) {
+                    console.log(`check-plugins: FAIL plugins-state.json — stale id "${id}" in layout.${s}`)
+                    bad++
+                }
+        }
+    }
+}
+
 console.log(`check-plugins: ${checked} plugins · ${waived} waived · ${warned} warnings`)
 if (bad > 0) { console.log(`check-plugins: FAIL (${bad} undeclared)`); process.exit(1) }
 console.log("check-plugins: OK")

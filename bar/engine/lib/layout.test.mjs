@@ -84,17 +84,17 @@ ok("migrate: no/garbage rightLayout → legacy default, nothing disabled", () =>
     }
 })
 
-ok("migrate: state stays schema-2-valid with no stale ids; legacy config still migrates clean", () => {
-    // Legacy-config leg reads a COMMITTED fixture: the repo-root
-    // bar-config.json is runtime state (gitignored — clean clones, and
-    // therefore `nix flake check`, don't have it), and a test pinned to
-    // mutable runtime state breaks the moment the live config drifts.
-    // The schema-2 leg keeps reading the tracked plugins-state.json: that
-    // file IS the bar's committed arrangement and the stale-id gate is
-    // deliberately live.
+ok("migrate: committed state fixture stays schema-2-valid; legacy config still migrates clean", () => {
+    // Both legs read COMMITTED fixtures: the repo-root bar-config.json and
+    // plugins-state.json are runtime state (gitignored — clean clones, and
+    // therefore `nix flake check`, have neither), and a test pinned to
+    // mutable runtime state breaks the moment the live file drifts. The LIVE
+    // stale-id gate over the real plugins-state.json lives in
+    // tools/check-plugins, which skips clones where the bar has not created
+    // the file yet.
     const here = dirname(fileURLToPath(import.meta.url))
     const cfg = JSON.parse(readFileSync(join(here, "fixtures", "bar-config.json"), "utf8"))
-    const state = JSON.parse(readFileSync(join(root, "plugins-state.json"), "utf8"))
+    const state = JSON.parse(readFileSync(join(here, "fixtures", "plugins-state.json"), "utf8"))
     assert.equal(state.schemaVersion, 2)
 
     // The old equality contract (migrate(bar-config) == plugins-state) is gone
@@ -104,14 +104,6 @@ ok("migrate: state stays schema-2-valid with no stale ids; legacy config still m
     // hold instead:
     const layout = normalize(state.layout)
     for (const s of ["left", "center", "right"]) assert.ok(Array.isArray(layout[s]), s)
-
-    // Every committed id is a real plugin or builtin. resolve() tolerates
-    // stale ids at runtime, but the committed file must not accumulate them —
-    // the bar prunes on its own writes; this keeps the gate honest.
-    const known = new Set(BUILTIN_IDS)
-    for (const p of repoPlugins()) known.add(p.id)
-    for (const s of ["left", "center", "right"])
-        for (const id of layout[s]) assert.ok(known.has(id), "stale id in committed state: " + id)
 
     // The legacy path still migrates clean from the committed bar-config.
     const { disabled } = migrate({ rightLayout: cfg.rightLayout, order: [], plugins: repoPlugins() })
