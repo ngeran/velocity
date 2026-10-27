@@ -360,7 +360,9 @@ Item {
                     var total = busy + idle + iow
                     var dBusy = busy - root._cpuPrevBusy
                     var dTotal = total - root._cpuPrevTotal
-                    if (dTotal > 0)
+                    // First tick after start has no baseline (_cpuPrev* are 0):
+                    // publishing then would emit the since-boot average as cpu.pct.
+                    if (dTotal > 0 && root._cpuPrevTotal > 0)
                         root.cpuPct = Math.max(0, Math.min(100, Math.round(dBusy / dTotal * 100)))
                     root._cpuPrevBusy = busy
                     root._cpuPrevTotal = total

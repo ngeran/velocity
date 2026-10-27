@@ -291,6 +291,10 @@ Item {
         triggeredOnStart: true
         onTriggered: {
             metricsFile.reload()
+            // The speed-test result is written by the BAR (tmp+mv) whenever a
+            // test completes — without this reload the footer would only
+            // refresh when the Wi-Fi section is opened (Hr review).
+            Services.NetworkControlService.refreshLastTest()
             // Re-judge freshness here — the last parse of a lapsed lease
             // would otherwise leave LIVE lit forever.
             root._live = root._ts > 0 && (Date.now() - root._ts) < 6000

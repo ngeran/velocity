@@ -104,11 +104,16 @@ Item {
 
     // ── TRAFFIC — sysfs counters via FileView (H8: zero forks) ──────────────
     // The `cat` Process is gone: two FileViews on the active iface's rx/tx
-    // statistics files, reloaded by the 1s traffic timer below. Absorb runs
-    // on the TX file's callback — the tick reloads RX then TX in order, so
-    // both texts belong to the same tick by then. SplitParser's per-line
-    // rejoin bug class is structurally gone (no parser at all).
+    // statistics files, reloaded by the traffic timer below. Absorb runs on
+    // the TX file's change callback — but an IDLE link's counters don't
+    // change, and FileView textChanged only fires on an actual change, so
+    // each tick arms a 250ms settle timer that absorbs the (unchanged)
+    // cache anyway: delta 0 decays the rates to zero instead of freezing
+    // them at the last nonzero sample, and the resume delta never spans the
+    // idle gap (Hr review). SplitParser's per-line rejoin bug class is
+    // structurally gone (no parser at all).
     readonly property string _trafficIface: connectionStatus.iface
+    property bool _absorbedTick: false   // did this tick's reload land a change?
     FileView {
         id: rxFile
         path: root._trafficIface !== ""
@@ -122,7 +127,12 @@ Item {
             ? "/sys/class/net/" + root._trafficIface + "/statistics/tx_bytes" : ""
         watchChanges: false
         printErrors: false
-        onTextChanged: root._absorbTraffic()
+        onTextChanged: { root._absorbedTick = true; root._absorbTraffic() }
+    }
+    Timer {
+        id: trafficSettle
+        interval: 250
+        onTriggered: if (!root._absorbedTick) root._absorbTraffic()
     }
 
     function _absorbTraffic() {
@@ -153,8 +163,10 @@ Item {
             if (connectionStatus.connected) console.log("[NetControl] traffic: connected but no iface — skipping sample")
             return
         }
-        rxFile.reload()      // ASYNC — absorb lands in txFile.onTextChanged
-        txFile.reload()
+        root._absorbedTick = false
+        rxFile.reload()      // ASYNC — a changed cache lands in txFile.onTextChanged,
+        txFile.reload()      // an unchanged one decays via trafficSettle below
+        trafficSettle.restart()
     }
 
     // ── LINK QUALITY MONITOR — TWO LEGS (math: ../lib/netstats.mjs, nexthop-
@@ -982,14 +994,21 @@ Item {
     FileView {
         id: lastTestFile
         path: root.lastTestPath
-        watchChanges: true               // in-place edits only — see the timer note
+        // The only writer (bar NetworkService._persistSpeedTest) lands tmp+mv,
+        // and FileView watch does not fire on renames — the watch would be
+        // dead code. Timer-driven reload() is the delivery mechanism (Hr review).
+        watchChanges: false
         printErrors: false
         onTextChanged: root._ingestLastTest(text())
     }
     function _ingestLastTest(raw) {
         var v = null
         try { v = JSON.parse(raw) } catch (e) { v = null }
-        root.lastTest = (v && typeof v.ts === "number" && typeof v.downMbps === "number") ? v : null
+        v = (v && typeof v.ts === "number" && typeof v.downMbps === "number") ? v : null
+        // Same ts → keep the old object identity (polling re-ingests must not
+        // churn every lastTest binding).
+        if (v && root.lastTest && root.lastTest.ts === v.ts) return
+        root.lastTest = v
     }
     function refreshLastTest() { lastTestFile.reload() }
 

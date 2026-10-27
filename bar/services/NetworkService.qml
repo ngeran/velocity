@@ -1,6 +1,8 @@
-/** Version: 27 — native Quickshell.Networking for bar state (zero forks);
+/** Version: 28 — native Quickshell.Networking for bar state (zero forks);
  ** popup diagnostics stay as popup-gated one-shot probes (NetworkModel.mjs);
- ** H1: glance-only card (scan/join moved to settings), speed results persist **/
+ ** H1: glance-only card (scan/join moved to settings), speed results persist;
+ ** Hr: idle links decay to 0 B/s (settle absorb — counters that don't change
+ ** never fire textChanged) **/
 pragma Singleton
 import QtQuick
 import Quickshell
@@ -324,13 +326,18 @@ Item {
     // H8: two FileViews on the sysfs files (zero forks) replace the old `cat`
     // BoundedProcess. watchChanges stays false — the 2s popup-gated timer is
     // the delivery mechanism; sysfs inotify wouldn't fire anyway. Absorb runs
-    // on the TX file's callback: the tick reloads RX then TX in order, so by
-    // the time TX lands both texts belong to the same tick. The old
+    // on the TX file's change callback — but an IDLE link's counters don't
+    // change and textChanged only fires on an actual change, so each tick
+    // arms a 250ms settle timer that absorbs the (unchanged) cache anyway:
+    // delta 0 shows a live "0 B/s" instead of freezing the last nonzero rate,
+    // and the resume delta never spans the idle gap (Hr review). The old
     // glued-counter incident class is structurally gone — no parser at all.
     readonly property string _rxPath:
         root.iface !== "" ? "/sys/class/net/" + root.iface + "/statistics/rx_bytes" : ""
     readonly property string _txPath:
         root.iface !== "" ? "/sys/class/net/" + root.iface + "/statistics/tx_bytes" : ""
+
+    property bool _absorbedTick: false   // did this tick's reload land a change?
 
     FileView {
         id: rxFile
@@ -343,7 +350,13 @@ Item {
         path: root._txPath
         watchChanges: false
         printErrors: false
-        onTextChanged: root._absorbStats()
+        onTextChanged: { root._absorbedTick = true; root._absorbStats() }
+    }
+
+    Timer {
+        id: statsSettle
+        interval: 250
+        onTriggered: if (!root._absorbedTick) root._absorbStats()
     }
 
     function _absorbStats() {
@@ -360,8 +373,10 @@ Item {
 
     function _reloadStats() {
         if (root.iface === "") return
-        rxFile.reload()      // ASYNC — absorb lands in txFile.onTextChanged
-        txFile.reload()
+        root._absorbedTick = false
+        rxFile.reload()      // ASYNC — a changed cache lands in txFile.onTextChanged,
+        txFile.reload()      // an unchanged one decays via statsSettle below
+        statsSettle.restart()
     }
 
     // 2s while the popup is open — rates want a short window to feel live.
