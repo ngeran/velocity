@@ -155,8 +155,8 @@ Item {
             var m = out.trim().match(/dev\s+(\S+)/)
             root.iface = m ? m[1] : ""
             // iface known — start sampling now (avoids reading an empty iface path).
-            if (root.popupOpen && root.iface !== "")
-                statsProc.run()
+            if (root.popupOpen)
+                root._reloadStats()
         }
     }
 
@@ -179,9 +179,9 @@ Item {
             return
         }
         // Fetch-on-open: no waiting for the next timer tick.
-        // NOTE: statsProc is NOT started here — it needs root.iface from
-        // gwProc's output. gwProc's onRunningChanged kicks statsProc once
-        // iface is known (fixes the empty-iface race that showed no data).
+        // NOTE: the counters are NOT read here — they need root.iface from
+        // gwProc's output. gwProc's onDone kicks the first FileView reload
+        // once iface is known (fixes the empty-iface race that showed no data).
         if (isConnected) getIP()
         if (isConnected) gwProc.run()
     }
@@ -321,24 +321,47 @@ Item {
     }
 
     // ── Interface throughput: raw sysfs counters for the active iface ────────
-    // (BoundedProcess rejoins lines WITH newlines — the TX/RX incident's
-    // glued-counter class is structurally impossible here.)
-    BoundedProcess {
-        id: statsProc
-        command: ["sh", "-c",
-            "cat /sys/class/net/" + root.iface + "/statistics/rx_bytes " +
-            "    /sys/class/net/" + root.iface + "/statistics/tx_bytes 2>/dev/null"]
-        onDone: function(out) {
-            var s = Model.parseStats(out)
-            if (s && root.iface) {
-                var r = Model.throughputState(root._stats, root.iface, s.rx, s.tx, Date.now())
-                root.rxRate = r.rxRate
-                root.txRate = r.txRate
-                root.rxTotal = r.rxTotal
-                root.txTotal = r.txTotal
-                root._stats = r.state
-            }
-        }
+    // H8: two FileViews on the sysfs files (zero forks) replace the old `cat`
+    // BoundedProcess. watchChanges stays false — the 2s popup-gated timer is
+    // the delivery mechanism; sysfs inotify wouldn't fire anyway. Absorb runs
+    // on the TX file's callback: the tick reloads RX then TX in order, so by
+    // the time TX lands both texts belong to the same tick. The old
+    // glued-counter incident class is structurally gone — no parser at all.
+    readonly property string _rxPath:
+        root.iface !== "" ? "/sys/class/net/" + root.iface + "/statistics/rx_bytes" : ""
+    readonly property string _txPath:
+        root.iface !== "" ? "/sys/class/net/" + root.iface + "/statistics/tx_bytes" : ""
+
+    FileView {
+        id: rxFile
+        path: root._rxPath
+        watchChanges: false
+        printErrors: false
+    }
+    FileView {
+        id: txFile
+        path: root._txPath
+        watchChanges: false
+        printErrors: false
+        onTextChanged: root._absorbStats()
+    }
+
+    function _absorbStats() {
+        var rx = parseInt(rxFile.text(), 10)
+        var tx = parseInt(txFile.text(), 10)
+        if (isNaN(rx) || isNaN(tx) || root.iface === "") return
+        var r = Model.throughputState(root._stats, root.iface, rx, tx, Date.now())
+        root.rxRate = r.rxRate
+        root.txRate = r.txRate
+        root.rxTotal = r.rxTotal
+        root.txTotal = r.txTotal
+        root._stats = r.state
+    }
+
+    function _reloadStats() {
+        if (root.iface === "") return
+        rxFile.reload()      // ASYNC — absorb lands in txFile.onTextChanged
+        txFile.reload()
     }
 
     // 2s while the popup is open — rates want a short window to feel live.
@@ -347,7 +370,7 @@ Item {
         interval: 2000
         repeat: true
         running: root.hasNetwork && root.popupOpen
-        onTriggered: if (root.isConnected && root.iface !== "") statsProc.run()
+        onTriggered: if (root.isConnected) root._reloadStats()
     }
 
     // (The old 15s hung-process reaper is gone: every probe is a

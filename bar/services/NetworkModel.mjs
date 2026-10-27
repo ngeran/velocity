@@ -11,17 +11,6 @@ import { formatBytes, formatRate } from "../lib/units.mjs"
 
 export { formatBytes, formatRate }
 
-// Two whitespace-separated counters: rx_bytes tx_bytes (from `cat` over both
-// sysfs statistics files). Returns {rx, tx} ints or null when unreadable.
-export function parseStats(raw) {
-    var f = (raw || "").trim().split(/\s+/)
-    if (f.length < 2) return null
-    var rx = parseInt(f[0], 10)
-    var tx = parseInt(f[1], 10)
-    if (isNaN(rx) || isNaN(tx)) return null
-    return { rx: rx, tx: tx }
-}
-
 // Pure state fold (Omarchy throughputState shape): given the previous sample,
 // the new counters and a timestamp, return the rates/totals to display and the
 // sample to carry forward. Guards: an iface change or a backwards counter

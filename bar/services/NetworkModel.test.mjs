@@ -69,7 +69,6 @@ ok(M.median([]) === 0, "empty sample → 0")
 
 // ── legacy surface intact ───────────────────────────────────────────────────
 ok(M.throughputState(null, "wlan0", 10, 10, 1).rxRate === "", "throughputState still exported")
-ok(M.parseStats("1 2").rx === 1, "parseStats still exported")
 ok(M.formatBytes(2048) === "2.0 KB", "formatBytes re-exported from shared units.mjs")
 ok(M.formatRate(2048) === "2.0 KB/s", "formatRate re-exported from shared units.mjs")
 

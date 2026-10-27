@@ -84,68 +84,77 @@ Item {
     property real _lastTrafficTick: 0
     property bool _trafficLogged: false
 
-    // Section-scoped (same lease as the scanner): the traffic card only exists
-    // while the network section is on screen.
+    // Section-scoped (same lease as the scanner): these consumers only exist
+    // while the network section is on screen. (Traffic since H8 has the wider
+    // dashboardVisible gate — the Overview tab's System Pulse shows rates too.)
     readonly property bool _sectionVisible: Config.SharedState.dashboardVisible
           && Config.SharedState.controlSection === "network"
 
     Timer {
         id: trafficTimer
         interval: 1000
-        running: root._sectionVisible && root.connectionStatus.connected
+        // H8: two viewers — the Wi-Fi section's chart (its own lease below)
+        // and the Overview tab's System Pulse NET line. dashboardVisible
+        // covers both; zero reloads once the window closes.
+        running: Config.SharedState.dashboardVisible && root.connectionStatus.connected
         repeat: true
         triggeredOnStart: true
         onTriggered: root._sampleTraffic()
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
-        id: trafficProc
-        command: []; running: false
-        property string buffer: ""
-        // SplitParser emits PER LINE — re-join with '\n' or the two-counter
-        // split below collapses to one line and rates never compute (the old
-        // "net traffic shows no data" bug).
-        stdout: SplitParser { onRead: function(d) { trafficProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (!running && trafficProc.buffer.length) {
-                var lines = trafficProc.buffer.trim().split("\n")
-                if (lines.length >= 2) {
-                    var rx = parseInt(lines[0]) || 0
-                    var tx = parseInt(lines[1]) || 0
-                    var now = Date.now()
-                    if (root._lastRxBytes >= 0 && root._lastTrafficTick > 0) {
-                        var dt = (now - root._lastTrafficTick) / 1000
-                        if (dt > 0.1) {
-                            root.rxRate = Math.max(0, (rx - root._lastRxBytes) / dt / 1024)
-                            root.txRate = Math.max(0, (tx - root._lastTxBytes) / dt / 1024)
-                            root.rxTotalMB += root.rxRate * dt / 1024
-                            root.txTotalMB += root.txRate * dt / 1024
-                            if (!root._trafficLogged && (root.rxRate > 1 || root.txRate > 1)) {
-                                root._trafficLogged = true
-                                console.log("[NetControl] traffic live: rx " + root.rxRate.toFixed(0) + " KB/s iface " + root.connectionStatus.iface)
-                            }
-                        }
-                    }
-                    root._lastRxBytes = rx; root._lastTxBytes = tx; root._lastTrafficTick = now
-                    root.rxHistory = History.appendHistory(root.rxHistory, now, root.rxRate, 120000, 120)
-                    root.txHistory = History.appendHistory(root.txHistory, now, root.txRate, 120000, 120)
+    // ── TRAFFIC — sysfs counters via FileView (H8: zero forks) ──────────────
+    // The `cat` Process is gone: two FileViews on the active iface's rx/tx
+    // statistics files, reloaded by the 1s traffic timer below. Absorb runs
+    // on the TX file's callback — the tick reloads RX then TX in order, so
+    // both texts belong to the same tick by then. SplitParser's per-line
+    // rejoin bug class is structurally gone (no parser at all).
+    readonly property string _trafficIface: connectionStatus.iface
+    FileView {
+        id: rxFile
+        path: root._trafficIface !== ""
+            ? "/sys/class/net/" + root._trafficIface + "/statistics/rx_bytes" : ""
+        watchChanges: false
+        printErrors: false
+    }
+    FileView {
+        id: txFile
+        path: root._trafficIface !== ""
+            ? "/sys/class/net/" + root._trafficIface + "/statistics/tx_bytes" : ""
+        watchChanges: false
+        printErrors: false
+        onTextChanged: root._absorbTraffic()
+    }
+
+    function _absorbTraffic() {
+        var rx = parseInt(rxFile.text(), 10)
+        var tx = parseInt(txFile.text(), 10)
+        if (isNaN(rx) || isNaN(tx)) return
+        var now = Date.now()
+        if (root._lastRxBytes >= 0 && root._lastTrafficTick > 0) {
+            var dt = (now - root._lastTrafficTick) / 1000
+            if (dt > 0.1) {
+                root.rxRate = Math.max(0, (rx - root._lastRxBytes) / dt / 1024)
+                root.txRate = Math.max(0, (tx - root._lastTxBytes) / dt / 1024)
+                root.rxTotalMB += root.rxRate * dt / 1024
+                root.txTotalMB += root.txRate * dt / 1024
+                if (!root._trafficLogged && (root.rxRate > 1 || root.txRate > 1)) {
+                    root._trafficLogged = true
+                    console.log("[NetControl] traffic live: rx " + root.rxRate.toFixed(0) + " KB/s iface " + root.connectionStatus.iface)
                 }
-                trafficProc.buffer = ""
             }
         }
+        root._lastRxBytes = rx; root._lastTxBytes = tx; root._lastTrafficTick = now
+        root.rxHistory = History.appendHistory(root.rxHistory, now, root.rxRate, 120000, 120)
+        root.txHistory = History.appendHistory(root.txHistory, now, root.txRate, 120000, 120)
     }
 
     function _sampleTraffic() {
-        var iface = connectionStatus.iface
-        if (!iface) {
+        if (connectionStatus.iface === "") {
             if (connectionStatus.connected) console.log("[NetControl] traffic: connected but no iface — skipping sample")
             return
         }
-        if (trafficProc.running) return
-        trafficProc.command = ["sh", "-c",
-            "cat /sys/class/net/" + iface + "/statistics/rx_bytes " +
-            "/sys/class/net/" + iface + "/statistics/tx_bytes"]
-        trafficProc.running = true
+        rxFile.reload()      // ASYNC — absorb lands in txFile.onTextChanged
+        txFile.reload()
     }
 
     // ── LINK QUALITY MONITOR — TWO LEGS (math: ../lib/netstats.mjs, nexthop-
