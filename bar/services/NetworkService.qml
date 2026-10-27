@@ -1,5 +1,5 @@
 /** Version: 28 — native Quickshell.Networking for bar state (zero forks);
- ** popup diagnostics stay as popup-gated one-shot probes (NetworkModel.mjs);
+ ** popup diagnostics stay as popup-gated one-shot probes (bar/lib/network-model.mjs);
  ** H1: glance-only card (scan/join moved to settings), speed results persist;
  ** Hr: idle links decay to 0 B/s (settle absorb — counters that don't change
  ** never fire textChanged) **/
@@ -9,7 +9,7 @@ import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config
-import "NetworkModel.mjs" as Model
+import "../lib/network-model.mjs" as Model
 
 Item {
     id: root
@@ -127,7 +127,7 @@ Item {
     property string iface: ""       // active interface, e.g. "wlp10s0"
     // ── Interface throughput (popup-only): deltas of sysfs counters; totals
     // are raw since-interface-up. Empty rate strings mean "no sample yet" —
-    // the fold in NetworkModel.mjs guards iface changes and counter resets.
+    // the fold in network-model.mjs guards iface changes and counter resets.
     property string rxRate: ""
     property string txRate: ""
     property string rxTotal: ""

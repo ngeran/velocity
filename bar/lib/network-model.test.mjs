@@ -1,5 +1,5 @@
-// NetworkModel.test.mjs — AP-list additions (C3): grouping, signature, glyphs
-import * as M from "./NetworkModel.mjs"
+// network-model.test.mjs — AP-list additions (C3): grouping, signature, glyphs
+import * as M from "./network-model.mjs"
 import { readFile } from "node:fs/promises"
 
 let n = 0
@@ -73,7 +73,7 @@ ok(M.formatBytes(2048) === "2.0 KB", "formatBytes re-exported from shared units.
 ok(M.formatRate(2048) === "2.0 KB/s", "formatRate re-exported from shared units.mjs")
 
 // source hygiene: no raw astral glyphs in the literals (the C2 transport law)
-const src = await readFile(new URL("./NetworkModel.mjs", import.meta.url), "utf8")
+const src = await readFile(new URL("./network-model.mjs", import.meta.url), "utf8")
 ok(src.includes('"\\u{f0928}"'), "glyph literals use explicit escapes")
 
-console.log("NetworkModel.test: " + n + " asserts")
+console.log("network-model.test: " + n + " asserts")

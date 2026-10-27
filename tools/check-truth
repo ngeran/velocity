@@ -161,7 +161,7 @@ print(json.dumps({"rx": rate_bytes(r2 - r1, dt_ms), "tx": rate_bytes(t2 - t1, dt
 PYEOF
 
     node -e '
-import(process.cwd() + "/bar/services/NetworkModel.js").then(M => {
+import(process.cwd() + "/bar/lib/network-model.mjs").then(M => {
   const [r1, t1, r2, t2, dt] = process.argv.slice(1).map(Number)
   const first = M.throughputState(null, "if", r1, t1, 0)
   const second = M.throughputState(first.state, "if", r2, t2, dt)

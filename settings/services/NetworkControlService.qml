@@ -31,8 +31,8 @@ import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
 import "../config" as Config
-import "NetworkControlModel.js" as Model
-import "History.js" as History
+import "../lib/network-control-model.mjs" as Model
+import "../lib/history.mjs" as History
 import "../lib/netparse.mjs" as Netparse
 import "../lib/netstats.mjs" as NetStats
 
@@ -71,7 +71,7 @@ Item {
     signal connectFailed(string ssid, string reasonKey, string reasonLabel)
 
     // ── TRAFFIC HISTORY — /sys/class/net/<iface>/statistics sampled 1s,
-    // ring-buffered 2-min (History.js, same pattern as CoreEngine).
+    // ring-buffered 2-min (history.mjs, same pattern as CoreEngine).
     // rxRate/txRate are KB/s deltas, NOT cumulative counters.
     property var rxHistory: []
     property var txHistory: []

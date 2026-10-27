@@ -17,7 +17,7 @@
 // /sys are read with FileView.reload() on the timer — ZERO forked processes
 // per tick (the old engine forked sh+free every second and sh again for GHz).
 // watchChanges stays false because inotify doesn't fire on procfs anyway.
-// History ring buffers (cpuHistory/memoryHistory, 2-min window via History.js)
+// History ring buffers (cpuHistory/memoryHistory, 2-min window via history.mjs)
 // live HERE, singleton-owned, so charts survive the dashboard Loader being
 // torn down on panel close.
 //
@@ -28,7 +28,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
-import "History.js" as History
+import "../lib/history.mjs" as History
 import "../lib/storage.mjs" as Storage
 import "../config" as Config
 

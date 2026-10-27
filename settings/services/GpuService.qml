@@ -30,7 +30,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../config" as Config
-import "History.js" as History
+import "../lib/history.mjs" as History
 
 Item {
     id: root

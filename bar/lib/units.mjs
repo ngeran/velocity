@@ -4,7 +4,7 @@
 // =============================================================================
 // Consumers (synced to bar/lib/ + settings/lib/ — separate -c roots cannot
 // import across, so every root gets a byte-identical copy):
-//   • bar/services/NetworkModel.mjs  — throughput totals/rates (imports here)
+//   • bar/lib/network-model.mjs  — throughput totals/rates (imports here)
 //   • settings/components/NetworkEngineerView.qml — iface counter rows
 //
 // NOTE: shared/storage.mjs's formatBytes is a DIFFERENT formatter on purpose

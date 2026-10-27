@@ -14,7 +14,7 @@ import "../config" as Config
 Canvas {
     id: root
 
-    property var points: []            // [{time, value}] oldest-first (History.js)
+    property var points: []            // [{time, value}] oldest-first (history.mjs)
     property int columns: 48
     property real ledSize: 6
     property real ledGap: 2
