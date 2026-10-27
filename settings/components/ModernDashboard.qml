@@ -247,6 +247,15 @@ Item {
         }
     }
 
+    // Open the Settings tab pinned to a rail section (H3 jump links, e.g.
+    // Display's read-only auto-blank row → Idle & Lock). Same lazy-tab idiom
+    // as openControlTab: openSettingsTab marks the tab visited, which creates
+    // settingsLoader's item synchronously — the guard covers the unfound key.
+    function openSettingsSection(section) {
+        openSettingsTab()
+        if (settingsLoader.item) settingsLoader.item.active = section
+    }
+
     function openThemeTab() {
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "themes") { root.currentTab = i; break }
@@ -465,6 +474,7 @@ Item {
 
             sourceComponent: Components.ControlDashboard {
                 anchors.fill: parent
+                dash: root   // H3: cross-tab jump links (Display → Idle & Lock)
             }
         }
 

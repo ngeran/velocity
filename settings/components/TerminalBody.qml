@@ -17,6 +17,7 @@ import "../services" as Services
 Rectangle {
     id: body
     property string activeSection: "network"
+    property var dash: null   // the ModernDashboard root — cross-tab jump links (H3)
     property string netPage: "wifi"   // network section's inner page: wifi | engineer
 
     color: Config.ThemeConfig.colors.background
@@ -116,6 +117,7 @@ Rectangle {
 
         DisplayControlView {
             visible: body.activeSection === "display"
+            dash: body.dash
             Layout.fillWidth: true
             Layout.fillHeight: true
             opacity: visible ? 1 : 0

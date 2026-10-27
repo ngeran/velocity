@@ -17,6 +17,7 @@ import "../services" as Services
 Item {
     id: root
     property string activeSection: "network"
+    property var dash: null   // the ModernDashboard root — cross-tab jump links (H3)
 
     onActiveSectionChanged: {
         // Publish the active section so services can section-gate their polls
@@ -66,5 +67,6 @@ Item {
         anchors.rightMargin: Config.ControlConfig.padding
         anchors.bottomMargin: Config.ControlConfig.padding
         activeSection: root.activeSection
+        dash: root.dash
     }
 }

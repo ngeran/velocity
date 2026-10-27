@@ -25,6 +25,7 @@ import "../services" as Services
 ColumnLayout {
     id: view
     spacing: Config.ControlConfig.space2
+    property var dash: null   // the ModernDashboard root — jump link target (H3)
 
     // The TARGETED monitor (selected on the canvas, else focused/first)
     readonly property var mon: Services.MonitorService.target
@@ -866,21 +867,34 @@ ColumnLayout {
                     }
                 }
 
-                // Auto-blank timer (hypridle display-off)
-                PanelDropdown {
+                // Auto-blank timer (hypridle display-off) — READ-ONLY here (H3):
+                // Idle & Lock owns the editor; this row mirrors the value and
+                // jumps there. One writer through HypridleService either way.
+                RowLayout {
                     Layout.fillWidth: true
-                    showLabel: false
-                    label: "AUTO-BLANK (BURN-IN PROTECTION)"
-                    value: Math.round(Services.HypridleService.displayOffTimeout / 60) + " MIN"
-                    options: [
-                        { label: "2 MIN", value: 120 },
-                        { label: "5 MIN", value: 300 },
-                        { label: "10 MIN", value: 600 },
-                        { label: "15 MIN", value: 900 }
-                    ]
-                    onChanged: function(newValue) {
-                        Services.HypridleService.displayOffTimeout = newValue
-                        Services.HypridleService.saveConfig()
+                    spacing: Config.ControlConfig.space2
+
+                    Text {
+                        text: "AUTO-BLANK (BURN-IN PROTECTION)"
+                        font.family: Config.ControlConfig.fontSans
+                        font.pixelSize: 10
+                        font.bold: true
+                        font.letterSpacing: 1.0
+                        font.capitalization: Font.AllUppercase
+                        color: Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: implicitWidth
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: Math.round(Services.HypridleService.displayOffTimeout / 60) + " MIN"
+                        font.family: Config.ControlConfig.fontMono
+                        font.pixelSize: 10
+                        color: Config.ThemeConfig.colors.text
+                    }
+                    ActionPill {
+                        text: "IDLE & LOCK ›"
+                        onActivated: if (view.dash) view.dash.openSettingsSection("idle")
                     }
                 }
 
