@@ -51,6 +51,10 @@ ok(act({ ttlMs: 999.9 }).expiresAt === 999, "now/ttl fractional → floored expi
 ok(act({ focusedOnly: 1 }).focusedOnly === true, "focusedOnly coerced")
 ok(act({ accent: "#ff8800" }).accent === "#ff8800", "hex accent kept")
 ok(act({ accent: "red" }).accent === null, "non-hex accent dropped")
+var fn = function() {}
+ok(typeof act({ activate: fn }).activate === "function", "function activate kept")
+ok(act({ activate: "click" }).activate === undefined, "non-function activate dropped")
+ok(act({}).activate === undefined, "activate absent by default")
 ok(act({ icon: "󰕾", label: "42%" }).icon === "󰕾" && act({ icon: "󰕾", label: "42%" }).label === "42%",
    "icon/label strings kept")
 
@@ -81,6 +85,19 @@ ok(r.changed === false && r.map === mm, "nothing expired → same map, changed f
 const prog = Aq.normalize({ key: "p", progress: 5 }, 0)
 mm = Aq.upsert(mm, prog, 3)
 ok(Aq.sweep(mm, Aq.HARD_CAP_MS + 1).changed === true, "hard cap expires progress entries too")
+
+// ── hover-hold: sweep skips keys held by any tag ────────────────────────────
+let hm = Aq.upsert({}, act({ key: "held", ttlMs: 100 }), 1)
+hm = Aq.upsert(hm, act({ key: "free", ttlMs: 100 }), 2)
+let hr = Aq.sweep(hm, 4000, { "island:DP-1": "held" })
+ok(hr.changed === true && hr.map.held !== undefined && hr.map.free === undefined,
+   "held key survives expiry, unheld swept")
+hr = Aq.sweep(hm, 4000, { a: "held", b: "held" })
+ok(hr.map.held !== undefined && hr.changed === true, "multiple tags holding the same key")
+hr = Aq.sweep(hm, 4000)
+ok(hr.changed === true && Object.keys(hr.map).length === 0, "no holds → expiry normal")
+hr = Aq.sweep(hm, 50, { "osd:card": "held" })
+ok(hr.changed === false && hr.map === hm, "nothing expired → same map even when held")
 
 // ── arbitrate ───────────────────────────────────────────────────────────────
 ok(Aq.arbitrate({}, false) === null, "empty queue → null")

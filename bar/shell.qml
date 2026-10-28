@@ -27,6 +27,21 @@ import "services" as Services
 ShellRoot {
     id: shellRoot
 
+    // NotificationService OWNERSHIP PIN (J2): this singleton is instantiated
+    // under TWO import URIs (this file's "services" and components'
+    // "../services" — a Quickshell quirk: the specifier string, not the
+    // resolved directory, keys the instance). Whichever copy constructs
+    // first wins the boot-time org.freedesktop.Notifications probe AND the
+    // IPC registration — and only THIS file's copy can deliver peeks into
+    // the PopupCoordinator every renderer reads (see the peek Connections
+    // below). Dereferencing it here, in a root property (evaluated before
+    // any child constructs), pins the bus + IPC to the delivering copy.
+    // The other copies still exist but always stand down: mirrors, harmless.
+    // MEMBER read — a bare `property var x: Services.Svc` reference is inert
+    // in this build (singletons construct on first dereference; a stored
+    // reference never dereferences).
+    property bool _notificationSvcPin: Services.NotificationService.peekKey !== ""
+
     // =========================================================================
     // PLUGIN ENGINE — the host's side of the contract: hand the engine the
     // bar surfaces it may expose to plugins (the engine imports nothing from
@@ -227,29 +242,37 @@ ShellRoot {
     }
 
     // The notification center claims the popup slot while shown. (target
-    // null-safe: no connection until the center has loaded)
+    // null-safe: no connection until the center has loaded) While it holds
+    // the slot the activity queue's arbitration hides any live peek (J0
+    // panel-wins) — no separate banner-dismissal needed.
     Connections {
         target: ncLoader.item
         function onShownChanged() {
-            if (ncLoader.item && ncLoader.item.shown) {
+            var shown = ncLoader.item && ncLoader.item.shown
+            // panel-wins is ALSO policy on the publisher copy: nc's own
+            // panelOpen write lands on the "../services" instance, not the
+            // peek publisher pinned above — this file re-states it.
+            Services.NotificationService.panelOpen = shown
+            if (shown)
                 Engine.PopupCoordinator.request("nc", shellRoot.closeNotificationCenter)
-                notificationToast.dismiss()   // a live banner over the open list is noise
-            }
             else
                 Engine.PopupCoordinator.release("nc")
         }
     }
 
-    // =========================================================================
-    // NOTIFICATION TOAST — transient arrival banner (top-right, under the bar).
-    // Warm from shell start so it can catch arrivals; shows nothing until
-    // NotificationService.arrived fires and its own policy passes (no DnD,
-    // panel closed). Card click opens the center.
-    // =========================================================================
-    Components.NotificationToast {
-        id: notificationToast
-        topClearance: shellRoot.topClearance
-        onCenterRequested: shellRoot.toggleNotificationCenter()
+    // Notification peek delivery (J2): NotificationService owns the peek
+    // POLICY but not the delivery — this file's Engine import is the
+    // PopupCoordinator instance every renderer reads (the service singleton
+    // instantiates under a second URI; its own ../engine resolves to a
+    // coordinator no renderer sees). peekSpec is reassigned per change;
+    // last-state-wins, so coalesced rev bumps resolve correctly.
+    Connections {
+        target: Services.NotificationService
+        function onPeekRevChanged() {
+            var s = Services.NotificationService.peekSpec
+            if (s) Engine.PopupCoordinator.activity(s)
+            else Engine.PopupCoordinator.endActivity(Services.NotificationService.peekKey)
+        }
     }
 
     // =========================================================================

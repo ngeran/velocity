@@ -25,8 +25,11 @@
 // `activities` is the live-activity registry (J0): OSD, plugins (ctx.island)
 // and the `island` IPC publish transient status; `visibleActivity` is the ONE
 // that renders (lib/activity-queue.mjs arbitration). An open panel wins —
-// every claim/release/clear recomputes it. Both maps are REASSIGNED, never
-// mutated, so bindings re-evaluate.
+// every claim/release/clear recomputes it. Activities may carry `activate`
+// (J2, e.g. the notification peek) — renderers surface it as a click.
+// `_holds` is the hover-hold registry (J2): a renderer showing an activity
+// holds its key while hovered, deferring expiry. Both maps are REASSIGNED,
+// never mutated, so bindings re-evaluate.
 // =============================================================================
 
 pragma Singleton
@@ -51,6 +54,20 @@ QtObject {
     // The arbitrated winner (or null) — what scenes render.
     property var visibleActivity: null
     property int _actSeq: 0
+    // Hover-hold registry (J2): tag → key. A renderer holds the activity it
+    // is showing while the pointer is over it (the user is reading it) —
+    // held keys are immune to the expiry sweep but NOT to end/remove.
+    // Tags ("island:<screen>", "osd:card") let several renderers hold
+    // independently; a destroyed renderer releases its tag.
+    property var _holds: ({})
+    function holdActivity(tag, key) {
+        tag = String(tag || ""); key = String(key || "")
+        if (tag === "") return
+        if ((root._holds[tag] || "") === key) return   // incl. both empty → no churn
+        var m = Object.assign({}, root._holds)
+        if (key === "") delete m[tag]; else m[tag] = key
+        root._holds = m
+    }
     // Expiry sweep — 1 Hz ONLY while something is registered; the map is
     // empty at rest, so the timer sits stopped (no idle cost). Property-
     // hosted: QtObject has no default property, so a bare child Timer
@@ -60,7 +77,7 @@ QtObject {
         running: Object.keys(root.activities).length > 0
         repeat: true
         onTriggered: {
-            var r = Aq.sweep(root.activities, Date.now())
+            var r = Aq.sweep(root.activities, Date.now(), root._holds)
             if (r.changed) { root.activities = r.map; root._recomputeVisible() }
         }
     }

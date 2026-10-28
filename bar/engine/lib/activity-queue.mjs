@@ -11,6 +11,10 @@
 //     even progress activities expire unless updated (updates renew)
 //   · specs with an unknown priority degrade to "timer" (a typo must not
 //     steal the OSD's rank — the safe direction is the bottom)
+//   · a spec may carry `activate` (a function — e.g. open/click-through);
+//     renderers that surface clicks call it, all others ignore it
+//   · sweep takes an optional holds map (tag → key): a key held by any tag
+//     is immune to expiry while held (hover-hold — the user is reading it)
 //
 // The registry itself lives in PopupCoordinator (reassigned map → bindings
 // re-evaluate); every rule here is pure and node-tested. `now` is always
@@ -47,6 +51,7 @@ export function normalize(spec, now) {
         accent: accent,
         progress: progress,        // undefined = no track
         focusedOnly: !!spec.focusedOnly,
+        activate: (typeof spec.activate === "function") ? spec.activate : undefined,
         expiresAt: Math.floor(now) + capped
     }
 }
@@ -68,13 +73,22 @@ export function remove(map, key) {
     return m
 }
 
-// Drop expired entries. Returns { map, changed } — changed tells the caller
-// whether bindings must re-evaluate.
-export function sweep(map, now) {
+// True when `holds` (tag → key) holds `key` — any tag counts.
+function _isHeld(holds, key) {
+    if (!holds) return false
+    for (var t in holds) if (holds[t] === key) return true
+    return false
+}
+
+// Drop expired entries — except keys currently held (hover-hold). Returns
+// { map, changed } — changed tells the caller whether bindings must
+// re-evaluate. `holds` is optional; end/remove beat a hold (they never land
+// here — callers call remove directly).
+export function sweep(map, now, holds) {
     var m = null
     var changed = false
     for (var k in map) {
-        if (map[k].expiresAt !== null && map[k].expiresAt <= now) {
+        if (map[k].expiresAt !== null && map[k].expiresAt <= now && !_isHeld(holds, k)) {
             if (m === null) m = Object.assign({}, map)
             delete m[k]
             changed = true

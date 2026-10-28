@@ -30,6 +30,8 @@ import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
 import Quickshell.Services.Notifications
+import "../engine/lib/activity-queue.mjs" as Aq
+import "../config" as Config
 
 Item {
     id: root
@@ -42,9 +44,9 @@ Item {
     property int unreadCount: 0
     property int nextId: 1
 
-    // Live-arrival hook for the toast layer (NotificationToast). Emitted for
-    // EVERY add() — DnD/panel suppression is the view's call (it reads dnd,
-    // panelOpen and the row's silent mark off this singleton).
+    // Live-arrival hook. Emitted for EVERY add() — the J2 arrival peek is
+    // driven by this service itself (see _peek); the signal stays public for
+    // any other view that wants the raw arrival event.
     signal arrived(var row)
 
     // -------------------------------------------------------------------------
@@ -277,6 +279,7 @@ Item {
                     if (root.history.count > root.historyMax)
                         root.history.remove(root.history.count - 1)
                     root.model.remove(i)
+                    root._peekGone(row.id)
                     removed++
                 }
             }
@@ -327,7 +330,64 @@ Item {
         root._recount()
         root._persist()
         root.arrived(row)
+        root._peek(row)
         return row
+    }
+
+    // ── arrival peek (J2) ───────────────────────────────────────────────
+    // Arrivals surface as THE peek activity (island row on the island style,
+    // floating Osd card elsewhere — never a 2nd window; the old toast
+    // PanelWindow is retired, its policy lives on here):
+    //   panel open → store only · DnD/silent → store only, EXCEPT critical
+    //   · low 4 s / normal 6 s / critical sticky (the queue's hard cap —
+    //   nothing is forever; the burn-in dim handles the rest)
+    //   · newest wins: each arrival re-upserts the single "notif" slot
+    //   · stack ≤ 3: the newest summary shows, "+N" (N ≤ 2) counts further
+    //   unread — the panel holds the rest. unreadCount never counts silent
+    //   rows, so DnD arrivals don't stack-count.
+    //   · a hints.value arrival renders its track but keeps peek rank — the
+    //   ladder's "progress" tier is for long-lived task progress, not cards
+    // DELIVERY: this service owns the POLICY and exposes the payload as
+    // data (peekSpec/peekRev); the shell forwards it into PopupCoordinator.
+    // The service must NOT import ../engine itself: this singleton is
+    // instantiated under a second URI (long-standing dual-instance
+    // phenomenon), and that copy's ../engine resolves to a SECOND
+    // PopupCoordinator no renderer reads — publishes into it vanish.
+    // Click (island row): markRead retracts the peek via _peekGone, then
+    // the notification's default action is invoked.
+    readonly property string peekKey: "notif"
+    property var peekSpec: null            // reassigned payload (or null = retract)
+    property int peekRev: 0                // bump on every peekSpec change
+    property int _peekRowId: 0
+    function _peek(row) {
+        if (root.panelOpen) return
+        var critical = row.urgency === 2
+        if (!critical && (root.dnd || row.silent)) return
+        var rid = row.id
+        var cid = row.clickId
+        root._peekRowId = rid
+        var more = Math.max(0, Math.min(root.unreadCount - 1, 2))
+        root.peekSpec = {
+            key: root.peekKey,
+            priority: "peek",
+            icon: row.glyph || "󰂚",
+            label: (row.summary || row.appName || "Notification") + (more > 0 ? "  +" + more : ""),
+            accent: critical ? Config.ThemeConfig.colors.error : null,
+            progress: (row.progress !== undefined && row.progress >= 0) ? row.progress : undefined,
+            ttlMs: critical ? Aq.HARD_CAP_MS : ((row.urgency === 0) ? 4000 : 6000),
+            activate: function() {
+                root.markRead(rid)
+                root.invokeAction(cid)
+            }
+        }
+        root.peekRev++
+    }
+    // The peeked row is gone (dismiss / app-side close / reaper) or seen
+    // (read) — retract the peek if it was showing that row.
+    function _peekGone(id) {
+        if (root._peekRowId !== id) return
+        root._peekRowId = 0
+        if (root.peekSpec !== null) { root.peekSpec = null; root.peekRev++ }
     }
 
     // ── native path (J1a/J1b) ───────────────────────────────────────────────
@@ -415,8 +475,13 @@ Item {
     }
 
     function _removeByClickId(clickId) {
+        var gone = 0
         for (var i = 0; i < root.model.count; i++)
-            if (root.model.get(i).clickId === clickId) { root.model.remove(i); break }
+            if (root.model.get(i).clickId === clickId) {
+                gone = root.model.get(i).id
+                root.model.remove(i); break
+            }
+        if (gone) root._peekGone(gone)
         root._recount()
         root._persist()   // app-side close must not resurrect on restart
     }
@@ -457,6 +522,7 @@ Item {
                 break
             }
         }
+        root._peekGone(id)   // seen → the peek retracts (its own click included)
         root._recount()
         root._persist()
     }
@@ -475,6 +541,7 @@ Item {
         for (var i = 0; i < root.model.count; i++) {
             if (root.model.get(i).id === id) { root.model.remove(i); break }
         }
+        root._peekGone(id)
         root._recount()
         root._persist()
     }

@@ -134,17 +134,33 @@ Item {
             // QD-OLED: an activity may hold full alpha for ≤ 3 s of stillness
             // — then it dims to the rest level until its next update (new
             // winner or in-place refresh resets the clock). The orbit keeps
-            // moving the pixels underneath the whole time.
+            // moving the pixels underneath the whole time. Hover holds too:
+            // a pointer on the island means someone is reading — the sweep
+            // defers expiry (PopupCoordinator._holds) and the dim waits.
             readonly property string activityStamp: win.activity
                 ? win.activity.key + ":" + win.activity.seq : ""
             property bool activityDim: false
-            onActivityStampChanged: activityDim = false
+            onActivityStampChanged: {
+                activityDim = false
+                win._syncHold()
+            }
+            onHoveredChanged: win._syncHold()
             Timer {
                 interval: 3000
-                running: win.activityLive && !win.activityDim
+                running: win.activityLive && !win.activityDim && !win.hovered
                 onTriggered: win.activityDim = true
             }
             readonly property real activityAlpha: win.activityDim ? 0.45 : 1
+            // Hold only while this island both shows the activity AND is
+            // hovered; "" releases this island's tag. Released on destruction
+            // (style swap) so a dead renderer never pins a key. The tag is
+            // the registered screen name (_registeredOn, "" when unregistered
+            // — holdActivity ignores empty tags).
+            function _syncHold() {
+                var key = (win.hovered && win.activityLive) ? win.activity.key : ""
+                Engine.PopupCoordinator.holdActivity("island:" + win._registeredOn, key)
+            }
+            Component.onDestruction: Engine.PopupCoordinator.holdActivity("island:" + win._registeredOn, "")
 
             Timer {
                 id: hoverInTimer
@@ -665,9 +681,13 @@ Item {
                         }
 
                         // Live activity readout (the queue's winner): glyph · track · label.
+                        // Clickable when the activity carries `activate` (the
+                        // J2 notification peek) — pointer + click else inert.
                         Row {
                             id: activityRow
                             readonly property bool shown: win.islandState === Isl.ACTIVITY
+                            readonly property bool clickable: win.activity !== null
+                                && win.activity.activate !== undefined
                             readonly property bool hasTrack: win.activity !== null
                                 && win.activity.progress !== undefined
                             anchors.centerIn: parent
@@ -720,6 +740,13 @@ Item {
                                 color: activityRow.hasTrack ? Config.BarConfig.colorTextDim
                                       : (win.activity && win.activity.accent) ? win.activity.accent
                                       : Config.BarConfig.colorAccent
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -8   // forgiving target on a barH row
+                                enabled: activityRow.clickable
+                                cursorShape: activityRow.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (win.activity && win.activity.activate) win.activity.activate()
                             }
                         }
 
