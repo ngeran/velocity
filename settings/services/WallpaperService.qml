@@ -6,6 +6,11 @@
 // stills, plus the wallpaper-engine (mpvpaper) backend for animated content.
 // Exposes IPC interface for control from Settings UI without duplicating state.
 //
+// I8 SPLIT: classification, the filtered library view, scan/thumbnail/
+// engine-status parsing, the repeat-avoiding random pick, the awww argv
+// builder and the config round-trip live in ../lib/wallpaper.mjs
+// (node-tested). This file keeps IO + state (Processes, timers, persister).
+//
 // LIBRARY MODEL
 //   still library : wallpaperDir  (default ~/Pictures/Wallpapers/)  → awww
 //   live library  : liveDir       (default ~/Pictures/Live-Wallpapers/) →
@@ -61,6 +66,7 @@ import Quickshell.Io
 import "../config" as Config
 import "../utils" as Utils
 import "../services" as Services
+import "../lib/wallpaper.mjs" as Wm
 
 Item {
     id: root
@@ -116,46 +122,31 @@ Item {
     /// True for real video containers — only the engine can display these
     /// (the awww fallback cannot decode video; gif/webp/apng can stay).
     function isVideo(path: string): bool {
-        var p = (path || "").toLowerCase()
-        return p.endsWith(".mp4") || p.endsWith(".webm") || p.endsWith(".mkv") || p.endsWith(".mov")
+        return Wm.isVideo(path)
     }
 
     /// Filtered pick list — rotation, IPC index access and the gallery all
     /// read this, so a mode switch re-scopes everything at once.
-    readonly property var wallpaperList: {
-        var live = root.liveList
-        if (!root.engineAvailable) {
-            // Without the engine, what's offered has to be limited to what a
-            // backend on this system can actually show: live videos are
-            // hidden (they used to be pushed to awww every cycle), while
-            // gif/webp/apng remain through the awww fallback.
-            live = live.filter(function(p) { return !root.isVideo(p) })
-        }
-        if (root.libraryMode === "still") return root.stillList
-        if (root.libraryMode === "live")  return live
-        return root.stillList.concat(live)
-    }
+    readonly property var wallpaperList: Wm.filterLibrary(root.stillList, root.liveList,
+                                                          root.engineAvailable, root.libraryMode)
 
     // =========================================================================
-    // CLASSIFICATION
+    // CLASSIFICATION — rules in ../lib/wallpaper.mjs (I8 split, node-tested)
     // =========================================================================
 
     /// True for formats awww animates as a wallpaper (still library gif/apng).
     function isLive(path: string): bool {
-        var p = (path || "").toLowerCase()
-        return p.endsWith(".gif") || p.endsWith(".apng")
+        return Wm.isLive(path)
     }
 
     /// True for anything in the live library — routed to wallpaper-engine
     /// (mpvpaper), awww fallback if the engine is unavailable. Directory-based
     /// (not extension-based) so existing still-library content, including
-    /// gif/apng/webp, keeps its current awww behaviour untouched. Prefix
-    /// matches against the SLASHED dir: a liveDir without its trailing slash
-    /// used to also claim sibling folders (Live-Wallpapers-old).
+    /// gif/apng/webp, keeps its current awww behaviour untouched. The slash-
+    /// normalized prefix match (sibling folders like Live-Wallpapers-old must
+    /// not be claimed) lives in ../lib/wallpaper.mjs.
     function isEngined(path: string): bool {
-        if (root.liveDir.length === 0) return false
-        var d = root.liveDir.endsWith("/") ? root.liveDir : root.liveDir + "/"
-        return (path || "").indexOf(d) === 0
+        return Wm.isEngined(path, root.liveDir)
     }
 
     /// THE preview resolver (§1 dedup): stills use the file itself, engine
@@ -164,10 +155,7 @@ Item {
     /// dashboard card (ActiveWallpaperCard.previewSource) both delegate here
     /// — the two copies had drifted into near-identical shapes.
     function previewSourceFor(path: string): string {
-        if (!path) return ""
-        if (!isEngined(path)) return "file://" + path
-        var t = thumbMap[path]
-        return t ? "file://" + t : ""
+        return Wm.previewSource(path, root.thumbMap, root.liveDir)
     }
 
     // =========================================================================
@@ -183,36 +171,22 @@ Item {
 
         onLoaded: function(data) {
             console.log("[WallpaperService] Config loaded:", JSON.stringify(data))
-            if (data.cycleInterval !== undefined) {
-                root.cycleInterval = data.cycleInterval * 1000 // Convert seconds to ms
-            }
-            if (data.cyclingEnabled !== undefined) {
-                root.cyclingEnabled = data.cyclingEnabled
-            }
-            if (data.transitionType !== undefined) {
-                root.transitionType = data.transitionType
-            }
-            if (data.animationPaused !== undefined) {
-                root.animationPaused = data.animationPaused
-            }
-            if (data.wallpaperDir !== undefined) {
-                root.wallpaperDir = data.wallpaperDir
-            }
-            if (data.currentWallpaper !== undefined) {
-                root.currentWallpaper = data.currentWallpaper
-            }
-            if (data.liveDir !== undefined) {
-                root.liveDir = data.liveDir
-            }
-            if (data.libraryMode !== undefined) {
-                root.libraryMode = data.libraryMode
-            }
+            // I8: seconds→ms and the per-key guards live in
+            // ../lib/wallpaper.mjs (loadedConfigPatch — absent key = keep
+            // previous value, exactly the old inline guards).
+            var patch = Wm.loadedConfigPatch(data)
+            if (patch.cycleInterval    !== undefined) root.cycleInterval    = patch.cycleInterval
+            if (patch.cyclingEnabled   !== undefined) root.cyclingEnabled   = patch.cyclingEnabled
+            if (patch.transitionType   !== undefined) root.transitionType   = patch.transitionType
+            if (patch.animationPaused  !== undefined) root.animationPaused  = patch.animationPaused
+            if (patch.wallpaperDir     !== undefined) root.wallpaperDir     = patch.wallpaperDir
+            if (patch.currentWallpaper !== undefined) root.currentWallpaper = patch.currentWallpaper
+            if (patch.liveDir          !== undefined) root.liveDir          = patch.liveDir
+            if (patch.libraryMode      !== undefined) root.libraryMode      = patch.libraryMode
             // Writers add the trailing slash, but a hand-edited or older
             // config may not have it — isEngined() prefix-matches with "/".
-            if (root.wallpaperDir.length > 0 && !root.wallpaperDir.endsWith("/"))
-                root.wallpaperDir += "/"
-            if (root.liveDir.length > 0 && !root.liveDir.endsWith("/"))
-                root.liveDir += "/"
+            root.wallpaperDir = Wm.normalizeDir(root.wallpaperDir)
+            root.liveDir      = Wm.normalizeDir(root.liveDir)
 
             // Sync the loaded wallpaper into SharedState so dashboard widgets
             // (e.g. the Active Wallpaper preview) show it immediately on
@@ -238,16 +212,8 @@ Item {
     }
 
     function saveConfig() {
-        configPersister.save({
-            cycleInterval: root.cycleInterval / 1000, // Convert ms to seconds
-            cyclingEnabled: root.cyclingEnabled,
-            transitionType: root.transitionType,
-            animationPaused: root.animationPaused,
-            wallpaperDir: root.wallpaperDir,
-            currentWallpaper: root.currentWallpaper,
-            liveDir: root.liveDir,
-            libraryMode: root.libraryMode
-        })
+        // (I8: ms→seconds conversion in ../lib/wallpaper.mjs.)
+        configPersister.save(Wm.configPayload(root))
     }
 
     // =========================================================================
@@ -344,13 +310,9 @@ Item {
             }
 
             // A failed scan reads as empty (previous behaviour: the exit-code
-            // warn plus the "No wallpapers found" pair).
-            var lines = code === 0
-                        ? out.trim().split("\n").filter(function(l) { return l.trim().length > 0 })
-                        : []
-
-            // Sort for deterministic ordering
-            lines.sort()
+            // warn plus the "No wallpapers found" pair). Sort for deterministic
+            // ordering. (I8: parse in ../lib/wallpaper.mjs.)
+            var lines = Wm.parseFileList(out, code)
             root.stillList = lines
 
             if (lines.length === 0 && root.wallpaperDir.length > 0) {
@@ -381,11 +343,7 @@ Item {
         maxBytes: 262144
 
         onDone: function(out, err, code) {
-            var lines = code === 0
-                        ? out.trim().split("\n").filter(function(l) { return l.trim().length > 0 })
-                        : []
-
-            lines.sort()
+            var lines = Wm.parseFileList(out, code)
             root.liveList = lines
 
             if (lines.length === 0) {
@@ -479,12 +437,7 @@ Item {
 
         onRunningChanged: {
             if (!running) {
-                var map = {}
-                var lines = thumbWorker.buf.trim().split("\n")
-                for (var i = 0; i < lines.length; i++) {
-                    var parts = lines[i].split("\t")
-                    if (parts.length === 2 && parts[0].length > 0) map[parts[0]] = parts[1]
-                }
+                var map = Wm.parseThumbMap(thumbWorker.buf)
                 thumbWorker.buf = ""
                 root.thumbMap = map
                 if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(map).length)
@@ -537,14 +490,8 @@ Item {
             return ""
         }
 
-        var newIndex
-        var attempts = 0
-        var maxAttempts = Math.min(10, root.wallpaperList.length)
-
-        do {
-            newIndex = Math.floor(Math.random() * root.wallpaperList.length)
-            attempts++
-        } while (newIndex === root.lastIndex && attempts < maxAttempts && root.wallpaperList.length > 1)
+        // (I8: the repeat-avoiding pick lives in ../lib/wallpaper.mjs.)
+        var newIndex = Wm.pickRandom(root.wallpaperList, root.lastIndex, Math.random)
 
         root.lastIndex = newIndex
         var path = root.wallpaperList[newIndex]
@@ -570,20 +517,10 @@ Item {
         // lands (a no-op if nothing is running).
         root.pendingClear = root.engineAvailable
 
-        // Build command with optional --outputs flag
-        var cmd = [
-            "awww", "img", path,
-            "--transition-type", root.transitionType,
-            "--transition-fps", root.transitionFps.toString(),
-            "--transition-step", root.transitionStep.toString()
-        ]
-
-        // Add --outputs if a specific monitor is selected
-        if (root.currentMonitor && root.currentMonitor.length > 0) {
-            cmd.push("--outputs", root.currentMonitor)
-        }
-
-        awwwApply(cmd)
+        // (I8: argv build + --outputs flag in ../lib/wallpaper.mjs.)
+        awwwApply(Wm.buildAwwwCmd(path, root.transitionType,
+                                  root.transitionFps, root.transitionStep,
+                                  root.currentMonitor))
     }
 
     // --- awww daemon guard --------------------------------------------------
@@ -837,13 +774,15 @@ Item {
             if (!running) {
                 var buf = root._statusBuf
                 root._statusBuf = ""
-                try {
-                    var st = JSON.parse(buf.trim())
-                    root.engineRunning   = st.running === true
-                    root.enginePaused    = st.paused === true
-                    root.engineInstances = st.instances | 0
-                    root.lastEngineStatus = buf.trim()
-                } catch (e) {
+                // (I8: parse in ../lib/wallpaper.mjs — null on garbage keeps
+                // the previous raw status.)
+                var st = Wm.parseEngineStatus(buf)
+                if (st !== null) {
+                    root.engineRunning   = st.running
+                    root.enginePaused    = st.paused
+                    root.engineInstances = st.instances
+                    root.lastEngineStatus = st.raw
+                } else {
                     // Daemon down mid-poll or garbage output — treat as off.
                     root.engineRunning   = false
                     root.enginePaused    = false
