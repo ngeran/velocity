@@ -10,9 +10,17 @@
 //     '{"appName":"Firefox","summary":"Download complete","body":"file.tar.gz","urgency":1}'
 //   quickshell ipc --config bar call notifications clear
 //
-// The org.freedesktop.Notifications DBus name cannot be owned natively by
-// Quickshell 0.3.0 (no QML DBus-server API), so a tiny forwarder daemon pushes
-// real system notifications through the IPC above (see docs/notify-forwarder).
+// INGEST PATHS (J1a) — real system notifications arrive natively when we can
+// own the bus: a one-shot NameHasOwner probe at startup decides. Bus free →
+// a NotificationServer (Loader-hosted) claims org.freedesktop.Notifications,
+// tracks arrivals and maps them into the same model with real actions, image
+// and progress hints — no daemon, no dbus-send forks for actions. Bus owned
+// (the forwarder daemon of docs/notify-forwarder still running) → the server
+// is never constructed and the forwarder keeps feeding the IPC above; the
+// active path is logged at startup. Scripts keep using `notifications add`.
+// =============================================================================
+// =============================================================================
+// NotificationService.qml — notification store (ListModel) + CRUD + counter
 // =============================================================================
 
 pragma Singleton
@@ -20,6 +28,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform
 import Quickshell.Io
+import Quickshell.Services.Notifications
 
 Item {
     id: root
@@ -291,8 +300,7 @@ Item {
     // -------------------------------------------------------------------------
     // urgency: 0 = low, 1 = normal, 2 = critical
     function add(appName, summary, body, urgency, clickId, appIcon) {
-        var row = {
-            id: root.nextId,
+        return root._commitRow({
             clickId: (clickId === undefined ? 0 : clickId),  // DBus id for ActionInvoked (0 = none)
             appName: appName || "Notification",
             appIcon: appIcon || "",
@@ -304,18 +312,118 @@ Item {
             read: false,
             silent: root.dnd,  // DnD arrival: badge stays quiet, row persists
             readAt: 0          // set when marked read — tier clock starts at READ
-        }
+        })
+    }
+
+    // Shared tail of both ingest paths: id assignment, insert, badge, store,
+    // arrival signal. Extra fields a row may carry (native path only, never
+    // persisted — they die with the session like bridge clickIds):
+    //   actions [{id,text}] · image "" · progress -1 · native true
+    function _commitRow(row) {
+        row.id = root.nextId
         root.model.insert(0, row)
         root.nextId++
         root._recount()
         root._persist()
         root.arrived(row)
+        return row
     }
 
-    // Click-to-open: tell the forwarder (org.quickshell.NotifyBridge) to emit
-    // ActionInvoked / NotificationClosed so the originating app (e.g. Chromium)
-    // opens the content / stops tracking it. QML can't emit DBus itself, so we
-    // shell out to dbus-send (no-op if clickId is 0, i.e. no actions).
+    // ── native path (J1a) ───────────────────────────────────────────────────
+    // One-shot bus-ownership probe. Owned → the forwarder daemon is still the
+    // notification server; we stay off the name entirely. Free → the Loader
+    // below constructs the NotificationServer and we own the bus.
+    property bool _busOwned: true
+    property bool _probed: false
+    Process {   // unbounded-ok: one-shot NameHasOwner probe, exits at the reply
+        id: _busProbe
+        command: ["dbus-send", "--print-reply", "--dest=org.freedesktop.DBus",
+                  "/org/freedesktop/DBus", "org.freedesktop.DBus.NameHasOwner",
+                  "string:org.freedesktop.Notifications"]
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { _busProbe.buffer += data + "\n" } }
+        onRunningChanged: if (!running && _busProbe.buffer !== "") {
+            root._busOwned = _busProbe.buffer.indexOf("boolean true") !== -1
+            root._probed = true
+            console.log("[Notifications] " + (root._busOwned
+                ? "forwarder path — org.freedesktop.Notifications owned elsewhere"
+                : "native NotificationServer active — owns org.freedesktop.Notifications"))
+            _busProbe.buffer = ""
+        }
+    }
+
+    Loader {
+        id: _serverLoader
+        active: root._probed && !root._busOwned
+        sourceComponent: NotificationServer {
+            bodySupported: true
+            bodyMarkupSupported: true
+            actionsSupported: true
+            imageSupported: true
+            keepOnReload: false
+            onNotification: (n) => root._absorbNative(n)
+        }
+    }
+
+    // Map a native arrival into the shared model. tracked=true keeps the
+    // object alive so action invocation stays valid; the app's own close
+    // (replaced/expired elsewhere) removes our row. DnD keeps our semantics:
+    // the row persists silent — a critical does not badge through DnD either
+    // (deliberate difference from glyph, our documented doctrine).
+    function _absorbNative(n) {
+        n.tracked = true
+        var acts = []
+        for (var i = 0; i < n.actions.length && acts.length < 4; i++)
+            acts.push({ id: String(n.actions[i].identifier), text: String(n.actions[i].text) })
+        var prog = -1
+        var hv = n.hints ? n.hints.value : undefined
+        if (hv !== undefined && hv !== null) {
+            var f = Number(hv)
+            if (!isNaN(f)) prog = Math.max(0, Math.min(100, Math.round(f)))
+        }
+        var row = root._commitRow({
+            clickId: n.id,
+            appName: n.appName || "Notification",
+            appIcon: n.appIcon || "",
+            glyph: root.appGlyph(n.appName, n.appIcon),
+            summary: n.summary || "",
+            body: n.body || "",
+            urgency: n.urgency,          // enum Low/Normal/Critical = 0/1/2
+            timestamp: Date.now(),
+            read: false,
+            silent: root.dnd,
+            readAt: 0,
+            actions: acts,
+            image: String(n.image || ""),
+            progress: prog,
+            native: true
+        })
+        n.closed.connect(function(reason) { root._removeByClickId(n.id) })
+        return row
+    }
+
+    function _nativeNotif(clickId) {
+        var it = _serverLoader.item
+        if (!it) return null
+        var list = it.trackedNotifications.values
+        for (var i = 0; i < list.length; i++)
+            if (list[i].id === clickId) return list[i]
+        return null
+    }
+
+    function _removeByClickId(clickId) {
+        for (var i = 0; i < root.model.count; i++)
+            if (root.model.get(i).clickId === clickId) { root.model.remove(i); break }
+        root._recount()
+        root._persist()   // app-side close must not resurrect on restart
+    }
+
+    // Click-to-open: the native path invokes the tracked notification's own
+    // action (default = card click); otherwise tell the forwarder
+    // (org.quickshell.NotifyBridge) to emit ActionInvoked / NotificationClosed
+    // so the originating app (e.g. Chromium) opens the content / stops
+    // tracking it. QML can't emit DBus method-calls itself, so the fallback
+    // shells out to dbus-send (no-op if clickId is 0, i.e. no actions).
     function _bridgeCall(method, clickId) {
         if (!clickId) return
         var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
@@ -329,8 +437,35 @@ Item {
         p.running = true
     }
 
-    function invokeAction(clickId) { root._bridgeCall("Invoke", clickId) }
-    function dismissDbus(clickId) { root._bridgeCall("Dismiss", clickId) }
+    function invokeAction(clickId) {
+        if (!root._busOwned) {
+            var n = root._nativeNotif(clickId)
+            if (n) {
+                for (var i = 0; i < n.actions.length; i++)
+                    if (n.actions[i].identifier === "default") { n.actions[i].invoke(); return }
+                return  // tracked but actionless — the card click just marked it read
+            }
+        }
+        root._bridgeCall("Invoke", clickId)
+    }
+
+    function invokeActionKey(clickId, identifier) {
+        if (!root._busOwned) {
+            var n = root._nativeNotif(clickId)
+            if (n) {
+                for (var i = 0; i < n.actions.length; i++)
+                    if (n.actions[i].identifier === identifier) { n.actions[i].invoke(); return }
+            }
+        }
+    }
+
+    function dismissDbus(clickId) {
+        if (!root._busOwned) {
+            var n = root._nativeNotif(clickId)
+            if (n) { n.dismiss(); return }
+        }
+        root._bridgeCall("Dismiss", clickId)
+    }
 
     function markRead(id) {
         for (var i = 0; i < root.model.count; i++) {
@@ -460,5 +595,6 @@ Item {
         _dndReader.running = true
         _clearedReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root.clearedPath]
         _clearedReader.running = true   // chains the store read (routing needs clearedAt)
+        _busProbe.running = true        // static command — decides the ingest path (J1a)
     }
 }

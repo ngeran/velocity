@@ -9,6 +9,13 @@
 // Modernized: app-icon swatch (urgency-tinted, zero-radius) replaces the old
 // accent stripe; unread state reads as an inline dot next to the app name;
 // hover lifts the card (surface + border shift) and reveals the dismiss action.
+//
+// J1a (native server rows): the BODY is the one styled surface — StyledText
+// with <img> tags stripped (markup is the notification's own formatting; no
+// script executes in StyledText, and the strip closes the local-file <img>
+// probe). appName/summary/glyph/action labels stay PlainText — untrusted.
+// Native rows may also carry action chips (≤3), a progress track and an
+// image preview; IPC/forwarder rows render exactly as before.
 // =============================================================================
 
 import QtQuick
@@ -155,12 +162,13 @@ Rectangle {
                 maximumLineCount: 2
             }
 
-            // --- body ---
+            // --- body (the one styled surface — see banner) ---
             Text {
-                textFormat: Text.PlainText   // notification text is untrusted — never render HTML
+                textFormat: Text.StyledText
                 visible: model.body !== ""
                 Layout.fillWidth: true
-                text: model.body
+                text: stripImages(model.body)
+                onLinkActivated: (link) => Qt.openUrlExternally(link)
                 color: Config.ThemeConfig.colors.textDim
                 font.pixelSize: 11
                 font.family: Config.BarConfig.fontFamily
@@ -169,7 +177,86 @@ Rectangle {
                 maximumLineCount: 3
                 opacity: 0.85
             }
+
+            // --- progress (native hints.value) ---
+            Rectangle {
+                visible: model.progress !== undefined && model.progress >= 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: 3
+                radius: 1
+                color: Config.ThemeConfig.colors.border
+                Rectangle {
+                    width: parent.width * Math.max(0, Math.min(100, model.progress || 0)) / 100
+                    radius: parent.radius
+                    height: parent.height
+                    color: card.urgencyColor
+                }
+            }
+
+            // --- image preview (native image hint) ---
+            Image {
+                visible: model.image !== undefined && model.image !== ""
+                Layout.preferredWidth: 64
+                Layout.preferredHeight: 44
+                Layout.maximumHeight: 44
+                fillMode: Image.PreserveAspectFit
+                source: model.image !== undefined ? model.image : ""
+                asynchronous: true
+            }
+
+            // --- action chips (native actions, default excluded — the card
+            // click is the default action; ≤3, same cap as the service) ---
+            Row {
+                visible: model.actions !== undefined
+                         && model.actions.filter(function(a) { return a.id !== "default" }).length > 0
+                spacing: 6
+                Repeater {
+                    model: model.actions !== undefined
+                           ? model.actions.filter(function(a) { return a.id !== "default" }).slice(0, 3)
+                           : []
+                    delegate: Rectangle {
+                        // modelData is the Repeater's context property — a
+                        // `required property var modelData` here breaks it
+                        // (JS-array model; known Quickshell trap).
+                        readonly property string label: (modelData && modelData.text) || ""
+                        radius: 3
+                        color: chipMa.containsMouse ? Config.ThemeConfig.colors.surfaceContainer
+                                                    : Config.ThemeConfig.colors.background
+                        border.width: 1
+                        border.color: card.urgencyColor
+                        implicitWidth: chipText.implicitWidth + 16
+                        implicitHeight: 20
+                        Text {
+                            id: chipText
+                            anchors.centerIn: parent
+                            textFormat: Text.PlainText   // action labels are untrusted too
+                            text: parent.label
+                            color: Config.ThemeConfig.colors.text
+                            font.pixelSize: 10
+                            font.family: Config.BarConfig.fontFamily
+                        }
+                        MouseArea {
+                            id: chipMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                Services.NotificationService.markRead(model.id)
+                                Services.NotificationService.invokeActionKey(model.clickId,
+                                                                             modelData.id)
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // <img> strip for the styled body: notifications are semi-trusted at best,
+    // and a styled <img src="file:///…"> would render local-file pixels (an
+    // exfil-free but still unintended read). Markup like <b>/<i>/<a> is kept.
+    function stripImages(t) {
+        return String(t || "").replace(/<img\b[^>]*>/gi, "")
     }
 
     // ----- helpers -----
