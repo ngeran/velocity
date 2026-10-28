@@ -15,7 +15,7 @@
 // script executes in StyledText, and the strip closes the local-file <img>
 // probe). appName/summary/glyph/action labels stay PlainText — untrusted.
 // Native rows may also carry action chips (≤3), a progress track and an
-// image preview; IPC/forwarder rows render exactly as before.
+// image preview; IPC-ingested rows render exactly as before.
 // =============================================================================
 
 import QtQuick

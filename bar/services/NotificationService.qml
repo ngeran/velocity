@@ -10,14 +10,15 @@
 //     '{"appName":"Firefox","summary":"Download complete","body":"file.tar.gz","urgency":1}'
 //   quickshell ipc --config bar call notifications clear
 //
-// INGEST PATHS (J1a) — real system notifications arrive natively when we can
-// own the bus: a one-shot NameHasOwner probe at startup decides. Bus free →
-// a NotificationServer (Loader-hosted) claims org.freedesktop.Notifications,
+// INGEST PATHS (J1b) — real system notifications arrive NATIVELY: a
+// NotificationServer (Loader-hosted) claims org.freedesktop.Notifications,
 // tracks arrivals and maps them into the same model with real actions, image
-// and progress hints — no daemon, no dbus-send forks for actions. Bus owned
-// (the forwarder daemon of docs/notify-forwarder still running) → the server
-// is never constructed and the forwarder keeps feeding the IPC above; the
-// active path is logged at startup. Scripts keep using `notifications add`.
+// and progress hints — no daemon, no dbus-send forks for actions. A one-shot
+// NameHasOwner probe at startup stays as the interlock: if something else
+// already owns the name (a manually started mako/dunst, …) we never construct
+// the server — two servers would fight — and log the stand-down; ingest for
+// such setups falls back to the IPC above. Scripts keep using
+// `notifications add`.
 // =============================================================================
 // =============================================================================
 // NotificationService.qml — notification store (ListModel) + CRUD + counter
@@ -329,10 +330,12 @@ Item {
         return row
     }
 
-    // ── native path (J1a) ───────────────────────────────────────────────────
-    // One-shot bus-ownership probe. Owned → the forwarder daemon is still the
-    // notification server; we stay off the name entirely. Free → the Loader
-    // below constructs the NotificationServer and we own the bus.
+    // ── native path (J1a/J1b) ───────────────────────────────────────────────
+    // One-shot bus-ownership interlock. Free (the normal case since J1b) → the
+    // Loader below constructs the NotificationServer and we own the bus.
+    // Owned → something ELSE is the notification server (a manually started
+    // mako/dunst, …); constructing ours would make two servers fight over the
+    // name, so we stand down — the active path is logged either way.
     property bool _busOwned: true
     property bool _probed: false
     Process {   // unbounded-ok: one-shot NameHasOwner probe, exits at the reply
@@ -346,7 +349,7 @@ Item {
             root._busOwned = _busProbe.buffer.indexOf("boolean true") !== -1
             root._probed = true
             console.log("[Notifications] " + (root._busOwned
-                ? "forwarder path — org.freedesktop.Notifications owned elsewhere"
+                ? "stand-down — org.freedesktop.Notifications owned elsewhere"
                 : "native NotificationServer active — owns org.freedesktop.Notifications"))
             _busProbe.buffer = ""
         }
@@ -418,53 +421,32 @@ Item {
         root._persist()   // app-side close must not resurrect on restart
     }
 
-    // Click-to-open: the native path invokes the tracked notification's own
-    // action (default = card click); otherwise tell the forwarder
-    // (org.quickshell.NotifyBridge) to emit ActionInvoked / NotificationClosed
-    // so the originating app (e.g. Chromium) opens the content / stops
-    // tracking it. QML can't emit DBus method-calls itself, so the fallback
-    // shells out to dbus-send (no-op if clickId is 0, i.e. no actions).
-    function _bridgeCall(method, clickId) {
-        if (!clickId) return
-        var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        p.command = ["dbus-send", "--session",
-                     "--dest=org.freedesktop.Notifications",
-                     "--type=method_call",
-                     "/org/freedesktop/Notifications",
-                     "org.quickshell.NotifyBridge." + method,
-                     "uint32:" + clickId]
-        p.onExited.connect(function() { p.destroy() })  // free the one-shot wrapper (was leaked per click)
-        p.running = true
-    }
-
+    // Click-to-open (J1b): we ARE the notification server, so a card click
+    // invokes the tracked notification's own action — the server side emits
+    // ActionInvoked / NotificationClosed to the originating app (e.g.
+    // Chromium), which opens the content / stops tracking it. Restored rows
+    // (clickId 0, actions died with the session) resolve to no tracked
+    // notification and no-op here.
     function invokeAction(clickId) {
-        if (!root._busOwned) {
-            var n = root._nativeNotif(clickId)
-            if (n) {
-                for (var i = 0; i < n.actions.length; i++)
-                    if (n.actions[i].identifier === "default") { n.actions[i].invoke(); return }
-                return  // tracked but actionless — the card click just marked it read
-            }
+        var n = root._nativeNotif(clickId)
+        if (n) {
+            for (var i = 0; i < n.actions.length; i++)
+                if (n.actions[i].identifier === "default") { n.actions[i].invoke(); return }
+            return  // tracked but actionless — the card click just marked it read
         }
-        root._bridgeCall("Invoke", clickId)
     }
 
     function invokeActionKey(clickId, identifier) {
-        if (!root._busOwned) {
-            var n = root._nativeNotif(clickId)
-            if (n) {
-                for (var i = 0; i < n.actions.length; i++)
-                    if (n.actions[i].identifier === identifier) { n.actions[i].invoke(); return }
-            }
+        var n = root._nativeNotif(clickId)
+        if (n) {
+            for (var i = 0; i < n.actions.length; i++)
+                if (n.actions[i].identifier === identifier) { n.actions[i].invoke(); return }
         }
     }
 
     function dismissDbus(clickId) {
-        if (!root._busOwned) {
-            var n = root._nativeNotif(clickId)
-            if (n) { n.dismiss(); return }
-        }
-        root._bridgeCall("Dismiss", clickId)
+        var n = root._nativeNotif(clickId)
+        if (n) n.dismiss()
     }
 
     function markRead(id) {
