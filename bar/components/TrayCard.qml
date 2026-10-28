@@ -5,7 +5,6 @@
 // =============================================================================
 
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
@@ -66,35 +65,28 @@ PanelWindow {
         id: settingsLauncher
         command: []
     }
-    component SettingsLink: Item {
-        id: link
-        property string verb: ""
-        signal activated(string verb)
-        Layout.fillWidth: true
-        Layout.topMargin: Config.PopupMetrics.px(10)
-        implicitHeight: Config.PopupMetrics.px(20)
-        implicitWidth: linkTxt.implicitWidth
-        Text {
-            id: linkTxt
-            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: "OPEN IN SETTINGS ›"
-            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-            font.bold: true; font.letterSpacing: 1.5
-            color: linkArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-        }
-        MouseArea { id: linkArea; anchors.fill: linkTxt; anchors.margins: -4; hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor; onClicked: link.activated(link.verb) }
-    }
     signal closeRequested()
     // Swap the open body in place (Control Center drill-down / back).
     signal switchRequested(string tray)
     // True while a body was reached from the Control Center (shows ‹ back).
     property bool fromControl: false
 
+    // I8 lazy bodies: each body file instantiates on its first open and then
+    // lives for the card's lifetime (sizing reads loader.item, guarded).
+    property bool _btEverOpened: false
+    property bool _volumeEverOpened: false
+    property bool _privacyEverOpened: false
+    property bool _controlEverOpened: false
+
     // HOVER-OUT DISMISSAL: lives in the Popover primitive (hoverClose +
     // hoverCloseNeedsEntry — the entered-guard idiom this card introduced).
     onActiveTrayChanged: {
         if (activeTray !== "") lastTray = activeTray
+        // Lazy bodies: arm on the tray's first open.
+        if (activeTray === "bluetooth") _btEverOpened = true
+        if (activeTray === "volume")    _volumeEverOpened = true
+        if (activeTray === "privacy")   _privacyEverOpened = true
+        if (activeTray === "control")   _controlEverOpened = true
         if (activeTray === "" || activeTray === "control") fromControl = false
         if (activeTray === "control") {
             Services.BrightnessService.refresh()
@@ -173,18 +165,19 @@ PanelWindow {
         // 12px narrow, squeezing every row.
         readonly property real bodyPad: 2 * Config.PopupMetrics.px(16)
         cardWidth: Math.max(300, networkBody.implicitWidth,
-                             btBody.implicitWidth,
-                             volumeBody.implicitWidth,
-                             privacyBody.implicitWidth,
-                             controlBody.implicitWidth) + 24 + bodyPad
+                             btLoader.item ? btLoader.item.implicitWidth : 0,
+                             volLoader.item ? volLoader.item.implicitWidth : 0,
+                             privacyLoader.item ? privacyLoader.item.implicitWidth : 0,
+                             controlLoader.item ? controlLoader.item.implicitWidth : 0) + 24 + bodyPad
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
-        // height budget.
+        // height budget. Lazy bodies contribute 0 until first open; once a
+        // body has opened, its loader.item lives for the card's lifetime.
         cardHeight: card.lastTray === "network" ? networkBody.implicitHeight + 59 + bodyPad
-              : card.lastTray === "volume" ? volumeBody.implicitHeight + 59 + bodyPad
-              : card.lastTray === "bluetooth" ? btBody.implicitHeight + 59 + bodyPad
-              : card.lastTray === "privacy" ? privacyBody.implicitHeight + 59 + bodyPad
-              : card.lastTray === "control" ? controlBody.implicitHeight + 59 + bodyPad
+              : card.lastTray === "volume" ? (volLoader.item ? volLoader.item.implicitHeight : 0) + 59 + bodyPad
+              : card.lastTray === "bluetooth" ? (btLoader.item ? btLoader.item.implicitHeight : 0) + 59 + bodyPad
+              : card.lastTray === "privacy" ? (privacyLoader.item ? privacyLoader.item.implicitHeight : 0) + 59 + bodyPad
+              : card.lastTray === "control" ? (controlLoader.item ? controlLoader.item.implicitHeight : 0) + 59 + bodyPad
               : 220
 
         // Tray geometry is card-internal (per-body sizing) — flow through the
@@ -298,436 +291,65 @@ PanelWindow {
             // ── Bluetooth ── mockup port: adapter row (ON pill · UP state ·
             // DISCOVERABLE chip), connected-device cards with battery bars,
             // PAIRED & NEARBY list with CONNECT/PAIR, DISABLE footer.
-            ColumnLayout {
-                id: btBody
-                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
-
-                // bluetoothctl absent — dim dash instead of a misleading "OFF" pill
-                Text {
-                    visible: !Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "—"
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: Config.PopupMetrics.px(28)
-                    color: Config.BarConfig.colorTextDim
+            // (I8: BluetoothBody.qml, instantiated on the body's first open.)
+            Loader {
+                id: btLoader
+                active: card._btEverOpened
+                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
+                sourceComponent: BluetoothBody {
+                    tray: card
+                    onSettingsRequested: function(verb) { card.openSettings(verb) }
                 }
-
-                // ── adapter row: ON pill · UP state · DISCOVERABLE chip ──
-                RowLayout {
-                    visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(10)
-
-                    Rectangle {
-                        width: btLbl.implicitWidth + 20; height: Config.PopupMetrics.px(26)
-                        radius: Config.PopupMetrics.px(5)
-                        color: Services.BluetoothService.powered ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillRest
-                        border.color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
-                        border.width: card.hair
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        Text { id: btLbl; anchors.centerIn: parent
-                            text: Services.BluetoothService.powered ? "ON" : "OFF"
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1.5
-                            color: Services.BluetoothService.powered ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Services.BluetoothService.togglePower()
-                        }
-                    }
-                    Text {
-                        text: Services.BluetoothService.powered ? "adapter: UP" : "adapter: DOWN"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(10)
-                        color: Config.BarConfig.colorTextDim
-                    }
-                }
-                Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
-                Rectangle { visible: Services.BluetoothService.hasBluetooth; Layout.fillWidth: true; height: card.hair; color: Config.ThemeConfig.hairline }
-                Item { height: Config.PopupMetrics.px(8); visible: Services.BluetoothService.hasBluetooth }
-
-                // ── CONNECTED section header ──
-                RowLayout {
-                    visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true
-                    Text {
-                        text: Services.BluetoothService.deviceCount + " DEVICE" + (Services.BluetoothService.deviceCount !== 1 ? "S" : "") + " CONNECTED"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                        font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: "BATTERY"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true
-                        font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                }
-                Item { height: Config.PopupMetrics.px(6); visible: Services.BluetoothService.hasBluetooth }
-
-                // ── connected device cards ──
-                Repeater {
-                    visible: Services.BluetoothService.hasBluetooth
-                    model: Services.BluetoothService.connectedDevices.slice(0, 4)
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        readonly property var batt: Services.BluetoothService.deviceBatteries[modelData.address]
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Config.PopupMetrics.px(46)
-                        Layout.bottomMargin: Config.PopupMetrics.px(8)
-                        radius: Config.PopupMetrics.px(6)
-                        color: rowHover.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                        border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                        Behavior on color { ColorAnimation { duration: 100 } }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Config.PopupMetrics.px(12); anchors.rightMargin: Config.PopupMetrics.px(12)
-                            spacing: Config.PopupMetrics.px(10)
-
-                            Text { text: modelData.icon; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(14); color: Config.BarConfig.colorAccent }
-                            ColumnLayout {
-                                spacing: Config.PopupMetrics.px(1)
-                                Layout.fillWidth: true
-                                Text {
-                                    text: modelData.name
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                                    color: Config.BarConfig.colorText
-                                    elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(190)
-                                }
-                                Text {
-                                    text: modelData.address
-                                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                                    color: Config.BarConfig.colorTextDim
-                                    elide: Text.ElideMiddle; Layout.maximumWidth: Config.PopupMetrics.px(190)
-                                }
-                            }
-                            Item { Layout.fillWidth: true }
-                            Text {
-                                visible: batt !== undefined
-                                text: batt + "%"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
-                                color: Config.BarConfig.colorText
-                            }
-                            // battery bar (mockup) — green when healthy
-                            Rectangle {
-                                visible: batt !== undefined
-                                width: Config.PopupMetrics.px(22); height: 11; radius: Config.PopupMetrics.px(2)
-                                color: Config.ThemeConfig.hairlineSoft
-                                border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top; anchors.bottom: parent.top
-                                    anchors.margins: Config.PopupMetrics.px(2)
-                                    width: (parent.width - 4) * batt / 100
-                                    height: parent.height - 4
-                                    color: batt >= 50 ? Config.ThemeConfig.colors.success
-                                         : batt >= 25 ? Config.ThemeConfig.colors.warning
-                                         : Config.ThemeConfig.colors.error
-                                }
-                            }
-                            // hover-revealed disconnect (kept from the old row)
-                            Text {
-                                visible: rowHover.containsMouse
-                                text: "✕"
-                                font.pixelSize: Config.PopupMetrics.px(10)
-                                color: discArea.containsMouse ? Config.ThemeConfig.colors.error : Config.BarConfig.colorTextDim
-                                MouseArea {
-                                    id: discArea
-                                    anchors.fill: parent; anchors.margins: -6
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Services.BluetoothService.disconnectDevice(modelData.address)
-                                }
-                            }
-                        }
-                        MouseArea {
-                            id: rowHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                        }
-                    }
-                }
-
-                Text {
-                    visible: Services.BluetoothService.hasBluetooth &&
-                             Services.BluetoothService.connectedDevices.length === 0
-                    Layout.fillWidth: true
-                    text: Services.BluetoothService.powered
-                          ? "No devices connected"
-                          : "Bluetooth is off"
-                    font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
-                    color: Config.BarConfig.colorTextDim
-                }
-                Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
-
-                // ── DISABLE / ENABLE BLUETOOTH footer (mockup full-width pill) ──
-                Rectangle {
-                    visible: Services.BluetoothService.hasBluetooth
-                    Layout.fillWidth: true; height: Config.PopupMetrics.px(32)
-                    radius: Config.PopupMetrics.px(6)
-                    color: btBtnArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
-                    border.color: Config.BarConfig.colorBorder; border.width: card.hair
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
-                        Text { text: Services.BluetoothService.powered ? "󰂲" : "󰂯"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Config.BarConfig.colorTextDim }
-                        Text { text: Services.BluetoothService.powered ? "DISABLE BLUETOOTH" : "ENABLE BLUETOOTH"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Config.BarConfig.colorText }
-                    }
-                    MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
-                }
-                SettingsLink { visible: Services.BluetoothService.hasBluetooth; verb: "openControlBluetooth"; onActivated: function(v) { card.openSettings(v) } }
             }
 
             // ── Volume ── mockup port: hero %, dB scale, OUTPUT SINK picker,
             // MUTE footer. Outputs, mic and per-app streams live in Settings.
-            ColumnLayout {
-                id: volumeBody
-                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
-
-                // wpctl absent — dim dash instead of a misleading "0%"
-                Text {
-                    visible: !Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "—"
-                    font.family: Config.BarConfig.fontFamily
-                    font.pixelSize: Config.PopupMetrics.px(28)
-                    color: Config.BarConfig.colorTextDim
+            // (I8: VolumeBody.qml, instantiated on the body's first open.)
+            Loader {
+                id: volLoader
+                active: card._volumeEverOpened
+                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
+                sourceComponent: VolumeBody {
+                    tray: card
+                    onSettingsRequested: function(verb) { card.openSettings(verb) }
                 }
-
-                // ── HERO — big glyph + huge % ──
-                RowLayout {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(12)
-
-                    Text {
-                        text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
-                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Text {
-                        text: Math.round(Services.AudioService.volume) + "%"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(52); font.bold: true
-                        color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Item { height: Config.PopupMetrics.px(6); visible: Services.AudioService.hasAudio }
-
-                // ── master slider ──
-                Slider {
-                    id: volSlider
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Config.PopupMetrics.px(28)        // generous vertical click band
-                    hoverEnabled: true
-                    from: 0; to: 100
-                    value: Services.AudioService.volume
-                    onMoved: {
-                        Services.AudioService.setVolume(value)
-                        Services.OsdService.showVolume(value, Services.AudioService.muted)
-                    }
-                    background: Rectangle {
-                        x: volSlider.leftPadding
-                        y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        implicitHeight: Config.PopupMetrics.px(6); width: volSlider.availableWidth; radius: 0
-                        color: Config.ThemeConfig.hairlineSoft
-                        Rectangle {
-                            height: parent.height
-                            width: volSlider.visualPosition * parent.width
-                            radius: 0
-                            color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                        }
-                    }
-                    handle: Rectangle {
-                        x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width)
-                        y: volSlider.topPadding + volSlider.availableHeight / 2 - height / 2
-                        width: 18; height: Config.PopupMetrics.px(20); radius: Config.PopupMetrics.px(4)
-                        color: Config.BarConfig.colorBackground
-                        border.color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
-                        border.width: Config.PopupMetrics.px(2)
-                        scale: volSlider.pressed ? 1.15 : (volSlider.hovered ? 1.1 : 1.0)
-                        Behavior on scale { NumberAnimation { duration: 90 } }
-                    }
-                }
-                Item { height: 12; visible: Services.AudioService.hasAudio }
-
-                // ── MUTE footer ──
-                Rectangle {
-                    visible: Services.AudioService.hasAudio
-                    Layout.fillWidth: true; height: Config.PopupMetrics.px(32)
-                    radius: Config.PopupMetrics.px(6)
-                    color: {
-                        if (muteBtnArea.containsMouse)
-                            return Services.AudioService.muted ? Config.ThemeConfig.accentTint : Config.ThemeConfig.fillHover
-                        return Services.AudioService.muted ? Config.ThemeConfig.accentTintSoft : Config.ThemeConfig.fillRest
-                    }
-                    border.color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorBorder
-                    border.width: card.hair
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    RowLayout { anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
-                        Text { text: Services.AudioService.muted ? "󰕾" : "󰝟"; font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(12); color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
-                        Text { text: Services.AudioService.muted ? "UNMUTE" : "MUTE"; font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5; color: Services.AudioService.muted ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim }
-                    }
-                    MouseArea { id: muteBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {
-                        Services.AudioService.toggleMute()
-                        Services.OsdService.showMute(Services.AudioService.muted)
-                    } }
-                }
-                SettingsLink { visible: Services.AudioService.hasAudio; verb: "openControlAudio"; onActivated: function(v) { card.openSettings(v) } }
             }
 
             // ── Control Center ──
-            ControlCenterBody {
-                id: controlBody
-                Layout.fillWidth: true
-                Layout.margins: Config.PopupMetrics.px(16)
-                onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }
-                onDone: card.closeRequested()
+            // (I8: instantiated on the body's first open.)
+            Loader {
+                id: controlLoader
+                active: card._controlEverOpened
+                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
+                sourceComponent: ControlCenterBody {
+                    onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }
+                    onDone: card.closeRequested()
+                }
             }
         }
 
         // ── PRIVACY BODY — who is watching or listening ──
         // Reads PrivacyService (native PipeWire link graph): one section per
         // active kind, each app that holds a capture stream under it.
-        ColumnLayout {
-            id: privacyBody
+        // (I8: PrivacyBody.qml, instantiated on the body's first open. The
+        // poll demand is a binding on lastTray now — value-equal to the old
+        // onVisibleChanged handler; lastTray freezes through the fade-out, so
+        // the demand outlives close exactly as before.)
+        Loader {
+            id: privacyLoader
+            active: card._privacyEverOpened
             visible: card.lastTray === "privacy"
-            // Body open → PrivacyService polls; closed → it may idle again.
-            onVisibleChanged: Services.PrivacyService.bodyDemanded = visible
-            Component.onDestruction: Services.PrivacyService.bodyDemanded = false
-            Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16); spacing: 0
-
-            readonly property var kindRows: {
-                var defs = [
-                    { key: "mic", glyph: "󰋎", label: "MICROPHONE" },
-                    { key: "camera", glyph: "󰍛", label: "CAMERA" },
-                    { key: "screen", glyph: "󰍹", label: "SCREEN" }
-                ]
-                var out = []
-                for (var i = 0; i < defs.length; i++) {
-                    var apps = Services.PrivacyService.appsFor(defs[i].key)
-                    if (apps.length > 0)
-                        out.push({ glyph: defs[i].glyph, label: defs[i].label, apps: apps })
-                }
-                return out
-            }
-
-            Text {
-                visible: !Services.PrivacyService.hasActive && !Services.PrivacyService.hasInhibitors
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: "Nothing is watching or listening."
-                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
-                color: Config.BarConfig.colorTextDim
-            }
-
-            // ── SLEEP INHIBITORS — what is keeping the machine awake ──
-            ColumnLayout {
-                visible: Services.PrivacyService.hasInhibitors
-                Layout.fillWidth: true
-                spacing: Config.PopupMetrics.px(6)
-
-                RowLayout {
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                    Text {
-                        text: "󰌾"
-                        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(13)
-                        color: Config.ThemeConfig.colors.warning
-                    }
-                    Text {
-                        text: "KEPT AWAKE"
-                        font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                        font.bold: true; font.letterSpacing: 1.5
-                        color: Config.BarConfig.colorTextDim
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-
-                Repeater {
-                    model: Services.PrivacyService.inhibitors
-
-                    delegate: RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true; Layout.leftMargin: Config.PopupMetrics.px(21); spacing: Config.PopupMetrics.px(8)
-                        Text {
-                            text: modelData.who
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
-                            color: Config.BarConfig.colorText
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            visible: modelData.why !== ""
-                            text: modelData.why
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                            color: Config.BarConfig.colorTextDim
-                            elide: Text.ElideRight
-                            Layout.maximumWidth: Config.PopupMetrics.px(140)
-                        }
-                    }
-                }
-
-                Item { height: 10 }
-            }
-
-            Repeater {
-                model: privacyBody.kindRows
-
-                delegate: ColumnLayout {
-                    id: kindSection
-                    required property var modelData
-                    Layout.fillWidth: true
-                    spacing: Config.PopupMetrics.px(6)
-
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                        Text {
-                            text: kindSection.modelData.glyph
-                            font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(13)
-                            color: Config.ThemeConfig.colors.error
-                        }
-                        Text {
-                            text: kindSection.modelData.label
-                            font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8)
-                            font.bold: true; font.letterSpacing: 1.5
-                            color: Config.BarConfig.colorTextDim
-                        }
-                        Item { Layout.fillWidth: true }
-                        Rectangle { width: Config.PopupMetrics.px(6); height: Config.PopupMetrics.px(6); radius: Config.PopupMetrics.px(3); color: Config.ThemeConfig.colors.error }
-                    }
-
-                    Repeater {
-                        model: kindSection.modelData.apps
-
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true; Layout.leftMargin: Config.PopupMetrics.px(21); spacing: Config.PopupMetrics.px(8)
-                            Text {
-                                text: modelData.app || "Unknown app"
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(12)
-                                color: Config.BarConfig.colorText
-                                Layout.fillWidth: true; elide: Text.ElideRight
-                            }
-                            Text {
-                                visible: modelData.pid !== null
-                                text: "pid " + modelData.pid
-                                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(9)
-                                color: Config.BarConfig.colorTextDim
-                            }
-                        }
-                    }
-
-                    Item { height: 10 }
-                }
-            }
+            Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
+            sourceComponent: PrivacyBody {}
+        }
+        // Body open → PrivacyService polls; closed → it may idle again. A
+        // Binding element (a bare `Services.X.prop:` line parses as attached-
+        // property syntax and fails). lastTray freezes through the fade-out,
+        // so the demand outlives close exactly as the old handler did.
+        Binding {
+            target: Services.PrivacyService
+            property: "bodyDemanded"
+            value: card.lastTray === "privacy"
         }
 
     }   // content ColumnLayout
