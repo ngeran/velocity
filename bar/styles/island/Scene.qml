@@ -40,6 +40,7 @@ import "../../components" as Bar
 import "../../config" as Config
 import "../../engine" as Engine
 import "../../services" as Services
+import "../../Ui" as Ui
 import "lib/island.mjs" as Isl
 
 Item {
@@ -160,7 +161,10 @@ Item {
                 var key = (win.hovered && win.activityLive) ? win.activity.key : ""
                 Engine.PopupCoordinator.holdActivity("island:" + win._registeredOn, key)
             }
-            Component.onDestruction: Engine.PopupCoordinator.holdActivity("island:" + win._registeredOn, "")
+            // (destruction release merged into the host's single
+            // Component.onDestruction below — a second handler here made the
+            // whole island Scene fail to load since the J3 commit: "Property
+            // value set multiple times" → silent fallback to vector.)
 
             Timer {
                 id: hoverInTimer
@@ -383,6 +387,7 @@ Item {
             Component.onCompleted: _register()
             Component.onDestruction: {
                 if (win._registeredOn !== "") Engine.PopupCoordinator.unregisterIsland(win._registeredOn, win)
+                Engine.PopupCoordinator.holdActivity("island:" + win._registeredOn, "")   // from _syncHold's merged release
                 win._finishLeaving()
                 // A live client's Popover sees embedHost go null and restores.
             }
@@ -712,8 +717,11 @@ Item {
                                 font.pixelSize: Config.BarConfig.fontSizeIcon
                                 color: Config.BarConfig.colorText
                             }
+                            // Track — style-split (J5): "bar" = continuous
+                            // pill fill, "segments" = Ui.SegmentTrack with
+                            // the pill radius. Same box either way.
                             Rectangle {
-                                visible: activityRow.hasTrack
+                                visible: activityRow.hasTrack && Config.BarConfig.osdStyle !== "segments"
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.round(win.barH * 4.6)
                                 height: Math.max(3, Math.round(win.barH * 0.14))
@@ -730,6 +738,18 @@ Item {
                                         NumberAnimation { duration: Config.MotionConfig.flap; easing.type: Easing.OutCubic }
                                     }
                                 }
+                            }
+                            Ui.SegmentTrack {
+                                visible: activityRow.hasTrack && Config.BarConfig.osdStyle === "segments"
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.round(win.barH * 4.6)
+                                height: Math.max(3, Math.round(win.barH * 0.14))
+                                segments: 9
+                                gap: 2
+                                segmentRadius: height / 2
+                                accent: Config.BarConfig.colorText
+                                dimAlpha: 0.3
+                                value: activityRow.hasTrack ? Math.max(0, Math.min(100, win.activity.progress)) : 0
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter

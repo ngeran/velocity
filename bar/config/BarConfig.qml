@@ -40,6 +40,11 @@ Item {
     // its lobe. Left/right placement is a follow-up, not modeled here.
     property string barPosition: "top"
     readonly property bool barAtBottom: root.barPosition === "bottom"
+    // Track-and-readout OSDs (volume/brightness + plugin progress): "bar" =
+    // the continuous fill; "segments" = Ui.SegmentTrack (Osd card + the
+    // island's activity row). Writes route through the settings funnel
+    // (SettingsWindow.setOsdStyle) like barStyle/barPosition.
+    property string osdStyle: "bar"
     // Island style QD-OLED guard (orbit drift + idle dim of the rest clock).
     property bool islandBurnGuard: true
     // Strip styles' QD-OLED guard: content orbit (BurnOrbit) on
@@ -89,6 +94,8 @@ Item {
                 barStyle = data.barStyle
             if (data.barPosition === "top" || data.barPosition === "bottom")
                 barPosition = data.barPosition
+            if (data.osdStyle === "bar" || data.osdStyle === "segments")
+                osdStyle = data.osdStyle
             if (typeof data.islandBurnGuard === "boolean")
                 islandBurnGuard = data.islandBurnGuard
             if (typeof data.stripBurnGuard === "boolean")

@@ -233,6 +233,15 @@ ShellRoot {
             return "ok"
         }
 
+        // J5: OSD track style — same silent funnel as style/edge.
+        function setOsdStyle(style: string): string {
+            if (style !== "bar" && style !== "segments")
+                return "error: osd style must be bar|segments"
+            Services.SettingsConfigService.osdStyle = String(style)
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
         // Consolidation: the logo overlay (velocity.bar-settings) is THE one
         // bar-settings surface — these are its remaining writes (the Settings
         // ▸ Bar pane was removed). Same funnel: set → saveSettings →

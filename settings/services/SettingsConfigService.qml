@@ -50,6 +50,9 @@ Item {
     // Bar edge (UA 2.6 stage 1): "top" | "bottom" — mirrors bar-config.json;
     // the bar flips scenes/popovers live via BarConfig's ingest.
     property string barPosition: "top"
+    // OSD track style (J5): "bar" = continuous fill, "segments" = segment
+    // track — mirrors bar-config.json; the bar's Osd/island read it live.
+    property string osdStyle: "bar"
     property int workspaceCount: 5             // 3, 5, 7, 9
 
     // Auto-regenerate the palette from the active wallpaper via matugen
@@ -169,6 +172,8 @@ Item {
             root.barStyle = data.barStyle
         if (data.barPosition === "top" || data.barPosition === "bottom")
             root.barPosition = data.barPosition
+        if (data.osdStyle === "bar" || data.osdStyle === "segments")
+            root.osdStyle = data.osdStyle
         if ([3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
             root.workspaceCount = data.workspaceCount
         if (typeof data.islandBurnGuard === "boolean")
@@ -196,6 +201,7 @@ Item {
             workspaceCount: root.workspaceCount,
             barStyle: root.barStyle,
             barPosition: root.barPosition,
+            osdStyle: root.osdStyle,
             islandBurnGuard: root.islandBurnGuard,
             stripBurnGuard: root.stripBurnGuard
         }
@@ -234,7 +240,7 @@ Item {
                     // clockCity/clockOffset (now the nikos.clock plugin's `zone` setting).
                     var dropped = ["schemaVersion", "barHeight", "workspaceCount",
                                    "clockCity", "clockOffset", "barStyle", "barPosition",
-                                   "islandBurnGuard", "stripBurnGuard", "rightLayout"]
+                                   "osdStyle", "islandBurnGuard", "stripBurnGuard", "rightLayout"]
                     var extras = {}
                     for (var k in data) {
                         if (Object.prototype.hasOwnProperty.call(data, k)

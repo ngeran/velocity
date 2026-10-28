@@ -116,6 +116,7 @@ OverlayShell {
 
     function _pickStyle(name) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarStyle", name]) }
     function _pickPosition(p) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarPosition", p]) }
+    function _pickOsdStyle(s) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setOsdStyle", s]) }
     function _pickHeight(h) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarHeight", String(h)]) }
     function _pickDots(n) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setWorkspaceCount", String(n)]) }
     function _pickGuard(scope, on) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBurnGuard", scope, on ? "on" : "off"]) }
@@ -354,6 +355,22 @@ OverlayShell {
                             label: "BOTTOM"
                             active: Config.BarConfig.barPosition === "bottom"
                             onPicked: root._pickPosition("bottom")
+                        }
+                    }
+
+                    // ---- OSD STYLE (J5) ----
+                    SectionLabel { text: "OSD TRACK" }
+                    RowLayout {
+                        spacing: Config.PopupMetrics.px(8)
+                        SegPill {
+                            label: "BAR"
+                            active: Config.BarConfig.osdStyle === "bar"
+                            onPicked: root._pickOsdStyle("bar")
+                        }
+                        SegPill {
+                            label: "SEGMENTS"
+                            active: Config.BarConfig.osdStyle === "segments"
+                            onPicked: root._pickOsdStyle("segments")
                         }
                     }
 

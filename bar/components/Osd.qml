@@ -15,6 +15,7 @@ import Quickshell.Wayland
 import "../services" as Services
 import "../config" as Config
 import "../engine" as Engine
+import "../Ui" as Ui
 
 PanelWindow {
     id: osdWindow
@@ -109,8 +110,12 @@ PanelWindow {
                 }
             }
 
+            // Track — style-split (J5): "bar" = the continuous fill,
+            // "segments" = Ui.SegmentTrack (discrete steps, dim-accent unlit
+            // cells). Same box (barWidth × 6) either way, so the measured-
+            // columns layout is style-independent.
             Rectangle {
-                visible: osdWindow.hasTrack
+                visible: osdWindow.hasTrack && Config.BarConfig.osdStyle !== "segments"
                 width: osdWindow.barWidth
                 height: Config.PopupMetrics.px(6)
                 anchors.verticalCenter: parent.verticalCenter
@@ -126,6 +131,21 @@ PanelWindow {
                         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
                     }
                 }
+            }
+            Ui.SegmentTrack {
+                visible: osdWindow.hasTrack && Config.BarConfig.osdStyle === "segments"
+                width: osdWindow.barWidth
+                height: Config.PopupMetrics.px(6)
+                anchors.verticalCenter: parent.verticalCenter
+                // The activity's accent (critical = error) wins; unlit cells
+                // ride the same accent at 0.28 (transient card — under the
+                // 0.45 ornament ceiling with margin).
+                segments: 12
+                gap: Config.PopupMetrics.px(2)
+                accent: (osdWindow.act && osdWindow.act.accent) ? osdWindow.act.accent
+                                                                : Config.BarConfig.colorAccent
+                dimAlpha: 0.28
+                value: osdWindow.hasTrack ? Math.max(0, Math.min(100, osdWindow.act.progress)) : 0
             }
 
             Text {

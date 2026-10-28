@@ -4,3 +4,4 @@ QsBarWidget 1.0 QsBarWidget.qml
 PluginPopup 1.0 PluginPopup.qml
 BarPill 1.0 BarPill.qml
 Switch 1.0 Switch.qml
+SegmentTrack 1.0 SegmentTrack.qml
