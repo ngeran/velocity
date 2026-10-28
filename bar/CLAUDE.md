@@ -195,7 +195,7 @@ To move the bar to the bottom: the bar-settings overlay (left-click the logo) â†
 | `nc` (netcat) | The one socket2 consumer (`nc -U`; socat is NOT installed) |
 | `hyprctl` | Workspace seed + Lua dispatcher (`hl.dsp.*`) + keyboard layout probes |
 | `upower` | Daemon (enabled in omni-nix) behind the native UPower client |
-| `journalctl` | EventService kernel incident tail |
+| `journalctl` | KernelEventRecorder kernel incident tail |
 | `nmcli` | Settings network section (the bar popup reads ip/sysfs only) |
 | `bluetoothctl` / `wpctl` | Settings process only (control services); the bar is native |
 | `qrencode` | Settings Wi-Fi QR share |

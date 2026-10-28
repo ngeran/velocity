@@ -462,7 +462,7 @@ ColumnLayout {
 
     // ═════════════════════════════════════════════════════════════════════════
     // 5. CONFIG ROW — MODE · SCALE · HDR SDR LEVEL · VRR + PANEL CHECKLIST.
-    // Single row of fill-height cards: SettingsCard sizes to content, so
+    // Single row of fill-height cards: settings-variant Card sizes to content, so
     // stacked rows collapsed and painted over each other — one row can't.
     // ═════════════════════════════════════════════════════════════════════════
     RowLayout {

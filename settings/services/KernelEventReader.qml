@@ -1,7 +1,7 @@
 // =============================================================================
-// EventsReader.qml — dashboard-side reader of the system event log
+// KernelEventReader.qml — dashboard-side reader of the system event log
 // =============================================================================
-// The collector (bar/services/EventService) runs in the BAR process and
+// The collector (bar/services/KernelEventRecorder) runs in the BAR process and
 // owns events.jsonl; this settings-process singleton is the VIEW-side
 // mirror: cat-polls the file and exposes a newest-first ListModel plus
 // summary fields for the Core-tab EVENTS pane.

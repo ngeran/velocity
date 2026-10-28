@@ -1,5 +1,5 @@
 // =============================================================================
-// EventService.qml — persistent system-event tracker (GPU Xids, boots,
+// KernelEventRecorder.qml — persistent system-event tracker (GPU Xids, boots,
 // nixos-rebuild switches, filesystem errors)
 // =============================================================================
 // Born from the 2026-08-22 GPU incident: the evidence for "what happened
@@ -89,7 +89,7 @@ Item {
     property bool _manualStop: false          // intended stream stops (LogService idiom)
 
     Component.onCompleted: {
-        console.log("[EventService] Service loaded")
+        console.log("[KernelEventRecorder] Service loaded")
         catProc.running = true                // history into the model
         unameProc.running = true              // boot event (after kernel known)
         readlinkProc.running = true           // seed _lastGen baseline
@@ -104,7 +104,7 @@ Item {
         p.command = ["sh", "-c", script]
         p.onExited.connect(function(code) {
             if (code !== 0)
-                console.error("[EventService] " + (label || "shell") +
+                console.error("[KernelEventRecorder] " + (label || "shell") +
                               " failed (exit " + code + ")")
             p.destroy()
         })
@@ -143,7 +143,7 @@ Item {
         else countInfo++
         if (type === "gpu-xid") lastXid = data.slice(0, 40)
         if (_ready) _atomicWrite(eventsPath, _lines.join("\n") + "\n")
-        console.log("[EventService] " + sev + " " + type + ": " + data)
+        console.log("[KernelEventRecorder] " + sev + " " + type + ": " + data)
     }
 
     // =========================================================================
@@ -230,7 +230,7 @@ Item {
             // event that fired during the load (boot) is persisted too.
             _ready = true
             _atomicWrite(eventsPath, _lines.join("\n") + "\n")
-            console.log("[EventService] loaded " + _entries.count + " events")
+            console.log("[KernelEventRecorder] loaded " + _entries.count + " events")
         }
     }
 

@@ -2,7 +2,7 @@
 # =============================================================================
 # backfill-events.sh — seed events.jsonl from journald + system generations
 # =============================================================================
-# Rebuilds the event history EventService only records from "now" onward:
+# Rebuilds the event history KernelEventRecorder only records from "now" onward:
 # every GPU Xid/NVRM line and filesystem error across ALL retained boots,
 # one boot event per boot (with that boot's kernel version), and one
 # nix-switch event per system generation (basename embeds the nixpkgs
@@ -10,7 +10,7 @@
 #
 # Idempotent-ish by design: regenerates the WHOLE file from sources of
 # truth (journal + generations), then appends nothing. Live events that
-# EventService wrote since are re-derived from the journal tail anyway
+# KernelEventRecorder wrote since are re-derived from the journal tail anyway
 # (kernel events) or lost (in-session switch events already covered by
 # the generation list). Safe to re-run any time; run it after big
 # journal-retention growth or before showing the dashboard off.
