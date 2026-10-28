@@ -152,12 +152,33 @@ number instead of estimating (the built-in clock does this).
 | `ctx.fit` | `"full"` / `"compact"` / `"collapsed"`. On a narrow window the bar asks widgets to drop to their minimal form (`compact` — hide labels, keep the glyph); `collapsed` means the plan hid the cell entirely. React to it with bindings; do nothing and only wide widgets lose their labels. |
 | `ctx.run(argv)` | fire-and-forget command; `argv[0]` must be in `manifest.commands` |
 | `ctx.popup` | `open`, `request(sub)`, `release(sub)`: one popup at a time across the whole bar; `island`: the island host on this screen (island style only, else null — PluginPopup uses it, plugins don't need to) |
+| `ctx.island` | `activity(spec)` → bool, `end(key)`: transient live activities (J0) — one visible bar-wide, shown as an island activity (floating Osd card on other styles). `spec = {key, icon, label, progress, accent, ttlMs, priority, focusedOnly}`; `ttlMs` required unless `progress` is present (10-min hard cap); `priority` ∈ `osd > recording > peek > progress > timer` (unknown → `timer`); same key = update in place (progress refresh); `end(key)` retracts. Keys are namespaced per plugin — see the "Live activities" section |
 | `ctx.events` | `onHyprEvent(line)`: the bar's Hyprland socket2 stream (don't open your own) |
 | `ctx.osd` | `showVolume(v, muted)`, `showMute(m)` |
 | `ctx.summon(id, payloadJson)`, `ctx.hide(id)` | open/close another plugin |
 | `ctx.log(msg)` | `[<id>] msg` in the bar's journal |
 
 Settings are stored in `$XDG_STATE_HOME/velocity/plugins/<id>.json`.
+
+## Live activities (`ctx.island`, J0)
+
+Transient status — downloads, timers, recording state — that blooms the island
+(floating Osd card on non-island styles) without opening a panel:
+
+```qml
+const h = ctx.island.activity({ key: "dl", icon: "\u{F01A7}", label: dlPct + "%",
+                                progress: dlPct, ttlMs: 4000 })   // true
+// ...updates are in-place (same key, no flicker); drop ttlMs while a
+// progress value is present and keep updating, or it expires at the 10-min cap
+ctx.island.end("dl")
+```
+
+Arbitration (node-tested in `bar/engine/lib/activity-queue.mjs`): exactly one
+activity renders — highest `priority` wins, ties go to the most recent update;
+an open panel beats any activity; entries expire at `ttlMs` (hard cap 10 min,
+refreshed by updates). Scripts use the same queue headlessly:
+`qs -c bar ipc call island activity '{"key":"dl","label":"42%","progress":42}'`
+(keys there are prefixed `ipc:`).
 
 ## UI kit: `import qs.Ui`
 

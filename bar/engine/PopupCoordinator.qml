@@ -21,11 +21,18 @@
 // output (styles/island). A popover whose screen has one presents its content
 // inside the island instead of opening its own window; the host object is
 // opaque here (the engine never calls into it).
+//
+// `activities` is the live-activity registry (J0): OSD, plugins (ctx.island)
+// and the `island` IPC publish transient status; `visibleActivity` is the ONE
+// that renders (lib/activity-queue.mjs arbitration). An open panel wins —
+// every claim/release/clear recomputes it. Both maps are REASSIGNED, never
+// mutated, so bindings re-evaluate.
 // =============================================================================
 
 pragma Singleton
 
 import QtQuick
+import "lib/activity-queue.mjs" as Aq
 
 QtObject {
     id: root
@@ -35,6 +42,50 @@ QtObject {
     property var _closer: null
     // Reassigned (never mutated) so bindings on islands[...] re-evaluate.
     property var islands: ({})
+
+    // ── live activities (J0) ────────────────────────────────────────────────
+    // key → entry {key, priority, icon, label, accent, progress, focusedOnly,
+    // expiresAt, seq}. Writers: OsdService (key "osd"), ctx.island
+    // ("<pluginId>:<key>"), the `island` IPC ("<key>" under owner "ipc:").
+    property var activities: ({})
+    // The arbitrated winner (or null) — what scenes render.
+    property var visibleActivity: null
+    property int _actSeq: 0
+    // Expiry sweep — 1 Hz ONLY while something is registered; the map is
+    // empty at rest, so the timer sits stopped (no idle cost). Property-
+    // hosted: QtObject has no default property, so a bare child Timer
+    // doesn't parse ("Cannot assign to non-existent default property").
+    property Timer sweepTimer: Timer {
+        interval: 1000
+        running: Object.keys(root.activities).length > 0
+        repeat: true
+        onTriggered: {
+            var r = Aq.sweep(root.activities, Date.now())
+            if (r.changed) { root.activities = r.map; root._recomputeVisible() }
+        }
+    }
+
+    // Publish/update one activity. `spec` is the raw caller object; invalid
+    // specs (no key, no ttl and no progress) are refused with false.
+    function activity(spec) {
+        var act = Aq.normalize(spec, Date.now())
+        if (act === null) return false
+        root._actSeq += 1
+        root.activities = Aq.upsert(root.activities, act, root._actSeq)
+        root._recomputeVisible()
+        return true
+    }
+
+    function endActivity(key) {
+        var m = Aq.remove(root.activities, String(key || ""))
+        if (m === root.activities) return
+        root.activities = m
+        root._recomputeVisible()
+    }
+
+    function _recomputeVisible() {
+        root.visibleActivity = Aq.arbitrate(root.activities, root.current !== "")
+    }
 
     function registerIsland(screenName, host) {
         var name = String(screenName || "")
@@ -65,6 +116,7 @@ QtObject {
         var changed = root.current !== key
         root.current = key
         root._closer = typeof closer === "function" ? closer : null
+        root._recomputeVisible()
         if (changed) {
             // The replaced holder's carve geometry is dead the moment it
             // loses the slot: a holder destroyed before it could publish
@@ -88,6 +140,7 @@ QtObject {
         if (root.current !== String(key)) return
         root.current = ""
         root._closer = null
+        root._recomputeVisible()
     }
 
     // Owner-checked: never wipes a successor's publish.
@@ -102,6 +155,7 @@ QtObject {
         root.current = ""
         root._closer = null
         root.connected = null
+        root._recomputeVisible()
         if (prev) {
             try { prev() } catch (e) {
                 console.warn("[PopupCoordinator] stale closer during clear:", e)

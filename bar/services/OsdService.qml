@@ -5,12 +5,19 @@
 // renders it. Triggers call show*() right after they mutate AudioService —
 // Omarchy's model: the mutator shows the OSD, nothing polls for it.
 // One card, last write wins: a rapid scroll just restarts the hide timer.
+//
+// J0: show*() ALSO claims the live-activity slot (key "osd", top of the
+// ladder) in Engine.PopupCoordinator — the island (and the floating card on
+// non-island styles) renders the queue's arbitrated winner, so OSD feedback
+// and plugin activities exclude each other through one rule. The ttl here
+// matches the hide timer; the endActivity on expiry keeps both views honest.
 // =============================================================================
 pragma Singleton
 
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../engine" as Engine
 
 Item {
     id: root
@@ -27,7 +34,10 @@ Item {
     Timer {
         id: hideTimer
         interval: root.duration
-        onTriggered: root.active = false
+        onTriggered: {
+            root.active = false
+            Engine.PopupCoordinator.endActivity("osd")
+        }
     }
 
     function show(icon_, value_, hasProgress_, message_) {
@@ -39,6 +49,17 @@ Item {
         root.message = message_
         root.active = true
         hideTimer.restart()
+        // Mirror into the activity queue (island render path). The spec's
+        // ttl is the same 1200 ms the hide timer enforces for the card.
+        Engine.PopupCoordinator.activity({
+            key: "osd",
+            priority: "osd",
+            icon: root.icon,
+            label: root.message,
+            progress: hasProgress_ ? root.value : undefined,
+            ttlMs: root.duration,
+            focusedOnly: true
+        })
     }
 
     // Volume glyph thresholds match VolumeIcon / the volume tray body.

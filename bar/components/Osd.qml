@@ -1,10 +1,13 @@
 // =============================================================================
-// Osd.qml — bottom-center on-screen display card (volume / mute feedback).
+// Osd.qml — bottom-center on-screen display card (live activities).
 // =============================================================================
-// Renders OsdService state. Overlay layer + empty input mask = visual-only,
-// fully click-through. Measured columns (Omarchy pattern): the icon column is
-// pinned to the widest glyph of the set and the readout column to the widest
-// possible text ("100%" / "UNMUTED"), so rapid updates never jitter the card.
+// Renders the PopupCoordinator activity queue's arbitrated winner (J0):
+// OsdService mirrors its feedback in as the "osd" entry, plugins/scripts
+// publish lower ranks — on non-island styles this card shows all of them.
+// Overlay layer + empty input mask = visual-only, fully click-through.
+// Measured columns (Omarchy pattern): the icon column is pinned to the widest
+// glyph of the set and the readout column to the widest possible text
+// ("100%" / "UNMUTED"), so rapid updates never jitter the card.
 // =============================================================================
 import QtQuick
 import Quickshell
@@ -29,7 +32,15 @@ PanelWindow {
     // Keep the window alive through the fade-out (opacity > 0 while closing).
     // Island style: the feedback renders inside the island instead.
     readonly property bool islandOwnsOsd: Object.keys(Engine.PopupCoordinator.islands).length > 0
-    visible: !islandOwnsOsd && (Services.OsdService.active || card.opacity > 0)
+    // The queue's winner, gated like the island: focusedOnly entries (the
+    // OSD) follow the focused output.
+    readonly property var act: Engine.PopupCoordinator.visibleActivity
+    readonly property bool shown: act !== null
+        && (!act.focusedOnly
+            || Services.HyprlandService.focusedMonitor === ""
+            || (osdWindow.screen !== null && Services.HyprlandService.focusedMonitor === osdWindow.screen.name))
+    readonly property bool hasTrack: act !== null && act.progress !== undefined
+    visible: !islandOwnsOsd && (osdWindow.shown || card.opacity > 0)
 
     // Card metrics ride the popup uiScale token (B3/B4): every literal below
     // is px(n), so uiScale 1.0 reproduces the old numbers exactly.
@@ -50,12 +61,12 @@ PanelWindow {
     // column to the widest glyph so the bar doesn't shift across thresholds.
     readonly property int iconInkWidth: Math.ceil(iconMetrics.tightBoundingRect.width)
     readonly property int iconInkHeight: Math.ceil(iconMetrics.tightBoundingRect.height)
-    readonly property int iconWidth: Services.OsdService.hasProgress
+    readonly property int iconWidth: osdWindow.hasTrack
         ? Math.max(iconInkWidth, Math.ceil(widestIconMetrics.tightBoundingRect.width))
         : iconInkWidth
     readonly property int valueWidth: Math.ceil(Math.max(readoutMetrics.advanceWidth,
                                                           messageMetrics.advanceWidth))
-    readonly property int contentWidth: Services.OsdService.hasProgress
+    readonly property int contentWidth: osdWindow.hasTrack
         ? iconWidth + gap + barWidth + gap + valueWidth
         : iconWidth + messageGap + valueWidth
 
@@ -70,13 +81,13 @@ PanelWindow {
         border.color: Config.BarConfig.colorBorder
         border.width: osdWindow.hair
         radius: 0   // sharp corners — bar design language
-        opacity: Services.OsdService.active ? 1 : 0
+        opacity: osdWindow.shown ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         Row {
             anchors.fill: parent
             anchors.margins: osdWindow.hair + osdWindow.pad
-            spacing: Services.OsdService.hasProgress ? osdWindow.gap : osdWindow.messageGap
+            spacing: osdWindow.hasTrack ? osdWindow.gap : osdWindow.messageGap
 
             Item {
                 width: Math.max(osdWindow.iconWidth, Math.round(osdWindow.iconPixelSize * 0.9))
@@ -91,7 +102,7 @@ PanelWindow {
                 Text {
                     anchors.centerIn: parent
                     anchors.verticalCenterOffset: 1
-                    text: Services.OsdService.icon
+                    text: osdWindow.act ? osdWindow.act.icon : ""
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: osdWindow.iconPixelSize
                     color: Config.BarConfig.colorText
@@ -99,17 +110,19 @@ PanelWindow {
             }
 
             Rectangle {
-                visible: Services.OsdService.hasProgress
+                visible: osdWindow.hasTrack
                 width: osdWindow.barWidth
                 height: Config.PopupMetrics.px(6)
                 anchors.verticalCenter: parent.verticalCenter
                 color: Config.ThemeConfig.hairlineSoft
                 Rectangle {
                     height: parent.height
-                    width: parent.width * Math.max(0, Math.min(100, Services.OsdService.value)) / 100
-                    color: Config.BarConfig.colorAccent
+                    width: parent.width
+                        * (osdWindow.hasTrack ? Math.max(0, Math.min(100, osdWindow.act.progress)) : 0) / 100
+                    color: (osdWindow.act && osdWindow.act.accent) ? osdWindow.act.accent
+                                                                   : Config.BarConfig.colorAccent
                     Behavior on width {
-                        enabled: Services.OsdService.active
+                        enabled: osdWindow.shown
                         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
                     }
                 }
@@ -119,13 +132,15 @@ PanelWindow {
                 width: osdWindow.valueWidth
                 // The readout hugs the card edge so a short percentage doesn't
                 // leave a hole in the padding; slack lands after the bar.
-                horizontalAlignment: Services.OsdService.hasProgress ? Text.AlignRight : Text.AlignLeft
+                horizontalAlignment: osdWindow.hasTrack ? Text.AlignRight : Text.AlignLeft
                 anchors.verticalCenter: parent.verticalCenter
-                text: Services.OsdService.message
+                text: osdWindow.act ? osdWindow.act.label : ""
                 font.family: Config.BarConfig.fontFamily
                 font.pixelSize: Config.PopupMetrics.px(13)
                 font.bold: true
-                color: Services.OsdService.hasProgress ? Config.BarConfig.colorText : Config.BarConfig.colorAccent
+                color: osdWindow.hasTrack ? Config.BarConfig.colorText
+                      : (osdWindow.act && osdWindow.act.accent) ? osdWindow.act.accent
+                      : Config.BarConfig.colorAccent
                 elide: Text.ElideRight
                 maximumLineCount: 1
             }
@@ -136,7 +151,7 @@ PanelWindow {
         id: iconMetrics
         font.family: Config.BarConfig.fontNerd
         font.pixelSize: osdWindow.iconPixelSize
-        text: Services.OsdService.icon
+        text: osdWindow.act ? osdWindow.act.icon : ""
     }
     TextMetrics {
         id: widestIconMetrics
@@ -153,6 +168,6 @@ PanelWindow {
     TextMetrics {
         id: messageMetrics
         font: readoutMetrics.font
-        text: Services.OsdService.message
+        text: osdWindow.act ? osdWindow.act.label : ""
     }
 }

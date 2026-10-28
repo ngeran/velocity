@@ -273,6 +273,27 @@ ShellRoot {
         function ping(): string { return "ok" }
     }
 
+    // Live activities (J0) — scripts/Hyprland push island feedback without a
+    // plugin: `qs -c bar ipc call island activity '{"key":"dl","icon":"↓",
+    // "label":"42%","progress":42}'` (ttlMs required unless progress is
+    // present; 10-min hard cap; priorities osd>recording>peek>progress>timer,
+    // unknown → timer). `island end <key>` retracts. Keys are prefixed
+    // "ipc:" so scripts can never end a plugin's or the OSD's activity.
+    IpcHandler {
+        target: "island"
+        function activity(json: string): string {
+            var spec
+            try { spec = JSON.parse(json) } catch (e) { return "bad json: " + e }
+            return Engine.PopupCoordinator.activity(spec)
+                ? "ok" : "refused: need key + ttlMs (or progress)"
+        }
+        function end(key: string): string {
+            Engine.PopupCoordinator.endActivity("ipc:" + key)
+            return "ok"
+        }
+        function ping(): string { return "ok" }
+    }
+
     // (The `plugins` IPC lives in engine/PluginHost.qml.)
 
     // =========================================================================

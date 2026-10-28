@@ -17,6 +17,12 @@
 //   ctx.popup       open (bool) · request() · release() · publish(geom) ·
 //                   island — one-at-a-time panels, notch carve geometry, and
 //                   the island host on this screen (null unless island style)
+//   ctx.island      activity(spec) → bool · end(key) — transient live
+//                   activities (J0): one visible bar-wide, arbitrated by
+//                   priority/TTL. spec: {key, icon, label, progress, accent,
+//                   ttlMs, priority, focusedOnly}; ttlMs required unless
+//                   progress (10-min hard cap); same key = update in place.
+//                   Renders as an island activity (floating Osd elsewhere).
 //
 // qs.Ui components reach engine state ONLY through ctx: a plugin loads qs.Ui
 // through the qs module path, and a singleton touched from there could be a
@@ -86,6 +92,26 @@ QtObject {
         // island; plugins never call into it directly.
         readonly property var island: ctx.screen
             ? (PopupCoordinator.islands[ctx.screen.name] || null) : null
+    }
+
+    // Live activities (J0). Keys are namespaced per plugin ("id:key") so two
+    // plugins can never end each other's activities; same key = update in
+    // place (progress bars refresh without flicker).
+    readonly property QtObject island: QtObject {
+        // spec: {key, icon, label, progress, accent, ttlMs, priority,
+        // focusedOnly}. priority: "osd"|"recording"|"peek"|"progress"|"timer"
+        // (unknown → "timer"). Returns false when the spec was refused
+        // (missing key, or no ttlMs and no progress).
+        function activity(spec) {
+            if (!spec || typeof spec !== "object") {
+                ctx.log("island.activity: spec must be an object")
+                return false
+            }
+            var s = Object.assign({}, spec)
+            s.key = ctx.pluginId + ":" + String(spec.key || "")
+            return PopupCoordinator.activity(s)
+        }
+        function end(key) { PopupCoordinator.endActivity(ctx.pluginId + ":" + String(key || "")) }
     }
 
     function run(argv) {

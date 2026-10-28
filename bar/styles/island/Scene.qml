@@ -121,14 +121,30 @@ Item {
                     hovered: win.hovered, hasPanel: win.client !== null, hasActivity: win.activityLive })
             }
 
-            // Live activity: OsdService feedback (volume, mute, layout,
-            // workspace) blooms the island on the focused output instead of
-            // the floating OSD card (Osd.qml stands down while an island is
-            // registered).
-            readonly property bool activityLive: Services.OsdService.active
-                && (Services.HyprlandService.focusedMonitor === ""
+            // Live activity (J0): the queue's arbitrated winner — OSD
+            // feedback is its top-priority member, plugins/scripts publish
+            // lower ranks (ctx.island / `island` IPC). focusedOnly entries
+            // (the OSD) bloom on the focused output only.
+            readonly property var activity: Engine.PopupCoordinator.visibleActivity
+            readonly property bool activityLive: win.activity !== null
+                && (!win.activity.focusedOnly
+                    || Services.HyprlandService.focusedMonitor === ""
                     || (win.screen !== null && Services.HyprlandService.focusedMonitor === win.screen.name))
             onActivityLiveChanged: _event(activityLive ? "activity" : "activityEnd")
+            // QD-OLED: an activity may hold full alpha for ≤ 3 s of stillness
+            // — then it dims to the rest level until its next update (new
+            // winner or in-place refresh resets the clock). The orbit keeps
+            // moving the pixels underneath the whole time.
+            readonly property string activityStamp: win.activity
+                ? win.activity.key + ":" + win.activity.seq : ""
+            property bool activityDim: false
+            onActivityStampChanged: activityDim = false
+            Timer {
+                interval: 3000
+                running: win.activityLive && !win.activityDim
+                onTriggered: win.activityDim = true
+            }
+            readonly property real activityAlpha: win.activityDim ? 0.45 : 1
 
             Timer {
                 id: hoverInTimer
@@ -648,13 +664,15 @@ Item {
                             }
                         }
 
-                        // Live activity readout (OsdService): glyph · track · value.
+                        // Live activity readout (the queue's winner): glyph · track · label.
                         Row {
                             id: activityRow
                             readonly property bool shown: win.islandState === Isl.ACTIVITY
+                            readonly property bool hasTrack: win.activity !== null
+                                && win.activity.progress !== undefined
                             anchors.centerIn: parent
                             spacing: Math.round(win.barH * 0.4)
-                            opacity: shown ? 1 : 0
+                            opacity: shown ? win.activityAlpha : 0
                             visible: opacity > 0.01
                             // scale-led like panels: grows in with the island
                             scale: shown ? 1 : Isl.CONTENT_OUT_SCALE
@@ -669,13 +687,13 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: Services.OsdService.icon
+                                text: win.activity ? win.activity.icon : ""
                                 font.family: Config.BarConfig.fontNerd
                                 font.pixelSize: Config.BarConfig.fontSizeIcon
                                 color: Config.BarConfig.colorText
                             }
                             Rectangle {
-                                visible: Services.OsdService.hasProgress
+                                visible: activityRow.hasTrack
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.round(win.barH * 4.6)
                                 height: Math.max(3, Math.round(win.barH * 0.14))
@@ -684,7 +702,8 @@ Item {
                                 Rectangle {
                                     height: parent.height
                                     radius: parent.radius
-                                    width: parent.width * Math.max(0, Math.min(100, Services.OsdService.value)) / 100
+                                    width: parent.width
+                                        * (activityRow.hasTrack ? Math.max(0, Math.min(100, win.activity.progress)) : 0) / 100
                                     color: Config.BarConfig.colorText
                                     Behavior on width {
                                         enabled: !win.reduceMotion
@@ -694,12 +713,13 @@ Item {
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: Services.OsdService.message
+                                text: win.activity ? win.activity.label : ""
                                 font.family: Config.BarConfig.fontFamily
                                 font.pixelSize: Config.BarConfig.fontSizeLabel
                                 font.bold: true
-                                color: Services.OsdService.hasProgress ? Config.BarConfig.colorTextDim
-                                                                       : Config.BarConfig.colorAccent
+                                color: activityRow.hasTrack ? Config.BarConfig.colorTextDim
+                                      : (win.activity && win.activity.accent) ? win.activity.accent
+                                      : Config.BarConfig.colorAccent
                             }
                         }
 
@@ -754,9 +774,12 @@ Item {
                         x: island.cornerRadius
                         y: win.atBottom ? 0 : island.height - height
                         height: 2
-                        width: span * Math.max(0, Math.min(100, Services.OsdService.value)) / 100
-                        color: Config.BarConfig.colorAccent
-                        opacity: activityRow.shown && Services.OsdService.hasProgress ? 0.55 : 0
+                        width: span
+                            * (activityRow.hasTrack ? Math.max(0, Math.min(100, win.activity.progress)) : 0) / 100
+                        color: (win.activity && win.activity.accent) ? win.activity.accent
+                                                                     : Config.BarConfig.colorAccent
+                        opacity: activityRow.shown && activityRow.hasTrack
+                                 ? 0.55 * win.activityAlpha : 0
                         visible: opacity > 0.01
                         Behavior on opacity {
                             enabled: !win.reduceMotion

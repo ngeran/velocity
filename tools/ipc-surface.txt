@@ -19,6 +19,9 @@
 osd.volume               manual    # external media-key/cli surface
 osd.mute                 manual
 osd.ping                 manual    # health probe (CLI scripting hooks)
+island.activity          manual    # J0 live activity (json spec; scripting)
+island.end               manual    # J0 retract one activity (ipc: keys only)
+island.ping              manual    # health probe
 plugins.rescan           manual    # qs -c bar ipc call plugins ... (host mgmt)
 plugins.reload           manual    # (id) — hot-remount one plugin from disk
 plugins.list             manual
