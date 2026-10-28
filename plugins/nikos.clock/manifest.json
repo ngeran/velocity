@@ -48,6 +48,20 @@
       "default": true,
       "label": "Weather in the calendar panel"
     },
+    "clockFace": {
+      "type": "enum",
+      "default": "plain",
+      "options": [
+        "plain",
+        "dot"
+      ],
+      "label": "Clock face on large clocks (dot = Doto, ≥ 26 px only)"
+    },
+    "colonBlink": {
+      "type": "bool",
+      "default": false,
+      "label": "Blink the colon on large clocks"
+    },
     "place": {
       "type": "string",
       "default": "",

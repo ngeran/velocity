@@ -66,7 +66,10 @@ Item {
     readonly property var _months: ["JAN","FEB","MAR","APR","MAY","JUN",
                                     "JUL","AUG","SEP","OCT","NOV","DEC"]
 
-    readonly property string zone: ctx ? ctx.settings.get("zone", "Local") : "Local"
+    // Through .values (bindable), not get() — a zone change from the settings
+    // app live-applies to the pill instead of freezing at the mount-time value.
+    readonly property string zone: ctx && ctx.settings.values.zone !== undefined
+                                   ? ctx.settings.values.zone : "Local"
 
     function _shifted(d) { return Tz.wallClock(d, root.zone) }
 

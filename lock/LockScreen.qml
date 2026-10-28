@@ -50,6 +50,21 @@ Rectangle {
     property bool _weatherStale: false
     property int _unread: 0
 
+    // ── clock face (J4) — mirrors nikos.clock via LockConfig's settings read ──
+    // Doto (ROND 100) on the 104 px clock only — the ≥ 26 px rule; the dot
+    // grid is illegible smaller. Colon blink is the plugin's `colonBlink`
+    // setting; opacity-only (no text swap → no reflow), resets to visible
+    // when disabled.
+    readonly property bool _clockDot: LockConfig.clockDot
+    readonly property bool _clockBlink: LockConfig.clockBlink
+    property bool _colonOn: true
+    Timer {
+        interval: 530; repeat: true
+        running: root._clockBlink
+        onRunningChanged: if (!running) root._colonOn = true
+        onTriggered: root._colonOn = !root._colonOn
+    }
+
     function _bump() {                     // any input: undim + restart idle clock
         idleTimer.restart()
         root.idleDimmed = false
@@ -270,13 +285,38 @@ Rectangle {
             opacity: root.idleDimmed ? 0.45 : 1.0
             Behavior on opacity { NumberAnimation { duration: LockConfig.dur(600) } }
 
-            Text {
+            // HH : MM as three Texts — the middle is the blinkable colon
+            // (J4). Doto axes: ROND 100 = full round dots; wght 500 ≈ the
+            // regular-weight presence the plain face has at this size.
+            Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: Qt.formatDateTime(clock.date, "HH:mm")
-                color: LockConfig.text
-                font.family: "JetBrains Mono"
-                font.pixelSize: 104
-                font.letterSpacing: 6
+                spacing: 0
+                Text {
+                    text: Qt.formatDateTime(clock.date, "HH")
+                    color: LockConfig.text
+                    font.family: root._clockDot ? "Doto" : "JetBrains Mono"
+                    font.variableAxes: root._clockDot ? ({ "ROND": 100, "wght": 500 }) : ({})
+                    font.pixelSize: 104
+                    font.letterSpacing: 6
+                }
+                Text {
+                    text: ":"
+                    color: LockConfig.text
+                    opacity: root._clockBlink ? (root._colonOn ? 1 : 0.12) : 1
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                    font.family: root._clockDot ? "Doto" : "JetBrains Mono"
+                    font.variableAxes: root._clockDot ? ({ "ROND": 100, "wght": 500 }) : ({})
+                    font.pixelSize: 104
+                    font.letterSpacing: 6
+                }
+                Text {
+                    text: Qt.formatDateTime(clock.date, "mm")
+                    color: LockConfig.text
+                    font.family: root._clockDot ? "Doto" : "JetBrains Mono"
+                    font.variableAxes: root._clockDot ? ({ "ROND": 100, "wght": 500 }) : ({})
+                    font.pixelSize: 104
+                    font.letterSpacing: 6
+                }
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter

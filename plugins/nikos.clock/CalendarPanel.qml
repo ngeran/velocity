@@ -35,6 +35,31 @@ RowLayout {
     // (idle-zero doctrine — the panel body stays loaded while closed).
     property bool live: false
 
+    // ── clock face (J4) ──────────────────────────────────────────────────────
+    // `clockFace = "dot"` switches the LARGE clocks to Doto (variable
+    // dot-matrix font, ROND 100). The ≥ 26 px rule: the dot grid is illegible
+    // smaller, so the bar pill (12 px) and the ":ss" ticker (13 px) stay in
+    // the bar font — only this 34 px hero (and the lock's 104 px clock,
+    // which mirrors this via LockConfig's direct settings read) qualify.
+    // NOTE the reads go through ctx.settings.VALUES (the bindable access —
+    // SettingsStore header): get() inside a binding is opaque, it would
+    // freeze at whatever the values were at mount.
+    readonly property bool _heroDot: ctx !== null
+        && ctx.settings.values.clockFace === "dot"
+    readonly property bool _heroBlink: ctx !== null
+        && ctx.settings.values.colonBlink === true
+    property bool _colonOn: true
+    Timer {
+        // Colon blink — opacity-only (no text swap) so the layout never
+        // reflows regardless of Doto's metrics. Runs ONLY while the panel
+        // is open (`live`); resets to visible on stop so closing the panel
+        // mid-dark-phase can't park the colon dark.
+        interval: 530; repeat: true
+        running: calRoot.live && calRoot._heroBlink
+        onRunningChanged: if (!running) calRoot._colonOn = true
+        onTriggered: calRoot._colonOn = !calRoot._colonOn
+    }
+
     Layout.fillWidth: true
     spacing: 12
 
@@ -90,8 +115,10 @@ RowLayout {
         return h12 + " " + ap
     }
 
-    // Zone-shifted hero clock (same zone setting as the bar pill).
-    readonly property var _shifted: Tz.wallClock(calRoot._now, ctx ? ctx.settings.get("zone", "Local") : "Local")
+    // Zone-shifted hero clock (same zone setting as the bar pill). Through
+    // .values — bindable — so a zone change live-applies without a remount.
+    readonly property var _shifted: Tz.wallClock(calRoot._now,
+        ctx && ctx.settings.values.zone !== undefined ? ctx.settings.values.zone : "Local")
     // 12-hour hero (upstream's style). Qt's "h" only goes 12h when AP is in
     // the SAME format string — "h:mm" plus a separate "AP" text yields
     // "19:01 PM", so the hour is converted by hand.
@@ -253,12 +280,41 @@ RowLayout {
                 anchors.rightMargin: 18
                 spacing: 8
 
-                Text {
-                    text: String(calRoot._heroHour12).padStart(2, "0") + ":" + Qt.formatDateTime(calRoot._shifted, "mm")
-                    color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
-                    font.pixelSize: 34; font.weight: Font.DemiBold
+                // HH : MM as three Texts (J4): the middle one is the blinkable
+                // colon, and dot-face switching stays per-segment. Opacity
+                // blink only — no text swap, no reflow. Doto axes per google/
+                // fonts: ROND 100 = full round dots, wght 600 ≈ the DemiBold
+                // the plain face uses.
+                RowLayout {
+                    spacing: 0
                     Layout.alignment: Qt.AlignVCenter
+
+                    Text {
+                        text: String(calRoot._heroHour12).padStart(2, "0")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                        font.family: calRoot._heroDot ? "Doto"
+                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
+                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.pixelSize: 34; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        text: ":"
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                        opacity: calRoot._heroBlink ? (calRoot._colonOn ? 1 : 0.12) : 1
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
+                        font.family: calRoot._heroDot ? "Doto"
+                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
+                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.pixelSize: 34; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        text: Qt.formatDateTime(calRoot._shifted, "mm")
+                        color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
+                        font.family: calRoot._heroDot ? "Doto"
+                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
+                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.pixelSize: 34; font.weight: Font.DemiBold
+                    }
                 }
                 Column {
                     spacing: 0

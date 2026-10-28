@@ -38,6 +38,15 @@ QtObject {
     property color accent: "#DE6145"
     property color errorCol: "#B56758"    // not "error" — QML Item already has one
 
+    // ── clock face (J4) — mirrors nikos.clock's `clockFace`/`colonBlink` ─────
+    // Third sampled file: the clock plugin's settings store
+    // ($XDG_STATE_HOME/velocity/plugins/nikos.clock.json — same file
+    // Settings ▸ Plugins writes). Read-only, keys fall back to the manifest
+    // defaults ("plain" / false) when absent. The dot face (Doto, ROND 100)
+    // applies ONLY to the 104 px clock — the ≥ 26 px rule from CalendarPanel.
+    property bool clockDot: false
+    property bool clockBlink: false
+
     // ── one-shot intakes (Process `cat`, the proven zero-fork pattern; the
     //    QtObject root has no default property, so these are property-hosted) ─
     function _parse(json, apply) {
@@ -77,8 +86,23 @@ QtObject {
         }
     }
 
+    property Process _clockFaceReader: Process {   // unbounded-ok: one-shot, exits at EOF
+        command: ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh",
+                  (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")
+                  + "/velocity/plugins/nikos.clock.json"]
+        stdout: SplitParser {
+            onRead: function(data) {
+                root._parse(data, function(d) {
+                    if (d.clockFace !== undefined) root.clockDot = d.clockFace === "dot"
+                    if (d.colonBlink !== undefined) root.clockBlink = d.colonBlink === true
+                })
+            }
+        }
+    }
+
     Component.onCompleted: {
         _cfgReader.running = true
         _themeReader.running = true
+        _clockFaceReader.running = true
     }
 }
