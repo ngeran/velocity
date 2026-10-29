@@ -43,6 +43,24 @@ PanelWindow {
     readonly property bool hasTrack: act !== null && act.progress !== undefined
     visible: !islandOwnsOsd && (osdWindow.shown || card.opacity > 0)
 
+    // QD-OLED (J0 doctrine, island-Scene parity): an activity holds full
+    // alpha for ≤ 3 s of stillness, then dims to the rest level until its
+    // next update — a new winner or an in-place refresh (seq bumps on every
+    // publish) resets the clock, so a live-updating card (the REC counter,
+    // a moving progress) never stills long enough to dim, while a parked
+    // critical peek does. The card is click-through (empty input mask), so
+    // unlike the island there is no hover-hold to defer the dim.
+    readonly property string actStamp: osdWindow.act
+        ? osdWindow.act.key + ":" + osdWindow.act.seq : ""
+    property bool actDim: false
+    onActStampChanged: actDim = false
+    Timer {
+        interval: 3000
+        running: osdWindow.shown && !osdWindow.actDim
+        onTriggered: osdWindow.actDim = true
+    }
+    readonly property real actAlpha: osdWindow.actDim ? 0.45 : 1
+
     // Card metrics ride the popup uiScale token (B3/B4): every literal below
     // is px(n), so uiScale 1.0 reproduces the old numbers exactly.
     readonly property int pad: Config.PopupMetrics.px(16)
@@ -82,7 +100,7 @@ PanelWindow {
         border.color: Config.BarConfig.colorBorder
         border.width: osdWindow.hair
         radius: 0   // sharp corners — bar design language
-        opacity: osdWindow.shown ? 1 : 0
+        opacity: osdWindow.shown ? osdWindow.actAlpha : 0
         Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         Row {

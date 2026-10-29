@@ -307,6 +307,13 @@ ShellRoot {
         function activity(json: string): string {
             var spec
             try { spec = JSON.parse(json) } catch (e) { return "bad json: " + e }
+            if (!spec || typeof spec !== "object" || !spec.key)
+                return "refused: need key + ttlMs (or progress)"
+            // Namespace on PUBLISH, not just on end — scripts must never
+            // collide with a plugin's "<pluginId>:<key>" or the OSD's "osd"
+            // (the prefix is what makes `island end <key>` reach only their
+            // own entries).
+            spec.key = "ipc:" + spec.key
             return Engine.PopupCoordinator.activity(spec)
                 ? "ok" : "refused: need key + ttlMs (or progress)"
         }

@@ -43,6 +43,7 @@ Rectangle {
 
     // ── idle / burn-in state ─────────────────────────────────────────────────
     property bool idleDimmed: false        // 30 s without input → clock at 0.45
+    onIdleDimmedChanged: if (idleDimmed) caretTimer.stop()   // blink is "not while dimmed" (caretTimer uses restart(), so its running can't take a binding — the dim transition is the stop path; _bump restarts it)
     property int _orbitStep: 0             // 4-step ±2 px wander, 3 min per step
 
     // ── read-only data lines (one-shot cats at startup) ──────────────────────
@@ -226,7 +227,12 @@ Rectangle {
                   Quickshell.env("HOME") + "/.config/quickshell/notifications.cleared",
                   Quickshell.env("HOME") + "/.config/quickshell/notifications.jsonl"]
         stdout: SplitParser {
-            property bool inStore: false
+            // The stream opens with "---" → the flag flips to false for the
+            // CLEARED-STAMP section; the store (jsonl) is the second section.
+            // Initial value must therefore be true — false made every stamp
+            // line land in the store branch and every store row in the stamp
+            // branch, so the unread chip could never count.
+            property bool inStore: true
             property real clearedAt: 0
             onRead: function(data) {
                 if (data === "---") { inStore = !inStore; return }
@@ -255,7 +261,7 @@ Rectangle {
         stdout: SplitParser {
             onRead: function(data) {
                 if (data.indexOf("activelayout>>") === 0) {
-                    var parts = data.substring(15).split(",")
+                    var parts = data.substring(14).split(",")   // "activelayout>>" is 14 chars
                     if (parts.length >= 2) root._kbLayout = parts[parts.length - 1].toUpperCase()
                 }
             }

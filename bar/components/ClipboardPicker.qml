@@ -112,9 +112,12 @@ PanelWindow {
     function paste(row) {
         var id = Clip.safeId(row)
         if (id === "") return
+        // The id/tab separator is an ARGV element, not "\t" in the script:
+        // in a grep BRE "\t" is a literal t (GNU grep warns "stray \") and
+        // matches nothing — the whole pipeline went dead silently that way.
         copyProc.command = ["sh", "-c",
-            'cliphist list | grep "^$1\t" | cliphist decode | wl-copy',
-            "sh", id]
+            'cliphist list | grep "^$1$2" | cliphist decode | wl-copy',
+            "sh", id, "\t"]
         copyProc.run()
     }
 
@@ -150,8 +153,8 @@ PanelWindow {
         if (path === "") return
         if (prevProc.running) prevProc.running = false   // command reassign needs a stopped process
         prevProc.command = ["sh", "-c",
-            'mkdir -p "$1" && cliphist list | grep "^$2\t" | cliphist decode > "$3"',
-            "sh", dir, row.id, path]
+            'mkdir -p "$1" && cliphist list | grep "^$2$4" | cliphist decode > "$3"',
+            "sh", dir, row.id, path, "\t"]   // real-tab argv (see paste)
         _previewPath = path
         _previewId = row.id
         prevReaper.restart()

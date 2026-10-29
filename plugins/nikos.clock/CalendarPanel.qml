@@ -675,10 +675,8 @@ RowLayout {
                     }
                 }
 
-                Connections {
-                    target: calRoot
-                    function onWxDataChanged() { curve.requestPaint() }
-                }
+                // (Weather arrivals repaint via `slice` above — calRoot has no
+                // wxData signal; a Connections on that name never fired.)
                 onWidthChanged: requestPaint()
             }
 

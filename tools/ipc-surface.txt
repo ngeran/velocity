@@ -58,6 +58,9 @@ controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
+focus.start              internal  # velocity.focus (J6) — clock panel presets spawn it
+focus.stop               internal  # clock panel STOP
+focus.status             internal  # clock panel open probe (one-shot)
 network.speedtest        internal  # settings' RUN IN BAR → the bar's XHR ladder;
                                    # result persists to $XDG_STATE_HOME/velocity/speedtest.json
 metrics.lease            internal  # settings Core + dashboard Pulse renew every 10s
@@ -88,6 +91,7 @@ SettingsWindow.setBarPosition     internal  # velocity.bar-settings bar-edge pic
 SettingsWindow.setBarHeight       internal  # velocity.bar-settings height slider (commits on release) — same funnel
 SettingsWindow.setWorkspaceCount  internal  # velocity.bar-settings workspace-dots pills — same funnel
 SettingsWindow.setBurnGuard       internal  # velocity.bar-settings QD-OLED guard pills (strip|island on|off) — same funnel
+SettingsWindow.setOsdStyle        internal  # velocity.bar-settings OSD TRACK row (J5; bar|segments) — same funnel
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P

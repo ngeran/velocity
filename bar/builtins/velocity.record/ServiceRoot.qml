@@ -17,8 +17,9 @@
 // `notifications add` IPC (notify-send absent — J6 pattern).
 //
 // QD-OLED: label-only card (no progress track — a growing red bar would be
-// a permanent fill); dims after 3 s per the J0 static doctrine while the
-// per-second label keeps it non-static.
+// a permanent fill); the 1 Hz label churn keeps the card non-static for the
+// whole take (a still activity dims to 0.45 after 3 s per the J0 doctrine —
+// the renewals keep resetting that clock, so this card never parks bright).
 //
 // Known edge: a bar restart kills the recorder child mid-take (the take is
 // lost, file truncated). Accepted for J9 — recording through a shell restart
@@ -192,7 +193,7 @@ Item {
                                   appName: "velocity.record",
                                   summary: summary,
                                   body: body,
-                                  urgency: "normal" })]
+                                  urgency: 1 })]   // int tier (0/1/2) — "normal" fell to the low tier
         notifyProc.running = true
     }
 }

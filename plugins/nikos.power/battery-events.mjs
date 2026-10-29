@@ -11,10 +11,12 @@
 //   · low   — armed + discharging + pct ≤ threshold; fires once, then
 //             disarms; re-arms above threshold or on plug (hysteresis —
 //             one nag per drain, not one per percentage point)
-//   · charging/state transitions within `debounceMs` of the last accepted
+//   · charging transitions within `debounceMs` of the last accepted
 //     transition are swallowed (AC-connector flap must not spam cards);
 //     percentage updates bypass the debounce (slow, and they carry the
-//     low-crossing)
+//     low-crossing), and so does the full edge (FullyCharged is a
+//     deliberate state — it cannot flap, and swallowing it would strand
+//     the event until the next full→not-full→full cycle)
 //   · a sample with has=false (no system battery) never produces events and
 //     never advances the baseline
 //
@@ -58,11 +60,16 @@ export function update(state, sample, opts, now) {
     const st = { seen: true, charging: s.charging, full: s.full, pct: s.pct,
                  lowArmed: s.lowArmed, lastTransitionAt: s.lastTransitionAt }
     const pct = normPct(sample.pct)
-    const stateChanged = !!sample.charging !== st.charging || !!sample.full !== st.full
+    const chargingChanged = !!sample.charging !== st.charging
+    const fullChanged = !!sample.full !== st.full
+    const stateChanged = chargingChanged || fullChanged
 
-    // Transition debounce — percentage changes are exempt (they arrive
-    // minutes apart and are what carries the low-battery crossing).
-    if (stateChanged && now - st.lastTransitionAt < debounce) {
+    // Transition debounce — only the CHARGING edge is gated (AC-connector
+    // flap): percentage changes are exempt (they arrive minutes apart and
+    // carry the low-battery crossing), and the full edge is exempt because
+    // FullyCharged never flaps — debouncing it would leave st.full stale
+    // and the "full" event unfireable until the next charge cycle.
+    if (chargingChanged && now - st.lastTransitionAt < debounce) {
         return { state: st, events: events }
     }
     if (stateChanged) st.lastTransitionAt = Math.floor(now)

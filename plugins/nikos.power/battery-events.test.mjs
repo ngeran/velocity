@@ -50,6 +50,24 @@ st = Be.update(Be.initState(), { has: true, charging: true, full: false, pct: 99
 r = Be.update(st, { has: true, charging: true, full: true, pct: 99 }, opts, 60000)
 eqv(kinds(r), ["full"], "full fires with real pct when reported early")
 
+// full WITHIN the debounce window of an accepted plug still fires (the full
+// edge bypasses the debounce — only charging flaps are gated)
+st = Be.update(Be.initState(), { has: true, charging: false, full: false, pct: 97 }, opts, 0).state
+r = Be.update(st, { has: true, charging: true, full: false, pct: 98 }, opts, 1000)
+eqv(kinds(r), ["plug"], "plug accepted (baseline seeds -Infinity)")
+r = Be.update(r.state, { has: true, charging: true, full: true, pct: 100 }, opts, 2500)
+eqv(kinds(r), ["full"], "full fires 1.5 s after the plug, inside the 2 s window")
+eqv(kinds(Be.update(r.state, { has: true, charging: true, full: true, pct: 100 }, opts, 60000)), [], "no duplicate full on the next still-full sample")
+
+// charging flap stays debounced (regression: the exemption is full-only) —
+// an accepted plug first (baseline seeds -Infinity, so the FIRST plug is
+// always real), then the unplug flap inside 2 s is swallowed
+st = Be.update(Be.initState(), { has: true, charging: false, full: false, pct: 55 }, opts, 0).state
+r = Be.update(st, { has: true, charging: true, full: false, pct: 55 }, opts, 10000)
+eqv(kinds(r), ["plug"], "plug outside the window accepted")
+r = Be.update(r.state, { has: true, charging: false, full: false, pct: 55 }, opts, 11000)
+eqv(kinds(r), [], "charging edge inside the window is swallowed")
+
 // ── low ─────────────────────────────────────────────────────────────────────
 // Threshold semantics are ≤ (the pill's error colour uses the same <= in
 // BarWidget): AT the threshold is already "low".

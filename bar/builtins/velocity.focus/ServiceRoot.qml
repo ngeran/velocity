@@ -203,7 +203,7 @@ Item {
                                   appName: "velocity.focus",
                                   summary: "FOCUS COMPLETE",
                                   body: body,
-                                  urgency: "normal" })]
+                                  urgency: 1 })]   // int tier (0/1/2) — "normal" fell to the low tier
         notifyProc.running = true
     }
 }

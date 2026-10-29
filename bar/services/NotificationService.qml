@@ -20,9 +20,6 @@
 // such setups falls back to the IPC above. Scripts keep using
 // `notifications add`.
 // =============================================================================
-// =============================================================================
-// NotificationService.qml — notification store (ListModel) + CRUD + counter
-// =============================================================================
 
 pragma Singleton
 
@@ -533,6 +530,7 @@ Item {
             root.model.setProperty(i, "read", true)
             root.model.setProperty(i, "readAt", nowMs)
         }
+        root._peekGone(root._peekRowId)   // everything just became seen → the peek retracts (no-op when none is up)
         root._recount()
         root._persist()
     }
@@ -553,13 +551,19 @@ Item {
     function clearAll() {
         var nowMs = Date.now()
         root.clearedAt = nowMs
+        var peekCleared = false
         for (var i = 0; i < root.model.count; ) {
             var r = root.model.get(i)
             if ((r.timestamp || 0) <= nowMs) {
+                if (r.id === root._peekRowId) peekCleared = true
                 root.clearedModel.append(root._rowCopy(r))  // copy: get() goes stale after remove
                 root.model.remove(i)
             } else i++
         }
+        // A sticky critical peek (ttl = HARD_CAP) must not survive CLEAR ALL —
+        // its row is gone from the model, so the card would park for 10 min.
+        // Future-stamped rows (clock skew) stay and keep their peek.
+        if (peekCleared) root._peekGone(root._peekRowId)
         root._recount()
         root._persist()
         root._writeCleared()

@@ -86,8 +86,11 @@ Item {
             var c = root.ctx.theme.colors
             if (!PW.BatteryService.hasBattery) return root.ctx.bar.colorText
             if (PW.BatteryService.charging) return c.success
-            if (PW.BatteryService.percentage <= root.ctx.settings.get("lowThreshold", 20)) return c.error
-            if (PW.BatteryService.percentage <= root.ctx.settings.get("warnThreshold", 50)) return c.warning
+            // Bindable .values reads (J4 doctrine) — get() in a binding is
+            // opaque: it froze at the mount-time value and never re-evaluated
+            // on a settings-file reload.
+            if (PW.BatteryService.percentage <= root.ctx.settings.values.lowThreshold) return c.error
+            if (PW.BatteryService.percentage <= root.ctx.settings.values.warnThreshold) return c.warning
             return root.ctx.bar.colorText
         }
         onClicked: function(button) { panel.toggle() }
