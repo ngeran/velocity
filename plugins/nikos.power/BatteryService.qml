@@ -25,6 +25,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Services.UPower
+import "./battery-events.mjs" as BatteryEvents
 
 Item {
     id: root
@@ -47,6 +48,39 @@ Item {
     property int percentage: sysBattery ? Math.round(sysBattery.percentage) : 100
     property bool charging: sysBattery ? sysBattery.state === UPowerDevice.Charging
                                        : false
+    property bool full: sysBattery ? sysBattery.state === UPowerDevice.FullyCharged
+                                   : false
+
+    // ── battery events (J7) ────────────────────────────────────────────────
+    // Edge detection over the UPower property notifies — no polling, no
+    // timers: _sample re-evaluates only when a DBus property changes, and
+    // every change feeds the pure machine in battery-events.mjs exactly once
+    // (this singleton is one-per-engine, so edges fire once regardless of
+    // how many outputs mount a BarWidget). lowThreshold is PUSHED in by
+    // BarWidget from the plugin settings (bindable values read — see J4).
+    signal eventOccurred(string kind, int pct)
+
+    property int lowThreshold: 20
+    property var _evState: null
+
+    // Object literal → new identity on every dep change → onChanged fires.
+    readonly property var _sample: {
+        return { has: hasBattery, charging: charging, full: full, pct: percentage }
+    }
+    on_SampleChanged: _feed()
+    onLowThresholdChanged: _feed()   // re-evaluate arming on a setting change
+
+    function _feed() {
+        if (!_evState) return
+        var r = BatteryEvents.update(_evState, _sample,
+                                     { lowThreshold: lowThreshold }, Date.now())
+        _evState = r.state
+        for (var i = 0; i < r.events.length; i++) {
+            var e = r.events[i]
+            console.log("[BatteryService] battery event: " + e.kind + " " + e.pct + "%")
+            eventOccurred(e.kind, e.pct)
+        }
+    }
 
     // ── POWER POPUP fields (CHARGE / Capacity / Rate / HEALTH) — undefined-safe
     // fallbacks so a desktop without a battery renders dashes, not errors.
@@ -64,11 +98,15 @@ Item {
         return charging ? "(" + t + " to full)" : "(" + t + " left)"
     }
 
-    Component.onCompleted: console.log(
+    Component.onCompleted: {
+        console.log(
         "[BatteryService] native UPower: hasBattery=" + hasBattery +
         " onAc=" + onAc + " pct=" + percentage + " charging=" + charging +
         " devices=" + (UPower.devices.values ? UPower.devices.values.length : 0) +
         " stateCharging=" + UPowerDevice.Charging)   // canary: validates enum scope
+        _evState = BatteryEvents.initState()
+        _feed()   // baseline — emits nothing, arms the machine
+    }
 
     // DBus enumeration is async — log when the device set lands/changes so
     // hotplug (dock, laptop battery) is visible in the journal.
