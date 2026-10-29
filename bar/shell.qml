@@ -409,19 +409,7 @@ ShellRoot {
         function open(): string { return Engine.PluginRegistry.call("nikos.keyboard", "toggle", "") }
     }
 
-    // J6: focus timer — thin forwarder to the velocity.focus service root
-    // (same pattern as the keyboard target above):
-    //   qs -c bar ipc call focus start 25 | stop | status
-    IpcHandler {
-        id: focusIpc
-        target: "focus"
-
-        function start(argument: string): string { return Engine.PluginRegistry.call("velocity.focus", "start", argument) }
-        function stop(): string { return Engine.PluginRegistry.call("velocity.focus", "stop", "") }
-        function status(): string { return Engine.PluginRegistry.call("velocity.focus", "status", "") }
-    }
-
-    // Clipboard picker (J8, same pattern as focus): thin forwarder to the
+    // Clipboard picker (J8, same pattern as the keyboard target): thin forwarder to the
     // velocity.clipboard overlay plugin — `qs -c bar ipc call clipboard
     // toggle|open|close`. No-ops (with a mount-time journal line) while
     // cliphist/wl-copy are absent.

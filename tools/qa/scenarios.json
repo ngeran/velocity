@@ -369,6 +369,176 @@
       "teardown": [
         "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call velocity.network toggle \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ]"
       ]
+    },
+    {
+      "id": "zai-toggle-cycle",
+      "name": "The z.ai usage overlay maps one layer surface and closes it clean",
+      "covers": "velocity.zai-usage builtin; SUPER+Z surface lifecycle (P0.5 overlay coverage)",
+      "steps": [
+        "layers before",
+        "ipc bar zaiUsage toggle",
+        "sleep 2",
+        "shot open",
+        "layers open",
+        "ipc bar zaiUsage toggle",
+        "sleep 2",
+        "layers closed"
+      ],
+      "asserts": [
+        "test -s $QA_EV/04-shot-open.png",
+        "test $(( $(cat $QA_EV/05-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/08-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
+      ],
+      "teardown": [
+        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call zaiUsage toggle >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
+      ]
+    },
+    {
+      "id": "logs-toggle-cycle",
+      "name": "Enabling velocity.logs, the logs overlay maps one layer and closes clean, then disables again",
+      "covers": "velocity.logs enable→overlay lifecycle→disable roundtrip (plugin is disabled at rest)",
+      "steps": [
+        "ipc bar plugins enable velocity.logs",
+        "sleep 1",
+        "layers before",
+        "ipc bar logs toggle",
+        "sleep 2",
+        "layers open",
+        "ipc bar logs toggle",
+        "sleep 2",
+        "layers closed",
+        "ipc bar plugins disable velocity.logs"
+      ],
+      "asserts": [
+        "grep -qx ok $QA_EV/01-plugins-enable.out",
+        "test $(( $(cat $QA_EV/06-layers-open.alive) - $(cat $QA_EV/03-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/09-layers-closed.alive)\" = \"$(cat $QA_EV/03-layers-before.alive)\"",
+        "grep -qx ok $QA_EV/10-plugins-disable.out"
+      ],
+      "teardown": [
+        "qs -c bar ipc call plugins disable velocity.logs >/dev/null 2>&1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/03-layers-before.alive)\" ] && break; qs -c bar ipc call logs toggle >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; true"
+      ]
+    },
+    {
+      "id": "clipboard-toggle-cycle",
+      "name": "Clipboard picker toggles without breaking the journal",
+      "covers": "velocity.clipboard (J8) toggle path; full layer assert deferred until wl-clipboard lands",
+      "blocked": "cliphist/wl-copy absent on this host (P3 owns packages); the picker hides itself without them",
+      "steps": [
+        "ipc? bar clipboard toggle",
+        "sleep 1",
+        "ipc? bar clipboard toggle"
+      ],
+      "asserts": []
+    },
+    {
+      "id": "record-status-blocked",
+      "name": "Recorder service answers status with valid JSON",
+      "covers": "velocity.record (J9) status verb; start/stop exercise deferred until wf-recorder lands",
+      "blocked": "wf-recorder absent on this host (P3 owns packages); recording cannot be exercised",
+      "steps": [
+        "ipc bar record status"
+      ],
+      "asserts": [
+        "jq -e 'has(\"recording\")' $QA_EV/01-record-status.out"
+      ]
+    },
+    {
+      "id": "power-menu-cycle",
+      "name": "The power menu toggles open and closed through IPC with a clean journal",
+      "covers": "settings powerMenu (SUPER+P path); settings-process toplevel, so no layer assert",
+      "steps": [
+        "ipc settings powerMenu toggle",
+        "sleep 2",
+        "ipc settings powerMenu toggle",
+        "sleep 1"
+      ],
+      "asserts": [
+        "test ! -s $QA_EV/01-powerMenu-toggle.out",
+        "test ! -s $QA_EV/03-powerMenu-toggle.out"
+      ]
+    },
+    {
+      "id": "dnd-state-roundtrip",
+      "name": "DND switches on and back off through IPC",
+      "covers": "notifications.dnd(on: bool); resting state is dnd=false",
+      "steps": [
+        "ipc bar notifications dnd true",
+        "ipc bar notifications dnd false"
+      ],
+      "asserts": [
+        "test ! -s $QA_EV/01-notifications-dnd-true.out",
+        "test ! -s $QA_EV/02-notifications-dnd-false.out"
+      ]
+    },
+    {
+      "id": "wallpaper-cycling-noop",
+      "name": "Toggling wallpaper cycling twice leaves the flag byte-identical",
+      "covers": "wallpaper-service cycling write path with zero net state change",
+      "steps": [
+        "ipc settings wallpaper-service getCyclingEnabled",
+        "ipc settings wallpaper-service toggleCycling",
+        "ipc settings wallpaper-service toggleCycling",
+        "ipc settings wallpaper-service getCyclingEnabled"
+      ],
+      "asserts": [
+        "grep -Eq '^(true|false)$' $QA_EV/01-wallpaper-service-getCyclingEnabled.out",
+        "test \"$(cat $QA_EV/04-wallpaper-service-getCyclingEnabled.out)\" = \"$(cat $QA_EV/01-wallpaper-service-getCyclingEnabled.out)\""
+      ]
+    },
+    {
+      "id": "settings-pages-deeplink",
+      "name": "Settings deep-links land on the requested page and the window hides clean",
+      "covers": "openCore system + openControlDisplay deep-link family; activeTab probes; hide verb",
+      "steps": [
+        "ipc settings SettingsWindow openCore system",
+        "sleep 1",
+        "ipc settings SettingsWindow activeTab",
+        "ipc settings SettingsWindow openControlDisplay",
+        "sleep 1",
+        "ipc settings SettingsWindow activeTab",
+        "ipc settings SettingsWindow hide"
+      ],
+      "asserts": [
+        "test ! -s $QA_EV/01-SettingsWindow-openCore-system.out",
+        "grep -q . $QA_EV/03-SettingsWindow-activeTab.out",
+        "grep -q . $QA_EV/06-SettingsWindow-activeTab.out",
+        "test ! -s $QA_EV/07-SettingsWindow-hide.out"
+      ]
+    },
+    {
+      "id": "lock-static-contract",
+      "name": "The lock screen contract holds: wrapper binary, QML entry, PAM service",
+      "covers": "lock/ process files + PAM wiring (deep lock QA lands in P6 glyph identity)",
+      "steps": [
+        "sh test -x bin/velocity-lock",
+        "sh test -f lock/shell.qml",
+        "sh test -f /etc/pam.d/velocity-lock",
+        "sh grep -q 'security.pam.services.velocity-lock' ~/.omni-nix/hosts/desktop/default.nix"
+      ],
+      "asserts": []
+    },
+    {
+      "id": "launcher-via-keybind",
+      "name": "The real SUPER+SPACE keybind opens the launcher and closes it",
+      "covers": "D3 SUPER+SPACE through the compositor bind; needs wtype",
+      "blocked": "wtype absent on this host (P3 owns packages); remove this field once it lands",
+      "steps": [
+        "layers before",
+        "key -M super -k space -m super",
+        "sleep 2",
+        "layers open",
+        "key -M super -k space -m super",
+        "sleep 2",
+        "layers closed"
+      ],
+      "asserts": [
+        "test $(( $(cat $QA_EV/04-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
+        "test \"$(cat $QA_EV/07-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
+      ],
+      "teardown": [
+        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call velocity.launcher toggle \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; true"
+      ]
     }
   ]
 }

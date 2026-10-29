@@ -58,14 +58,18 @@ controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
-focus.start              internal  # velocity.focus (J6) — clock panel presets spawn it
-focus.stop               internal  # clock panel STOP
-focus.status             internal  # clock panel open probe (one-shot)
 network.speedtest        internal  # settings' RUN IN BAR → the bar's XHR ladder;
                                    # result persists to $XDG_STATE_HOME/velocity/speedtest.json
 metrics.lease            internal  # settings Core + dashboard Pulse renew every 10s
                                    # while visible → gates the bar's live-metrics poll (H7)
 
+
+notifications.add                 manual    # ingest surface (docs in NotificationService header)
+notifications.clear               manual    # soft clear
+notifications.restore              manual    # undo the soft clear
+notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
+notifications.readAll             manual    # mark all read
+notifications.list                manual    # dump the visible model (truth probes)
 # ---- settings process ------------------------------------------------------
 search.query                      manual    # scripting/truth probe (dashboard search index)
 search.open                       manual    # opens the palette pre-filled (deep-link)
@@ -101,12 +105,6 @@ display.refresh                   manual    # one-shot monitor poll (the poll ti
 display.revertProbe               manual    # keep/revert cycle probe: stage the CURRENT rule (no visible change)
 display.revertState               manual    # pending keep/revert window (label + secondsLeft) or "none"
 display.revertKeep                manual    # cancel the pending window (stops the external revert timer)
-notifications.add                 manual    # ingest surface (docs in NotificationService header)
-notifications.clear               manual    # soft clear
-notifications.restore              manual    # undo the soft clear
-notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
-notifications.readAll             manual    # mark all read
-notifications.list                manual    # dump the visible model (truth probes)
 wallpaper-service.toggleCycling   manual    # cycle pill toggles in-process; IPC kept external
 wallpaper-service.cycleNow       manual    # skip to next wallpaper in the cycle
 wallpaper-service.getCount       manual    # wallpaper count (scripting)

@@ -1,0 +1,96 @@
+#!/usr/bin/env sh
+#
+# check-runtime — the runtime twin of tools/check-all (P0 harness).
+#
+# Restarts the resident shells, asserts a warning-free boot, then samples
+# idle cost. This is the gate every rice phase must survive.
+#
+#   tools/check-runtime            # full: 60 s idle sample
+#   tools/check-runtime --quick    # boot + warnings only, no sampling
+#   RUNTIME_SKIP_QA=1 tools/check-runtime
+#                                  # skip the qa suite even when tools exist
+#
+# Pass looks like:
+#   warnings=0 cpu=0.3% rss=180M spawns/min=2 qa=14/14
+#
+# No pidstat/bpftrace on this host — CPU comes from /proc/<pid>/stat tick
+# deltas and spawn counting from /proc/<pid>/task/*/children set-diffs
+# (a lower bound: a child born and reaped between samples is invisible).
+set -u
+cd "$(dirname "$0")/.."
+
+UNITS="quickshell-bar quickshell-settings"
+QUICK=0
+[ "${1:-}" = "--quick" ] && QUICK=1
+
+fail=0
+bad() { echo "check-runtime: FAIL — $*" >&2; fail=1; }
+
+# ── 1 · restart + settle ────────────────────────────────────────────────────
+# ISO stamp (no space): JFLAGS is expanded unquoted, a spaced --since value
+# would word-split and journalctl would silently match nothing.
+BOOT_STAMP=$(date '+%Y-%m-%dT%H:%M:%S')
+systemctl --user restart $UNITS || { bad "systemctl restart failed"; exit 1; }
+sleep 5
+for u in $UNITS; do
+    systemctl --user is-active --quiet "$u" || bad "$u not active after restart"
+done
+
+# ── 2 · warnings since the restart ──────────────────────────────────────────
+# Two passes: -p warning (systemd / qml-level) and a WARN-text grep on the
+# info stream — quickshell logs its own "  WARN: …" lines below syslog's
+# warning priority, so -p warning alone misses them.
+JFLAGS="--user -u quickshell-bar -u quickshell-settings --since $BOOT_STAMP --no-pager -q"
+W1=$(journalctl $JFLAGS -p warning 2>/dev/null | grep -v '^-- ' | grep -c . || true)
+W2=$(journalctl $JFLAGS -p info 2>/dev/null | grep -cE '\bWARN\b' || true)
+WARNINGS=$W1
+[ "$W2" -gt "$WARNINGS" ] && WARNINGS=$W2
+if [ "$WARNINGS" -ne 0 ]; then
+    journalctl $JFLAGS -p info 2>/dev/null | grep -E '\bWARN\b' | head -10 >&2
+    bad "warnings=$WARNINGS since restart"
+fi
+
+# ── 3 · resident pids ───────────────────────────────────────────────────────
+BAR_PID=$(systemctl --user show -p MainPID --value quickshell-bar)
+SET_PID=$(systemctl --user show -p MainPID --value quickshell-settings)
+case "$BAR_PID" in ''|0) bad "no MainPID for quickshell-bar"; exit 1 ;; esac
+
+CPU="skip" RSS="skip" SPAWNS="skip"
+if [ "$QUICK" -eq 0 ]; then
+    # ── 4 · 60 s idle sample: cpu %, rss, spawn count ──────────────────────
+    CLK=$(getconf CLK_TCK); PAGE=$(getconf PAGESIZE)
+    ticks() { # <pid> → utime+stime ticks (fields after the ')' in /proc/stat)
+        sed 's/.*) //' "/proc/$1/stat" | awk '{print $14+$15}'
+    }
+    rss_kb() { awk '/VmRSS/{print $2}' "/proc/$1/status" 2>/dev/null; }
+
+    T0=$(ticks "$BAR_PID")
+    R0_BAR=$(rss_kb "$BAR_PID"); R0_SET=$(rss_kb "$SET_PID")
+    SEEN=$(cat /proc/"$BAR_PID"/task/*/children 2>/dev/null | tr ' ' '\n' | grep -c . || true)
+
+    N=0; while [ "$N" -lt 30 ]; do sleep 2; N=$((N + 1)); done
+
+    T1=$(ticks "$BAR_PID")
+    R1_BAR=$(rss_kb "$BAR_PID"); R1_SET=$(rss_kb "$SET_PID")
+    NOW=$(cat /proc/"$BAR_PID"/task/*/children 2>/dev/null | tr ' ' '\n' | grep -c . || true)
+
+    CPU=$(awk -v d="$((T1 - T0))" -v c="$CLK" 'BEGIN{printf "%.1f", d/c/60*100}')
+    RSS="${R1_BAR}+${R1_SET}kB"
+    SPAWNS=$((NOW - SEEN)); [ "$SPAWNS" -lt 0 ] && SPAWNS=0
+fi
+
+# ── 5 · qa suite (needs wtype + grim) ───────────────────────────────────────
+QA="skip"
+if [ -z "${RUNTIME_SKIP_QA:-}" ] && command -v wtype >/dev/null 2>&1 \
+        && command -v grim >/dev/null 2>&1; then
+    OUT=${QA_OUT:-/tmp/velocity-qa}
+    QA_OUT="$OUT" tools/qa/run >"$OUT-runtime.log" 2>&1 || bad "qa suite failed (log: $OUT-runtime.log)"
+    if [ -f "$OUT/results.tsv" ]; then
+        QA="$(awk -F'\t' '$2 == "PASS"' "$OUT/results.tsv" | wc -l)/$(wc -l < "$OUT/results.tsv")"
+    fi
+fi
+
+# ── 6 · verdict ─────────────────────────────────────────────────────────────
+echo "warnings=$WARNINGS cpu=${CPU}% rss=$RSS spawns/min=$SPAWNS qa=$QA"
+[ "$fail" -eq 0 ] && echo "check-runtime: OK"
+exit "$fail"
