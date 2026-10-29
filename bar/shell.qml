@@ -426,6 +426,21 @@ ShellRoot {
         function close(): string { return Engine.PluginRegistry.call("velocity.clipboard", "close", "") }
     }
 
+    // Screen recorder (J9, same pattern): thin forwarder to the velocity.record
+    // service — `qs -c bar ipc call record start [region|output]|stop|toggle|status`.
+    // Answers "unavailable: …" while wf-recorder is absent.
+    IpcHandler {
+        target: "record"
+
+        // bare start/toggle = region mode; typed IPC params are required, so
+        // the mode variant is its own verb
+        function start(): string { return Engine.PluginRegistry.call("velocity.record", "start", "") }
+        function startMode(argument: string): string { return Engine.PluginRegistry.call("velocity.record", "start", argument) }
+        function stop(): string { return Engine.PluginRegistry.call("velocity.record", "stop", "") }
+        function toggle(): string { return Engine.PluginRegistry.call("velocity.record", "toggle", "") }
+        function status(): string { return Engine.PluginRegistry.call("velocity.record", "status", "") }
+    }
+
     IpcHandler {
         target: "controlCenter"
         function toggle() { shellRoot.toggleControlCenter() }

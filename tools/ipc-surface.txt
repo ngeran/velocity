@@ -47,6 +47,11 @@ keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polyto
 keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
 clipboard.toggle          manual    # velocity.clipboard picker (J8; no keybind yet — omni-nix decision)
 clipboard.open            manual
+record.start             manual    # velocity.record (J9): start region|output
+record.stop              manual    # SIGINT finalize → ~/Videos mp4 + notification
+record.startMode          manual    # start <region|output> (typed arg variant)
+record.toggle            manual
+record.status            manual    # JSON: recording/elapsed/file
 clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
 controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)

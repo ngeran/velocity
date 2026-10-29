@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.record",
+  "name": "Record",
+  "version": "1.0.0",
+  "description": "Built-in service: screen recording (wf-recorder + slurp region). Island REC card with click-to-stop; hides nothing — verbs answer 'unavailable' until wf-recorder is installed.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "ServiceRoot.qml"
+  },
+  "commands": [
+    "sh",
+    "qs",
+    "mkdir",
+    "kill",
+    "wf-recorder",
+    "slurp"
+  ],
+  "ipc": [
+    "start",
+    "stop",
+    "toggle",
+    "status"
+  ],
+  "settings": {
+    "audio": {
+      "type": "bool",
+      "default": false,
+      "label": "Capture system audio"
+    }
+  }
+}
