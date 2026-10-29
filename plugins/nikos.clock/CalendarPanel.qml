@@ -21,6 +21,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import "lib/tz.mjs" as Tz
 import "lib/weather.mjs" as Wx
 import "lib/calendar.mjs" as Cal
@@ -130,6 +131,44 @@ RowLayout {
         color: "transparent"
         border.width: 1
         border.color: calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.14) : "#222"
+    }
+
+    // J6 — preset/stop pill of the FOCUS card (transparent + hairline like
+    // every control here; accent on hover).
+    component FocusPill: Rectangle {
+        id: pillRoot
+        property string label: ""
+        signal activated()
+
+        width: pillLabel.implicitWidth + 20
+        height: 22
+        radius: 6
+        color: pillMa.containsMouse
+               ? (calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.08) : "#111")
+               : "transparent"
+        border.width: 1
+        border.color: pillMa.containsMouse
+                      ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                      : (calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.25) : "#333")
+        Behavior on border.color { ColorAnimation { duration: 120 } }
+
+        Text {
+            id: pillLabel
+            anchors.centerIn: parent
+            text: pillRoot.label
+            color: pillMa.containsMouse
+                   ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                   : (calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd")
+            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+            font.pixelSize: 10; font.bold: true
+        }
+        MouseArea {
+            id: pillMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: pillRoot.activated()
+        }
     }
 
     // ═══ LEFT — month calendar card ══════════════════════════════════════════
@@ -351,6 +390,95 @@ RowLayout {
                         font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
                         font.pixelSize: 10
                     }
+                }
+            }
+        }
+
+        // ── Focus (J6) — starts the velocity.focus timer via the bar IPC ─────
+        // ctx.run (sh is declared in this plugin's manifest.commands) shells
+        // to `qs -c bar ipc call focus …`; the plugin's own bar pill carries
+        // the live countdown, so this card probes status once per OPEN and
+        // updates optimistically on click — no polling while it sits open.
+        Card {
+            id: focusCard
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+
+            property bool focusRunning: false
+            property string focusRemaining: ""
+
+            Process {
+                id: focusStatus   // unbounded-ok: one-shot probe per panel open
+                stdout: SplitParser {
+                    onRead: function(line) {
+                        try {
+                            var d = JSON.parse("" + line)
+                            focusCard.focusRunning = d.running === true
+                            focusCard.focusRemaining = typeof d.remaining === "string" ? d.remaining : ""
+                        } catch (e) {
+                            focusCard.focusRunning = false   // plugin off / not loaded
+                        }
+                    }
+                }
+            }
+            function probe() {
+                focusStatus.command = ["sh", "-c", "qs -c bar ipc call focus status"]
+                focusStatus.running = true
+            }
+            function launch(mins) {
+                focusCard.focusRunning = true
+                focusCard.focusRemaining = mins + ":00"
+                if (calRoot.ctx) calRoot.ctx.run(["sh", "-c", "qs -c bar ipc call focus start " + mins])
+            }
+            function cancel() {
+                focusCard.focusRunning = false
+                focusCard.focusRemaining = ""
+                if (calRoot.ctx) calRoot.ctx.run(["sh", "-c", "qs -c bar ipc call focus stop"])
+            }
+            Connections {
+                target: calRoot
+                function onLiveChanged() { if (calRoot.live) focusCard.probe() }
+            }
+            Component.onCompleted: if (calRoot.live) focusCard.probe()
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 10
+
+                Text {
+                    text: "󰥔"
+                    color: focusCard.focusRunning
+                           ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                           : (calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.4) : "#555")
+                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontNerd : "monospace"
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: focusCard.focusRunning
+                          ? "FOCUS  " + focusCard.focusRemaining
+                          : "FOCUS — PICK A LENGTH"
+                    color: focusCard.focusRunning
+                           ? (calRoot.ctx ? calRoot.ctx.theme.colors.accent : "#0ff")
+                           : (calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666")
+                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                    font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.5
+                    elide: Text.ElideRight
+                }
+                Row {
+                    visible: !focusCard.focusRunning
+                    spacing: 8
+                    FocusPill { label: "15M"; onActivated: focusCard.launch(15) }
+                    FocusPill { label: "25M"; onActivated: focusCard.launch(25) }
+                    FocusPill { label: "50M"; onActivated: focusCard.launch(50) }
+                }
+                FocusPill {
+                    visible: focusCard.focusRunning
+                    label: "STOP"
+                    onActivated: focusCard.cancel()
                 }
             }
         }

@@ -19,7 +19,8 @@
   "commands": [
     "curl",
     "sh",
-    "mkdir"
+    "mkdir",
+    "qs"
   ],
   "ipc": [
     "toggle",

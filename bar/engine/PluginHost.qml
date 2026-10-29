@@ -37,6 +37,17 @@ Item {
             id: serviceLoader
             required property var modelData
             source: PluginRegistry.entryUrl(modelData, "service")
+            // Hot reload swaps the item; the Loader itself survives, so its
+            // Component.onDestruction never fires for the swap. Without this
+            // guard the OUTGOING root lingers in PluginRegistry.instances and
+            // instance()/call() serve a destroyed object (J6: reload left
+            // every entryPoints.service plugin answering "not loaded").
+            property var _mountedItem: null
+            onItemChanged: {
+                if (_mountedItem && _mountedItem !== item)
+                    PluginRegistry.unmount(modelData.id, _mountedItem)
+                _mountedItem = item
+            }
             onLoaded: PluginRegistry.mount(item, modelData, "service", null)
             onStatusChanged: {
                 if (status === Loader.Error)
@@ -59,6 +70,15 @@ Item {
             Loader {
                 id: overlayLoader
                 source: PluginRegistry.entryUrl(overlaySlot.modelData, "overlay")
+                // Same swap-guard as the service Loader above: a hot reload
+                // replaces the item without destroying the Loader, so the
+                // outgoing overlay root must be unmounted here.
+                property var _mountedItem: null
+                onItemChanged: {
+                    if (_mountedItem && _mountedItem !== item)
+                        PluginRegistry.unmount(overlaySlot.modelData.id, _mountedItem)
+                    _mountedItem = item
+                }
                 onLoaded: PluginRegistry.mount(item, overlaySlot.modelData, "overlay", null)
                 onStatusChanged: {
                     if (status === Loader.Error)

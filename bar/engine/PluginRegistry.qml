@@ -538,7 +538,11 @@ Item {
         if ("ctx" in item) item.ctx = root._contextFor(plugin, item, window)
         var list = (root.instances[plugin.id] || []).filter(function(e) { return e.item && e.item !== item })
         list.push({ item: item, kind: kind, window: window || null })
-        var reg = root.instances
+        // Clone — assigning the same object reference back would emit no
+        // change signal, and every ctx.service binding would freeze at the
+        // map state of its first evaluation (PopupCoordinator's islands map
+        // documents the same doctrine: reassigned, never mutated).
+        var reg = Object.assign({}, root.instances)
         reg[plugin.id] = list
         root.instances = reg
     }
@@ -550,7 +554,7 @@ Item {
         var list = reg[id].filter(function(e) { return e.item && e.item !== item })
         if (list.length > 0) reg[id] = list
         else delete reg[id]
-        root.instances = reg
+        root.instances = Object.assign({}, reg)   // clone: emit the change signal
     }
 
     // The live instance of `kind` ("" = any) on the focused monitor, else

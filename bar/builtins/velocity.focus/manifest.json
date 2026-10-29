@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.focus",
+  "name": "Focus",
+  "version": "1.0.0",
+  "description": "Focus timer: accent countdown pill; transient timer-priority activity at start and completion; desktop notification when done. Counts to a persisted end timestamp (no drift) and survives bar restarts.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "ServiceRoot.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [
+    "sh",
+    "mkdir",
+    "qs"
+  ],
+  "ipc": [
+    "start",
+    "stop",
+    "status"
+  ],
+  "settings": {
+    "defaultMinutes": {
+      "type": "number",
+      "default": 25,
+      "min": 1,
+      "max": 180,
+      "label": "Minutes an idle-pill click starts"
+    }
+  }
+}
