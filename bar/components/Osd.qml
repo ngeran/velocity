@@ -34,12 +34,28 @@ PanelWindow {
     // Island style: the feedback renders inside the island instead.
     readonly property bool islandOwnsOsd: Object.keys(Engine.PopupCoordinator.islands).length > 0
     // The queue's winner, gated like the island: focusedOnly entries (the
-    // OSD) follow the focused output.
+    // OSD) follow the focused output. The gate reads the screen NAME through
+    // an imperative copy (P1.11): reading `osdWindow.screen` inside `shown`
+    // closes a binding loop (screen re-resolves on visibility; visible reads
+    // shown). The copy never resets to "": a window CLOSE nulls `screen`,
+    // and an empty name makes the gate PASS — pass → reopen → name set →
+    // fail → close → … was the oscillation the engine reported as a loop on
+    // `shown`. Holding the last name converges; the first assignment still
+    // happens at window creation.
+    property string _screenName: ""
+    // callLater: the write must NOT land inside the synchronous window-setup
+    // pass — visible eval → surface creation → screenChanged → write → shown
+    // re-entry was the engine's loop, even with the value held stable across
+    // close (the boot-time re-entry at creation needs no value flip).
+    onScreenChanged: if (screen !== null) Qt.callLater(function () {
+        if (osdWindow.screen !== null) _screenName = osdWindow.screen.name
+    })
     readonly property var act: Engine.PopupCoordinator.visibleActivity
     readonly property bool shown: act !== null
         && (!act.focusedOnly
             || Services.HyprlandService.focusedMonitor === ""
-            || (osdWindow.screen !== null && Services.HyprlandService.focusedMonitor === osdWindow.screen.name))
+            || _screenName === ""
+            || Services.HyprlandService.focusedMonitor === _screenName)
     readonly property bool hasTrack: act !== null && act.progress !== undefined
     visible: !islandOwnsOsd && (osdWindow.shown || card.opacity > 0)
 

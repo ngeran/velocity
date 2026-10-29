@@ -394,7 +394,7 @@ ShellRoot {
     }
 
     // TRANSITIONAL — delete once SUPER+SHIFT+SPACE in ~/.omni-nix/configs/
-    // hypr/keybindings.lua calls the plugin directly:
+    // ~/.config/hypr/keybindings.lua (omni-nix ships it) calls the plugin directly:
     //   qs -c bar ipc call plugins call nikos.keyboard next ""
     // Until then the old `keyboard.*` targets just forward to the plugin's
     // declared verbs (manifest.ipc), so the bind keeps working.
@@ -441,7 +441,7 @@ ShellRoot {
         function toggle() { shellRoot.toggleControlCenter() }
     }
 
-    // Keybinds overlay toggle (for SUPER+K — see configs/hypr/keybindings.lua)
+    // Keybinds overlay toggle (for SUPER+K — see ~/.config/hypr/keybindings.lua)
     IpcHandler {
         id: keybindsIpc
         target: "keybinds"
@@ -451,7 +451,7 @@ ShellRoot {
         }
     }
 
-    // Z.ai usage overlay toggle (for SUPER+Z — see configs/hypr/keybindings.lua)
+    // Z.ai usage overlay toggle (for SUPER+Z — see ~/.config/hypr/keybindings.lua)
     IpcHandler {
         id: zaiUsageIpc
         target: "zaiUsage"
@@ -461,7 +461,7 @@ ShellRoot {
         }
     }
 
-    // Logs overlay toggle (for SUPER+T — see configs/hypr/keybindings.lua)
+    // Logs overlay toggle (for SUPER+T — see ~/.config/hypr/keybindings.lua)
     IpcHandler {
         id: logsIpc
         target: "logs"

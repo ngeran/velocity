@@ -17,7 +17,12 @@
 # (security.pam.services.velocity-lock) — same trap as the hyprlock note there.
 # =============================================================================
 
-QS_BIN="$(command -v quickshell || echo /etc/profiles/per-user/nikos/bin/quickshell)"
+# PATH only — a hard-coded store/profile path rots on every rebuild (P1.8).
+QS_BIN="$(command -v quickshell || true)"
+if [ -z "$QS_BIN" ]; then
+  echo "velocity-lock: quickshell not on PATH" >&2
+  exit 1
+fi
 
 case "${1-}" in
   preview)

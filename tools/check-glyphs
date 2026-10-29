@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# check-glyphs — no silent icon losses (the P1.2 incident class).
+#
+# A Nerd Font Text whose `text:` is the empty string renders as NOTHING: the
+# glyph was lost (editor/paste mangling) or never restored, and the UI just
+# shows a hole — no gate caught it, so BarSettingsOverlay's header icon sat
+# empty for its whole life. This gate rejects that shape:
+#
+#   a bare `text: ""` assignment within 5 lines of a fontNerd font reference
+#
+# `property string text: ""` DECLARATIONS are exempt (component API defaults,
+# not rendered literals), as are concatenations (`text: "" + x` renders x).
+# Glyphs must be written as \uXXXX escapes (the transport law: raw PUA chars
+# mangle through editors and shells) — QML decodes the escape at load.
+#
+# Usage: tools/check-glyphs          (whole repo; part of check-all)
+set -u
+cd "$(dirname "$0")/.."
+
+fail=0
+while IFS= read -r -d '' f; do
+    awk -v file="$f" '
+        # a rendered empty text literal — NOT a property declaration, NOT a
+        # concatenation (those lines have more after the closing quote)
+        /^[[:space:]]*text[[:space:]]*:[[:space:]]*""[[:space:]]*(\/\/.*)?$/ {
+            empty[NR] = 1
+        }
+        # any nerd-font reference near the empty text: the property itself or
+        # a local alias (fontN) pointing at it
+        /fontNerd/ { nerd[NR] = 1 }
+        END {
+            for (e in empty) {
+                for (n in nerd) {
+                    d = e - n; if (d < 0) d = -d
+                    if (d <= 5) { print file ":" e ": empty text: on a fontNerd Text — restore the \\uXXXX glyph or drop the element"; fail = 1; break }
+                }
+            }
+            exit fail
+        }
+    ' "$f" || fail=1
+done < <(find bar settings plugins shared -name '*.qml' -not -path '*/.git/*' -print0 2>/dev/null)
+
+if (( fail == 0 )); then
+    echo "check-glyphs: OK"
+fi
+exit "$fail"

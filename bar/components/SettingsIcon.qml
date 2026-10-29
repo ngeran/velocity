@@ -41,7 +41,7 @@ HoverGlyph {
 
     function activate() {
         launcher.command = ["sh", "-c",
-            "quickshell ipc -c settings call SettingsWindow toggle 2>/dev/null || " +
+            "qs -c settings ipc call SettingsWindow toggle 2>/dev/null || " +
             "setsid quickshell -c settings >/dev/null 2>&1 &"]
         launcher.running = true
     }

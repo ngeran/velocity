@@ -1,40 +1,37 @@
 // =============================================================================
 // settings/config/ThemePresets.qml
-// Single Source of Truth for All Theme Palettes
+// Curated theme presets — views over the canonical seed
 // =============================================================================
 //
-// This singleton contains the full 17-token bundle for all 6 curated presets.
-// It is the canonical source of truth for theme palettes across the entire
-// settings process. ThemeService, ThemeModule, and ThemePresetCard all read
-// from here, eliminating palette drift and duplicate maintenance.
+// This singleton holds the token bundles for the 6 curated presets.
+// ThemeService, ThemeModule, and ThemePresetCard all read from here. The
+// CANONICAL seed — "OLED Pure Black" — is shared/theme-core.mjs
+// DEFAULT_BUNDLE (synced to ../lib/theme-core.mjs; the VFS cannot cross
+// config roots, hence the sync): the preset entry below DERIVES from it
+// rather than restating it (P1.9 — the two copies used to diverge).
+// The other five presets are defined here and nowhere else.
 //
-// The 17 canonical color tokens (Tier 1 structural + Tier 2 accents):
+// The canonical color tokens (Tier 1 structural + Tier 2 accents):
 //   background, surface, surfaceVariant, surfaceContainer,
 //   text, textDim, border, outline, outlineVariant,
 //   primary, secondary, accent, success, warning, error, info
-//
-// These values MUST be kept in sync with ~/.local/bin/theme-switcher.
 //
 // =============================================================================
 
 pragma Singleton
 import QtQuick
+import "../lib/theme-core.mjs" as ThemeCore
 
 QtObject {
     id: presetRoot
 
     // =========================================================================
-    // PRESET PALETTE TABLE — full 17-token bundles for all 6 curated themes
+    // PRESET PALETTE TABLE — full token bundles for all 6 curated themes
     // =========================================================================
 
     readonly property var palettes: ({
-        "OLED Pure Black": {
-            background: "#000000", surface: "#000000", surfaceVariant: "#0a0a0a",
-            surfaceContainer: "#111111", text: "#e0e0e0", textDim: "#808080",
-            border: "#1a1a1a", outline: "#2a2a2a", outlineVariant: "#1a1a1a",
-            primary: "#7c6bf0", secondary: "#00dce5", accent: "#f87171",
-            success: "#34d399", warning: "#fbbf24", error: "#f87171", info: "#00dce5"
-        },
+        // THE seed — one definition, shared/theme-core.mjs (see header).
+        "OLED Pure Black": ThemeCore.DEFAULT_BUNDLE,
         "Catppuccin Mocha": {
             background: "#1e1e2e", surface: "#181825", surfaceVariant: "#313244",
             surfaceContainer: "#313244", text: "#cdd6f4", textDim: "#a6adc8",

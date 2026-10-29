@@ -124,6 +124,22 @@ while IFS= read -r d; do
   grep -q "^$d[[:space:]]" "$SURFACE" || warn "declared '$d' is not in $SURFACE (add it with a class)"
 done <<< "$declared"
 
+# --- P1.6: one CLI call form in THIS repo -------------------------------------
+# `qs -c <proc> ipc call …` is the recorded form (P0 Facts: both spellings
+# work at runtime, but a single spelling keeps callers greppable and the
+# scanners above honest). The omni-nix extraction still accepts `quickshell
+# ipc` — a different tree. tools/ is exempt: its dev harness targets `-p`
+# instances positionally, which the named-config form cannot express. Only
+# call SHAPES match — prose that merely names the CLI (`quickshell ipc` CLI
+# subcommand) is fine.
+stray="$(grep -rnE 'quickshell ipc (-c |--config )[a-zA-Z]+ call|quickshell ipc call' \
+    "$QS_DIR/bar" "$QS_DIR/settings" "$QS_DIR/plugins" "$QS_DIR/shared" "$QS_DIR/bin" \
+    --include='*.qml' --include='*.mjs' --include='*.sh' 2>/dev/null || true)"
+if [[ -n $stray ]]; then
+  fail "non-canonical IPC call form (use: qs -c <proc> ipc call <target> <fn>):"
+  echo "$stray" | sed 's/^/    /' >&2
+fi
+
 if (( status == 0 )); then
   echo "check-ipc: OK ($(wc -l <<< "$declared") declared, $(grep -c . <<< "$used_raw") used, manifest consistent)"
 fi

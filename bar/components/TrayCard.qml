@@ -51,9 +51,9 @@ PanelWindow {
     // "OPEN IN SETTINGS ›" — the full manager for each body lives in the
     // settings app (single source); literal call strings for tools/check-ipc.
     readonly property var _settingsCalls: ({
-        openControlNetwork: "quickshell ipc -c settings call SettingsWindow openControlNetwork",
-        openControlBluetooth: "quickshell ipc -c settings call SettingsWindow openControlBluetooth",
-        openControlAudio: "quickshell ipc -c settings call SettingsWindow openControlAudio"
+        openControlNetwork: "qs -c settings ipc call SettingsWindow openControlNetwork",
+        openControlBluetooth: "qs -c settings ipc call SettingsWindow openControlBluetooth",
+        openControlAudio: "qs -c settings ipc call SettingsWindow openControlAudio"
     })
     function openSettings(verb) {
         settingsLauncher.command = ["sh", "-c", card._settingsCalls[verb] + " 2>/dev/null || " +

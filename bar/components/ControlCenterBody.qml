@@ -25,8 +25,8 @@ ColumnLayout {
     // Literal call strings (tools/check-ipc greps for them); launches the
     // settings shell when it isn't running.
     readonly property var _settingsCalls: ({
-        openSettings: "quickshell ipc -c settings call SettingsWindow openSettings",
-        openThemeTab: "quickshell ipc -c settings call SettingsWindow openThemeTab"
+        openSettings: "qs -c settings ipc call SettingsWindow openSettings",
+        openThemeTab: "qs -c settings ipc call SettingsWindow openThemeTab"
     })
     function openSettings(verb) {
         launcher.command = ["sh", "-c", root._settingsCalls[verb] + " 2>/dev/null || " +

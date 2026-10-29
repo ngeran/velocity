@@ -688,6 +688,17 @@ Item {
                         // Live activity readout (the queue's winner): glyph · track · label.
                         // Clickable when the activity carries `activate` (the
                         // J2 notification peek) — pointer + click else inert.
+                        // The wrapper Item is structural (P1.11 journal fix):
+                        // a Row child may not anchors.fill, so the forgiving
+                        // click target can't live inside activityRow — the
+                        // wrapper carries the centering AND the MouseArea;
+                        // the Row is sized by its children.
+                        Item {
+                            id: activityWrap
+                            anchors.centerIn: parent
+                            width: activityRow.width
+                            height: activityRow.height
+
                         Row {
                             id: activityRow
                             readonly property bool shown: win.islandState === Isl.ACTIVITY
@@ -695,7 +706,6 @@ Item {
                                 && win.activity.activate !== undefined
                             readonly property bool hasTrack: win.activity !== null
                                 && win.activity.progress !== undefined
-                            anchors.centerIn: parent
                             spacing: Math.round(win.barH * 0.4)
                             opacity: shown ? win.activityAlpha : 0
                             visible: opacity > 0.01
@@ -761,6 +771,10 @@ Item {
                                       : (win.activity && win.activity.accent) ? win.activity.accent
                                       : Config.BarConfig.colorAccent
                             }
+                            }
+                            // Lives on the wrapper (a Row child may not
+                            // anchors.fill); parent = activityWrap, so the
+                            // forgiving -8px target still covers the whole row.
                             MouseArea {
                                 anchors.fill: parent
                                 anchors.margins: -8   // forgiving target on a barH row

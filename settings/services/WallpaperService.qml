@@ -31,7 +31,7 @@
 //   Handoff is flash-free both ways: awww renders UNDER mpvpaper, so
 //   animated→still applies the still first, then clears the instances.
 //
-// IPC Commands (quickshell ipc call settings call wallpaper-service <fn>):
+// IPC Commands (qs -c settings ipc call wallpaper-service <fn>):
 //   cycleNow            — Apply a random wallpaper immediately
 //   refreshList         — Re-scan both wallpaper directories
 //   getList             — Returns newline-separated list of wallpaper paths
@@ -824,7 +824,7 @@ Item {
     // --------------------------------------------------------------------------
     // These mirror the IpcHandler interface below. The IPC handlers delegate
     // here so behavior is identical whether called from WallpaperModule (a
-    // direct singleton method call) or over `quickshell ipc`.
+    // direct singleton method call) or over `qs -c settings ipc call`.
     //
     // GOTCHA: functions declared inside an IpcHandler{} block are NOT callable
     // as methods on this singleton from other QML files — they only answer IPC

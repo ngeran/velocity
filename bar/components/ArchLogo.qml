@@ -6,6 +6,7 @@
 
 import QtQuick
 import "../config" as Config
+import "../lib/b64.mjs" as B64
 
 Item {
     id: icon
@@ -30,8 +31,8 @@ Item {
             + '<path d="M8.2247 14.1249L0 22.3496L1.85031 24.1999L10.075 15.9752L8.2247 14.1249Z" fill="' + fill + '"/>'
             + '</svg>'
     }
-    readonly property string _normalSrc: "data:image/svg+xml;base64," + Qt.btoa(_svgBody(Config.ThemeConfig.colors.text))
-    readonly property string _hoverSrc: "data:image/svg+xml;base64," + Qt.btoa(_svgBody(Config.BarConfig.colorAccent))
+    readonly property string _normalSrc: "data:image/svg+xml;base64," + B64.b64encode(_svgBody(Config.ThemeConfig.colors.text))
+    readonly property string _hoverSrc: "data:image/svg+xml;base64," + B64.b64encode(_svgBody(Config.BarConfig.colorAccent))
 
     // Normal (text-colour) logo
     Image {

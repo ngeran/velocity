@@ -56,7 +56,7 @@ export const rotatingBackupId = /^look-and-feel\.lua\.[0-9]{8}-[0-9]{6}(?:-[0-9]
 // variant is left out on purpose: this setup binds Super+Space (and the bar's
 // keybinds overlay documents it).
 // "none" writes no grp: option at all, for switching through a Hyprland
-// binding to `quickshell ipc -c bar call keyboard next` instead.
+// binding to `qs -c bar ipc call keyboard next` instead.
 export const HOTKEYS = [
   { value: "grp:caps_toggle", label: "Caps Lock" },
   { value: "grp:shift_caps_toggle", label: "Shift+Caps Lock" },

@@ -107,10 +107,21 @@ Item {
         // ≈ a couple of nits on QD-OLED — dimmer than the rounding-AA it
         // replaces). Deliberately OUTSIDE the orbit wrapper: an edge-flush
         // line that drifted 1-2px would show a gap against the screen edge.
+        // Edge tint line rides the desktop-facing edge — flips with the bar.
+        // Two anchored siblings instead of one ternary-null-anchored item
+        // (P1.11: assigning null to an anchor line is a boot warning; the
+        // language has no "unset this anchor" expression). Invisible half
+        // costs nothing; only one is ever visible.
         Rectangle {
-            // Edge tint line rides the desktop-facing edge — flips with the bar.
-            anchors.bottom: Config.BarConfig.barAtBottom ? null : parent.bottom
-            anchors.top: Config.BarConfig.barAtBottom ? parent.top : null
+            visible: !Config.BarConfig.barAtBottom
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 1
+            color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)
+        }
+        Rectangle {
+            visible: Config.BarConfig.barAtBottom
+            anchors.top: parent.top
             width: parent.width
             height: 1
             color: Config.ThemeConfig.withAlpha(Config.ThemeConfig.colors.text, 0.045)

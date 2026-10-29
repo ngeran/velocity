@@ -30,7 +30,7 @@ var nb2 = Core.normalizeBundle({ background: "#111111", surfaceVariant: "#222222
 ok(nb2.background === "#111111", "raw value wins");
 ok(nb2.surfaceContainer === "#222222", "container cascades from raw surfaceVariant");
 var nb3 = Core.normalizeBundle({ surface: "red" }, Core.DEFAULT_BUNDLE);
-ok(nb3.surface === "#0a0a0a", "non-# value rejected → default");
+ok(nb3.surface === Core.DEFAULT_BUNDLE.surface, "non-# value rejected → default");
 
 // ── clampOLED ───────────────────────────────────────────────────────────────
 var c1 = Core.clampOLED(Core.normalizeBundle({ background: "#ffffff", surface: "#eeeeee" }, Core.DEFAULT_BUNDLE), false, Core.DEFAULT_BUNDLE);

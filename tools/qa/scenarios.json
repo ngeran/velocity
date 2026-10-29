@@ -57,8 +57,8 @@
     },
     {
       "id": "plugins-settings-roundtrip",
-      "name": "Plugin settings transport: schema read, noop write accepted, bad value rejected, values byte-identical",
-      "covers": "plugins settings/setSetting IPC \u2014 the exact transport the Plugins pane settings form uses; schema coercion and rejection paths; no state drift. The noop write may materialize an implicit default as an explicit stored value (zone Local == absent zone Local)",
+      "name": "Plugin settings transport: schema read, noop write accepted, bad value rejected, stored values stable",
+      "covers": "plugins settings/setSetting IPC \u2014 the exact transport the Plugins pane settings form uses; schema coercion and rejection paths; no state drift. The noop write may materialize an implicit default as an explicit stored value (zone Local == absent zone Local), so stability means: every key present in the FIRST read is unchanged and still present after the write \u2014 not byte-identical objects (P1: the strict diff flaked on first-ever runs, exactly per this covers note)",
       "steps": [
         "ipc bar plugins settings nikos.clock",
         "sh v=$(jq -r '.values.zone // \"Local\"' \"$QA_EV/01-plugins-settings.out\"); qs -c bar ipc call plugins setSetting nikos.clock zone \"\\\"$v\\\"\"",
@@ -69,7 +69,7 @@
         "jq -e '.schema.zone.type == \"enum\" and (.schema.zone.options | length) >= 1 and .schema.zone.default != null' $QA_EV/01-plugins-settings.out",
         "grep -qx ok $QA_EV/02-sh.out",
         "grep -q 'rejected by the manifest schema' $QA_EV/03-plugins-setSetting.out",
-        "diff <(jq -S '.values' $QA_EV/01-plugins-settings.out) <(jq -S '.values' $QA_EV/04-plugins-settings.out)"
+        "jq -se '(.[0].values | to_entries) as $a | (.[1].values) as $b | ([ $a[] | $b[.key] == .value ] | all) and ([ $a[].key ] - ([ $b | keys[] ] | .) == [])' $QA_EV/01-plugins-settings.out $QA_EV/04-plugins-settings.out"
       ]
     },
     {

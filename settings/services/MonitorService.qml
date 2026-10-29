@@ -346,8 +346,8 @@ Item {
     // open the Keep/Revert window. The DEADLINE lives OUTSIDE this process:
     // a transient systemd timer (systemd-run --user --on-active) re-applies
     // the snapshot even if the shell dies mid-window (the Omacale lesson —
-    // whoever owns the clock must outlive the UI; see .plans/omacale-review.md
-    // #1). confirmKeep() cancels the timer; revertNow() cancels it and
+    // whoever owns the clock must outlive the UI).
+    // confirmKeep() cancels the timer; revertNow() cancels it and
     // applies immediately. The 250ms in-process timer above stays as a
     // backup — re-applying the same rule is idempotent, so both firing is
     // harmless. If the shell dies the window simply reverts (fail-safe to
@@ -502,7 +502,7 @@ Item {
     // cmAutoHdr lives in the look-and-feel render block, not monitors.lua.
     FileView {
         id: lookFile
-        path: root.hyprDir + "/looknfeel.lua"
+        path: root.hyprDir + "/look-and-feel.lua"
         watchChanges: false
         onLoaded: {
             var m = /cm_auto_hdr\s*=\s*(\d)/.exec(text())

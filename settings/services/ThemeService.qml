@@ -170,7 +170,7 @@ Item {
         var colorsJsonPath = themeService.homeDir + "/.cache/theme/colors.json";
         themeService._atomicWrite(colorsJsonPath, JSON.stringify({ colors: bundle, metadata: metadata }), function(ok) {
             if (!ok) return;
-            var nudge = "n=0; until quickshell ipc -c bar call theme reload 2>&1 | grep -q ok; do " +
+            var nudge = "n=0; until qs -c bar ipc call theme reload 2>&1 | grep -q ok; do " +
                         "n=$((n+1)); [ $n -ge 10 ] && exit 1; sleep 0.15; done";
             themeService._runSh(nudge, "bar theme nudge");
         });

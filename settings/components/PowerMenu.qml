@@ -57,12 +57,6 @@ PanelWindow {
         systemCmd.execute(cmd)
     }
 
-    Keys.onEscapePressed: {
-        // Escape defuses the armed confirm first, then closes the menu.
-        if (root.confirming) root._cancelConfirm()
-        else root.showing = false
-    }
-
     aboveWindows: true
     focusable: true
     exclusionMode: ExclusionMode.Ignore
@@ -87,6 +81,9 @@ PanelWindow {
     Timer { id: hideTimer; interval: 220; onTriggered: if (!root.showing) root.visible = false }
 
     // ---- dim backdrop (click-outside = close) ----
+    // Keys live here (OverlayShell's card pattern): a Keys attached property
+    // on the PanelWindow root can't attach — the window is not an Item (the
+    // boot warning P1.11 fixed).
     Rectangle {
         anchors.fill: parent
         color: root.cBg
@@ -94,6 +91,11 @@ PanelWindow {
         visible: opacity > 0.01
         Behavior on opacity { NumberAnimation { duration: 200 } }
         MouseArea { anchors.fill: parent; onClicked: root.showing = false }
+        Keys.onEscapePressed: {
+            // Escape defuses the armed confirm first, then closes the menu.
+            if (root.confirming) root._cancelConfirm()
+            else root.showing = false
+        }
     }
 
     // ---- centred card ----

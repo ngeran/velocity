@@ -4,7 +4,7 @@
 // A size-clamped (≤900×≤680) overlay that mirrors KeybindsOverlay's shell (full-screen
 // transparent PanelWindow, dim backdrop, centered card, Esc / click-outside,
 // shown/visible + 220ms hide timer). Toggled via IPC:
-//   quickshell ipc -c bar call zaiUsage toggle    (bound to SUPER+Z)
+//   qs -c bar ipc call zaiUsage toggle    (bound to SUPER+Z)
 //
 // CONTENT is the provided HUD reference, re-tinted by the LIVE theme
 // (Config.ThemeConfig.colors.*) so it recolors with the rest of the shell:

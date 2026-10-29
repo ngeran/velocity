@@ -118,9 +118,15 @@ Item {
                 spacing: 12
 
                 // Bracket-style OLED clamp toggle — terminal flag, not a
-                // settings row.
-                Row {
-                    spacing: 4
+                // settings row. The wrapper Item is structural: a Row child
+                // may not anchors.fill (P1.11 journal fix), so the MouseArea
+                // lives on the wrapper, sized by the Row it fronts.
+                Item {
+                    implicitWidth: oledRow.width
+                    implicitHeight: oledRow.height
+                    Row {
+                        id: oledRow
+                        spacing: 4
 
                     Text {
                         text: "["
@@ -144,6 +150,7 @@ Item {
                         font.pixelSize: 9
                         font.family: Config.SettingsConfig.fontFamily
                         color: Config.ThemeConfig.colors.textDim
+                    }
                     }
 
                     MouseArea {

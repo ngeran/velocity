@@ -18,12 +18,14 @@
 // Pure functions only — no Qt, no I/O; node-tested (bar/lib/theme-core.test.mjs).
 // =============================================================================
 
-// The 16-token default seed ("OLED Pure Black"). Values were settings
-// ThemeSchema.defaults; the schema now delegates here so there is ONE seed.
-// KEEP IN SYNC note: ~/.omni-nix/modules/apps/essentials.nix seedThemeColors
-// is the remaining Nix-side copy (cross-repo, cannot import this).
+// The 16-token default seed — and THE "OLED Pure Black" definition (P1.9:
+// settings ThemePresets derives its preset entry from here; before, two
+// diverging copies existed, one with a non-black surface). Values were
+// settings ThemeSchema.defaults; the schema delegates here so there is ONE
+// seed. KEEP IN SYNC note: ~/.omni-nix/modules/apps/essentials.nix
+// seedThemeColors is the remaining Nix-side copy (cross-repo, cannot import).
 export const DEFAULT_BUNDLE = {
-    background: "#000000", surface: "#0a0a0a", surfaceVariant: "#111111",
+    background: "#000000", surface: "#000000", surfaceVariant: "#0a0a0a",
     surfaceContainer: "#111111", text: "#e0e0e0", textDim: "#808080",
     border: "#1a1a1a", outline: "#2a2a2a", outlineVariant: "#1a1a1a",
     primary: "#7c6bf0", secondary: "#00dce5", accent: "#f87171",

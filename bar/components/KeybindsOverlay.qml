@@ -3,8 +3,8 @@
 // =============================================================================
 // Replaces the old `kitty -e python3 keybinds_viewer.py` flow (python3 isn't on
 // PATH under NixOS). A centered, themed PanelWindow overlay with the keybinds
-// grouped by section. Toggled via IPC: `quickshell ipc -c bar call keybinds toggle`
-// (bound to SUPER+K in configs/hypr/keybindings.lua). Esc or outside-click closes.
+// grouped by section. Toggled via IPC: `qs -c bar ipc call keybinds toggle`
+// (bound to SUPER+K in ~/.config/hypr/keybindings.lua). Esc or outside-click closes.
 // =============================================================================
 
 import Quickshell
@@ -120,7 +120,7 @@ OverlayShell {
             }
         }
 
-    // ---- keybinds data (mirrors configs/hypr/keybindings.lua) ----
+    // ---- keybinds data (mirrors ~/.config/hypr/keybindings.lua) ----
     property var keybindModel: [
         { sectionName: "CORE APPLICATIONS", binds: [
             { key: "SUPER + X",         desc: "Terminal" },

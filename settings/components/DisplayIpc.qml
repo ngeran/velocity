@@ -6,8 +6,8 @@
 // trap — see SettingsWindowShell). A shell.qml-side handler would probe an empty
 // twin. Declared in tools/ipc-surface.txt.
 //
-//   quickshell ipc -c settings call display status
-//   quickshell ipc -c settings call display stage
+//   qs -c settings ipc call display status
+//   qs -c settings ipc call display stage
 // =============================================================================
 
 import Quickshell.Io

@@ -5,8 +5,8 @@
 // singleton, and shell.qml's "services" import is a separate instance (the
 // SharedState trap). Declared in tools/ipc-surface.txt.
 //
-//   quickshell ipc -c settings call network latency
-//   quickshell ipc -c settings call network engineer
+//   qs -c settings ipc call network latency
+//   qs -c settings ipc call network engineer
 // =============================================================================
 
 import Quickshell.Io

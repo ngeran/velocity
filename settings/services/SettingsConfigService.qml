@@ -129,13 +129,18 @@ Item {
         _justSavedReset.restart()
     }
 
-    // One-click escape hatch for the Settings tab
+    // One-click escape hatch for the Settings tab. Resets the WHOLE saved
+    // surface (P1.7: barStyle/osdStyle/both burn guards were silently kept).
     function resetToDefaults() {
         root.animationSpeed = "normal"
         root.cornerRadius = 0
         root.barHeight = 26
         root.barPosition = "top"
         root.workspaceCount = 5
+        root.barStyle = "vector"
+        root.osdStyle = "bar"
+        root.islandBurnGuard = true
+        root.stripBurnGuard = true
         root.matugenOnWallpaperChange = false
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
     }
@@ -215,7 +220,7 @@ Item {
         var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
         ThemeService._atomicWrite(barConfigPath, json, function(ok) {
             if (!ok) return
-            ThemeService._runSh("n=0; until quickshell ipc -c bar call config reload 2>&1 | grep -q ok; do " +
+            ThemeService._runSh("n=0; until qs -c bar ipc call config reload 2>&1 | grep -q ok; do " +
                                 "n=$((n+1)); [ $n -ge 10 ] && exit 1; sleep 0.15; done", "bar config nudge")
         })
     }

@@ -6,9 +6,9 @@
 // read/write this one model.
 //
 // INGEST — push a notification from anywhere on the system:
-//   quickshell ipc --config bar call notifications add \
+//   qs -c bar ipc call notifications add \
 //     '{"appName":"Firefox","summary":"Download complete","body":"file.tar.gz","urgency":1}'
-//   quickshell ipc --config bar call notifications clear
+//   qs -c bar ipc call notifications clear
 //
 // INGEST PATHS (J1b) — real system notifications arrive NATIVELY: a
 // NotificationServer (Loader-hosted) claims org.freedesktop.Notifications,
@@ -393,22 +393,33 @@ Item {
     // Owned → something ELSE is the notification server (a manually started
     // mako/dunst, …); constructing ours would make two servers fight over the
     // name, so we stand down — the active path is logged either way.
-    property bool _busOwned: true
+    // Unknown-until-resolved (P1.1): the pre-P1 form only resolved on a
+    // well-formed reply, so a dead dbus-send (bus not up yet, binary gone)
+    // left us stood down SILENTLY forever. Now exit, error and timeout all
+    // resolve — an unresolved probe claims the bus (D8: velocity owns it) and
+    // the outcome is logged exactly once.
+    property bool _busOwned: false
     property bool _probed: false
-    Process {   // unbounded-ok: one-shot NameHasOwner probe, exits at the reply
+    function _resolveProbe(owned) {
+        if (_probed) return
+        root._busOwned = owned
+        root._probed = true
+        console.log("[Notifications] " + (owned
+            ? "stand-down — org.freedesktop.Notifications owned elsewhere"
+            : "native NotificationServer active — owns org.freedesktop.Notifications"))
+    }
+    BoundedProcess {   // bounded: timeout/error/exit all resolve (P1.1)
         id: _busProbe
+        timeoutMs: 5000
         command: ["dbus-send", "--print-reply", "--dest=org.freedesktop.DBus",
                   "/org/freedesktop/DBus", "org.freedesktop.DBus.NameHasOwner",
                   "string:org.freedesktop.Notifications"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _busProbe.buffer += data + "\n" } }
-        onRunningChanged: if (!running && _busProbe.buffer !== "") {
-            root._busOwned = _busProbe.buffer.indexOf("boolean true") !== -1
-            root._probed = true
-            console.log("[Notifications] " + (root._busOwned
-                ? "stand-down — org.freedesktop.Notifications owned elsewhere"
-                : "native NotificationServer active — owns org.freedesktop.Notifications"))
-            _busProbe.buffer = ""
+        onDone: function (out, err, code) {
+            root._resolveProbe(String(out).indexOf("boolean true") !== -1)
+        }
+        onLimit: function (reason) {
+            console.log("[Notifications] bus probe " + reason + " — assuming free")
+            root._resolveProbe(false)
         }
     }
 

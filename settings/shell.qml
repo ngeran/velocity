@@ -311,7 +311,7 @@ ShellRoot {
     // Runs through dashboard.* bridges: the search index singleton lives under
     // the components' "../services" import, a DIFFERENT instance from this
     // file's "services" (see SettingsWindowShell — the SharedState trap).
-    //   quickshell ipc -c settings call search query lock
+    //   qs -c settings ipc call search query lock
     // =========================================================================
     IpcHandler {
         target: "search"
@@ -374,11 +374,13 @@ ShellRoot {
                 anchors.fill: parent
                 onClicked: root.shown = false
             }
-        }
 
-        // Key handler — Escape closes
-        Keys.onEscapePressed: {
-            root.shown = false
+            // Key handler — Escape closes. Lives on the backdrop (OverlayShell
+            // card pattern): a Keys attached property on the PanelWindow root
+            // can't attach — the window is not an Item (P1.11 journal fix).
+            Keys.onEscapePressed: {
+                root.shown = false
+            }
         }
 
         // =====================================================================

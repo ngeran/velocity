@@ -53,17 +53,36 @@ OverlayShell {
         _scanStyles()
         _refresh()
         _heightDraft = Config.BarConfig.barHeight
+        _heightCommitted = Config.BarConfig.barHeight
+    }
+
+    // Re-seed the draft when BarConfig reloads under us while the card is open
+    // (a settings-side save, another host's pick) — never mid-drag (P1.5).
+    Connections {
+        target: Config.BarConfig
+        function onBarHeightChanged() {
+            if (!root.shown || heightSlider.pressed) return
+            root._heightDraft = Config.BarConfig.barHeight
+            root._heightCommitted = Config.BarConfig.barHeight
+        }
     }
 
     // ---- state (rebuilt imperatively — no cross-object bindings) ----
-    property var _styles: []
+    // _styles seeds with the built-in set (P1.3): the directory scan needs the
+    // repo on disk at the deployed path — under `qs -p` (or a moved checkout)
+    // it finds nothing and the pre-P1 empty list left the STYLE section blank.
+    property var _styles: ["vector", "notch", "ryoku", "island"]
     property var _rows: []
     // Height slider drafts locally (disk truth on open) and commits once on
     // release — onMoved fires per tick and each commit is a settings fork.
+    // _heightCommitted makes the release commit a no-op unless the value
+    // actually moved (P1.5: every release was a settings fork).
     property int _heightDraft: Config.BarConfig.barHeight
+    property int _heightCommitted: Config.BarConfig.barHeight
 
-    readonly property string _stylesDir: StandardPaths.writableLocation(
-        StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar/styles"
+    // Repo-relative (P1.3): PluginRegistry already solves the qrc-VFS vs
+    // file:// vs deployed-path resolution — don't fork it via StandardPaths.
+    readonly property string _stylesDir: Engine.PluginRegistry.repoDir + "/bar/styles"
 
     // ---- engine actions (same process; the bar owns plugins-state.json) ----
     function _refresh() {
@@ -95,15 +114,42 @@ OverlayShell {
     }
 
     // ---- settings-process writes (the single bar-config writer) ----
+    // A non-zero exit means the settings PROCESS is gone (unit stopped /
+    // crashed): the pre-P1 form only logged it, so every pick silently did
+    // nothing. Now the failure surfaces as the inline row (below) with a
+    // START button; a subsequent good call heals it (P1.4).
+    property bool _settingsDown: false
+    property string _failedArgv: "[]"
     Services.BoundedProcess {
         id: settingsCall
         property bool expectOk: true
         onDone: function (out, err, code) {
             // `qs ipc call` exits 0 even on rejected calls — output is the truth.
             var t = String(out).trim()
-            if (expectOk && (code !== 0 || t.indexOf("ok") !== 0))
+            if (code !== 0) {
+                root._failedArgv = JSON.stringify(settingsCall.command)
+                root._settingsDown = true
+                return
+            }
+            if (expectOk && t.indexOf("ok") !== 0)
                 console.log("[BarSettingsOverlay] settings write failed:", t || "(no output)", String(err).trim())
+            root._settingsDown = false
         }
+    }
+    Services.BoundedProcess {   // one-shot unit start, then retry the write once
+        id: settingsStart
+        timeoutMs: 15000
+        onDone: function (out, err, code) {
+            if (code !== 0) {
+                console.log("[BarSettingsOverlay] quickshell-settings start failed:", String(err).trim())
+                return   // the row stays up; the user can press START again
+            }
+            root._settingsIpc(JSON.parse(root._failedArgv), true)
+        }
+    }
+    function _startSettingsProcess() {
+        settingsStart.command = ["systemctl", "--user", "start", "quickshell-settings"]
+        settingsStart.run()
     }
 
     // argv passed LITERALLY at each call site — check-ipc's internal-class
@@ -131,7 +177,12 @@ OverlayShell {
                   "ls -1d '" + root._stylesDir + "/'*/Scene.qml 2>/dev/null | sed 's|.*/styles/||; s|/Scene.qml||' | sort"]
         onDone: function (out, err, code) {
             var found = String(out).split("\n").filter(function (l) { return l.length > 0 })
-            if (code === 0 && found.length > 0) root._styles = found
+            if (code !== 0 || found.length === 0) return   // keep the fallback seed
+            // array-identity law: an equal-content reassign destroys and
+            // rebuilds every card for nothing — diff before assigning
+            var same = found.length === root._styles.length &&
+                found.every(function (s, i) { return s === root._styles[i] })
+            if (!same) root._styles = found
         }
     }
     function _scanStyles() { scanProc.run() }
@@ -289,7 +340,7 @@ OverlayShell {
                 Layout.fillWidth: true
                 spacing: Config.PopupMetrics.px(8)
                 Text {
-                    text: ""
+                    text: "\uF013"
                     font.family: Config.BarConfig.fontNerd
                     font.pixelSize: Config.PopupMetrics.px(16)
                     color: Config.BarConfig.colorAccent
@@ -395,8 +446,13 @@ OverlayShell {
                             value: root._heightDraft
                             onMoved: root._heightDraft = value
                             // AbstractSlider has no released() — commit when
-                            // the press drops (drag end or click).
-                            onPressedChanged: if (!pressed) root._pickHeight(root._heightDraft)
+                            // the press drops (drag end or click), but ONLY if
+                            // the value actually moved (P1.5: every release
+                            // was a settings fork).
+                            onPressedChanged: if (!pressed && root._heightDraft !== root._heightCommitted) {
+                                root._heightCommitted = root._heightDraft
+                                root._pickHeight(root._heightDraft)
+                            }
                             background: Rectangle {
                                 x: heightSlider.leftPadding
                                 y: heightSlider.topPadding + heightSlider.availableHeight / 2 - height / 2
@@ -559,6 +615,59 @@ OverlayShell {
             }
 
             Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: Config.ThemeConfig.colors.border }
+
+            // ---- settings-process down (P1.4) ----
+            // Accent border only, no fill (QD-OLED doctrine) — the card is
+            // ephemeral, like the rest of the overlay.
+            Rectangle {
+                id: downRow
+                Layout.fillWidth: true
+                visible: root._settingsDown
+                Layout.preferredHeight: visible ? Config.PopupMetrics.px(34) : 0
+                radius: Config.PopupMetrics.px(6)
+                color: "transparent"
+                border.color: Config.BarConfig.colorAccent
+                border.width: Config.PopupMetrics.hairline(downRow)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: Config.PopupMetrics.px(8)
+                    spacing: Config.PopupMetrics.px(8)
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: "SETTINGS PROCESS DOWN — writes are failing"
+                        color: Config.ThemeConfig.colors.textDim
+                        font.pixelSize: Config.PopupMetrics.px(9)
+                        font.family: Config.BarConfig.fontFamily
+                        font.letterSpacing: 1
+                        elide: Text.ElideRight
+                    }
+                    Rectangle {
+                        id: startBtn
+                        Layout.preferredWidth: Config.PopupMetrics.px(52)
+                        Layout.preferredHeight: Config.PopupMetrics.px(20)
+                        radius: Config.PopupMetrics.px(4)
+                        color: startMa.containsPress ? Config.ThemeConfig.colors.surfaceVariant : "transparent"
+                        border.color: Config.BarConfig.colorAccent
+                        border.width: Config.PopupMetrics.hairline(startBtn)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "START"
+                            color: Config.BarConfig.colorAccent
+                            font.pixelSize: Config.PopupMetrics.px(9)
+                            font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                            font.letterSpacing: 1.5
+                        }
+                        MouseArea {
+                            id: startMa
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root._startSettingsProcess()
+                        }
+                    }
+                }
+            }
 
             // ---- footer ----
             RowLayout {

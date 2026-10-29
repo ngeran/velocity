@@ -319,8 +319,8 @@ Item {
                         anchors.centerIn: parent
                         text: parent.seg.label
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                        font.bold: parent.on
-                        color: parent.on ? Config.ThemeConfig.colors.text
+                        font.bold: parent.isOn
+                        color: parent.isOn ? Config.ThemeConfig.colors.text
                                          : Config.ThemeConfig.colors.textDim
                     }
 
@@ -332,7 +332,7 @@ Item {
                         onClicked: {
                             if (parent.seg.key === "custom") {
                                 view.svc.dnsMode = "custom"
-                            } else if (!parent.on) {
+                            } else if (!parent.isOn) {
                                 view.svc.applyDns(parent.seg.key, "")
                             }
                         }

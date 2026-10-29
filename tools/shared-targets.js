@@ -14,6 +14,7 @@ module.exports = {
   'shared/LogModel.js': ['bar/services/LogModel.js', 'settings/services/LogModel.js'],
   'shared/components/Sparkline.qml': ['settings/components/Sparkline.qml'],
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
+  'shared/b64.mjs': ['bar/lib/b64.mjs'],
   'shared/theme-core.mjs': ['bar/lib/theme-core.mjs', 'settings/lib/theme-core.mjs'],
   'shared/orbit.mjs': ['bar/lib/orbit.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],

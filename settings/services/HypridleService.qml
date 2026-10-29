@@ -123,7 +123,7 @@ Item {
             "listener {\n" +
             "    timeout = " + root.displayOffTimeout + "\n" +
             "    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'\n" +
-            "    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })' && sleep 1 && quickshell ipc -c bar call barToggle toggle\n" +
+            "    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })' && sleep 1 && qs -c bar ipc call barToggle toggle\n" +
             "}\n"
         if (root.suspendEnabled) {
             conf +=
