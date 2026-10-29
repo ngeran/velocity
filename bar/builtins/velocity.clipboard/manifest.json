@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.clipboard",
+  "name": "Clipboard",
+  "version": "1.0.0",
+  "description": "Built-in overlay: clipboard history picker (cliphist). Hides itself when cliphist is missing.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "overlay"
+  ],
+  "entryPoints": {
+    "overlay": "Overlay.qml"
+  },
+  "commands": [
+    "sh",
+    "cliphist",
+    "wl-paste"
+  ],
+  "ipc": [
+    "toggle",
+    "open",
+    "close"
+  ]
+}

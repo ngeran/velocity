@@ -19,6 +19,7 @@ FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 OverlayShell 1.0 OverlayShell.qml
 LauncherOverlay 1.0 LauncherOverlay.qml
+ClipboardPicker 1.0 ClipboardPicker.qml
 NotificationCard 1.0 NotificationCard.qml
 NotificationButton 1.0 NotificationButton.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml

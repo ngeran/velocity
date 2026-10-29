@@ -64,6 +64,8 @@ check feature jq           "tools/qa harness asserts + ipc-surface/layer evidenc
 
 # --- optional: degrade gracefully by design ---------------------------------
 check optional fastfetch   "FastfetchOverlay hides itself without it"
+check optional cliphist    "velocity.clipboard picker hides itself without it (with wl-clipboard)"
+check optional wl-copy     "velocity.clipboard paste-back (ships with wl-clipboard)"
 check optional ping        "settings network engineer view latency"
 check optional powerprofilesctl "Control Center power-profile tile hides without it"
 check optional brightnessctl "Control Center brightness (backlight); falls back to ddcutil"

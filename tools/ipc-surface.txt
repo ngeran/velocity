@@ -45,6 +45,9 @@ keyboard.next            bound     # SUPER+SHIFT+SPACE (cycle; nikos.keyboard)
 keyboard.prev            manual    # cycle backwards
 keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polytonic)`
 keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
+clipboard.toggle          manual    # velocity.clipboard picker (J8; no keybind yet — omni-nix decision)
+clipboard.open            manual
+clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
 controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K

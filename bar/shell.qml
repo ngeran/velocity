@@ -414,6 +414,18 @@ ShellRoot {
         function status(): string { return Engine.PluginRegistry.call("velocity.focus", "status", "") }
     }
 
+    // Clipboard picker (J8, same pattern as focus): thin forwarder to the
+    // velocity.clipboard overlay plugin — `qs -c bar ipc call clipboard
+    // toggle|open|close`. No-ops (with a mount-time journal line) while
+    // cliphist/wl-copy are absent.
+    IpcHandler {
+        target: "clipboard"
+
+        function toggle(): string { return Engine.PluginRegistry.call("velocity.clipboard", "toggle", "") }
+        function open(): string { return Engine.PluginRegistry.call("velocity.clipboard", "open", "") }
+        function close(): string { return Engine.PluginRegistry.call("velocity.clipboard", "close", "") }
+    }
+
     IpcHandler {
         target: "controlCenter"
         function toggle() { shellRoot.toggleControlCenter() }
