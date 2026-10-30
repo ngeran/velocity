@@ -23,11 +23,11 @@
       "name": "Settings process serves wallpaper getters and the search index",
       "covers": "resident settings IPC; wallpaper getters; search index dump",
       "steps": [
-        "ipc settings wallpaper-service getCount",
-        "ipc settings wallpaper-service getList",
-        "ipc settings wallpaper-service getCyclingEnabled",
-        "ipc settings wallpaper-service getEngineStatus",
-        "ipc settings search list"
+        "ipc bar wallpaper-service getCount",
+        "ipc bar wallpaper-service getList",
+        "ipc bar wallpaper-service getCyclingEnabled",
+        "ipc bar wallpaper-service getEngineStatus",
+        "ipc bar search list"
       ],
       "asserts": [
         "grep -Eq '^[0-9]+$' $QA_EV/01-wallpaper-service-getCount.out",
@@ -134,10 +134,10 @@
       "name": "Setting the current wallpaper is a render exercise with no state drift",
       "covers": "wallpaper setWallpaperByPath roundtrip (awww re-set of the same file)",
       "steps": [
-        "ipc settings wallpaper-service getCurrentInfo",
-        "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/01-wallpaper-service-getCurrentInfo.out)\"",
+        "ipc bar wallpaper-service getCurrentInfo",
+        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/01-wallpaper-service-getCurrentInfo.out)\"",
         "sleep 1",
-        "ipc settings wallpaper-service getCurrentInfo"
+        "ipc bar wallpaper-service getCurrentInfo"
       ],
       "asserts": [
         "diff $QA_EV/01-wallpaper-service-getCurrentInfo.out $QA_EV/04-wallpaper-service-getCurrentInfo.out"
@@ -146,21 +146,21 @@
     {
       "id": "wallpaper-engine-live",
       "name": "The engine plays a live wallpaper and the service routes it end to end",
-      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. PRECONDITION: libraryMode must be all|live — under the saved 'still' mode getList hides videos and step 3 greps empty. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-settings once so the engine probe re-runs",
+      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. PRECONDITION: libraryMode must be all|live — under the saved 'still' mode getList hides videos and step 3 greps empty. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-bar once so the engine probe re-runs",
       "requires": [
         "wallpaper-engine"
       ],
       "steps": [
-        "ipc settings wallpaper-service getEngineStatus",
-        "ipc settings wallpaper-service getCurrentInfo",
-        "sh qs -c settings ipc call wallpaper-service getList | grep -E '\\.(mp4|webm|mkv|mov)$' | head -1",
-        "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-sh.out)\"",
+        "ipc bar wallpaper-service getEngineStatus",
+        "ipc bar wallpaper-service getCurrentInfo",
+        "sh qs -c bar ipc call wallpaper-service getList | grep -E '\\.(mp4|webm|mkv|mov)$' | head -1",
+        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-sh.out)\"",
         "sleep 3",
-        "ipc settings wallpaper-service getEngineStatus",
-        "ipc settings wallpaper-service getCurrentInfo",
-        "sh qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\"",
+        "ipc bar wallpaper-service getEngineStatus",
+        "ipc bar wallpaper-service getCurrentInfo",
+        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\"",
         "sleep 1",
-        "ipc settings wallpaper-service getCurrentInfo"
+        "ipc bar wallpaper-service getCurrentInfo"
       ],
       "asserts": [
         "jq -e '.running == true' $QA_EV/01-wallpaper-service-getEngineStatus.out",
@@ -170,7 +170,7 @@
         "diff $QA_EV/02-wallpaper-service-getCurrentInfo.out $QA_EV/10-wallpaper-service-getCurrentInfo.out"
       ],
       "teardown": [
-        "qs -c settings ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\" >/dev/null 2>&1"
+        "qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\" >/dev/null 2>&1"
       ]
     },
     {
@@ -178,8 +178,8 @@
       "name": "Search index answers queries with well-formed hits",
       "covers": "dashboard search index (query path used by truth probes)",
       "steps": [
-        "ipc settings search list",
-        "ipc settings search query theme"
+        "ipc bar search list",
+        "ipc bar search query theme"
       ],
       "asserts": [
         "sed 's/^entries=[0-9]* //' $QA_EV/01-search-list.out | jq -e 'type == \"array\" and length >= 10'",
@@ -267,17 +267,17 @@
       "covers": "C4 single-writer transport: SettingsWindow.setBarStyle/setBarPosition -> saveBarConfig funnel (extras merge + config-reload nudge); live style swap; rejection paths",
       "steps": [
         "sh cp $HOME/.config/quickshell/bar-config.json $QA_EV/before.json",
-        "ipc settings SettingsWindow setBarStyle island",
+        "ipc bar SettingsWindow setBarStyle island",
         "sleep 2",
         "shot island",
-        "ipc settings SettingsWindow setBarPosition bottom",
+        "ipc bar SettingsWindow setBarPosition bottom",
         "sleep 2",
-        "sh v=$(jq -r .barStyle $QA_EV/before.json); qs -c settings ipc call SettingsWindow setBarStyle \"$v\"",
+        "sh v=$(jq -r .barStyle $QA_EV/before.json); qs -c bar ipc call SettingsWindow setBarStyle \"$v\"",
         "sleep 1.5",
-        "sh v=$(jq -r .barPosition $QA_EV/before.json); qs -c settings ipc call SettingsWindow setBarPosition \"$v\"",
+        "sh v=$(jq -r .barPosition $QA_EV/before.json); qs -c bar ipc call SettingsWindow setBarPosition \"$v\"",
         "sleep 1.5",
-        "ipc settings SettingsWindow setBarStyle ../evil",
-        "ipc settings SettingsWindow setBarPosition sideways",
+        "ipc bar SettingsWindow setBarStyle ../evil",
+        "ipc bar SettingsWindow setBarPosition sideways",
         "sh cp $HOME/.config/quickshell/bar-config.json $QA_EV/after.json"
       ],
       "asserts": [
@@ -448,9 +448,9 @@
       "name": "The power menu toggles open and closed through IPC with a clean journal",
       "covers": "settings powerMenu (SUPER+P path); settings-process toplevel, so no layer assert",
       "steps": [
-        "ipc settings powerMenu toggle",
+        "ipc bar powerMenu toggle",
         "sleep 2",
-        "ipc settings powerMenu toggle",
+        "ipc bar powerMenu toggle",
         "sleep 1"
       ],
       "asserts": [
@@ -476,10 +476,10 @@
       "name": "Toggling wallpaper cycling twice leaves the flag byte-identical",
       "covers": "wallpaper-service cycling write path with zero net state change",
       "steps": [
-        "ipc settings wallpaper-service getCyclingEnabled",
-        "ipc settings wallpaper-service toggleCycling",
-        "ipc settings wallpaper-service toggleCycling",
-        "ipc settings wallpaper-service getCyclingEnabled"
+        "ipc bar wallpaper-service getCyclingEnabled",
+        "ipc bar wallpaper-service toggleCycling",
+        "ipc bar wallpaper-service toggleCycling",
+        "ipc bar wallpaper-service getCyclingEnabled"
       ],
       "asserts": [
         "grep -Eq '^(true|false)$' $QA_EV/01-wallpaper-service-getCyclingEnabled.out",
@@ -491,13 +491,13 @@
       "name": "Settings deep-links land on the requested page and the window hides clean",
       "covers": "openCore system + openControlDisplay deep-link family; activeTab probes; hide verb",
       "steps": [
-        "ipc settings SettingsWindow openCore system",
+        "ipc bar SettingsWindow openCore system",
         "sleep 1",
-        "ipc settings SettingsWindow activeTab",
-        "ipc settings SettingsWindow openControlDisplay",
+        "ipc bar SettingsWindow activeTab",
+        "ipc bar SettingsWindow openControlDisplay",
         "sleep 1",
-        "ipc settings SettingsWindow activeTab",
-        "ipc settings SettingsWindow hide"
+        "ipc bar SettingsWindow activeTab",
+        "ipc bar SettingsWindow hide"
       ],
       "asserts": [
         "test ! -s $QA_EV/01-SettingsWindow-openCore-system.out",

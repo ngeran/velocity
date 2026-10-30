@@ -4,7 +4,8 @@
 # The whole service stack assumes velocity IS ~/.config/quickshell:
 #   • every config write lands there (settings-config.json, bar-config.json,
 #     theme cache, plugins-state.json, events.jsonl …)
-#   • `qs -c bar` / `qs -c settings` resolve to ~/.config/quickshell/{bar,settings}
+#   • `qs -c bar` resolves to ~/.config/quickshell/bar (the settings tree is
+#     hosted by the bar process since P2.1)
 #     (PluginManagerService's plugin IPC, ThemeService's push nudge, HypridleService)
 #   • the repo doubles as the live config dir — that is the design, not a hack
 #
@@ -46,9 +47,9 @@ else
     ln -s "$REPO" "$TARGET" && echo "link:   ✓ created"
 fi
 
-# verify the two config names resolve (what -c and every `qs -c` caller use)
+# verify the bar config name resolves (what -c and every `qs -c` caller use)
 ok=1
-for name in bar settings; do
+for name in bar; do
     if [ -f "$TARGET/$name/shell.qml" ]; then
         echo "config: ✓ -c $name → $TARGET/$name/shell.qml"
     else

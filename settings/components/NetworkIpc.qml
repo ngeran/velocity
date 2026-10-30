@@ -1,24 +1,25 @@
 // =============================================================================
-// NetworkIpc.qml — IPC surface for the NETWORK section (scripting / probes)
+// NetworkIpc.qml — NETWORK-section probe payloads (scripting / truth probes)
 // =============================================================================
-// Component-owned like DisplayIpc: NetworkControlService is a "../services"
-// singleton, and shell.qml's "services" import is a separate instance (the
-// SharedState trap). Declared in tools/ipc-surface.txt.
+// P2.1: this no longer declares an IpcHandler — in the merged bar process the
+// `network` target is owned by bar/shell.qml (its speedtest verb), and a
+// second handler for the same target would silently lose the registration.
+// The two payload builders live here (they read the merged network service
+// via HostBridge — import-split law: no "../bar" imports) and are exposed through
+// SettingsBootstrap; bar/shell.qml's network target forwards to them.
 //
-//   qs -c settings ipc call network latency
-//   qs -c settings ipc call network engineer
+//   qs -c bar ipc call network latency
+//   qs -c bar ipc call network engineer
 // =============================================================================
 
-import Quickshell.Io
+import QtQuick
 import "../services" as Services
 
-IpcHandler {
-    target: "network"
-
+QtObject {
     // Two-leg latency snapshot: per-leg folds (netstats.mjs math) + the
     // paired WAN leg. Nulls when a leg has no data yet.
     function latency(): string {
-        var svc = Services.NetworkControlService
+        var svc = Services.HostBridge.network
         return JSON.stringify({
             connected: svc.connectionStatus.connected === true,
             iface: svc.connectionStatus.iface || "",
@@ -34,7 +35,7 @@ IpcHandler {
     // ENGINEER-pane snapshot: link/PHY, addressing, routes, counters,
     // neighbors, listeners (whatever the last 15s probe collected).
     function engineer(): string {
-        var svc = Services.NetworkControlService
+        var svc = Services.HostBridge.network
         return JSON.stringify({
             iface: svc.connectionStatus.iface || "",
             link: svc.engLink,

@@ -3,7 +3,7 @@
 // =============================================================================
 // Reads `dev`: { mac, name, alias, icon, connected, paired, trusted,
 // battery(-1=unknown), rssi(0-100, 0=unknown) } from
-// BluetoothControlService.devices. `beacon` selects the card context:
+// HostBridge.bluetooth (its `devices`). `beacon` selects the card context:
 //   • beacon === true  → unpaired scanned device (AVAIL_BEACONS card)
 //   • beacon === false → paired device (PAIRED_NODES card)
 // Behaviour:
@@ -11,7 +11,7 @@
 //   • busy (pairing/connecting) → Pairing.../Connecting... label + amber tint
 //   • paired/disconnected → PAIRED chip + Connect button
 //   • unpaired beacon → NEW chip + Confirm button
-//   • paired row + hover → [×] forget (BluetoothControlService.remove)
+//   • paired row + hover → [×] forget (HostBridge.bluetooth.remove)
 //
 // NOTE on click handling: the row MouseArea covers the whole row, so the
 // action button / [×] sub-areas would be shadowed. `propagateComposedEvents`
@@ -37,8 +37,8 @@ Item {
     property bool beacon: false   // true = AVAIL_BEACONS, false = PAIRED_NODES
 
     // ── Busy state — driven by the service's serialized action queue ──────────
-    readonly property bool pairing:    Services.BluetoothControlService.pairingTo    === dev.mac
-    readonly property bool connecting: Services.BluetoothControlService.connectingTo === dev.mac
+    readonly property bool pairing:    Services.HostBridge.bluetooth.pairingTo    === dev.mac
+    readonly property bool connecting: Services.HostBridge.bluetooth.connectingTo === dev.mac
     readonly property bool busy:       pairing || connecting
 
     // ── Icon glyph map (dev.icon → Nerd Font). Order matters: "headphone" and
@@ -285,9 +285,9 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         mouse.accepted = true
-                        if (dev.connected)   Services.BluetoothControlService.disconnect(dev.mac)
-                        else if (dev.paired) Services.BluetoothControlService.connect(dev.mac)
-                        else                 Services.BluetoothControlService.pair(dev.mac)   // pair → trust → connect
+                        if (dev.connected)   Services.HostBridge.bluetooth.disconnect(dev.mac)
+                        else if (dev.paired) Services.HostBridge.bluetooth.connect(dev.mac)
+                        else                 Services.HostBridge.bluetooth.pair(dev.mac)   // pair → trust → connect
                     }
                 }
             }
@@ -335,7 +335,7 @@ Item {
                         forgetBtn.forgetArmed = true
                         disarmTimer.restart()
                     } else {
-                        Services.BluetoothControlService.remove(dev.mac)
+                        Services.HostBridge.bluetooth.remove(dev.mac)
                     }
                 }
             }

@@ -72,7 +72,7 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
 ```
 left:   velocity.logo · velocity.workspaces
 center: nikos.clock · velocity.settings
-right:  nikos.keyboard · nikos.power · nikos.timezones · nikos.storage · randazraik.xray
+right:  nikos.keyboard · nikos.power · nikos.timezones · nikos.storage
         velocity.network · bluetooth · volume · privacy · logs · notifications
 ```
 Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <delta>`, or Settings ▸ Plugins.

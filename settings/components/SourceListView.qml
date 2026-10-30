@@ -19,7 +19,7 @@ Card { variant: "settings";
 
     // Priority order for the visible capacity: default first.
     readonly property var sortedSources: {
-        var arr = Services.AudioControlService.sources.slice(0)
+        var arr = Services.HostBridge.audio.sources.slice(0)
         arr.sort(function(a, b) {
             if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
             return (b.volume || 0) - (a.volume || 0)
@@ -47,10 +47,10 @@ Card { variant: "settings";
                 color: Config.ThemeConfig.colors.text
             }
             Text {
-                text: Services.AudioControlService.sources.length > 0
-                      ? (view.visibleCount + " / " + Services.AudioControlService.sources.length) : "0"
+                text: Services.HostBridge.audio.sources.length > 0
+                      ? (view.visibleCount + " / " + Services.HostBridge.audio.sources.length) : "0"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                color: view.visibleCount < Services.AudioControlService.sources.length
+                color: view.visibleCount < Services.HostBridge.audio.sources.length
                        ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.secondary
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
@@ -92,7 +92,7 @@ Card { variant: "settings";
 
             Text {
                 anchors.centerIn: parent
-                visible: Services.AudioControlService.sources.length === 0
+                visible: Services.HostBridge.audio.sources.length === 0
                 text: "// no input sources"
                 font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                 color: Config.ThemeConfig.colors.textDim
@@ -102,9 +102,9 @@ Card { variant: "settings";
 
         Text {
             Layout.fillWidth: true
-            visible: view.visibleCount < Services.AudioControlService.sources.length
+            visible: view.visibleCount < Services.HostBridge.audio.sources.length
             Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-            text: "+ " + (Services.AudioControlService.sources.length - view.visibleCount) + " more inputs hidden"
+            text: "+ " + (Services.HostBridge.audio.sources.length - view.visibleCount) + " more inputs hidden"
             font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
             elide: Text.ElideRight

@@ -1,26 +1,24 @@
 // =============================================================================
 // SystemPulseCard.qml — SYSTEM PULSE (H4: the dashboard calendar's successor)
 // =============================================================================
-// READ-ONLY window over the bar's H7 metrics feed. Sits in the Overview tab's
+// READ-ONLY window over the metrics engine. Sits in the Overview tab's
 // left-column square (DashboardCard wrapper in OverviewTab provides
 // the brackets); WeatherCard stays below it.
 //
 // Data sources — every one of them is another component's primary, this card
 // only reads:
-//   • $XDG_RUNTIME_DIR/velocity/metrics.json (bar SystemInfoService, lease-
-//     gated) → CPU/MEM/GPU/DISK gauge rows. Same file+idiom as GpuService:
-//     watchChanges stays FALSE (tmp+mv renames don't fire it — KernelEventReader
-//     lesson), a 2s visible-gated Timer drives reload() (ASYNC; parse lands
-//     in onTextChanged). gpu:null → the GPU row reads dim "—".
-//   • NetworkControlService.rxRate/txRate (KB/s, its own dashboard-visible-
-//     gated sysfs sampler) → the ↓↑ line. No second sampler here.
-//   • NetworkControlService.lastTest + lib/age.mjs → last speed-test line.
+//   • HostBridge.metrics (P2.3: one process — the ex-SystemInfoService engine,
+//     now MetricsService) → CPU/MEM/GPU/DISK gauge rows. `leased` is the LIVE
+//     indicator; extendLease(30) while the card is live keeps the poll running.
+//   • HostBridge.network.trafficRxKB/trafficTxKB (KB/s, its own dashboard-
+//     visible-gated sysfs sampler) → the ↓↑ line. No second sampler here.
+//   • HostBridge.network.lastTest + lib/age.mjs → last speed-test line.
 //   • the nikos.clock weather cache (same file as WeatherCard, lib/weather.mjs)
 //     → one glyph/temp/condition line, dimmed past the 15-min staleness rule.
 //
-// LEASE: while visible a 10s Timer renews the bar's metrics lease via the
-// `metrics lease 30` IPC (SystemMetricsService idiom) — close the dashboard and
-// the bar's poll timer self-clears at expiry; idle cost returns to zero.
+// LEASE: while visible a 10s Timer calls extendLease(30) directly (the
+// `metrics lease` IPC round-trip is gone — same process). Close the dashboard
+// and the engine's poll timer self-clears at expiry; idle cost returns to zero.
 // =============================================================================
 
 import QtQuick
@@ -37,16 +35,6 @@ import "../lib/weather.mjs" as Wx
 Item {
     id: root
 
-    // ── metrics file state ────────────────────────────────────────────────
-    property double _ts: 0               // file's publish timestamp (ms epoch)
-    property bool _live: false           // file advanced within the last 6s
-    property real _cpuPct: 0
-    property real _memPct: 0
-    property real _diskPct: 0
-    property var _gpu: null              // metrics gpu object | null
-
-    readonly property bool _gpuPresent: _gpu !== null
-
     // ── weather cache state (same file as WeatherCard) ────────────────────
     property var _weather: null               // Wx.parseForecast output
     property double _fetchedAt: 0
@@ -57,28 +45,12 @@ Item {
     readonly property string _weatherUnit: Wx.unitFor(
         Quickshell.env("LC_ALL") || Quickshell.env("LANG") || "")
 
-    readonly property string _metricsPath:
-        (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/" + (Quickshell.env("UID") || "1000"))
-        + "/velocity/metrics.json"
-
     readonly property string _weatherPath:
         (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") || "~") + "/.local/state")
         + "/velocity/plugins/nikos.clock-weather.json"
 
     function _clamp(v) {
         return (typeof v === "number" && isFinite(v)) ? Math.max(0, Math.min(100, v)) : 0
-    }
-
-    function _ingestMetrics(raw) {
-        var v = null
-        try { v = JSON.parse(raw) } catch (e) { v = null }
-        if (!v || typeof v !== "object") return
-        _ts = typeof v.ts === "number" ? v.ts : 0
-        _live = _ts > 0 && (Date.now() - _ts) < 6000
-        _cpuPct = v.cpu ? _clamp(v.cpu.pct) : 0
-        _memPct = (v.mem && v.mem.totalB > 0) ? _clamp(v.mem.usedB / v.mem.totalB * 100) : 0
-        _diskPct = (v.disk && v.disk.totalB > 0) ? _clamp(v.disk.usedB / v.disk.totalB * 100) : 0
-        _gpu = (v.gpu && typeof v.gpu === "object") ? v.gpu : null
     }
 
     function _ingestWx(raw) {
@@ -91,6 +63,9 @@ Item {
         _weather = wxp
         _fetchedAt = c.fetchedAt
     }
+
+    // ── the metrics engine (null until the bar shell attaches barServices) ──
+    readonly property var _m: Services.HostBridge.metrics
 
     ColumnLayout {
         anchors.fill: parent
@@ -109,15 +84,15 @@ Item {
             }
             Item { Layout.fillWidth: true }
             Text {
-                // Honest indicator: only while the metrics file is actually
-                // advancing (lease held). Resets on the next parse after the
-                // file stops moving.
-                text: root._live ? "LIVE" : "IDLE"
-                color: root._live ? Config.ThemeConfig.colors.success
-                                  : Config.ThemeConfig.colors.textDim
+                // Honest indicator: the engine's own lease state — LIVE while
+                // anything (this card, the Core tab, the LCD feed, the overlay)
+                // keeps the poll running.
+                text: root._m && root._m.leased ? "LIVE" : "IDLE"
+                color: root._m && root._m.leased ? Config.ThemeConfig.colors.success
+                                                 : Config.ThemeConfig.colors.textDim
                 font.family: Config.ControlConfig.fontMono
                 font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.0
-                opacity: root._live ? 1.0 : 0.55
+                opacity: root._m && root._m.leased ? 1.0 : 0.55
             }
         }
 
@@ -181,11 +156,11 @@ Item {
                 }
             }
 
-            GaugeRow { label: "CPU"; pct: root._cpuPct }
-            GaugeRow { label: "MEM"; pct: root._memPct }
-            GaugeRow { label: "GPU"; pct: root._gpuPresent ? root._clamp(root._gpu.pct) : 0
-                       present: root._gpuPresent }
-            GaugeRow { label: "DSK"; pct: root._diskPct }
+            GaugeRow { label: "CPU"; pct: root._m ? root._clamp(root._m.cpuUsage) : 0 }
+            GaugeRow { label: "MEM"; pct: root._m ? root._clamp(root._m.ramPct) : 0 }
+            GaugeRow { label: "GPU"; pct: root._m ? root._clamp(root._m.gpuUsagePct) : 0
+                       present: root._m ? root._m.present : false }
+            GaugeRow { label: "DSK"; pct: root._m ? root._clamp(root._m.diskPct) : 0 }
 
             // ── network line ──────────────────────────────────────────────
             Text {
@@ -194,13 +169,13 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 text: {
-                    var net = Services.NetworkControlService
+                    var net = Services.HostBridge.network
                     if (!net.connectionStatus.connected) return "NET — DISCONNECTED"
-                    var rx = Units.formatRate(net.rxRate * 1024)
-                    var tx = Units.formatRate(net.txRate * 1024)
+                    var rx = Units.formatRate(net.trafficRxKB * 1024)
+                    var tx = Units.formatRate(net.trafficTxKB * 1024)
                     return "↓ " + rx + "   ↑ " + tx
                 }
-                color: Services.NetworkControlService.connectionStatus.connected
+                color: Services.HostBridge.network.connectionStatus.connected
                     ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                 font.family: Config.ControlConfig.fontMono
                 font.pixelSize: 8
@@ -213,7 +188,7 @@ Item {
             Layout.fillWidth: true
             elide: Text.ElideRight
             text: {
-                var t = Services.NetworkControlService.lastTest
+                var t = Services.HostBridge.network.lastTest
                 if (!t) return "SPEED TEST — NO RUNS YET"
                 return "SPEED TEST  ↓" + t.downMbps.toFixed(1) + " ↑" + t.upMbps.toFixed(1)
                     + " MBPS · " + Age.ageLabel(t.ts)
@@ -248,27 +223,13 @@ Item {
         }
     }
 
-    // ── readers — file-fed, no forks ──────────────────────────────────────
-    FileView {
-        id: metricsFile
-        path: root._metricsPath
-        watchChanges: false          // tmp+mv renames don't fire it — Timer reloads
-        printErrors: false
-        onTextChanged: root._ingestMetrics(text())
-    }
+    // ── weather reader — file-fed, no forks (plugin cache writes are atomic) ─
     FileView {
         id: wxFile
         path: root._weatherPath
-        watchChanges: false          // plugin cache writes are also atomic
+        watchChanges: false          // atomic renames don't fire it — Timer reloads
         printErrors: false
         onTextChanged: root._ingestWx(text())
-    }
-
-    // ── lease renewal — dashboard open = the bar keeps polling ────────────
-    Services.BoundedProcess {
-        id: leaseProc
-        timeoutMs: 5000
-        command: ["qs", "-c", "bar", "ipc", "call", "metrics", "lease", "30"]
     }
 
     // The sanctioned visibility gate (NetworkControlService idiom): the card's
@@ -280,25 +241,7 @@ Item {
         repeat: true
         running: root._cardLive
         triggeredOnStart: true
-        onTriggered: leaseProc.run()
-    }
-
-    // ── 2s metrics read + 60s weather read, both visible-gated ────────────
-    Timer {
-        interval: 2000
-        repeat: true
-        running: root._cardLive
-        triggeredOnStart: true
-        onTriggered: {
-            metricsFile.reload()
-            // The speed-test result is written by the BAR (tmp+mv) whenever a
-            // test completes — without this reload the footer would only
-            // refresh when the Wi-Fi section is opened (Hr review).
-            Services.NetworkControlService.refreshLastTest()
-            // Re-judge freshness here — the last parse of a lapsed lease
-            // would otherwise leave LIVE lit forever.
-            root._live = root._ts > 0 && (Date.now() - root._ts) < 6000
-        }
+        onTriggered: if (root._m) root._m.extendLease(30)   // dashboard open = poll on
     }
     Timer {
         interval: 60000

@@ -115,10 +115,29 @@ Item {
     }
 
     // =========================================================================
-    // PUBLIC API  (called by the logs view — bar overlay or settings tab)
+    // PUBLIC API  (called by the logs views — since P2.4 both the bar overlay
+    // and the settings tab reach the ONE in-process instance, so open/close
+    // take a consumer tag and the journalctl child runs while ANY tag is held.
+    // A bare open()/close() still works via the default tag.)
     // =========================================================================
-    function open()   { root.active = true;  root.following = true; root.refresh() }
-    function close()  { root.active = false; root._stop() }
+    property var _refs: ({})                 // consumer tag → true (reassigned)
+    function open(tag) {
+        var t = tag || "default"
+        if (!root._refs[t]) {
+            var r = Object.assign({}, root._refs); r[t] = true; root._refs = r
+        }
+        if (Object.keys(root._refs).length === 1) {   // first consumer starts it
+            root.active = true; root.following = true; root.refresh()
+        }
+    }
+    function close(tag) {
+        var t = tag || "default"
+        if (!root._refs[t]) return
+        var r = Object.assign({}, root._refs); delete r[t]; root._refs = r
+        if (Object.keys(root._refs).length === 0) {   // last consumer stops it
+            root.active = false; root._stop()
+        }
+    }
     function pause()  { root.following = false; root._stop() }    // entries retained
     function resume() { root.following = true;  root.refresh() }  // fresh tail, no dupes
     function clear()  { _entries.clear(); root._resetCounts() }   // stream keeps running

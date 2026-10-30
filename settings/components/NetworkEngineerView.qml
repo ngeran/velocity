@@ -17,7 +17,7 @@ import "../lib/units.mjs" as Units
 Item {
     id: viewRoot
 
-    readonly property var svc: Services.NetworkControlService
+    readonly property var svc: Services.HostBridge.network
     readonly property bool hasIface: svc.connectionStatus.iface !== ""
 
     ColumnLayout {

@@ -51,3 +51,5 @@ LogsTab 1.0 LogsTab.qml
 Sparkline 1.0 Sparkline.qml
 Header 1.0 Header.qml
 SidebarNav 1.0 SidebarNav.qml
+SettingsBootstrap 1.0 SettingsBootstrap.qml
+SettingsHostWindow 1.0 SettingsHostWindow.qml

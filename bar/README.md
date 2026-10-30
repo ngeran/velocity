@@ -11,7 +11,7 @@ Everything on it is a plugin; the styles (`vector`, `notch`, `ryoku`,
   deployment modes
 - `../plugins/README.md` + `../bin/velocity-plugin` — writing and managing
   plugins (`velocity-plugin place/move/enable/…`)
-- `../settings/` — the companion dashboard process (`quickshell -c settings`)
+- `../settings/` — the dashboard views; hosted in THIS process since P2.1 (SettingsHostWindow)
 
 ## Quick reference
 

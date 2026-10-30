@@ -61,7 +61,7 @@
 #                                     any failure fails the scenario
 #   requires[]                        tool names; any missing -> SKIP
 #   units[]                           journal units to gate (default:
-#                                     quickshell-bar + quickshell-settings)
+#                                     quickshell-bar)
 #   allowJournalErrors                ERE; matching -p err lines are exempt
 #   blocked                           reason string; FAIL reports as BLOCKED
 set -u
@@ -103,10 +103,10 @@ if [[ "$ping" != "ok" ]]; then
     echo "  systemctl --user restart quickshell-bar" >&2
     exit 2
 fi
-count="$(timeout 5 qs -c settings ipc call wallpaper-service getCount 2>&1)"
+count="$(timeout 5 qs -c bar ipc call wallpaper-service getCount 2>&1)"
 if [[ ! "$count" =~ ^[0-9]+$ ]]; then
-    echo "qa/run: settings is not resident (getCount => '$count')." >&2
-    echo "  systemctl --user restart quickshell-settings" >&2
+    echo "qa/run: wallpaper IPC not resident (getCount => '$count')." >&2
+    echo "  systemctl --user restart quickshell-bar" >&2
     exit 2
 fi
 
@@ -257,7 +257,7 @@ run_step() {
 # --- suite -------------------------------------------------------------------
 pass=0; fail=0; skip=0; block=0
 : >"$OUT/results.tsv"
-DEFAULT_UNITS='"quickshell-bar","quickshell-settings"'
+DEFAULT_UNITS='"quickshell-bar"'
 
 while IFS= read -r sc; do
     id="$(jq -r '.id // "unnamed"' <<<"$sc")"

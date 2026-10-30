@@ -4,7 +4,9 @@
 // The BAR process owns plugin loading (bar/engine/PluginRegistry) and is the
 // single writer of plugins-state.json and of every plugin's settings file.
 // This service is the management bridge:
-//   • list/rescan/enable/disable/place/move/settings → bar `plugins` IPC
+//   • list/rescan/enable/disable/place/move/settings → PluginRegistry DIRECT
+//     (P2.2: same process now — reached through HostBridge.engine; the old
+//     `qs -c bar ipc` round-trips are gone)
 //   • new / install / remove (→ trash) / restore     → bin/velocity-plugin
 // sectionVisible gates the 5s refresh (popup-gated poll idiom).
 // =============================================================================
@@ -83,56 +85,54 @@ Item {
         opProc.running = true
     }
 
-    // ── bar IPC ──────────────────────────────────────────────────────────────
-    property string _lastListJson: ""
-    function refresh() {
-        runCoalesced(["qs", "-c", "bar", "ipc", "call", "plugins", "list"], function(out) {
-            var trimmed = (out || "").trim()
-            if (trimmed === root._lastListJson) return   // no churn — keep row hover states
-            root._lastListJson = trimmed
-            try { root.plugins = JSON.parse(trimmed || "[]") }
-            catch (e) { root.lastError = "bad list output" }
-        })
+    // ── engine bridge (in-process; HostBridge.engine until attach is null) ──
+    function _eng() {
+        var e = HostBridge.engine
+        if (!e) root.lastError = "plugin engine not ready (bar shell not attached)"
+        return e
     }
 
-    // ── deep links: settings surfaces → bar overlay plugins ─────────────────
-    // "Inspect this process" from the Core GPU pane: summons an overlay
-    // plugin (xray) in the BAR process with a query payload
-    // ({"query":"pid:4242"}). hasPlugin() reads the last bar list; the Core
-    // tab never loads it, so inspectExternal refreshes first and retries once
-    // the answer lands — then reports instead of silently doing nothing.
-    function hasPlugin(id) {
-        for (var i = 0; i < root.plugins.length; i++) {
-            var p = root.plugins[i]
-            if (p.id === id && p.status === "ready" && p.enabled) return true
-        }
-        return false
+    property string _lastListJson: ""
+    function refresh() {
+        var e = _eng(); if (!e) return
+        // Same row shape the bar `plugins list` IPC served (Primitives only —
+        // no QObject reaches a delegate).
+        var out = []
+        var ps = e.plugins || []
+        for (var i = 0; i < ps.length; i++)
+            out.push({ id: ps[i].id, name: ps[i].name, version: ps[i].version,
+                       kinds: ps[i].kinds, enabled: ps[i].enabled,
+                       status: ps[i].status, error: ps[i].error,
+                       commands: ps[i].commands, ipc: ps[i].ipc,
+                       source: ps[i].source, overrides: ps[i].overrides,
+                       section: e.sectionOf(ps[i].id),
+                       position: e.positionOf(ps[i].id),
+                       defaultSection: ps[i].defaultSection,
+                       description: ps[i].description,
+                       settings: ps[i].settings,
+                       dir: ps[i].dir })
+        var j = JSON.stringify(out)
+        if (j === root._lastListJson) return   // no churn — keep row hover states
+        root._lastListJson = j
+        root.plugins = out
     }
-    function inspectExternal(id, payload) {
-        if (root.plugins.length === 0) refresh()
-        if (!hasPlugin(id)) {
-            run(["true"], function() {
-                if (hasPlugin(id))
-                    run(["qs", "-c", "bar", "ipc", "call", "plugins", "summon", id, payload])
-                else
-                    root.lastError = "inspect: " + id + " is not installed or not enabled"
-            })
-            return
-        }
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "summon", id, payload])
-    }
+
     function rescan() {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "rescan"], function() { root.refresh() })
+        var e = _eng(); if (!e) return
+        e.rescan()
+        root.refresh()
     }
     function setEnabled(id, on) {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", on ? "enable" : "disable", id],
-            function() { root.refresh() })
+        var e = _eng(); if (!e) return
+        e.setEnabled(id, on)
+        root.refresh()
     }
-    // Shift within its bar section; the bar (single writer of the state
-    // file) clamps at the edges.
+    // Shift within its bar section; the engine (single writer of the state
+    // file) clamps at the edges. Direct call: delta is numeric (neg = up).
     function move(id, delta) {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "move", id, delta < 0 ? "up" : "down"],
-            function() { root.refresh() })
+        var e = _eng(); if (!e) return
+        e.move(id, delta)
+        root.refresh()
     }
 
     // ── file operations → bin/velocity-plugin ───────────────────────────────
@@ -175,25 +175,24 @@ Item {
         })
     }
 
-    // ── placement + per-plugin settings (bar IPC) ────────────────────────────
+    // ── placement + per-plugin settings (direct engine calls) ────────────────
     function place(id, section) {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "place", id, section, "end"],
-            function() { root.refresh() })
+        var e = _eng(); if (!e) return
+        e.place(id, section, -1)
+        root.refresh()
     }
-    // cb({ schema, values }) — read through the bar's SettingsStore.
+    // cb({ schema, values }) — read through the engine's SettingsStore.
     function loadSettings(id, cb) {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "settings", id], function(out) {
-            var j = null
-            try { j = JSON.parse(String(out || "").trim()) } catch (e) { j = null }
-            if (!j || j.error) { root.lastError = j && j.error ? j.error : "bad settings output"; return }
-            if (cb) cb(j)
-        })
+        var e = _eng(); if (!e) return
+        var j = null
+        try { j = JSON.parse(e.settingsJson(id)) } catch (err) { j = null }
+        if (!j || j.error) { root.lastError = j && j.error ? j.error : "bad settings output"; return }
+        if (cb) cb(j)
     }
     function setSetting(id, key, value, cb) {
-        run(["qs", "-c", "bar", "ipc", "call", "plugins", "setSetting", id, key, JSON.stringify(value)], function(out) {
-            var r = String(out || "").trim()
-            root.lastError = r === "ok" ? "" : (key + ": " + r)
-            if (cb) cb(r === "ok")
-        })
+        var e = _eng(); if (!e) return
+        var r = e.setSetting(id, key, JSON.stringify(value))
+        root.lastError = r === "ok" ? "" : (key + ": " + r)
+        if (cb) cb(r === "ok")
     }
 }

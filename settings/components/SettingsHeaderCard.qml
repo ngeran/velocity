@@ -7,7 +7,7 @@
 //
 //   SettingsHeaderCard {
 //       eyebrow: "CONTROLS · NETWORK"; title: "Network"
-//       subtitle: Services.NetworkControlService.ssid
+//       subtitle: Services.HostBridge.network.ssid
 //       StatusBadge { label: "CONNECTED"; kind: "ok" }
 //   }
 // =============================================================================

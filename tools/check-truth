@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-truth — machine-truth probes (xray pattern): recompute expected values
+# check-truth — machine-truth probes: recompute expected values
 # independently from the LIVE system, cross-check velocity's logic against them.
 #
 # These need a live desktop + PipeWire; they are NOT part of check-all's

@@ -80,8 +80,8 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     if (!row.isDefault) {
-                        if (row.deviceType === "sink") Services.AudioControlService.setDefaultSink(row.device.id)
-                        else if (row.deviceType === "source") Services.AudioControlService.setDefaultSource(row.device.id)
+                        if (row.deviceType === "sink") Services.HostBridge.audio.setDefaultSink(row.device.id)
+                        else if (row.deviceType === "source") Services.HostBridge.audio.setDefaultSource(row.device.id)
                     }
                 }
             }
@@ -104,8 +104,8 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    if (row.deviceType === "sink") Services.AudioControlService.setDefaultSink(row.device.id)
-                    else if (row.deviceType === "source") Services.AudioControlService.setDefaultSource(row.device.id)
+                    if (row.deviceType === "sink") Services.HostBridge.audio.setDefaultSink(row.device.id)
+                    else if (row.deviceType === "source") Services.HostBridge.audio.setDefaultSource(row.device.id)
                 }
             }
         }
@@ -130,9 +130,9 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     var pct = Math.round(Math.max(0, Math.min(1, mouseX / lvl.width)) * 100)
-                    if (row.deviceType === "sink") Services.AudioControlService.setSinkVolume(row.device.id, pct + "%")
-                    else if (row.deviceType === "source") Services.AudioControlService.setSourceVolume(row.device.id, pct + "%")
-                    else Services.AudioControlService.setSinkInputVolume(row.device.id, pct + "%")
+                    if (row.deviceType === "sink") Services.HostBridge.audio.setSinkVolume(row.device.id, pct + "%")
+                    else if (row.deviceType === "source") Services.HostBridge.audio.setSourceVolume(row.device.id, pct + "%")
+                    else Services.HostBridge.audio.setSinkInputVolume(row.device.id, pct + "%")
                 }
             }
         }
@@ -167,9 +167,9 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    if (row.deviceType === "sink") Services.AudioControlService.toggleSinkMute(row.device.id)
-                    else if (row.deviceType === "source") Services.AudioControlService.toggleSourceMute(row.device.id)
-                    else Services.AudioControlService.toggleSinkInputMute(row.device.id)
+                    if (row.deviceType === "sink") Services.HostBridge.audio.toggleSinkMute(row.device.id)
+                    else if (row.deviceType === "source") Services.HostBridge.audio.toggleSourceMute(row.device.id)
+                    else Services.HostBridge.audio.toggleSinkInputMute(row.device.id)
                 }
             }
         }

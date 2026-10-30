@@ -9,7 +9,7 @@ singleton AudioService 1.0 AudioService.qml
 singleton PrivacyService 1.0 PrivacyService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton ZaiUsageService 1.0 ZaiUsageService.qml
-singleton SystemInfoService 1.0 SystemInfoService.qml
+singleton MetricsService 1.0 MetricsService.qml
 singleton OsdService 1.0 OsdService.qml
 singleton LogService 1.0 LogService.qml
 singleton KernelEventRecorder 1.0 KernelEventRecorder.qml

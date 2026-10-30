@@ -34,7 +34,7 @@ Item {
     property bool listFrozen: false
 
     // True while nmcli is connecting to this specific network (now wired).
-    readonly property bool connecting: Services.NetworkControlService.connectingTo === net.ssid
+    readonly property bool connecting: Services.HostBridge.network.connectingTo === net.ssid
     // Secured = has a non-empty, non-"--"/"open" security field.
     readonly property bool secured: {
         var s = (net.security || "").toUpperCase()
@@ -207,7 +207,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.NetworkControlService.disconnectWifi()
+                        onClicked: Services.HostBridge.network.disconnectWifi()
                     }
                 }
                 Text {
@@ -245,7 +245,7 @@ Item {
                     selectionColor: Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.35)
                     Keys.onReturnPressed: {
                         if (passField.text.length > 0) {
-                            Services.NetworkControlService.connectWifi(net.ssid, passField.text)
+                            Services.HostBridge.network.connectWifi(net.ssid, passField.text)
                             row.closePassword()
                         }
                     }
@@ -282,7 +282,7 @@ Item {
                     anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         if (passField.text.length > 0) {
-                            Services.NetworkControlService.connectWifi(net.ssid, passField.text)
+                            Services.HostBridge.network.connectWifi(net.ssid, passField.text)
                             row.closePassword()
                         }
                     }
@@ -333,7 +333,7 @@ Item {
         onClicked: function(mouse) {
             if (net.inUse || connecting || row.editing) { mouse.accepted = false; return }
             if (row.secured) row.openPassword()
-            else Services.NetworkControlService.connectWifi(net.ssid, "")
+            else Services.HostBridge.network.connectWifi(net.ssid, "")
         }
     }
 }

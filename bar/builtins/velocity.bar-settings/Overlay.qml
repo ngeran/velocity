@@ -20,7 +20,11 @@ Item {
     Loader {
         id: loader
         active: root._wanted
-        sourceComponent: Component { Components.BarSettingsOverlay { } }
+        sourceComponent: Component {
+            Components.BarSettingsOverlay {
+                hostApi: root.ctx ? root.ctx.host : null
+            }
+        }
         onLoaded: item.open()
     }
 }

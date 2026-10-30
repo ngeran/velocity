@@ -19,7 +19,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-UNITS="quickshell-bar quickshell-settings"
+UNITS="quickshell-bar"
 QUICK=0
 [ "${1:-}" = "--quick" ] && QUICK=1
 
@@ -40,7 +40,7 @@ done
 # Two passes: -p warning (systemd / qml-level) and a WARN-text grep on the
 # info stream — quickshell logs its own "  WARN: …" lines below syslog's
 # warning priority, so -p warning alone misses them.
-JFLAGS="--user -u quickshell-bar -u quickshell-settings --since $BOOT_STAMP --no-pager -q"
+JFLAGS="--user -u quickshell-bar --since $BOOT_STAMP --no-pager -q"
 W1=$(journalctl $JFLAGS -p warning 2>/dev/null | grep -v '^-- ' | grep -c . || true)
 W2=$(journalctl $JFLAGS -p info 2>/dev/null | grep -cE '\bWARN\b' || true)
 WARNINGS=$W1
@@ -52,7 +52,6 @@ fi
 
 # ── 3 · resident pids ───────────────────────────────────────────────────────
 BAR_PID=$(systemctl --user show -p MainPID --value quickshell-bar)
-SET_PID=$(systemctl --user show -p MainPID --value quickshell-settings)
 case "$BAR_PID" in ''|0) bad "no MainPID for quickshell-bar"; exit 1 ;; esac
 
 CPU="skip" RSS="skip" SPAWNS="skip"
@@ -65,17 +64,17 @@ if [ "$QUICK" -eq 0 ]; then
     rss_kb() { awk '/VmRSS/{print $2}' "/proc/$1/status" 2>/dev/null; }
 
     T0=$(ticks "$BAR_PID")
-    R0_BAR=$(rss_kb "$BAR_PID"); R0_SET=$(rss_kb "$SET_PID")
+    R0_BAR=$(rss_kb "$BAR_PID")
     SEEN=$(cat /proc/"$BAR_PID"/task/*/children 2>/dev/null | tr ' ' '\n' | grep -c . || true)
 
     N=0; while [ "$N" -lt 30 ]; do sleep 2; N=$((N + 1)); done
 
     T1=$(ticks "$BAR_PID")
-    R1_BAR=$(rss_kb "$BAR_PID"); R1_SET=$(rss_kb "$SET_PID")
+    R1_BAR=$(rss_kb "$BAR_PID")
     NOW=$(cat /proc/"$BAR_PID"/task/*/children 2>/dev/null | tr ' ' '\n' | grep -c . || true)
 
     CPU=$(awk -v d="$((T1 - T0))" -v c="$CLK" 'BEGIN{printf "%.1f", d/c/60*100}')
-    RSS="${R1_BAR}+${R1_SET}kB"
+    RSS="${R1_BAR}kB"
     SPAWNS=$((NOW - SEEN)); [ "$SPAWNS" -lt 0 ] && SPAWNS=0
 fi
 

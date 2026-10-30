@@ -582,9 +582,9 @@ Item {
         return null
     }
 
-    // One verb for widget panels AND overlays. Dual-kind plugins (xray:
-    // overlay + bar-widget) register both — a widget without open() must not
-    // shadow the overlay.
+    // One verb for widget panels AND overlays. Dual-kind plugins (overlay +
+    // bar-widget) register both — a widget without open() must not shadow
+    // the overlay.
     function summon(id, payloadJson) {
         var w = root.instance(id, "bar-widget")
         if (w && typeof w.open === "function") { w.open(); return "ok" }

@@ -59,8 +59,8 @@ Item {
             barRunProc.running = true
         }
         // `bar.shell` — the omarchy surface converted bar-widgets call into
-        // (xray: `bar.shell.toggle(moduleName, "{}")` from its launcher
-        // button). Routed through the host's summon registries, which cover
+        // `bar.shell.toggle(moduleName, "{}")` from its launcher button.
+        // Routed through the host's summon registries, which cover
         // widget plugins AND overlay plugins with one verb.
         readonly property var shell: shellObj
     }

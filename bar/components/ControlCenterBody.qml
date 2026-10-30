@@ -21,22 +21,12 @@ ColumnLayout {
     signal drill(string tray)
     signal done()
 
-
-    // Literal call strings (tools/check-ipc greps for them); launches the
-    // settings shell when it isn't running.
-    readonly property var _settingsCalls: ({
-        openSettings: "qs -c settings ipc call SettingsWindow openSettings",
-        openThemeTab: "qs -c settings ipc call SettingsWindow openThemeTab"
-    })
+    // The bar ShellRoot (injected by TrayCard's loader) — verb names match
+    // the SettingsWindow IPC functions (openSettings/openThemeTab).
+    property var shellApi: null
     function openSettings(verb) {
-        launcher.command = ["sh", "-c", root._settingsCalls[verb] + " 2>/dev/null || " +
-            "setsid quickshell -c settings >/dev/null 2>&1 &"]
-        launcher.running = true
+        if (shellApi) shellApi.settingsCall(verb)
         root.done()
-    }
-    Process {   // unbounded-ok: one-shot ipc call / detached spawn — exits at once
-        id: launcher
-        command: []
     }
 
     component Tile: Rectangle {

@@ -121,8 +121,9 @@ Item {
             if (ok) Config.MotionConfig.reloadFromDisk()
         })
 
-        // Also write bar-specific config for cross-process sync
-        saveBarConfig()
+        // (Bar keys no longer sync here — P2.5: bar-config.json's writer is
+        // the bar's BarConfigWriter; bar-shaped picks flow through it at the
+        // moment they are made, not on settings-config saves.)
 
         // Pulse the "✓ APPLIED" toast in the Settings tab
         root.justSaved = true
@@ -143,6 +144,7 @@ Item {
         root.stripBurnGuard = true
         root.matugenOnWallpaperChange = false
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
+        root.saveBarConfig()  // the bar keys above live in bar-config.json (P2.5)
     }
 
     function loadSettings() {
@@ -188,20 +190,14 @@ Item {
     }
 
     function saveBarConfig() {
-        // Anti-drift: the extras snapshot is captured at startup; a hand-edit
-        // made since (motionScale via CLI, …) would be clobbered by writing
-        // from that stale snapshot. Re-read the file first and chain the
-        // write off the read's exit (skipping applyBarConfig — see the
-        // _barConfigReadForSave branch). A read still in flight can't be
-        // re-triggered, so write with what we have rather than drop the save.
-        if (barConfigRead.running) { _writeBarConfig(); return }
-        root._barConfigReadForSave = true
-        barConfigRead.running = true
-    }
-
-    function _writeBarConfig() {
-        var barConfig = {
-            schemaVersion: 1,   // bar's ingestConfigText ignores unknown keys; bump on shape changes
+        // P2.5: the bar's BarConfigWriter (via HostBridge) is bar-config.json's
+        // single writer — read-modify-write over the disk content, so bar-owned
+        // keys this mirror doesn't model survive; BarConfig reloads in-process.
+        // All 8 modeled keys are merged together so callers that changed only
+        // the mirror still persist the whole known surface.
+        var w = HostBridge.configWriter
+        if (!w) { console.log("[SettingsConfigService] bar config writer not ready"); return }
+        w.merge({
             barHeight: root.barHeight,
             workspaceCount: root.workspaceCount,
             barStyle: root.barStyle,
@@ -209,70 +205,30 @@ Item {
             osdStyle: root.osdStyle,
             islandBurnGuard: root.islandBurnGuard,
             stripBurnGuard: root.stripBurnGuard
-        }
-        // Merge back bar-owned keys this service does not model (motionScale,
-        // reduceMotion, …) so a save doesn't reset them.
-        for (var k in root.barConfigExtras) {
-            if (Object.prototype.hasOwnProperty.call(root.barConfigExtras, k))
-                barConfig[k] = root.barConfigExtras[k]
-        }
-        var json = JSON.stringify(barConfig, null, 2)
-        var barConfigPath = StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
-        ThemeService._atomicWrite(barConfigPath, json, function(ok) {
-            if (!ok) return
-            ThemeService._runSh("n=0; until qs -c bar ipc call config reload 2>&1 | grep -q ok; do " +
-                                "n=$((n+1)); [ $n -ge 10 ] && exit 1; sleep 0.15; done", "bar config nudge")
         })
     }
 
-    // ── bar-config extras capture ───────────────────────────────────────────
-    // Everything in bar-config.json the service does NOT model, so saves can
-    // merge it back instead of clobbering it. Snapshot is refreshed from disk
-    // at the START of every save (see saveBarConfig) — the startup snapshot
-    // alone would clobber hand-edits made since (motionScale via CLI etc.).
-    property var barConfigExtras: ({})
-    property bool _barConfigReadForSave: false
-    property var barConfigRead: Process {   // unbounded-ok: waived — see service header
-        command: ["cat", StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { barConfigRead.buffer += data + "\n" } }
-        onStarted: buffer = ""
-        onExited: {
-            if (running === false && barConfigRead.buffer.trim().length > 0) {
-                try {
-                    var data = JSON.parse(barConfigRead.buffer)
-                    // Dropped on save: rightLayout (now plugins-state.json layout) and
-                    // clockCity/clockOffset (now the nikos.clock plugin's `zone` setting).
-                    var dropped = ["schemaVersion", "barHeight", "workspaceCount",
-                                   "clockCity", "clockOffset", "barStyle", "barPosition",
-                                   "osdStyle", "islandBurnGuard", "stripBurnGuard", "rightLayout"]
-                    var extras = {}
-                    for (var k in data) {
-                        if (Object.prototype.hasOwnProperty.call(data, k)
-                                && dropped.indexOf(k) === -1)
-                            extras[k] = data[k]
-                    }
-                    root.barConfigExtras = extras
-                    // In save mode the disk copy is STALE by definition (the
-                    // user just changed values in the UI) — refresh extras
-                    // only; re-applying would silently revert the save.
-                    if (!root._barConfigReadForSave) root.applyBarConfig(data)
-                } catch (e) { /* keep empty extras */ }
-            }
-            barConfigRead.buffer = ""
-            // A save chains through the re-read (extras refreshed above);
-            // the actual write waits until here so it always lands, even if
-            // the file was missing/unparseable (extras stay from startup).
-            if (root._barConfigReadForSave) {
-                root._barConfigReadForSave = false
-                root._writeBarConfig()
-            }
+    // ── bar-config mirror read (read-only since P2.5) ────────────────────────
+    // The mirror (barHeight/barStyle/…) only feeds the settings window's own
+    // reads (slide-in offset). Writes go through the bar's BarConfigWriter —
+    // including the bar-settings overlay's direct picks, which bypass this
+    // mirror entirely — so the mirror just follows the file (watchChanges).
+    FileView {
+        path: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"
+        watchChanges: true
+        printErrors: false
+        onTextChanged: {
+            try {
+                var data = JSON.parse(text())
+                if (data) root.applyBarConfig(data)
+            } catch (e) { /* keep mirror defaults */ }
         }
+        Component.onCompleted: reload()
     }
 
     // (Bar style discovery lived here for the Settings ▸ Bar pane's pick
     // cards; the pane was consolidated away — the bar's overlay scans the
-    // styles itself in its own process.)
+    // styles itself and writes directly since P2.5.)
 
     // =========================================================================
     // INITIALIZATION
@@ -280,6 +236,5 @@ Item {
 
     Component.onCompleted: {
         loadSettings()
-        barConfigRead.running = true
     }
 }

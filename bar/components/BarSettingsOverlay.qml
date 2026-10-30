@@ -5,19 +5,17 @@
 // In-bar surface for the BAR's own settings, orpheus-style:
 //
 //   STYLE     every scanned style (bar/styles/*/Scene.qml) as a card — a pick
-//             swaps the bar live. The pick is routed THROUGH the settings
-//             process (`SettingsWindow.setBarStyle`) so the settings app stays
-//             bar-config.json's single writer: the write lands via its proven
-//             funnel (extras merge → atomic write → `config reload` nudge) and
-//             a later settings-side save can't clobber a bar-side pick. Active
-//             state reads the bar's own BarConfig — disk truth, never an
-//             optimistic guess.
-//   POSITION  top/bottom edge pills, same routing (`setBarPosition`).
+//             swaps the bar live. The pick calls Config.BarConfigWriter.merge()
+//             DIRECTLY (P2.5 — one process, one writer; before P2.1 this
+//             shelled out to the settings process, a path that died when P2.1
+//             deleted that process). Active state reads the bar's own
+//             BarConfig — disk truth, never an optimistic guess.
+//   POSITION  top/bottom edge pills, same direct merge.
 //   HEIGHT    slider (drafts locally, commits on release — one fork per
-//             drag, not per tick), routed via `setBarHeight`.
-//   DOTS      workspace-count pills, routed via `setWorkspaceCount`.
-//   GUARD     QD-OLED burn-guard pills — STRIPS (`setBurnGuard strip …`,
-//             the shared BurnOrbit on vector/notch/ryoku) and ISLAND (its
+//             drag, not per tick).
+//   DOTS      workspace-count pills.
+//   GUARD     QD-OLED burn-guard pills — STRIPS (stripBurnGuard, the shared
+//             BurnOrbit on vector/notch/ryoku) and ISLAND (its
 //             own dim+orbit knob, shown only while the island style is
 //             active). Both routed through the same funnel.
 //   MODULES   the plugin engine is IN this process: enable/disable and section
@@ -45,6 +43,10 @@ import "../services" as Services
 
 OverlayShell {
     id: root
+
+    // Injected by builtins/velocity.bar-settings (ctx.host = the shell) for
+    // the in-process settings deep link (_openPlugins).
+    property var hostApi: null
 
     cardWidth: 560
     cardHeight: 640
@@ -113,61 +115,30 @@ OverlayShell {
         _refresh()
     }
 
-    // ---- settings-process writes (the single bar-config writer) ----
-    // A non-zero exit means the settings PROCESS is gone (unit stopped /
-    // crashed): the pre-P1 form only logged it, so every pick silently did
-    // nothing. Now the failure surfaces as the inline row (below) with a
-    // START button; a subsequent good call heals it (P1.4).
-    property bool _settingsDown: false
-    property string _failedArgv: "[]"
-    Services.BoundedProcess {
-        id: settingsCall
-        property bool expectOk: true
-        onDone: function (out, err, code) {
-            // `qs ipc call` exits 0 even on rejected calls — output is the truth.
-            var t = String(out).trim()
-            if (code !== 0) {
-                root._failedArgv = JSON.stringify(settingsCall.command)
-                root._settingsDown = true
-                return
-            }
-            if (expectOk && t.indexOf("ok") !== 0)
-                console.log("[BarSettingsOverlay] settings write failed:", t || "(no output)", String(err).trim())
-            root._settingsDown = false
-        }
+    // ---- bar-config writes (P2.5: the writer is IN this process) ----
+    // Config.BarConfigWriter is bar-config.json's single writer: each pick
+    // merges over the disk content (extras preserved) atomically and reloads
+    // BarConfig in-process. Before P2.1 these picks shelled out to the
+    // settings process — a path that died outright when that process was
+    // deleted (the P1.4 down-row and START retry below it are gone with it).
+    function _pickStyle(name) { Config.BarConfigWriter.merge({ barStyle: String(name) }) }
+    function _pickPosition(p) { Config.BarConfigWriter.merge({ barPosition: p === "bottom" ? "bottom" : "top" }) }
+    function _pickOsdStyle(s) { Config.BarConfigWriter.merge({ osdStyle: s === "segments" ? "segments" : "bar" }) }
+    function _pickHeight(h) {
+        var v = Math.round(Number(h))
+        if (v >= 18 && v <= 64) Config.BarConfigWriter.merge({ barHeight: v })
     }
-    Services.BoundedProcess {   // one-shot unit start, then retry the write once
-        id: settingsStart
-        timeoutMs: 15000
-        onDone: function (out, err, code) {
-            if (code !== 0) {
-                console.log("[BarSettingsOverlay] quickshell-settings start failed:", String(err).trim())
-                return   // the row stays up; the user can press START again
-            }
-            root._settingsIpc(JSON.parse(root._failedArgv), true)
-        }
+    function _pickDots(n) {
+        var v = Math.round(Number(n))
+        if ([3, 5, 7, 9].indexOf(v) !== -1) Config.BarConfigWriter.merge({ workspaceCount: v })
     }
-    function _startSettingsProcess() {
-        settingsStart.command = ["systemctl", "--user", "start", "quickshell-settings"]
-        settingsStart.run()
+    function _pickGuard(scope, on) {
+        var key = scope === "island" ? "islandBurnGuard" : "stripBurnGuard"
+        var c = {}; c[key] = (on === true)
+        Config.BarConfigWriter.merge(c)
     }
-
-    // argv passed LITERALLY at each call site — check-ipc's internal-class
-    // scan keys on the literal `"call", "Target", "fn"` spelling.
-    function _settingsIpc(argv, expectOk) {
-        settingsCall.expectOk = expectOk !== false
-        settingsCall.command = argv
-        settingsCall.run()
-    }
-
-    function _pickStyle(name) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarStyle", name]) }
-    function _pickPosition(p) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarPosition", p]) }
-    function _pickOsdStyle(s) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setOsdStyle", s]) }
-    function _pickHeight(h) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBarHeight", String(h)]) }
-    function _pickDots(n) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setWorkspaceCount", String(n)]) }
-    function _pickGuard(scope, on) { _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "setBurnGuard", scope, on ? "on" : "off"]) }
     function _openPlugins() {
-        _settingsIpc(["qs", "-c", "settings", "ipc", "call", "SettingsWindow", "openControlPlugins"], false)
+        if (root.hostApi) root.hostApi.settingsCall("openControlPlugins")
         root.close()   // the settings window takes over; free the screen + keys
     }
 
@@ -615,59 +586,6 @@ OverlayShell {
             }
 
             Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: Config.ThemeConfig.colors.border }
-
-            // ---- settings-process down (P1.4) ----
-            // Accent border only, no fill (QD-OLED doctrine) — the card is
-            // ephemeral, like the rest of the overlay.
-            Rectangle {
-                id: downRow
-                Layout.fillWidth: true
-                visible: root._settingsDown
-                Layout.preferredHeight: visible ? Config.PopupMetrics.px(34) : 0
-                radius: Config.PopupMetrics.px(6)
-                color: "transparent"
-                border.color: Config.BarConfig.colorAccent
-                border.width: Config.PopupMetrics.hairline(downRow)
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Config.PopupMetrics.px(8)
-                    spacing: Config.PopupMetrics.px(8)
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.minimumWidth: 0
-                        text: "SETTINGS PROCESS DOWN — writes are failing"
-                        color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: Config.PopupMetrics.px(9)
-                        font.family: Config.BarConfig.fontFamily
-                        font.letterSpacing: 1
-                        elide: Text.ElideRight
-                    }
-                    Rectangle {
-                        id: startBtn
-                        Layout.preferredWidth: Config.PopupMetrics.px(52)
-                        Layout.preferredHeight: Config.PopupMetrics.px(20)
-                        radius: Config.PopupMetrics.px(4)
-                        color: startMa.containsPress ? Config.ThemeConfig.colors.surfaceVariant : "transparent"
-                        border.color: Config.BarConfig.colorAccent
-                        border.width: Config.PopupMetrics.hairline(startBtn)
-                        Text {
-                            anchors.centerIn: parent
-                            text: "START"
-                            color: Config.BarConfig.colorAccent
-                            font.pixelSize: Config.PopupMetrics.px(9)
-                            font.bold: true
-                            font.family: Config.BarConfig.fontFamily
-                            font.letterSpacing: 1.5
-                        }
-                        MouseArea {
-                            id: startMa
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root._startSettingsProcess()
-                        }
-                    }
-                }
-            }
 
             // ---- footer ----
             RowLayout {

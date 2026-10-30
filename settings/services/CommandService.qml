@@ -112,76 +112,105 @@ Item {
         for (var i = 0; i < lines.length; i++) root.pushLog(lines[i], "output")
     }
 
+    // ── Merged-domain accessors (P2.2) ──────────────────────────────────────
+    // The three control services became the BAR's services (one process, one
+    // owner per domain); this console reaches them through HostBridge, which
+    // stays null until the bar shell attaches barServices.
+    function _svc(name) {
+        var s = HostBridge[name]
+        if (!s) root.pushLog("error: " + name + " service not ready (bar shell not attached)", "error")
+        return s
+    }
+
     function _status() {
-        var ns = NetworkControlService.connectionStatus
-        root.pushLog("[ NETWORK ] " + (ns.connected
-            ? "connected via " + ns.type + (ns.ssid ? " · " + ns.ssid : "") + (ns.ip ? " · " + ns.ip : "")
+        var ns = _svc("network"); if (!ns) return
+        var st = ns.connectionStatus
+        root.pushLog("[ NETWORK ] " + (st.connected
+            ? "connected via " + st.type + (st.ssid ? " · " + st.ssid : "") + (st.ip ? " · " + st.ip : "")
             : "disconnected"), "output")
 
-        root.pushLog("[ BLUETOOTH ] " + (BluetoothControlService.powered
-            ? "powered · " + BluetoothControlService.devices.length + " device(s)"
+        var bt = _svc("bluetooth"); if (!bt) return
+        root.pushLog("[ BLUETOOTH ] " + (bt.powered
+            ? "powered · " + bt.devices.length + " device(s)"
             : "offline"), "output")
 
-        root.pushLog("[ AUDIO ] sink: " + (AudioControlService.defaultSink || "none")
-            + " · " + AudioControlService.sinks.length + " sink(s)"
-            + " · " + AudioControlService.sinkInputs.length + " stream(s)", "output")
+        var au = _svc("audio"); if (!au) return
+        root.pushLog("[ AUDIO ] sink: " + (au.defaultSink || "none")
+            + " · " + au.sinks.length + " sink(s)"
+            + " · " + au.sinkInputs.length + " stream(s)", "output")
     }
 
     function _scan(args) {
         if (args.length < 2) { root.pushLog("usage: scan <wifi|bt>", "warning"); return }
         var t = args[1].toLowerCase()
-        if (t === "wifi") NetworkControlService.scanWifi()
-        else if (t === "bt") BluetoothControlService.scanDevices()
+        if (t === "wifi") { var n = _svc("network"); if (n) n.scanWifi() }
+        else if (t === "bt") { var b = _svc("bluetooth"); if (b) b.scanDevices() }
         else root.pushLog("error: scan target must be 'wifi' or 'bt'", "error")
     }
 
     function _connect(args) {
         if (args.length < 2) { root.pushLog("usage: connect <ssid> [pass]", "warning"); return }
+        var ns = _svc("network"); if (!ns) return
         var ssid = args[1]
         var pass = args.length >= 3 ? args.slice(2).join(" ") : ""
-        NetworkControlService.connectWifi(ssid, pass)
+        ns.connectWifi(ssid, pass)
     }
 
     function _btUnary(args, fn, macIdx) {
         if (args.length <= macIdx) { root.pushLog("usage: " + fn + " <mac>", "warning"); return }
-        BluetoothControlService[fn](args[macIdx])
+        var bt = _svc("bluetooth"); if (!bt) return
+        bt[fn](args[macIdx])
     }
 
     function _btChain(args) {
         if (args.length < 2) { root.pushLog("usage: bt <mac>  (pair + trust + connect)", "warning"); return }
+        var bt = _svc("bluetooth"); if (!bt) return
         var mac = args[1]
         root.pushLog("chaining pair → trust → connect " + mac, "output")
-        BluetoothControlService.pair(mac)
-        BluetoothControlService.trust(mac)
-        BluetoothControlService.connect(mac)
+        bt.pair(mac)
+        bt.trust(mac)
+        bt.connect(mac)
     }
 
     function _disconnect(args) {
         if (args.length < 3 || args[1].toLowerCase() !== "bt") {
             root.pushLog("usage: disconnect bt <mac>", "warning"); return
         }
-        BluetoothControlService.disconnect(args[2])
+        var bt = _svc("bluetooth"); if (!bt) return
+        bt.disconnect(args[2])
     }
 
     function _setSink(args) {
         if (args.length < 2) { root.pushLog("usage: set-sink <name>", "warning"); return }
-        AudioControlService.setDefaultSink(args.slice(1).join(" "))
+        var au = _svc("audio"); if (!au) return
+        var want = args.slice(1).join(" ").toLowerCase()
+        for (var i = 0; i < au.sinks.length; i++) {
+            var s = au.sinks[i]
+            if (String(s.name).toLowerCase().indexOf(want) !== -1 || String(s.id) === want) {
+                au.setDefaultSink(s.id)
+                root.pushLog("[audio] default sink → " + s.name, "success")
+                return
+            }
+        }
+        root.pushLog("error: no sink matching '" + want + "'", "error")
     }
 
     function _vol(args) {
         if (args.length < 2) { root.pushLog("usage: vol <0-150>", "warning"); return }
         var pct = parseInt(args[1], 10)
         if (isNaN(pct)) { root.pushLog("error: volume must be a number", "error"); return }
-        AudioControlService.setSinkVolume(AudioControlService.defaultSink, pct + "%")
+        var au = _svc("audio"); if (!au) return
+        au.setSinkVolume(au.defaultSink, pct + "%")
     }
 
     function _mute(args) {
-        AudioControlService.toggleSinkMute(AudioControlService.defaultSink)
+        var au = _svc("audio"); if (!au) return
+        au.toggleSinkMute(au.defaultSink)
     }
 
     function _toggle(args) {
         if (args.length < 2) { root.pushLog("usage: toggle <bt>", "warning"); return }
-        if (args[1].toLowerCase() === "bt") BluetoothControlService.togglePower()
+        if (args[1].toLowerCase() === "bt") { var b = _svc("bluetooth"); if (b) b.togglePower() }
         else root.pushLog("error: toggle target must be 'bt'", "error")
     }
 }

@@ -104,6 +104,54 @@ ShellRoot {
         return !!ov && ov.shown === true
     }
 
+    // =========================================================================
+    // SETTINGS HOST (P2.1) — the dashboard runs in THIS process. Two file://
+    // loaders into the settings tree (cross-root loads are legal; URI imports
+    // are not — the import-split law). The bootstrap loads at boot (singleton
+    // pins + DisplayIpc/NetworkIpc + the bar-config write verbs); the window
+    // loads on first use and then stays mounted (close only hides it, like
+    // ncLoader). IPC target names are unchanged — handlers below forward.
+    // =========================================================================
+    property bool settingsWanted: false
+    property var _pendingSettingsCall: null
+
+    readonly property string _settingsBootstrapUrl:
+        "file://" + Engine.PluginRegistry.repoDir + "/settings/components/SettingsBootstrap.qml"
+    readonly property string _settingsHostUrl:
+        "file://" + Engine.PluginRegistry.repoDir + "/settings/components/SettingsHostWindow.qml"
+
+    // Route a call at the host window, loading it first if needed (the queued
+    // call flushes in the loader's onLoaded). Returns the function's value.
+    // Two optional args — setBurnGuard(scope, val) needs both.
+    function settingsCall(fn, arg1, arg2) {
+        if (!settingsHostLoader.active) {
+            settingsHostLoader.active = true
+            _pendingSettingsCall = { fn: fn, arg1: arg1, arg2: arg2 }
+            return "ok"
+        }
+        return _settingsInvoke(settingsHostLoader.item, fn, arg1, arg2)
+    }
+
+    // The always-on bootstrap (write verbs + PluginManager surface). Loaded
+    // during shell init, so a null here means "called during boot" — say so
+    // instead of silently no-oping.
+    function settingsBootstrapFn(fn, arg1, arg2) {
+        var b = settingsBootstrapLoader.item
+        if (!b) return "error: settings bootstrap not ready"
+        return _settingsInvoke(b, fn, arg1, arg2)
+    }
+
+    function _settingsInvoke(it, fn, arg1, arg2) {
+        if (arg1 === undefined) return it[fn]()
+        if (arg2 === undefined) return it[fn](arg1)
+        return it[fn](arg1, arg2)
+    }
+
+    // Direct verb for in-process callers (velocity.settings gear right-click).
+    function settingsToggle() {
+        settingsCall("toggle")
+    }
+
     // KernelEventRecorder must be EAGER: QML singletons construct lazily on first
     // DEREFERENCE — and a never-read property binding may never evaluate.
     // Touching it imperatively at shell start guarantees construction (the
@@ -116,6 +164,10 @@ ShellRoot {
         // force KernelEventRecorder construction: QML singletons build lazily and
         // nothing else references the collector until a panel binds it.
         console.log("[shell] KernelEventRecorder online:", Services.KernelEventRecorder.events.count, "events")
+        // Same lazy-pin for the metrics engine: the deepcool LCD feed runs
+        // window-independent, so its consumer (lcdPresent) must exist before
+        // any overlay/Core tab ever opens. Reading a member forces it.
+        console.log("[shell] MetricsService online:", Services.MetricsService.metricsPath)
     }
 
     // TRAY STATE — one tray card for all outputs. trayOwner = the bar window
@@ -220,11 +272,43 @@ ShellRoot {
     Components.TrayCard {
         activeTray: shellRoot.activeTray
         anchorItem: shellRoot.trayAnchor
+        shellApi: shellRoot
         onCloseRequested: shellRoot.closeTray()
         onSwitchRequested: function(tray) { shellRoot.switchTray(tray) }
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
         embedHost: shellRoot.trayOwner && shellRoot.trayOwner.screen
             ? (Engine.PopupCoordinator.islands[shellRoot.trayOwner.screen.name] || null) : null
+    }
+
+    // =========================================================================
+    // SETTINGS LOADERS — file:// into the settings tree (see settings host
+    // note above). barServices hands the merged-domain services to
+    // HostBridge; extended as P2.2/P2.3 merge each domain.
+    // =========================================================================
+    Loader {
+        id: settingsBootstrapLoader
+        active: true
+        source: shellRoot._settingsBootstrapUrl
+        onLoaded: item.barServices = ({
+            engine: Engine.PluginRegistry,
+            log: Services.LogService,
+            bluetooth: Services.BluetoothService,
+            audio: Services.AudioService,
+            network: Services.NetworkService,
+            metrics: Services.MetricsService,
+            configWriter: Config.BarConfigWriter
+        })
+    }
+
+    Loader {
+        id: settingsHostLoader
+        active: shellRoot.settingsWanted
+        source: shellRoot._settingsHostUrl
+        onLoaded: {
+            var p = shellRoot._pendingSettingsCall
+            shellRoot._pendingSettingsCall = null
+            if (p) shellRoot._settingsInvoke(item, p.fn, p.arg1, p.arg2)
+        }
     }
 
     // =========================================================================
@@ -358,19 +442,21 @@ ShellRoot {
     // $XDG_STATE_HOME/velocity/speedtest.json for the settings view.
     IpcHandler {
         target: "network"
+        function latency(): string { return shellRoot.settingsBootstrapFn("networkLatency") }
+        function engineer(): string { return shellRoot.settingsBootstrapFn("networkEngineer") }
         function speedtest(): string {
             Services.NetworkService.runSpeedTest()
             return "ok"
         }
     }
 
-    // metrics lease — H7: settings (Core tab, dashboard System Pulse) renew
-    // every 10s while visible; the bar's live-metrics poll runs only while a
-    // lease is live. Clamp ≤ 30s lives in lib/lease.mjs.
+    // metrics lease — H7: scripting surface; settings (Core tab, dashboard
+    // System Pulse) now call MetricsService.extendLease() directly (one
+    // process, P2.3). Clamp ≤ 30s lives in lib/lease.mjs.
     IpcHandler {
         target: "metrics"
         function lease(seconds: int): string {
-            Services.SystemInfoService.extendLease(seconds)
+            Services.MetricsService.extendLease(seconds)
             return "ok"
         }
     }
@@ -469,5 +555,69 @@ ShellRoot {
         function toggle() {
             shellRoot.toggleOverlay("velocity.logs-viewer")
         }
+    }
+
+    // =========================================================================
+    // SETTINGS IPC (P2.1) — target names unchanged from the old settings
+    // process; every verb forwards into the hosted window (toggle/deep links)
+    // or the bootstrap (silent config writes, PluginManager).
+    // =========================================================================
+    IpcHandler {
+        target: "SettingsWindow"
+
+        function toggle() { return shellRoot.settingsCall("toggle") }
+        function show() { return shellRoot.settingsCall("show") }
+        function hide() { return shellRoot.settingsCall("hide") }
+
+        // Read-only probe: key of the visible top-level tab. First-ever call
+        // loads the window and returns "" — the probe means "generic open";
+        // a second call reads the real tab.
+        function activeTab(): string {
+            if (!settingsHostLoader.active) {
+                shellRoot.settingsCall("activeTab")
+                return ""
+            }
+            return settingsHostLoader.item.activeTab()
+        }
+
+        function openControlNetwork() { return shellRoot.settingsCall("openControlNetwork") }
+        function openControlBluetooth() { return shellRoot.settingsCall("openControlBluetooth") }
+        function openControlAudio() { return shellRoot.settingsCall("openControlAudio") }
+        function openControlDisplay() { return shellRoot.settingsCall("openControlDisplay") }
+        function openControlPlugins() { return shellRoot.settingsCall("openControlPlugins") }
+        function openSettings() { return shellRoot.settingsCall("openSettings") }
+        function openThemeTab() { return shellRoot.settingsCall("openThemeTab") }
+        function openCore(section: string) { return shellRoot.settingsCall("openCore", section) }
+
+        // C4: bar-owned keys written FROM the bar — silent funnel through the
+        // bootstrap (no window opened).
+        function setBarStyle(name: string): string { return shellRoot.settingsBootstrapFn("setBarStyle", name) }
+        function setBarPosition(pos: string): string { return shellRoot.settingsBootstrapFn("setBarPosition", pos) }
+        function setOsdStyle(style: string): string { return shellRoot.settingsBootstrapFn("setOsdStyle", style) }
+        function setBarHeight(h: string): string { return shellRoot.settingsBootstrapFn("setBarHeight", h) }
+        function setWorkspaceCount(n: string): string { return shellRoot.settingsBootstrapFn("setWorkspaceCount", n) }
+        function setBurnGuard(scope: string, val: string): string { return shellRoot.settingsBootstrapFn("setBurnGuard", scope, val) }
+    }
+
+    // Plugin pipeline (install/convert from the CLI and tests)
+    IpcHandler {
+        target: "PluginManager"
+        function installFromGit(url: string): string { return shellRoot.settingsBootstrapFn("pluginInstallFromGit", url) }
+        function refresh(): string { return shellRoot.settingsBootstrapFn("pluginRefresh") }
+    }
+
+    // Power menu overlay (bar PowerIcon / SUPER+P)
+    IpcHandler {
+        target: "powerMenu"
+        function toggle() { shellRoot.settingsCall("powerToggle") }
+    }
+
+    // Dashboard search (scripting / truth probes / deep-link)
+    IpcHandler {
+        target: "search"
+        function query(q: string): string { return shellRoot.settingsCall("searchQuery", q) }
+        function open(q: string) { shellRoot.settingsCall("searchOpen", q) }
+        function activateFirst(q: string) { return shellRoot.settingsCall("searchActivateFirst", q) }
+        function list(): string { return shellRoot.settingsCall("searchList") }
     }
 }

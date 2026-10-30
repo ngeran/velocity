@@ -1,19 +1,21 @@
 # shared/ — canonical cross-shell files
 
-The bar (`quickshell -c bar`) and the settings dashboard (`-c settings`) are
-**separate config roots**. Quickshell's VFS blocks QML imports that escape
-the root, so these files are **synced into each root, not imported across
-roots** (only file://-loaded plugin code can cross roots).
+Since P2.1 the bar and the settings dashboard run in ONE process, but they
+remain **two import worlds**: the settings tree is loaded via file:// and
+must not `import "../bar/…"` (a directory imported under two specifiers
+yields two singleton instances — the import-split law). So these files are
+still **synced into each tree, not imported across trees** (only file://-
+loaded plugin code crosses roots, and plugins stay self-contained anyway).
 
 - `MotionConfig.qml`, `DebugConfig.qml` → synced to `bar/config/` and
   `settings/config/` (byte-identical; the root whose config json gets watched
   is derived from the copy's own location).
 - `BoundedProcess.qml` → synced to `bar/services/` and `settings/services/`
-  (no per-root divergence — pure primitive).
+  (no per-tree divergence — pure primitive).
 - `LogService.qml` + `LogModel.js` → synced to `bar/services/` and
-  `settings/services/` (the bar's SUPER+T overlay and the settings app's LOGS
-  tab each run their own copy — one journal stream per process; the copies'
-  `import "../config"` resolves to each root's own DebugConfig).
+  `settings/services/` (the bar's SUPER+T overlay and the dashboard's LOGS
+  tab each run their own copy — one journal stream per import world; the
+  copies' `import "../config"` resolves to each tree's own DebugConfig).
 - `tz.mjs` → synced to `settings/lib/` and into the `nikos.timezones` and
   `nikos.clock` plugins' `lib/` (plugins stay self-contained).
 

@@ -13,7 +13,7 @@
 //                   list FROZEN while typing — Repeater array-identity trap)
 //   QR OVERLAY      white matrix card (qrencode) toggled from the header
 //
-// Backed by Services.NetworkControlService. All colours are live ThemeConfig
+// Backed by Services.HostBridge.network. All colours are live ThemeConfig
 // tokens. List freeze/capacity logic preserved (see memory notes — do not
 // "simplify" it back to a live binding).
 // =============================================================================
@@ -38,8 +38,8 @@ Item {
         anchors.fill: parent
         spacing: Config.ControlConfig.space2
 
-    readonly property var connectionState: Services.NetworkControlService.connectionStatus
-    readonly property var svc: Services.NetworkControlService
+    readonly property var connectionState: Services.HostBridge.network.connectionStatus
+    readonly property var svc: Services.HostBridge.network
     readonly property bool linkUp: view.connectionState.connected === true
     // "↓ 234.1 · ↑ 41.2 Mbps · 2h ago" — last bar-run speed test (H1 file).
     readonly property string lastTestLine: {
@@ -75,7 +75,7 @@ Item {
     property string editingSsid: ""    // which OTHER row shows the password field
 
     readonly property var otherNets: {
-        var all = Services.NetworkControlService.wifiNetworks
+        var all = Services.HostBridge.network.wifiNetworks
         var out = []
         for (var i = 0; i < all.length; i++)
             if (!all[i].inUse && all[i].ssid !== "") out.push(all[i])
@@ -91,7 +91,7 @@ Item {
     Component.onCompleted: frozenNets = otherNets
 
     property bool showQr: false
-    onShowQrChanged: if (showQr) Services.NetworkControlService.generateQr()
+    onShowQrChanged: if (showQr) Services.HostBridge.network.generateQr()
 
     // ── shared bits ──────────────────────────────────────────────────────────
     component SectionLabel: Text {
@@ -221,7 +221,7 @@ Item {
         ToggleSwitch {
             checked: view.connectionState.wifiEnabled
             Layout.alignment: Qt.AlignVCenter
-            onToggled: Services.NetworkControlService.toggleWifi()
+            onToggled: Services.HostBridge.network.toggleWifi()
         }
     }
 
@@ -248,10 +248,10 @@ Item {
         TelemetryCell { label: "PACKET LOSS"
             value: view.svc.latencyMs >= 0 ? view.svc.lossPct.toFixed(0) + "%" : "—" }
         TelemetryCell { label: "RECEIVING"
-            value: view.fmtRate(view.svc.rxRate)
+            value: view.fmtRate(view.svc.trafficRxKB)
             unit: "↓"; valueColor: Config.ThemeConfig.colors.primary }
         TelemetryCell { label: "SENDING"
-            value: view.fmtRate(view.svc.txRate)
+            value: view.fmtRate(view.svc.trafficTxKB)
             unit: "↑"; valueColor: Config.ThemeConfig.colors.primary }
         TelemetryCell { label: "DOWNLOADED"
             value: view.fmtTotal(view.svc.rxTotalMB) }

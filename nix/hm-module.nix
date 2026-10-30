@@ -71,7 +71,7 @@ in
       type = lib.types.package;
       default = pkgs.quickshell;
       defaultText = lib.literalExpression "pkgs.quickshell";
-      description = "Quickshell build that runs the bar and settings.";
+      description = "Quickshell build that runs the bar (with the hosted dashboard).";
     };
 
     runtimeInputs = lib.mkOption {
@@ -83,13 +83,13 @@ in
       #   frames) · matugen (wallpaper → palette) · mpvpaper (engine backend)
       default = with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper ];
       defaultText = lib.literalExpression "with pkgs; [ netcat networkmanager upower qrencode nodejs git coreutils findutils gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper ]";
-      description = "Tools on the bar/settings services' PATH (ahead of the user and system profiles).";
+      description = "Tools on the bar service's PATH (ahead of the user and system profiles).";
     };
 
     systemd.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Run the bar and settings as systemd user services (quickshell-bar, quickshell-settings).";
+      description = "Run the bar as a systemd user service (quickshell-bar; the dashboard is hosted in it since P2.1).";
     };
   };
 
@@ -103,7 +103,6 @@ in
 
     systemd.user.services = lib.mkIf cfg.systemd.enable {
       quickshell-bar = unit "bar";
-      quickshell-settings = unit "settings";
     };
   };
 }

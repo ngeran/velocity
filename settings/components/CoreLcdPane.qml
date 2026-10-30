@@ -60,16 +60,16 @@ ColumnLayout {
     function tempStr(celsius) { var v = root.unit === "F" ? celsius * 9.0 / 5.0 + 32.0 : celsius; return Math.round(v) + "°" }
     function metricValue(key) {
         switch (key) {
-            case "cpu_temp": return tempStr(Services.ThermalService.cpuTemp)
-            case "gpu_temp": return tempStr(Services.GpuService.temp)
-            case "coolant_temp": return Services.ThermalService.coolantAvailable ? tempStr(Services.ThermalService.coolantTemp) : "N/A"
-            case "nvme_temp": return Services.ThermalService.nvmeTemp > 0 ? tempStr(Services.ThermalService.nvmeTemp) : "N/A"
-            case "cpu_usage": return Math.round(Services.SystemMetricsService.cpuUsage) + "%"
-            case "gpu_usage": return Math.round(Services.GpuService.util) + "%"
-            case "ram_pct": return Math.round(Services.SystemMetricsService.ramPct) + "%"
-            case "swap_pct": return Math.round(Services.SystemMetricsService.swapPct) + "%"
-            case "disk_pct": return Math.round(Services.SystemMetricsService.diskPct) + "%"
-            case "cpu_ghz": return Services.SystemMetricsService.cpuGhz.toFixed(2)
+            case "cpu_temp": return tempStr(Services.HostBridge.metrics.cpuTemp)
+            case "gpu_temp": return tempStr(Services.HostBridge.metrics.temp)
+            case "coolant_temp": return Services.HostBridge.metrics.coolantAvailable ? tempStr(Services.HostBridge.metrics.coolantTemp) : "N/A"
+            case "nvme_temp": return Services.HostBridge.metrics.nvmeTemp > 0 ? tempStr(Services.HostBridge.metrics.nvmeTemp) : "N/A"
+            case "cpu_usage": return Math.round(Services.HostBridge.metrics.cpuUsage) + "%"
+            case "gpu_usage": return Math.round(Services.HostBridge.metrics.util) + "%"
+            case "ram_pct": return Math.round(Services.HostBridge.metrics.ramPct) + "%"
+            case "swap_pct": return Math.round(Services.HostBridge.metrics.swapPct) + "%"
+            case "disk_pct": return Math.round(Services.HostBridge.metrics.diskPct) + "%"
+            case "cpu_ghz": return Services.HostBridge.metrics.cpuGhz.toFixed(2)
         }
         return "—"
     }

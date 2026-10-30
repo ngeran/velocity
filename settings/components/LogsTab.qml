@@ -3,16 +3,17 @@
 // =============================================================================
 // The settings-side home for the system journal (user ask, 2026-10-21: the
 // header LOGS launcher used to cross-process-toggle the BAR's overlay; now it
-// deep-links here — same data, one surface). The bar overlay (SUPER+T) keeps
-// its own window; both read the shared LogService singleton (synced from
-// shared/LogService.qml — one stream per process, never shared state).
+// deep-links here — same data, one surface). Since P2.4 the bar overlay
+// (SUPER+T) and this tab are two views over the ONE in-process HostBridge.log
+// instance (synced from shared/LogService.qml) — open/close are tag-refcounted
+// ("overlay" vs "tab"), so one view closing never kills the other's stream.
 //
 // Interior mirrors bar/components/LogsOverlay (severity chips + height-collapse
 // filtering + debounced match scan + stick-to-bottom), restyled for the
 // settings card: PopupMetrics scaling → plain px, no backdrop/Esc chrome, no
 // footer clock (the dedupe doctrine — the bar owns time). The journalctl child
-// runs only while this tab is visible AND the window is shown (LogService's
-// active gating; hiding the window or leaving the tab closes the stream).
+// runs while either view holds its tag; hiding the window or leaving the tab
+// releases ours (LogService's active gating).
 // =============================================================================
 
 import QtQuick
@@ -31,15 +32,15 @@ Item {
 
     // ---- stream gating: tab visible AND window shown ----
     readonly property bool streamWanted: visible && Config.SharedState.dashboardVisible
-    onStreamWantedChanged: streamWanted ? Services.LogService.open()
-                                        : Services.LogService.close()
+    onStreamWantedChanged: streamWanted ? Services.HostBridge.log.open("tab")
+                                        : Services.HostBridge.log.close("tab")
     Component.onCompleted: {
-        if (streamWanted) Services.LogService.open()
+        if (streamWanted) Services.HostBridge.log.open("tab")
         // (the logs-tab search entry is seeded once in SettingsWindowShell's
         // _seedSearchCatalog — with O1's lazy tabs the index must be whole
         // before this tab is ever visited.)
     }
-    Component.onDestruction: if (Services.LogService.active) Services.LogService.close()
+    Component.onDestruction: if (Services.HostBridge.log) Services.HostBridge.log.close("tab")
 
     readonly property string fontM: Config.ControlConfig.fontMono
     readonly property string fontN: Config.ControlConfig.fontNerd
@@ -61,8 +62,8 @@ Item {
             spacing: 10
             Rectangle {
                 width: 8; height: 8; radius: 4
-                color: Services.LogService.unreadable ? Config.ThemeConfig.colors.error
-                     : Services.LogService.following  ? Config.ThemeConfig.colors.success
+                color: Services.HostBridge.log.unreadable ? Config.ThemeConfig.colors.error
+                     : Services.HostBridge.log.following  ? Config.ThemeConfig.colors.success
                      : Config.ThemeConfig.colors.warning
                 Layout.alignment: Qt.AlignVCenter
                 SequentialAnimation on opacity {
@@ -86,7 +87,7 @@ Item {
             }
             Item { Layout.fillWidth: true }
             Text {
-                text: "JOURNAL · " + (Services.LogService.hostName || "—")
+                text: "JOURNAL · " + (Services.HostBridge.log.hostName || "—")
                 color: Config.ThemeConfig.colors.textDim
                 font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
                 Layout.alignment: Qt.AlignVCenter
@@ -96,7 +97,7 @@ Item {
         // ---- sub-header strip ----
         Text {
             Layout.fillWidth: true
-            text: "LIVE TAIL  //  journalctl -f -o json  //  CAP " + Services.LogService.maxEntries +
+            text: "LIVE TAIL  //  journalctl -f -o json  //  CAP " + Services.HostBridge.log.maxEntries +
                   "  //  SYS + USER + KERNEL"
             color: Config.ThemeConfig.colors.textDim
             font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
@@ -136,10 +137,10 @@ Item {
                 }
             }
 
-            SevChip { label: "ALL";  sev: "all";   count: Services.LogService.entries.count }
-            SevChip { label: "ERR";  sev: "error"; count: Services.LogService.countErr }
-            SevChip { label: "WARN"; sev: "warn";  count: Services.LogService.countWarn }
-            SevChip { label: "INFO"; sev: "info";  count: Services.LogService.countInfo }
+            SevChip { label: "ALL";  sev: "all";   count: Services.HostBridge.log.entries.count }
+            SevChip { label: "ERR";  sev: "error"; count: Services.HostBridge.log.countErr }
+            SevChip { label: "WARN"; sev: "warn";  count: Services.HostBridge.log.countWarn }
+            SevChip { label: "INFO"; sev: "info";  count: Services.HostBridge.log.countInfo }
 
             Item { Layout.fillWidth: true }
 
@@ -172,12 +173,12 @@ Item {
             }
 
             ActionChip {
-                label: Services.LogService.following ? "󰏤 PAUSE" : "󰐊 RESUME"
-                onActivated: Services.LogService.following ? Services.LogService.pause()
-                                                           : Services.LogService.resume()
+                label: Services.HostBridge.log.following ? "󰏤 PAUSE" : "󰐊 RESUME"
+                onActivated: Services.HostBridge.log.following ? Services.HostBridge.log.pause()
+                                                           : Services.HostBridge.log.resume()
             }
-            ActionChip { label: "󰑐 REFRESH"; onActivated: Services.LogService.refresh() }
-            ActionChip { label: "󰀍 CLEAR";   onActivated: Services.LogService.clear() }
+            ActionChip { label: "󰑐 REFRESH"; onActivated: Services.HostBridge.log.refresh() }
+            ActionChip { label: "󰀍 CLEAR";   onActivated: Services.HostBridge.log.clear() }
         }
 
         // ---- search field + matched count ----
@@ -209,7 +210,7 @@ Item {
             }
             Item { Layout.fillWidth: true }
             Text {
-                text: "MATCHED " + root.matchCount + " / " + Services.LogService.entries.count
+                text: "MATCHED " + root.matchCount + " / " + Services.HostBridge.log.entries.count
                 color: Config.ThemeConfig.colors.textDim
                 font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
             }
@@ -227,7 +228,7 @@ Item {
                 clip: true
                 spacing: 0
                 boundsBehavior: Flickable.StopAtBounds
-                model: Services.LogService.entries
+                model: Services.HostBridge.log.entries
 
                 // Stick to the newest line only when already at the bottom.
                 onCountChanged: {
@@ -238,7 +239,7 @@ Item {
                 delegate: Rectangle {
                     width: list.width
                     // FILTER = height-collapse (LogsOverlay PERF NOTES)
-                    height: Services.LogService.rowMatches(model.severity, model.message, model.unit,
+                    height: Services.HostBridge.log.rowMatches(model.severity, model.message, model.unit,
                                                            root.sevFilter, root.searchText.toLowerCase())
                             ? 22 : 0
                     visible: height > 0
@@ -282,32 +283,32 @@ Item {
                     anchors.centerIn: parent
                     spacing: 6
                     z: 5
-                    visible: Services.LogService.unreadable ||
-                             Services.LogService.entries.count === 0 ||
+                    visible: Services.HostBridge.log.unreadable ||
+                             Services.HostBridge.log.entries.count === 0 ||
                              root.matchCount === 0
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: Services.LogService.unreadable ? "󰅖"
-                             : Services.LogService.entries.count === 0 ? "󰔛" : "󰍉"
+                        text: Services.HostBridge.log.unreadable ? "󰅖"
+                             : Services.HostBridge.log.entries.count === 0 ? "󰔛" : "󰍉"
                         font.family: root.fontN; font.pixelSize: 24
-                        color: Services.LogService.unreadable ? Config.ThemeConfig.colors.error
+                        color: Services.HostBridge.log.unreadable ? Config.ThemeConfig.colors.error
                              : Config.ThemeConfig.colors.textDim
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: Services.LogService.unreadable ? "JOURNALCTL UNREADABLE"
-                             : Services.LogService.entries.count === 0 ? "WAITING FOR JOURNAL ENTRIES"
+                        text: Services.HostBridge.log.unreadable ? "JOURNALCTL UNREADABLE"
+                             : Services.HostBridge.log.entries.count === 0 ? "WAITING FOR JOURNAL ENTRIES"
                              : "NO ENTRIES MATCH FILTER"
-                        color: Services.LogService.unreadable ? Config.ThemeConfig.colors.error
+                        color: Services.HostBridge.log.unreadable ? Config.ThemeConfig.colors.error
                              : Config.ThemeConfig.colors.textDim
                         font.family: Config.SettingsConfig.fontFamily
                         font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        visible: Services.LogService.unreadable || root.matchCount === 0
-                        text: Services.LogService.unreadable
+                        visible: Services.HostBridge.log.unreadable || root.matchCount === 0
+                        text: Services.HostBridge.log.unreadable
                               ? "check journal access / group membership — REFRESH to retry"
                               : "adjust severity or search — CLEAR search resets the view"
                         color: Config.ThemeConfig.colors.textDim
@@ -324,20 +325,20 @@ Item {
             spacing: 12
             opacity: 0.7
             Text {
-                text: Services.LogService.unreadable ? "STREAM ERROR"
-                     : Services.LogService.following  ? "LIVE" : "PAUSED"
-                color: Services.LogService.unreadable ? Config.ThemeConfig.colors.error
-                     : Services.LogService.following  ? Config.ThemeConfig.colors.success
+                text: Services.HostBridge.log.unreadable ? "STREAM ERROR"
+                     : Services.HostBridge.log.following  ? "LIVE" : "PAUSED"
+                color: Services.HostBridge.log.unreadable ? Config.ThemeConfig.colors.error
+                     : Services.HostBridge.log.following  ? Config.ThemeConfig.colors.success
                      : Config.ThemeConfig.colors.warning
                 font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
             }
             Text {
-                text: (Services.LogService.entries.count || 0) + " ENTRIES"
+                text: (Services.HostBridge.log.entries.count || 0) + " ENTRIES"
                 color: Config.ThemeConfig.colors.textDim
                 font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
             }
             Text {
-                text: Services.LogService.following ? "" : "RESUME RE-TAILS THE JOURNAL"
+                text: Services.HostBridge.log.following ? "" : "RESUME RE-TAILS THE JOURNAL"
                 color: Config.ThemeConfig.colors.textDim
                 font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
             }
@@ -362,7 +363,7 @@ Item {
         onTriggered: root.recomputeMatches()
     }
     Connections {
-        target: Services.LogService.entries
+        target: Services.HostBridge.log.entries
         function onCountChanged() { matchTimer.restart() }
     }
 
@@ -373,7 +374,7 @@ Item {
     }
 
     function recomputeMatches() {
-        var m = Services.LogService.entries
+        var m = Services.HostBridge.log.entries
         if (sevFilter === "all" && (searchText === null || searchText.length === 0)) {
             matchCount = m.count
             return
@@ -382,7 +383,7 @@ Item {
         var q = (searchText || "").toLowerCase()
         for (var i = 0; i < m.count; i++) {
             var r = m.get(i)
-            if (Services.LogService.rowMatches(r.severity, r.message, r.unit, sevFilter, q))
+            if (Services.HostBridge.log.rowMatches(r.severity, r.message, r.unit, sevFilter, q))
                 n++
         }
         matchCount = n

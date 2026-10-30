@@ -27,39 +27,39 @@ Rectangle {
     border.width: 1
     clip: true
 
-    readonly property int coreCount: Math.max(1, Services.SystemMetricsService.perCoreLoad.length)
+    readonly property int coreCount: Math.max(1, Services.HostBridge.metrics.perCoreLoad.length)
     function tempTier(t) { return Config.ThemeConfig.tierColor(t, 55, 75) }
     function loadTier(v) { return Config.ThemeConfig.tierColor(v, 50, 85) }
     function diskTier(p) { return Config.ThemeConfig.tierColor(p, 70, 85) }
     // Hoisted to a property (not an inline-literal model): Repeater delegates
     // over literal arrays have hit the singleton-not-ready init trap before.
     readonly property var engineRows: [
-        { k: "COOLANT", v: Services.ThermalService.coolantAvailable ? Services.ThermalService.coolantTemp.toFixed(0) + "°C" : "—",
-          c: Services.ThermalService.coolantAvailable ? tempTier(Services.ThermalService.coolantTemp) : Config.ThemeConfig.colors.textDim },
-        { k: "NVME", v: Services.ThermalService.nvmeTemp > 0 ? Services.ThermalService.nvmeTemp.toFixed(0) + "°C" : "—",
-          c: Services.ThermalService.nvmeTemp > 0 ? tempTier(Services.ThermalService.nvmeTemp) : Config.ThemeConfig.colors.textDim },
-        { k: "CLOCK", v: Services.GpuService.clockMHz > 0 ? (Services.GpuService.clockMHz / 1000).toFixed(2) + " GHz" : "—",
+        { k: "COOLANT", v: Services.HostBridge.metrics.coolantAvailable ? Services.HostBridge.metrics.coolantTemp.toFixed(0) + "°C" : "—",
+          c: Services.HostBridge.metrics.coolantAvailable ? tempTier(Services.HostBridge.metrics.coolantTemp) : Config.ThemeConfig.colors.textDim },
+        { k: "NVME", v: Services.HostBridge.metrics.nvmeTemp > 0 ? Services.HostBridge.metrics.nvmeTemp.toFixed(0) + "°C" : "—",
+          c: Services.HostBridge.metrics.nvmeTemp > 0 ? tempTier(Services.HostBridge.metrics.nvmeTemp) : Config.ThemeConfig.colors.textDim },
+        { k: "CLOCK", v: Services.HostBridge.metrics.clockMHz > 0 ? (Services.HostBridge.metrics.clockMHz / 1000).toFixed(2) + " GHz" : "—",
           c: Config.ThemeConfig.colors.info }
     ]
     // GPU process list (re-homed from the retired CoreGpuSection): rows
     // deep-link into X-Ray when the plugin is present — hover lights up,
     // click summons the overlay on this pid (PluginManagerService).
-    readonly property real procMaxMem: (Services.GpuService.processes.length > 0
-        ? Services.GpuService.processes[0].memMiB : 1) || 1
+    readonly property real procMaxMem: (Services.HostBridge.metrics.processes.length > 0
+        ? Services.HostBridge.metrics.processes[0].memMiB : 1) || 1
     readonly property int procCap: 5
     function driveLabel(mount) {
         return mount === "/" ? "SYSTEM" : (mount.split("/").pop() || mount)
     }
 
     // "UPDATED Ns AGO" — resets whenever live telemetry ticks
-    readonly property string _sig: Services.SystemMetricsService.cpuUsage.toFixed(3)
+    readonly property string _sig: Services.HostBridge.metrics.cpuUsage.toFixed(3)
     property int _agoSec: 0
     on_SigChanged: _agoSec = 0
     Timer { interval: 1000; repeat: true; running: root.visible; onTriggered: root._agoSec++ }
 
     // Uptime string is pull-based — refresh on every pane entry so the
     // trip-computer line never shows a stale/em-dash value.
-    onVisibleChanged: if (visible) Services.SystemMetricsService.refreshUptime()
+    onVisibleChanged: if (visible) Services.HostBridge.metrics.refreshUptime()
 
     component DashLabel: Text {
         color: Config.ThemeConfig.colors.textDim
@@ -106,13 +106,13 @@ Rectangle {
                 RowLayout { Layout.fillWidth: true
                     DashLabel { text: "CPU LOAD / %" }
                     Item { Layout.fillWidth: true }
-                    Text { text: Services.SystemMetricsService.cpuUsage.toFixed(1) + " %"
-                        color: root.loadTier(Services.SystemMetricsService.cpuUsage)
+                    Text { text: Services.HostBridge.metrics.cpuUsage.toFixed(1) + " %"
+                        color: root.loadTier(Services.HostBridge.metrics.cpuUsage)
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                 }
                 CoreDashBand {
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    points: Services.SystemMetricsService.cpuHistory
+                    points: Services.HostBridge.metrics.cpuHistory
                     columns: 64
                 }
                 RowLayout { Layout.fillWidth: true
@@ -146,14 +146,14 @@ Rectangle {
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
                 DashLabel { Layout.leftMargin: 12; text: "GPU UTILIZATION" }
                 RowLayout { Layout.leftMargin: 12; Layout.fillWidth: true; spacing: 2
-                    Text { text: Services.GpuService.util > 0 ? Math.round(Services.GpuService.util) : "—"
+                    Text { text: Services.HostBridge.metrics.util > 0 ? Math.round(Services.HostBridge.metrics.util) : "—"
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 34; font.bold: true }
                     Text { text: "%"; color: Config.ThemeConfig.colors.info
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true }
                 }
-                Text { Layout.leftMargin: 12; text: Services.GpuService.temp > 0
-                        ? Math.round(Services.GpuService.temp) + " °C / " + Services.GpuService.vramUsedGB.toFixed(1) + " GB VRAM"
+                Text { Layout.leftMargin: 12; text: Services.HostBridge.metrics.temp > 0
+                        ? Math.round(Services.HostBridge.metrics.temp) + " °C / " + Services.HostBridge.metrics.vramUsedGB.toFixed(1) + " GB VRAM"
                         : "NO GPU SENSOR"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
@@ -161,10 +161,10 @@ Rectangle {
                     id: gpuDial
                     Layout.fillWidth: true; Layout.fillHeight: true
                     Layout.margins: 4
-                    value: Services.GpuService.util
+                    value: Services.HostBridge.metrics.util
                     accent: Config.ThemeConfig.colors.info
                 }
-                Text { Layout.leftMargin: 12; text: "FAN " + Services.GpuService.fanPct.toFixed(0) + "%"
+                Text { Layout.leftMargin: 12; text: "FAN " + Services.HostBridge.metrics.fanPct.toFixed(0) + "%"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
@@ -182,7 +182,7 @@ Rectangle {
                 DashLabel { Layout.alignment: Qt.AlignHCenter; text: "PROCESSOR" }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true }
                 RowLayout { Layout.alignment: Qt.AlignHCenter; spacing: 4
-                    Text { text: Services.SystemMetricsService.cpuUsage > 0 ? Math.round(Services.SystemMetricsService.cpuUsage) : "0"
+                    Text { text: Services.HostBridge.metrics.cpuUsage > 0 ? Math.round(Services.HostBridge.metrics.cpuUsage) : "0"
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 74; font.bold: true }
                     Text { text: "%"; color: Config.ThemeConfig.colors.primary
@@ -190,11 +190,11 @@ Rectangle {
                         Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 14 }
                 }
                 Text { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 2
-                    text: Services.SystemMetricsService.cpuGhz.toFixed(2) + " GHZ / CPU CLOCK"
+                    text: Services.HostBridge.metrics.cpuGhz.toFixed(2) + " GHZ / CPU CLOCK"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true }
                 Text { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 4
-                    text: "UPTIME " + Services.SystemMetricsService.uptime.toUpperCase()
+                    text: "UPTIME " + Services.HostBridge.metrics.uptime.toUpperCase()
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 10 }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true }
@@ -209,14 +209,14 @@ Rectangle {
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
                 DashLabel { Layout.leftMargin: 12; text: "MEMORY UTILIZATION" }
                 RowLayout { Layout.leftMargin: 12; Layout.fillWidth: true; spacing: 2
-                    Text { text: Math.round(Services.SystemMetricsService.ramPct)
+                    Text { text: Math.round(Services.HostBridge.metrics.ramPct)
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 34; font.bold: true }
                     Text { text: "%"; color: Config.ThemeConfig.colors.success
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 13; font.bold: true }
                 }
                 Text { Layout.leftMargin: 12
-                    text: Services.SystemMetricsService.ramUsedGB.toFixed(1) + " / " + Services.SystemMetricsService.ramTotalGB.toFixed(1) + " GiB"
+                    text: Services.HostBridge.metrics.ramUsedGB.toFixed(1) + " / " + Services.HostBridge.metrics.ramTotalGB.toFixed(1) + " GiB"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                 // 2-min utilization trend — memoryHistory was collected but
@@ -228,17 +228,17 @@ Rectangle {
                     Layout.leftMargin: 12; Layout.rightMargin: 12
                     Layout.topMargin: 8; Layout.bottomMargin: 8
                     samples: {
-                        var h = Services.SystemMetricsService.memoryHistory
+                        var h = Services.HostBridge.metrics.memoryHistory
                         var out = []
                         for (var i = 0; i < h.length; i++) out.push(Number(h[i].value) || 0)
                         return out
                     }
-                    capacity: Services.SystemMetricsService.historyMaxSamples
+                    capacity: Services.HostBridge.metrics.historyMaxSamples
                     valueMax: 100
-                    stroke: root.loadTier(Services.SystemMetricsService.ramPct)
-                    fill: Config.ThemeConfig.tint(root.loadTier(Services.SystemMetricsService.ramPct), 0.12)
+                    stroke: root.loadTier(Services.HostBridge.metrics.ramPct)
+                    fill: Config.ThemeConfig.tint(root.loadTier(Services.HostBridge.metrics.ramPct), 0.12)
                 }
-                Text { Layout.leftMargin: 12; text: "SWAP " + Services.SystemMetricsService.swapUsedGB.toFixed(1) + " / " + Services.SystemMetricsService.swapTotalGB.toFixed(0) + " GB"
+                Text { Layout.leftMargin: 12; text: "SWAP " + Services.HostBridge.metrics.swapUsedGB.toFixed(1) + " / " + Services.HostBridge.metrics.swapTotalGB.toFixed(0) + " GB"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 8 }
@@ -263,10 +263,10 @@ Rectangle {
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "CPU TEMP" }
                 RowLayout { Layout.leftMargin: 12; spacing: 2
-                    Text { text: Services.ThermalService.cpuTemp > 0 ? Services.ThermalService.cpuTemp.toFixed(0) : "—"
-                        color: Services.ThermalService.cpuTemp > 0 ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                    Text { text: Services.HostBridge.metrics.cpuTemp > 0 ? Services.HostBridge.metrics.cpuTemp.toFixed(0) : "—"
+                        color: Services.HostBridge.metrics.cpuTemp > 0 ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
                         font.family: Config.SettingsConfig.fontFamily; font.pixelSize: 24; font.bold: true }
-                    Text { text: "°C"; color: root.tempTier(Services.ThermalService.cpuTemp)
+                    Text { text: "°C"; color: root.tempTier(Services.HostBridge.metrics.cpuTemp)
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 11; font.bold: true }
                 }
                 Text { Layout.leftMargin: 12; text: "THERMAL / 0–110°C"; color: Config.ThemeConfig.colors.textDim
@@ -277,7 +277,7 @@ Rectangle {
                             model: 22
                             Rectangle {
                                 width: 4; height: 14; radius: 1
-                                readonly property real _t: Services.ThermalService.cpuTemp
+                                readonly property real _t: Services.HostBridge.metrics.cpuTemp
                                 readonly property bool _lit: _t > 0 && index < Math.round(Math.min(110, _t) / 110 * 22)
                                 color: !_lit ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
                                              : (index >= 18 ? Config.ThemeConfig.colors.error : root.tempTier(_t))
@@ -317,8 +317,8 @@ Rectangle {
                             model: root.coreCount
                             Rectangle {
                                 width: 9; height: 9; radius: 2
-                                readonly property real _load: Services.SystemMetricsService.perCoreLoad.length > index
-                                                              ? Services.SystemMetricsService.perCoreLoad[index] : 0
+                                readonly property real _load: Services.HostBridge.metrics.perCoreLoad.length > index
+                                                              ? Services.HostBridge.metrics.perCoreLoad[index] : 0
                                 color: _load > 0 ? root.loadTier(_load)
                                                  : Config.ThemeConfig.tint(Config.ThemeConfig.colors.text, 0.08)
                                 border.color: Config.ThemeConfig.colors.outlineVariant
@@ -338,14 +338,14 @@ Rectangle {
                 spacing: 3
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "STORAGE" }
-                Text { Layout.leftMargin: 12; text: Services.SystemMetricsService.disks.length + " FILESYSTEMS"
+                Text { Layout.leftMargin: 12; text: Services.HostBridge.metrics.disks.length + " FILESYSTEMS"
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true
                     ColumnLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                         anchors.topMargin: 2; anchors.bottomMargin: 4; spacing: 4
                         Repeater {
-                            model: Services.SystemMetricsService.disks
+                            model: Services.HostBridge.metrics.disks
                             delegate: ColumnLayout {
                                 id: dsk
                                 required property var modelData
@@ -391,7 +391,7 @@ Rectangle {
                 spacing: 3
                 Item { Layout.fillWidth: true; Layout.preferredHeight: 6 }
                 DashLabel { Layout.leftMargin: 12; text: "ENGINE" }
-                Text { Layout.leftMargin: 12; text: Services.SystemMetricsService.hostname.toUpperCase()
+                Text { Layout.leftMargin: 12; text: Services.HostBridge.metrics.hostname.toUpperCase()
                     color: Config.ThemeConfig.colors.textDim
                     font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; elide: Text.ElideRight
                     Layout.fillWidth: true; Layout.rightMargin: 12 }
@@ -415,7 +415,7 @@ Rectangle {
                 RowLayout { Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.fillWidth: true
                     DashLabel { text: "GPU PROCESSES" }
                     Item { Layout.fillWidth: true }
-                    Text { text: "" + Services.GpuService.processes.length
+                    Text { text: "" + Services.HostBridge.metrics.processes.length
                         color: Config.ThemeConfig.colors.text
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
                 }
@@ -423,12 +423,11 @@ Rectangle {
                     ColumnLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                         spacing: 2
                         Repeater {
-                            model: Services.GpuService.processes
+                            model: Services.HostBridge.metrics.processes
                             delegate: Rectangle {
                                 id: procRow
                                 required property var modelData
                                 required property int index
-                                readonly property bool inspectable: Services.PluginManagerService.hasPlugin("randazraik.xray")
                                 Layout.fillWidth: true
                                 visible: index < root.procCap
                                 height: 22
@@ -446,28 +445,21 @@ Rectangle {
                                     Text { text: procRow.modelData.name; color: Config.ThemeConfig.colors.text
                                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 9
                                         elide: Text.ElideRight; Layout.fillWidth: true }
-                                    Text { visible: rowMa.containsMouse; text: "X-RAY"; color: Config.ThemeConfig.colors.primary
-                                        font.family: Config.ControlConfig.fontMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
                                     Text { text: procRow.modelData.memMiB.toFixed(0) + " MiB"; color: Config.ControlConfig.accent
                                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 9; font.bold: true }
                                 }
                                 MouseArea {
                                     id: rowMa
                                     anchors.fill: parent
-                                    enabled: procRow.inspectable
-                                    hoverEnabled: procRow.inspectable
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Services.PluginManagerService.inspectExternal(
-                                        "randazraik.xray",
-                                        JSON.stringify({ query: "pid:" + procRow.modelData.pid }))
+                                    hoverEnabled: true
                                 }
                             }
                         }
-                        Text { visible: Services.GpuService.processes.length === 0
+                        Text { visible: Services.HostBridge.metrics.processes.length === 0
                             text: "NO ACTIVE GPU PROCESSES"; color: Config.ThemeConfig.colors.textDim
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 9 }
-                        Text { visible: Services.GpuService.processes.length > root.procCap
-                            text: "+ " + (Services.GpuService.processes.length - root.procCap) + " more — open X-Ray"
+                        Text { visible: Services.HostBridge.metrics.processes.length > root.procCap
+                            text: "+ " + (Services.HostBridge.metrics.processes.length - root.procCap) + " more"
                             color: Config.ThemeConfig.colors.textDim
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 8 }
                     }

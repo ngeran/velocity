@@ -1,1 +1,0 @@
-"""Process collection and sampling."""

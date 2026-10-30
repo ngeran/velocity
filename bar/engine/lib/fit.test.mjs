@@ -16,7 +16,7 @@ function fixture() {
         left: [c("velocity.logo", 24, 24, 90), c("velocity.workspaces", 110, 110, 95)],
         center: [c("velocity.clock", 280, 70, 50)],
         right: [c("velocity.notifications", 30, 30, 90), c("nikos.keyboard", 78),
-                c("nikos.example", 84), c("nikos.timezones", 30), c("randazraik.xray", 30),
+                c("nikos.example", 84), c("nikos.timezones", 30), c("example.tracer", 30),
                 c("velocity.network", 26), c("velocity.bluetooth", 26), c("velocity.volume", 26),
                 c("velocity.privacy", 26, 26, 60), c("velocity.logs", 26, 26, 30),
                 c("velocity.settings", 26, 26, 20)],

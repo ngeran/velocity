@@ -1,6 +1,6 @@
 // =============================================================================
-// BoundedProcess.qml — the ONE way services shell out (xray config.py +
-// omasettings capture(), distilled to velocity's QML-native form).
+// BoundedProcess.qml — the ONE way services shell out (omasettings
+// capture(), distilled to velocity's QML-native form).
 // =============================================================================
 // Every one-shot command gets, by construction:
 //   • a TIMEOUT (timeoutMs, default 5s) — a hung tool is killed, not waited on

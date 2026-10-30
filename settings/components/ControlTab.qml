@@ -24,8 +24,8 @@ Item {
         // (NetworkControlService's wifi scans only run on the network section).
         Config.SharedState.controlSection = activeSection
         // Nudge the active section's service to refresh (no-ops until phases 3-5).
-        if (activeSection === "network")   Services.NetworkControlService.refreshStatus()
-        else if (activeSection === "audio") {}   // AudioControlService polls on its own
+        if (activeSection === "network")   Services.HostBridge.network.refreshStatus()
+        else if (activeSection === "audio") {}   // audio state arrives as PipeWire events
         else if (activeSection === "display") Services.MonitorService.refresh()
     }
 

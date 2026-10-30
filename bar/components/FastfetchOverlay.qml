@@ -7,7 +7,7 @@
 // Hardware (CPU/GPU + RAM radial), Session, Storage, Network, Health, and a
 // full-width Software & OS strip.
 //
-// All data comes from Services.SystemInfoService (fastfetch JSON profile +
+// All data comes from Services.MetricsService (fastfetch JSON profile +
 // live metrics engine (lease-gated) + geo). Every accent is bound
 // to Config.ThemeConfig.colors.* so the whole panel recolors with the live
 // theme, and it deliberately uses ALL accent tokens (secondary/primary/success/
@@ -37,11 +37,11 @@ OverlayShell {
     property string clockText: "--:--:--"
 
     onAboutToOpen: {
-        Services.SystemInfoService.active = true
-        Services.SystemInfoService.refresh()
+        Services.MetricsService.active = true
+        Services.MetricsService.refresh()
         clockTimer.restart()
     }
-    onDismissed: Services.SystemInfoService.active = false
+    onDismissed: Services.MetricsService.active = false
 
     // ---- theme palette (every accent token is used below) ----
     readonly property color cBg:        Config.ThemeConfig.colors.background
@@ -100,7 +100,7 @@ OverlayShell {
                 spacing: Config.PopupMetrics.px(10)
                 Rectangle {
                     width: Config.PopupMetrics.px(10); height: Config.PopupMetrics.px(10); radius: Config.PopupMetrics.px(5)
-                    color: Services.SystemInfoService.loading ? root.cWarn : root.cSecondary
+                    color: Services.MetricsService.loading ? root.cWarn : root.cSecondary
                     Layout.alignment: Qt.AlignVCenter
                     SequentialAnimation on opacity {
                         running: root.shown; loops: Animation.Infinite
@@ -150,7 +150,7 @@ OverlayShell {
                     }
                     Text {
                         Layout.alignment: Qt.AlignRight
-                        text: (Services.SystemInfoService.userName || "—") + "@" + (Services.SystemInfoService.hostName || "—")
+                        text: (Services.MetricsService.userName || "—") + "@" + (Services.MetricsService.hostName || "—")
                         color: root.cSecondary
                         font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                     }
@@ -168,8 +168,8 @@ OverlayShell {
             Text {
                 Layout.fillWidth: true
                 text: "REAL-TIME  //  " +
-                      (Services.SystemInfoService.osName || "—") + " " + (Services.SystemInfoService.osVersion || "") + "  //  " +
-                      (Services.SystemInfoService.kernelName || "") + " " + (Services.SystemInfoService.kernelRelease || "")
+                      (Services.MetricsService.osName || "—") + " " + (Services.MetricsService.osVersion || "") + "  //  " +
+                      (Services.MetricsService.kernelName || "") + " " + (Services.MetricsService.kernelRelease || "")
                 color: root.cDim
                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1
             }
@@ -255,7 +255,7 @@ OverlayShell {
                                             Text { text: "CPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: Services.SystemInfoService.cpuModel
+                                                text: Services.MetricsService.cpuModel
                                                 color: root.cText
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                             }
@@ -263,13 +263,13 @@ OverlayShell {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             Text {
-                                                text: (Services.SystemInfoService.cpuThreads || 0) + " Threads"
+                                                text: (Services.MetricsService.cpuThreads || 0) + " Threads"
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: Services.SystemInfoService.cpuMaxGhz > 0 ? Services.SystemInfoService.cpuMaxGhz.toFixed(2) + " GHz Max" : "—"
+                                                text: Services.MetricsService.cpuMaxGhz > 0 ? Services.MetricsService.cpuMaxGhz.toFixed(2) + " GHz Max" : "—"
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
@@ -285,7 +285,7 @@ OverlayShell {
                                             Text { text: "GPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: Services.SystemInfoService.gpuName
+                                                text: Services.MetricsService.gpuName
                                                 color: root.cText
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                             }
@@ -293,13 +293,13 @@ OverlayShell {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             Text {
-                                                text: Services.SystemInfoService.gpuType || "—"
+                                                text: Services.MetricsService.gpuType || "—"
                                                 color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.85)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: Services.SystemInfoService.gpuDriver || "—"
+                                                text: Services.MetricsService.gpuDriver || "—"
                                                 color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.85)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                             }
@@ -315,7 +315,7 @@ OverlayShell {
                                             Text { text: "BOARD"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.letterSpacing: 1 }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: Services.SystemInfoService.boardName
+                                                text: Services.MetricsService.boardName
                                                 color: root.cText
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(14); font.bold: true
                                                 elide: Text.ElideRight; Layout.maximumWidth: Config.PopupMetrics.px(300)
@@ -324,17 +324,17 @@ OverlayShell {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             Text {
-                                                text: Services.SystemInfoService.boardVendor
+                                                text: Services.MetricsService.boardVendor
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
-                                                visible: Services.SystemInfoService.boardVendor !== "—" && Services.SystemInfoService.boardVendor.length > 0
+                                                visible: Services.MetricsService.boardVendor !== "—" && Services.MetricsService.boardVendor.length > 0
                                             }
                                             Item { Layout.fillWidth: true }
                                             Text {
-                                                text: "CHIPSET " + Services.SystemInfoService.chipset
+                                                text: "CHIPSET " + Services.MetricsService.chipset
                                                 color: Qt.rgba(root.cSecondary.r, root.cSecondary.g, root.cSecondary.b, 0.8)
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                                                visible: Services.SystemInfoService.chipset !== "—" && Services.SystemInfoService.chipset.length > 0
+                                                visible: Services.MetricsService.chipset !== "—" && Services.MetricsService.chipset.length > 0
                                             }
                                         }
                                     }
@@ -352,7 +352,7 @@ OverlayShell {
                                         Canvas {
                                             id: ramRadial
                                             anchors.fill: parent
-                                            property real pct: Services.SystemInfoService.memPct
+                                            property real pct: Services.MetricsService.memPct
                                             // build a CSS rgba string from a QML color (color.toString() is
                                             // unreliable for semi-alpha on Canvas strokeStyle)
                                             function rgba(c, a) {
@@ -380,7 +380,7 @@ OverlayShell {
                                                 ctx.lineWidth = 8
                                                 ctx.beginPath(); ctx.arc(cx, cy, r, start, start + Math.PI * 2 * frac); ctx.stroke()
                                             }
-                                            Connections { target: Services.SystemInfoService; function onMemPctChanged() { ramRadial.requestPaint() } }
+                                            Connections { target: Services.MetricsService; function onMemPctChanged() { ramRadial.requestPaint() } }
                                             Connections { target: root; function onCSecondaryChanged() { ramRadial.requestPaint() } }
                                             Component.onCompleted: ramRadial.requestPaint()
                                         }
@@ -389,7 +389,7 @@ OverlayShell {
                                             spacing: 0
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
-                                                text: Math.round(Services.SystemInfoService.memPct) + "%"
+                                                text: Math.round(Services.MetricsService.memPct) + "%"
                                                 color: root.cText
                                                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(22); font.bold: true
                                             }
@@ -406,12 +406,12 @@ OverlayShell {
                                         Layout.alignment: Qt.AlignVCenter
                                         spacing: Config.PopupMetrics.px(2)
                                         Text {
-                                            text: Services.SystemInfoService.memUsedGiB.toFixed(2) + " GiB"
+                                            text: Services.MetricsService.memUsedGiB.toFixed(2) + " GiB"
                                             color: root.cText
                                             font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(13); font.bold: true
                                         }
                                         Text {
-                                            text: (Services.SystemInfoService.memTotalGiB > 0 ? Services.SystemInfoService.memTotalGiB.toFixed(2) + " GiB Total" : "—")
+                                            text: (Services.MetricsService.memTotalGiB > 0 ? Services.MetricsService.memTotalGiB.toFixed(2) + " GiB Total" : "—")
                                             color: root.cDim
                                             font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10)
                                         }
@@ -459,7 +459,7 @@ OverlayShell {
                                 }
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: Services.SystemInfoService.uptimeStr
+                                    text: Services.MetricsService.uptimeStr
                                     color: root.cPrimary
                                     font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(26); font.bold: true
                                 }
@@ -476,7 +476,7 @@ OverlayShell {
                                         ColumnLayout {
                                             anchors.centerIn: parent; spacing: Config.PopupMetrics.px(1)
                                             Text { text: "OS AGE"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                            Text { text: (Services.SystemInfoService.osAgeDays || 0) + "d"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(14); font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                            Text { text: (Services.MetricsService.osAgeDays || 0) + "d"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(14); font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                         }
                                     }
                                     Rectangle {
@@ -487,7 +487,7 @@ OverlayShell {
                                         ColumnLayout {
                                             anchors.centerIn: parent; spacing: Config.PopupMetrics.px(1)
                                             Text { text: "INSTALLED"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                            Text { text: Services.SystemInfoService.installDate || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(12); font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                            Text { text: Services.MetricsService.installDate || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(12); font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                         }
                                     }
                                 }
@@ -516,7 +516,7 @@ OverlayShell {
                                 Rectangle { width: Config.PopupMetrics.px(8); height: Config.PopupMetrics.px(8); radius: Config.PopupMetrics.px(2); color: root.cSecondary; Layout.alignment: Qt.AlignVCenter }
                                 Text { text: "STORAGE"; color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true; font.letterSpacing: 2 }
                                 Item { Layout.fillWidth: true }
-                                Text { text: (Services.SystemInfoService.disks ? Services.SystemInfoService.disks.length : 0) + " VOL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
+                                Text { text: (Services.MetricsService.profileDisks ? Services.MetricsService.profileDisks.length : 0) + " VOL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                             }
                             Rectangle { Layout.fillWidth: true; height: Config.PopupMetrics.hairline(parent); color: root.cBorder }
 
@@ -524,7 +524,7 @@ OverlayShell {
                                 Layout.fillWidth: true
                                 spacing: Config.PopupMetrics.px(8)
                                 Repeater {
-                                    model: Services.SystemInfoService.disks
+                                    model: Services.MetricsService.profileDisks
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: Config.PopupMetrics.px(3)
@@ -622,8 +622,8 @@ OverlayShell {
                                         Text { text: "GEO"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                         Item { Layout.fillWidth: true }
                                         Text {
-                                            text: Services.SystemInfoService.geoCity
-                                                  ? Services.SystemInfoService.geoCity + (Services.SystemInfoService.geoCountry ? ", " + Services.SystemInfoService.geoCountry : "")
+                                            text: Services.MetricsService.geoCity
+                                                  ? Services.MetricsService.geoCity + (Services.MetricsService.geoCountry ? ", " + Services.MetricsService.geoCountry : "")
                                                   : "—"
                                             color: root.cPrimary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                         }
@@ -665,8 +665,8 @@ OverlayShell {
                                     Text { text: "GPU TEMP"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1 }
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: Services.SystemInfoService.gpuTempC ? Services.SystemInfoService.gpuTempC + "°C" : "—"
-                                        color: root.tempColor(Services.SystemInfoService.gpuTempC)
+                                        text: Services.MetricsService.gpuTempC ? Services.MetricsService.gpuTempC + "°C" : "—"
+                                        color: root.tempColor(Services.MetricsService.gpuTempC)
                                         font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     }
                                 }
@@ -675,8 +675,8 @@ OverlayShell {
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7) }
                                     Rectangle {
                                         anchors.fill: parent
-                                        color: root.tempColor(Services.SystemInfoService.gpuTempC)
-                                        opacity: Services.SystemInfoService.gpuTempC ? Math.min(1, Services.SystemInfoService.gpuTempC / 100) : 0
+                                        color: root.tempColor(Services.MetricsService.gpuTempC)
+                                        opacity: Services.MetricsService.gpuTempC ? Math.min(1, Services.MetricsService.gpuTempC / 100) : 0
                                         Behavior on opacity { NumberAnimation { duration: 300 } }
                                     }
                                 }
@@ -691,7 +691,7 @@ OverlayShell {
                                     Text { text: "GPU POWER"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.letterSpacing: 1 }
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: Services.SystemInfoService.gpuPowerW > 0 ? Services.SystemInfoService.gpuPowerW.toFixed(1) + " W" : "—"
+                                        text: Services.MetricsService.gpuPowerW > 0 ? Services.MetricsService.gpuPowerW.toFixed(1) + " W" : "—"
                                         color: root.cSecondary
                                         font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(11); font.bold: true
                                     }
@@ -701,7 +701,7 @@ OverlayShell {
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7) }
                                     Rectangle {
                                         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                        width: parent.width * Math.min(Services.SystemInfoService.gpuPowerW / 450, 1)
+                                        width: parent.width * Math.min(Services.MetricsService.gpuPowerW / 450, 1)
                                         color: root.cSecondary
                                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                                     }
@@ -719,7 +719,7 @@ OverlayShell {
                                 Text { text: "GPU UTIL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                 Item { Layout.fillWidth: true }
                                 Text {
-                                    text: Services.SystemInfoService.gpuUsagePct + "%"
+                                    text: Services.MetricsService.gpuUsagePct + "%"
                                     color: root.cAccent2
                                     font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true
                                 }
@@ -762,11 +762,11 @@ OverlayShell {
                                     Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cPrimary; Layout.alignment: Qt.AlignLeft }
                                     Text { text: "OPERATING SYSTEM"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
-                                        text: (Services.SystemInfoService.osName || "—") + (Services.SystemInfoService.osVersion ? " " + Services.SystemInfoService.osVersion : "")
+                                        text: (Services.MetricsService.osName || "—") + (Services.MetricsService.osVersion ? " " + Services.MetricsService.osVersion : "")
                                         color: root.cPrimary; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
                                     Text {
-                                        text: Services.SystemInfoService.osCodename ? "(" + Services.SystemInfoService.osCodename + ") " + (Services.SystemInfoService.arch || "") : (Services.SystemInfoService.arch || "")
+                                        text: Services.MetricsService.osCodename ? "(" + Services.MetricsService.osCodename + ") " + (Services.MetricsService.arch || "") : (Services.MetricsService.arch || "")
                                         color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.italic: true
                                     }
                                 }
@@ -777,10 +777,10 @@ OverlayShell {
                                     Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cSecondary; Layout.alignment: Qt.AlignLeft }
                                     Text { text: "KERNEL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
-                                        text: (Services.SystemInfoService.kernelName || "—") + " " + (Services.SystemInfoService.kernelRelease || "")
+                                        text: (Services.MetricsService.kernelName || "—") + " " + (Services.MetricsService.kernelRelease || "")
                                         color: root.cText; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
-                                    Text { text: Services.SystemInfoService.arch || ""; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
+                                    Text { text: Services.MetricsService.arch || ""; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
                                 }
                                 // Packages
                                 ColumnLayout {
@@ -789,11 +789,11 @@ OverlayShell {
                                     Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cSuccess; Layout.alignment: Qt.AlignLeft }
                                     Text { text: "PACKAGES"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
-                                        text: root.fmtNum(Services.SystemInfoService.pkgAll) + " Total"
+                                        text: root.fmtNum(Services.MetricsService.pkgAll) + " Total"
                                         color: root.cSuccess; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
                                     Text {
-                                        text: (Services.SystemInfoService.pkgSystem || 0) + " sys / " + (Services.SystemInfoService.pkgUser || 0) + " user"
+                                        text: (Services.MetricsService.pkgSystem || 0) + " sys / " + (Services.MetricsService.pkgUser || 0) + " user"
                                         color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                                     }
                                 }
@@ -804,7 +804,7 @@ OverlayShell {
                                     Rectangle { width: Config.PopupMetrics.px(16); height: Config.PopupMetrics.px(2); color: root.cAccent2; Layout.alignment: Qt.AlignLeft }
                                     Text { text: "SHELL"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8); font.letterSpacing: 1 }
                                     Text {
-                                        text: Services.SystemInfoService.shellName || "—"
+                                        text: Services.MetricsService.shellName || "—"
                                         color: root.cAccent2; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(15); font.bold: true
                                     }
                                     Text { text: "Quickshell"; color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9) }
@@ -832,7 +832,7 @@ OverlayShell {
                 }
                 Item { Layout.fillWidth: true }
                 Text {
-                    text: "[ " + (Services.SystemInfoService.hostName || "host") + " ]"
+                    text: "[ " + (Services.MetricsService.hostName || "host") + " ]"
                     color: root.cDim; font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
                 }
                 Text {

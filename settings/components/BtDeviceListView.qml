@@ -7,7 +7,7 @@
 //          PAIRED DEVICES (fixed, clamped) over AVAILABLE DEVICES (fills,
 //          clamped). Rows show visible-of-total; priority = connected first.
 //
-// Backed by Services.BluetoothControlService (native BlueZ). All colours are
+// Backed by Services.HostBridge.bluetooth (native BlueZ). All colours are
 // live ThemeConfig tokens. Scan/pair/connect/disconnect logic unchanged.
 // =============================================================================
 
@@ -22,8 +22,8 @@ ColumnLayout {
 
     // Paired nodes feed the right-top card; everything else (scan beacons)
     // feeds the right-bottom card. Re-evaluate when `devices` changes.
-    readonly property var pairedDevs: Services.BluetoothControlService.devices.filter(function(d){ return d.paired })
-    readonly property var beaconDevs: Services.BluetoothControlService.devices.filter(function(d){ return !d.paired })
+    readonly property var pairedDevs: Services.HostBridge.bluetooth.devices.filter(function(d){ return d.paired })
+    readonly property var beaconDevs: Services.HostBridge.bluetooth.devices.filter(function(d){ return !d.paired })
 
     // Priority order for the visible capacity: connected first, then rssi desc.
     readonly property var sortedPaired: {
@@ -42,7 +42,7 @@ ColumnLayout {
 
     // First connected device that reports a battery (drives the status card bar).
     readonly property var connBatDev: {
-        var ds = Services.BluetoothControlService.devices
+        var ds = Services.HostBridge.bluetooth.devices
         for (var i = 0; i < ds.length; i++) {
             if (ds[i].connected && ds[i].battery >= 0) return ds[i]
         }
@@ -77,14 +77,14 @@ ColumnLayout {
 
         StatusBadge {
             Layout.alignment: Qt.AlignVCenter
-            label: Services.BluetoothControlService.powered ? "POWERED" : "OFFLINE"
-            kind: Services.BluetoothControlService.powered ? "ok" : "err"
+            label: Services.HostBridge.bluetooth.powered ? "POWERED" : "OFFLINE"
+            kind: Services.HostBridge.bluetooth.powered ? "ok" : "err"
         }
 
         Item { Layout.fillWidth: true }
 
         Text {
-            visible: !Services.BluetoothControlService.scanning
+            visible: !Services.HostBridge.bluetooth.scanning
             Layout.alignment: Qt.AlignVCenter
             text: view.pairedDevs.length + " paired · " + view.beaconDevs.length + " beacons"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
@@ -92,9 +92,9 @@ ColumnLayout {
         }
 
         Text {
-            visible: Services.BluetoothControlService.scanning
+            visible: Services.HostBridge.bluetooth.scanning
             Layout.alignment: Qt.AlignVCenter
-            text: "scan " + Services.BluetoothControlService.scanSecondsLeft + "s"
+            text: "scan " + Services.HostBridge.bluetooth.scanSecondsLeft + "s"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
             color: Config.ControlConfig.accent
         }
@@ -103,12 +103,12 @@ ColumnLayout {
             Layout.alignment: Qt.AlignVCenter
             width: rescanLbl.implicitWidth + 20; height: 24
             radius: Config.ControlConfig.radiusPill
-            color: rescanMA.containsMouse && Services.BluetoothControlService.powered && !Services.BluetoothControlService.scanning
+            color: rescanMA.containsMouse && Services.HostBridge.bluetooth.powered && !Services.HostBridge.bluetooth.scanning
                    ? Config.ThemeConfig.tint(Config.ControlConfig.accent, 0.16) : "transparent"
-            border.color: (!Services.BluetoothControlService.powered || Services.BluetoothControlService.scanning)
+            border.color: (!Services.HostBridge.bluetooth.powered || Services.HostBridge.bluetooth.scanning)
                           ? Config.ThemeConfig.colors.outlineVariant : Config.ControlConfig.accent
             border.width: 1
-            opacity: (!Services.BluetoothControlService.powered || Services.BluetoothControlService.scanning) ? 0.5 : 1.0
+            opacity: (!Services.HostBridge.bluetooth.powered || Services.HostBridge.bluetooth.scanning) ? 0.5 : 1.0
             Behavior on color { ColorAnimation { duration: 100 } }
             Text {
                 id: rescanLbl; anchors.centerIn: parent
@@ -118,10 +118,10 @@ ColumnLayout {
             }
             MouseArea {
                 id: rescanMA; anchors.fill: parent; hoverEnabled: true
-                cursorShape: (!Services.BluetoothControlService.powered || Services.BluetoothControlService.scanning)
+                cursorShape: (!Services.HostBridge.bluetooth.powered || Services.HostBridge.bluetooth.scanning)
                              ? Qt.ArrowCursor : Qt.PointingHandCursor
-                onClicked: if (Services.BluetoothControlService.powered && !Services.BluetoothControlService.scanning)
-                               Services.BluetoothControlService.scanDevices()
+                onClicked: if (Services.HostBridge.bluetooth.powered && !Services.HostBridge.bluetooth.scanning)
+                               Services.HostBridge.bluetooth.scanDevices()
             }
         }
     }
@@ -159,20 +159,20 @@ ColumnLayout {
                         Item { Layout.fillWidth: true }
                         ToggleSwitch {
                             Layout.alignment: Qt.AlignVCenter
-                            checked: Services.BluetoothControlService.powered
-                            onToggled: Services.BluetoothControlService.togglePower()
+                            checked: Services.HostBridge.bluetooth.powered
+                            onToggled: Services.HostBridge.bluetooth.togglePower()
                         }
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        text: Services.BluetoothControlService.powered
-                              ? (Services.BluetoothControlService.adapterAlias
-                                 || Services.BluetoothControlService.adapterAddress
+                        text: Services.HostBridge.bluetooth.powered
+                              ? (Services.HostBridge.bluetooth.adapterAlias
+                                 || Services.HostBridge.bluetooth.adapterAddress
                                  || "READY")
                               : "NO ACTIVE ADAPTER"
                         font.family: Config.ControlConfig.fontMono; font.pixelSize: 18; font.bold: true
-                        color: Services.BluetoothControlService.powered
+                        color: Services.HostBridge.bluetooth.powered
                                ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight
                     }
@@ -183,14 +183,14 @@ ColumnLayout {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "STATE";   value: Services.BluetoothControlService.powered ? "POWERED" : "DOWN" }
-                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "VERSION"; value: Services.BluetoothControlService.adapterVersion || "—" }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "STATE";   value: Services.HostBridge.bluetooth.powered ? "POWERED" : "DOWN" }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "VERSION"; value: Services.HostBridge.bluetooth.adapterVersion || "—" }
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "ADAPTER"; value: Services.BluetoothControlService.adapterAddress || "—" }
-                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "DEVICES";  value: Services.BluetoothControlService.devices.length }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "ADAPTER"; value: Services.HostBridge.bluetooth.adapterAddress || "—" }
+                        Stat { Layout.fillWidth: true; Layout.preferredWidth: 0; label: "DEVICES";  value: Services.HostBridge.bluetooth.devices.length }
                     }
 
                     // Connected-device battery bar (first connected dev with a battery)
@@ -301,7 +301,7 @@ ColumnLayout {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: view.pairedDevs.length === 0 && !Services.BluetoothControlService.scanning
+                            visible: view.pairedDevs.length === 0 && !Services.HostBridge.bluetooth.scanning
                             text: "// no paired devices — pair from AVAILABLE below"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                             color: Config.ThemeConfig.colors.textDim
@@ -356,7 +356,7 @@ ColumnLayout {
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.25) }
                         Text {
-                            visible: Services.BluetoothControlService.scanning
+                            visible: Services.HostBridge.bluetooth.scanning
                             text: "●"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                             color: Config.ControlConfig.accent
@@ -397,7 +397,7 @@ ColumnLayout {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: view.beaconDevs.length === 0 && Services.BluetoothControlService.scanning
+                            visible: view.beaconDevs.length === 0 && Services.HostBridge.bluetooth.scanning
                             text: "// scanning for nearby devices…"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                             color: Config.ControlConfig.accent
@@ -406,7 +406,7 @@ ColumnLayout {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: view.beaconDevs.length === 0 && !Services.BluetoothControlService.scanning
+                            visible: view.beaconDevs.length === 0 && !Services.HostBridge.bluetooth.scanning
                             text: "// no devices found — press RESCAN to scan nearby devices"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                             color: Config.ThemeConfig.colors.textDim

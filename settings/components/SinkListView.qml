@@ -7,7 +7,7 @@
 //          right column: OUTPUT DEVICES (fills, clamped) + ACTIVE STREAMS
 //          (clamped). Rows show visible-of-total; default device is priority.
 //
-// Backed by Services.AudioControlService (native PipeWire). All colours are
+// Backed by Services.HostBridge.audio (native PipeWire). All colours are
 // live ThemeConfig tokens. Set-default/volume/mute logic unchanged.
 // =============================================================================
 
@@ -23,11 +23,11 @@ ColumnLayout {
     // -------------------------------------------------------------------------
     // DERIVED STATE — master volume / mute = the default sink's, else 0/false.
     // -------------------------------------------------------------------------
-    readonly property bool hasOutput: Services.AudioControlService.defaultSink !== ""
+    readonly property bool hasOutput: Services.HostBridge.audio.defaultSink !== ""
 
     readonly property int masterVol: {
-        var sk = Services.AudioControlService.sinks
-        var def = Services.AudioControlService.defaultSink
+        var sk = Services.HostBridge.audio.sinks
+        var def = Services.HostBridge.audio.defaultSink
         for (var i = 0; i < sk.length; i++) {
             if (sk[i].id === def || sk[i].isDefault) return sk[i].volume
         }
@@ -35,8 +35,8 @@ ColumnLayout {
     }
 
     readonly property bool masterMuted: {
-        var sk = Services.AudioControlService.sinks
-        var def = Services.AudioControlService.defaultSink
+        var sk = Services.HostBridge.audio.sinks
+        var def = Services.HostBridge.audio.defaultSink
         for (var i = 0; i < sk.length; i++) {
             if (sk[i].id === def || sk[i].isDefault) return sk[i].mute
         }
@@ -44,8 +44,8 @@ ColumnLayout {
     }
 
     readonly property string defaultDesc: {
-        var sk = Services.AudioControlService.sinks
-        var def = Services.AudioControlService.defaultSink
+        var sk = Services.HostBridge.audio.sinks
+        var def = Services.HostBridge.audio.defaultSink
         for (var i = 0; i < sk.length; i++) {
             if (sk[i].id === def || sk[i].isDefault) return sk[i].desc || sk[i].name
         }
@@ -54,7 +54,7 @@ ColumnLayout {
 
     // Priority order for the visible capacity: default first.
     readonly property var sortedSinks: {
-        var arr = Services.AudioControlService.sinks.slice(0)
+        var arr = Services.HostBridge.audio.sinks.slice(0)
         arr.sort(function(a, b) {
             if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
             return (b.volume || 0) - (a.volume || 0)
@@ -83,8 +83,8 @@ ColumnLayout {
 
         Text {
             Layout.alignment: Qt.AlignVCenter
-            text: Services.AudioControlService.sinks.length + " outs · "
-                  + Services.AudioControlService.sinkInputs.length + " streams"
+            text: Services.HostBridge.audio.sinks.length + " outs · "
+                  + Services.HostBridge.audio.sinkInputs.length + " streams"
             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
             color: Config.ThemeConfig.colors.textDim
         }
@@ -141,7 +141,7 @@ ColumnLayout {
                             MouseArea {
                                 id: muteMA; anchors.fill: parent; hoverEnabled: true
                                 cursorShape: view.hasOutput ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: if (view.hasOutput) Services.AudioControlService.toggleMute()
+                                onClicked: if (view.hasOutput) Services.HostBridge.audio.toggleMute()
                             }
                         }
                     }
@@ -190,7 +190,7 @@ ColumnLayout {
                                 onClicked: {
                                     if (!view.hasOutput) return
                                     var pct = Math.round(Math.max(0, Math.min(1, mouseX / meterItem.width)) * 100)
-                                    Services.AudioControlService.setSinkVolume(Services.AudioControlService.defaultSink, pct + "%")
+                                    Services.HostBridge.audio.setSinkVolume(Services.HostBridge.audio.defaultSink, pct + "%")
                                 }
                             }
                         }
@@ -239,10 +239,10 @@ ColumnLayout {
                             color: Config.ThemeConfig.colors.text
                         }
                         Text {
-                            text: Services.AudioControlService.sinks.length > 0
-                                  ? (view.visibleSinkCount + " / " + Services.AudioControlService.sinks.length) : "0"
+                            text: Services.HostBridge.audio.sinks.length > 0
+                                  ? (view.visibleSinkCount + " / " + Services.HostBridge.audio.sinks.length) : "0"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
-                            color: view.visibleSinkCount < Services.AudioControlService.sinks.length
+                            color: view.visibleSinkCount < Services.HostBridge.audio.sinks.length
                                    ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.primary
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.tint(Config.ThemeConfig.colors.primary, 0.25) }
@@ -282,7 +282,7 @@ ColumnLayout {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: Services.AudioControlService.sinks.length === 0
+                            visible: Services.HostBridge.audio.sinks.length === 0
                             text: "// no audio output devices detected"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                             color: Config.ThemeConfig.colors.textDim
@@ -292,9 +292,9 @@ ColumnLayout {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: view.visibleSinkCount < Services.AudioControlService.sinks.length
+                        visible: view.visibleSinkCount < Services.HostBridge.audio.sinks.length
                         Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 2
-                        text: "+ " + (Services.AudioControlService.sinks.length - view.visibleSinkCount) + " more outputs hidden"
+                        text: "+ " + (Services.HostBridge.audio.sinks.length - view.visibleSinkCount) + " more outputs hidden"
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
                         color: Config.ThemeConfig.colors.textDim
                         elide: Text.ElideRight
@@ -310,7 +310,7 @@ ColumnLayout {
 
                 readonly property int cap: Math.max(1, Math.floor(streamViewport.height / 36))
                 // Count only — rows clamp by visibility, never model slicing.
-                readonly property int visibleCount: Math.min(Services.AudioControlService.sinkInputs.length, cap)
+                readonly property int visibleCount: Math.min(Services.HostBridge.audio.sinkInputs.length, cap)
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -326,7 +326,7 @@ ColumnLayout {
                             color: Config.ThemeConfig.colors.text
                         }
                         Text {
-                            text: "[ " + Services.AudioControlService.sinkInputs.length + " ]"
+                            text: "[ " + Services.HostBridge.audio.sinkInputs.length + " ]"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; font.bold: true
                             color: Config.ThemeConfig.colors.secondary
                         }
@@ -349,14 +349,14 @@ ColumnLayout {
                     Item {
                         id: streamViewport
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(Services.AudioControlService.sinkInputs.length, 3) * 36
+                        Layout.preferredHeight: Math.min(Services.HostBridge.audio.sinkInputs.length, 3) * 36
                         clip: true
 
                         Column {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             Repeater {
-                                model: Services.AudioControlService.sinkInputs
+                                model: Services.HostBridge.audio.sinkInputs
                                 delegate: AudioDeviceRow {
                                     width: parent.width
                                     visible: index < streamsCard.cap
@@ -367,7 +367,7 @@ ColumnLayout {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: Services.AudioControlService.sinkInputs.length === 0
+                            visible: Services.HostBridge.audio.sinkInputs.length === 0
                             text: "// no active audio streams"
                             font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
                             color: Config.ThemeConfig.colors.textDim

@@ -1,7 +1,7 @@
-# ipc-surface.txt — the reviewed IPC contract (bar + settings processes).
+# ipc-surface.txt — the reviewed IPC contract (one process since P2.1: bar hosts settings).
 #
 # Checked by tools/check-ipc. Column 1 is target.function exactly as declared
-# in bar/shell.qml / settings/shell.qml (the checker re-extracts those, so a
+# in any QML under bar/ or settings/ (the checker re-extracts those, so a
 # handler that disappears fails the gate). Column 2 is the caller class:
 #
 #   bound    a Hyprland keybind in ~/.omni-nix/configs/hypr/keybindings.lua
@@ -37,7 +37,10 @@ plugins.summon           manual    # (id, payload) — BOTH required (Quickshell
 plugins.hide             manual
 plugins.call             manual    # (id, verb, arg) — plugin-declared verbs (manifest.ipc); handler in bar/engine/PluginHost.qml
 theme.reload             internal  # ThemeService push nudge after colors.json write
-config.reload            internal  # SettingsConfigService push nudge after bar-config.json write
+config.reload            manual    # P2.5: the writer (bar's BarConfigWriter) reloads
+                                   # BarConfig in-process; the verb stays for external
+                                   # writers (scripts/hand-edit tooling that want an
+                                   # instant apply instead of the 60s backstop)
 barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
 # keyboard.* = TRANSITIONAL forwarders to `plugins call nikos.keyboard <verb>`;
 # remove with the handler once the keybind uses plugins.call.
@@ -58,10 +61,13 @@ controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
-network.speedtest        internal  # settings' RUN IN BAR → the bar's XHR ladder;
-                                   # result persists to $XDG_STATE_HOME/velocity/speedtest.json
-metrics.lease            internal  # settings Core + dashboard Pulse renew every 10s
-                                   # while visible → gates the bar's live-metrics poll (H7)
+network.speedtest        manual    # P2.2: one process — NetworkCardBody calls
+                                   # NetworkService.runSpeedTest() directly; the IPC verb
+                                   # stays for headless runs. Result persists to
+                                   # $XDG_STATE_HOME/velocity/speedtest.json
+metrics.lease            manual    # P2.3: one process — settings Core tab + dashboard
+                                   # Pulse call MetricsService.extendLease() directly;
+                                   # the verb stays for scripting (gates the live poll)
 
 
 notifications.add                 manual    # ingest surface (docs in NotificationService header)
@@ -70,7 +76,7 @@ notifications.restore              manual    # undo the soft clear
 notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
 notifications.readAll             manual    # mark all read
 notifications.list                manual    # dump the visible model (truth probes)
-# ---- settings process ------------------------------------------------------
+# ---- settings surfaces (hosted in the bar process since P2.1) ------------------------------------------------------
 search.query                      manual    # scripting/truth probe (dashboard search index)
 search.open                       manual    # opens the palette pre-filled (deep-link)
 search.list                       manual    # index dump for probes
@@ -80,22 +86,22 @@ SettingsWindow.show               manual    # CLI window verbs (qs misparses bar
 SettingsWindow.hide               manual    #  — see settings-ipc quirks; both work)
 SettingsWindow.activeTab          manual   # read-only probe: visible tab key (dashboard-start proof)
 SettingsWindow.openControlNetwork bound    # SUPER+SHIFT+T
-SettingsWindow.openControlAudio   internal  # TrayCard volume OPEN IN SETTINGS
-SettingsWindow.openControlBluetooth internal  # TrayCard bluetooth OPEN IN SETTINGS
+SettingsWindow.openControlAudio   manual    # TrayCard volume OPEN IN SETTINGS (in-process via shellApi since P2.1)
+SettingsWindow.openControlBluetooth manual    # TrayCard bluetooth OPEN IN SETTINGS (in-process via shellApi)
 SettingsWindow.openControlDisplay manual    # deep-link family; scripted entry, no bind today
 SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
                                             # nikos.example pill that used to call it
                                             # was removed in the R6 cleanup; CLI/scripting
                                             # remains the caller)
 SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path
-SettingsWindow.openSettings       internal  # Control Center footer
-SettingsWindow.openThemeTab       internal  # Control Center THEME tile
-SettingsWindow.setBarStyle        internal  # velocity.bar-settings style pick — write via the settings funnel (single bar-config writer)
-SettingsWindow.setBarPosition     internal  # velocity.bar-settings bar-edge pick — same funnel
-SettingsWindow.setBarHeight       internal  # velocity.bar-settings height slider (commits on release) — same funnel
-SettingsWindow.setWorkspaceCount  internal  # velocity.bar-settings workspace-dots pills — same funnel
-SettingsWindow.setBurnGuard       internal  # velocity.bar-settings QD-OLED guard pills (strip|island on|off) — same funnel
-SettingsWindow.setOsdStyle        internal  # velocity.bar-settings OSD TRACK row (J5; bar|segments) — same funnel
+SettingsWindow.openSettings       manual    # Control Center footer (in-process via shellApi since P2.1)
+SettingsWindow.openThemeTab       manual    # Control Center THEME tile (in-process via shellApi)
+SettingsWindow.setBarStyle        manual    # P2.5: velocity.bar-settings picks call
+SettingsWindow.setBarPosition     manual    # BarConfigWriter.merge() directly (one
+SettingsWindow.setBarHeight       manual    # process); these verbs remain the scripting
+SettingsWindow.setWorkspaceCount  manual    # funnel — validated, silent writes to
+SettingsWindow.setBurnGuard       manual    # bar-config.json through the single writer
+SettingsWindow.setOsdStyle        manual    #
 PluginManager.installFromGit      manual   # plugin pipeline CLI/tests
 PluginManager.refresh             manual
 powerMenu.toggle                  bound    # SUPER+P

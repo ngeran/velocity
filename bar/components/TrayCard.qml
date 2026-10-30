@@ -48,22 +48,13 @@ PanelWindow {
     // so the closing view's content, header and height don't flash to another
     // body while the 140ms fade runs.
     property string lastTray: ""
-    // "OPEN IN SETTINGS ›" — the full manager for each body lives in the
-    // settings app (single source); literal call strings for tools/check-ipc.
-    readonly property var _settingsCalls: ({
-        openControlNetwork: "qs -c settings ipc call SettingsWindow openControlNetwork",
-        openControlBluetooth: "qs -c settings ipc call SettingsWindow openControlBluetooth",
-        openControlAudio: "qs -c settings ipc call SettingsWindow openControlAudio"
-    })
+    // The bar ShellRoot (injected by shell.qml) — the hosted settings
+    // dashboard's functions hang off it since P2.1; verb names match the
+    // SettingsWindow IPC functions (openControlNetwork/…).
+    property var shellApi: null
     function openSettings(verb) {
-        settingsLauncher.command = ["sh", "-c", card._settingsCalls[verb] + " 2>/dev/null || " +
-            "setsid quickshell -c settings >/dev/null 2>&1 &"]
-        settingsLauncher.running = true
+        if (shellApi) shellApi.settingsCall(verb)
         card.closeRequested()
-    }
-    Process {   // unbounded-ok: one-shot ipc call / detached spawn — exits at once
-        id: settingsLauncher
-        command: []
     }
     signal closeRequested()
     // Swap the open body in place (Control Center drill-down / back).
@@ -322,6 +313,7 @@ PanelWindow {
                 active: card._controlEverOpened
                 Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
                 sourceComponent: ControlCenterBody {
+                    shellApi: card.shellApi
                     onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }
                     onDone: card.closeRequested()
                 }

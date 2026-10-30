@@ -54,7 +54,7 @@ PanelWindow {
     function open() {
         visible = true
         shown = true
-        Services.LogService.open()
+        Services.LogService.open("overlay")
         clockTimer.restart()
         // Entries that arrived while hidden were never scanned (O3: the
         // append Connections is shown-gated) — catch up synchronously once.
@@ -63,7 +63,7 @@ PanelWindow {
     function close() {
         shown = false
         hideTimer.restart()
-        Services.LogService.close()
+        Services.LogService.close("overlay")
     }
     function toggle() { shown ? close() : open() }
 

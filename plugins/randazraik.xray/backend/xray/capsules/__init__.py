@@ -1,1 +1,0 @@
-"""Portable sanitized inspection capsules."""

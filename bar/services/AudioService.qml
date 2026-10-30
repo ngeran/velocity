@@ -1,6 +1,8 @@
 // =============================================================================
 // AudioService.qml — native PipeWire audio: default sink/source volume + mute,
-// plus the SINK LIST for the volume popup's output picker.
+// plus the SINK LIST for the volume popup's output picker (P2.2: this is the
+// ONE audio service — the settings dashboard's device rows read the same
+// instance through HostBridge).
 // =============================================================================
 // Quickshell.Services.Pipewire over the session's PipeWire: zero processes,
 // zero timers for state (volume/mute arrive as PipeWire events — external
@@ -16,7 +18,14 @@
 //   volume / muted / hasAudio          default sink (as before)
 //   micMuted / hasMic                  default source
 //   hwLabel                            short node id for the popup header
-// METHODS: setVolume, toggleMute, volumeUp/Down, toggleMicMute
+//   defaultSink / defaultSource        string ids of the default nodes
+//   sinks / sources / sinkInputs       device rows for the settings views:
+//                                      { id, name, desc, isDefault, volume(0-100), mute }
+//                                      sinkInputs rows: { id, app, volume, mute }
+// METHODS: setVolume, toggleMute, volumeUp/Down, toggleMicMute (default nodes)
+//          setDefaultSink/Source, setSinkVolume, toggleSinkMute,
+//          setSinkInputVolume, toggleSinkInputMute, setSourceVolume,
+//          toggleSourceMute (per-id; the settings rows)
 // =============================================================================
 
 pragma Singleton
@@ -31,6 +40,10 @@ Scope {
     // The default sink/source, followed automatically when the user switches.
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property var source: Pipewire.defaultAudioSource
+
+    // String ids (the settings views pass them verbatim; "" if none).
+    readonly property string defaultSink: root.sink ? String(root.sink.id) : ""
+    readonly property string defaultSource: root.source ? String(root.source.id) : ""
 
     // PipeWire only populates node properties for tracked objects — track ALL
     // of them; the views filter. The registry signal is `valuesChanged` ON THE
@@ -50,7 +63,8 @@ Scope {
         tracker.objects = Pipewire.nodes.values
         console.log("[AudioService] native PipeWire: sink=" +
             (root.sink ? root.sink.description : "none") +
-            " vol=" + volume + " muted=" + muted)
+            " vol=" + volume + " muted=" + muted +
+            " sinks=" + sinks.length + " sources=" + sources.length)
     }
     Connections {
         target: Pipewire.nodes
@@ -69,9 +83,60 @@ Scope {
     property bool hasMic: root.source != null
     property bool micMuted: root.source ? root.source.audio.muted : false
 
-    function toggleMicMute() {
-        if (!root.source) return
-        root.source.audio.muted = !root.source.audio.muted
+    // ── DEVICE ROWS (settings dashboard views) ──────────────────────────────
+    // Flag semantics (verified live): audio nodes carry Audio + Sink/Source.
+    // e.g. t=17 = Audio|Sink (a sink), t=9 = Audio|Source (a source).
+    readonly property var sinks: {
+        const rows = []
+        const nodes = Pipewire.nodes.values || []
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i]
+            if (!n.isSink) continue
+            rows.push({
+                id: String(n.id),
+                name: n.description || n.nickname || n.name,
+                desc: n.description || n.nickname || n.name,
+                isDefault: root.sink !== null && n.id === root.sink.id,
+                volume: Math.round(Math.min(n.audio.volume, 1.0) * 100),
+                mute: n.audio.muted
+            })
+        }
+        return rows
+    }
+
+    readonly property var sources: {
+        const rows = []
+        const nodes = Pipewire.nodes.values || []
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i]
+            if (!(n.type & PwNodeType.Source)) continue
+            const name = n.description || n.nickname || n.name
+            rows.push({
+                id: String(n.id),
+                name: name,
+                desc: name,
+                isDefault: root.source !== null && n.id === root.source.id,
+                volume: Math.round(Math.min(n.audio.volume, 1.0) * 100),
+                mute: n.audio.muted
+            })
+        }
+        return rows
+    }
+
+    readonly property var sinkInputs: {
+        const rows = []
+        const nodes = Pipewire.nodes.values || []
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i]
+            if (!n.isStream || !(n.type & PwNodeType.Audio)) continue
+            rows.push({
+                id: String(n.id),
+                app: n.nickname || n.name,
+                volume: Math.round(Math.min(n.audio.volume, 1.0) * 100),
+                mute: n.audio.muted
+            })
+        }
+        return rows
     }
 
     onSinkChanged: console.log("[AudioService] default sink: " +
@@ -83,6 +148,7 @@ Scope {
     onMutedChanged: if (Config.DebugConfig.debugService)
         console.log("[AudioService] muted " + muted)
 
+    // ── DEFAULT-NODE ACTIONS (bar popup) ──
     function setVolume(val) {
         if (!root.sink) return
         root.sink.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
@@ -95,4 +161,60 @@ Scope {
 
     function volumeUp()   { setVolume(root.volume + 5) }
     function volumeDown() { setVolume(root.volume - 5) }
+
+    function toggleMicMute() {
+        if (!root.source) return
+        root.source.audio.muted = !root.source.audio.muted
+    }
+
+    // ── PER-ID ACTIONS (settings device rows) ───────────────────────────────
+    function _node(id) {
+        const all = Pipewire.nodes.values || []
+        for (let i = 0; i < all.length; i++)
+            if (String(all[i].id) === String(id)) return all[i]
+        return null
+    }
+
+    function _volFloat(pct) {
+        // Accept number (50) or "50%" string from the UI sliders
+        var n = typeof pct === "string" ? parseFloat(pct.replace("%", "")) : Number(pct)
+        if (isNaN(n)) n = 0
+        return Math.max(0, Math.min(100, Math.round(n))) / 100
+    }
+
+    // Event-driven state — kept for consumer compatibility.
+    function refresh() {}
+
+    function setDefaultSink(id) {
+        const n = _node(id)
+        if (!n) return
+        Pipewire.preferredDefaultAudioSink = n
+        console.log("[AudioService] default sink → " + n.description)
+    }
+
+    function setDefaultSource(id) {
+        const n = _node(id)
+        if (!n) return
+        Pipewire.preferredDefaultAudioSource = n
+        console.log("[AudioService] default source → " + n.description)
+    }
+
+    function setSinkVolume(id, pct) {
+        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+    }
+    function toggleSinkMute(id) {
+        const n = _node(id); if (n) n.audio.muted = !n.audio.muted
+    }
+    function setSinkInputVolume(id, pct) {
+        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+    }
+    function toggleSinkInputMute(id) {
+        const n = _node(id); if (n) n.audio.muted = !n.audio.muted
+    }
+    function setSourceVolume(id, pct) {
+        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+    }
+    function toggleSourceMute(id) {
+        const n = _node(id); if (n) n.audio.muted = !n.audio.muted
+    }
 }

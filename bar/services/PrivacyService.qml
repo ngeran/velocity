@@ -17,7 +17,7 @@
 // live-update (a stream node started AFTER launch never appears; link group
 // states stay -1/Unlinked while capture is running). AudioService only works
 // around this because sinks persist. The pill needs the transient truth, so
-// it polls the source of truth. xray's device domain does the same.
+// it polls the source of truth.
 // =============================================================================
 
 pragma Singleton
