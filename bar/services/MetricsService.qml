@@ -448,8 +448,8 @@ Item {
     // spawn-per-tick prober is gone; the lease binding stops the process).
     // Fields can be [N/A] on some drivers → NaN → 0.
     // =========================================================================
-    Process {
-        id: gpuLoop
+    Process {   // unbounded-ok: the leased `nvidia-smi -l 2` long-runner —
+        id: gpuLoop   // lifecycle bound to root.leased (onLeasedChanged stops it)
         command: ["nvidia-smi",
                   "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed,clocks.gr",
                   "--format=csv,noheader,nounits", "-l", "2"]
@@ -622,10 +622,10 @@ Item {
     // properties directly, it doesn't read the file. GPU fields come from THIS
     // service's prober now (ex-GpuService indirection is gone).
     // =========================================================================
-    Process {   // [d]eepcool regex self-match guard: pgrep -f scans full command
-        id: lcdProbe   // lines; anything probing THIS file's path would otherwise
-        command: ["sh", "-c",   // read as the LCD daemon and light the feed up.
-                  "pgrep -f '[d]eepcool' >/dev/null 2>&1"]
+    Process {   // unbounded-ok: one-shot pgrep that exits itself; 60s cadence
+        id: lcdProbe   // [d]eepcool regex self-match guard: pgrep -f scans full
+        command: ["sh", "-c",   // command lines; anything probing THIS file's path
+                  "pgrep -f '[d]eepcool' >/dev/null 2>&1"]   // would read as the LCD daemon and light the feed up.
         onExited: function(code) { root.lcdPresent = (code === 0) }
     }
     Timer {

@@ -1,0 +1,101 @@
+#!/usr/bin/env node
+// check-ssot — the P2 architecture invariants as a gate.
+//
+//   RULE 1 — one service type per name
+//   A `singleton X` row in any qmldir must be the ONLY declaration of X
+//   repo-wide. Two locations for one name is the import-split disease: the
+//   same directory imported under two specifiers yields TWO live instances
+//   (double scanners, split popup slots, lost IPC — the P2.2/P2.3 lesson and
+//   the pre-P2 HyprlandService/KernelEventRecorder double construction).
+//   Exempt: names whose every location is a shared/ sync pair (one canonical,
+//   byte-identical copies — tools/shared-targets.js), and explicit
+//   INTENTIONAL_FORKS (ThemeConfig: two process-specific variants; their
+//   shared core lives in theme-ingest/theme-core.mjs).
+//
+//   RULE 2 — one declared writer per SSOT file
+//   Each single-source-of-truth state file names its writer QML file(s).
+//   The gate asserts every declared writer exists and references the file,
+//   and that NO other QML line combines an SSOT path with a write idiom
+//   (printf/mv/_atomicWrite/tee) — the class that spawned settings' old
+//   _writeBarConfig side-channel. Static analysis of QML can't see a path
+//   built indirectly (a second writer hiding behind a property), so the
+//   table is also the review checklist: a new writer means editing this
+//   gate, not just shipping the file.
+//
+// Usage: tools/check-ssot   (exit 1 on any violation)
+const fs = require("fs"), path = require("path")
+process.chdir(path.join(__dirname, ".."))
+
+let bad = 0
+const fail = (f, line, msg) => { console.log(`check-ssot: FAIL ${f}:${line} — ${msg}`); bad++ }
+
+// Synced-copy universe: canonical + per-root targets (one shared row each).
+const syncUniverse = new Set()
+for (const [canon, targets] of Object.entries(require("./shared-targets.js"))) {
+    syncUniverse.add(canon)
+    targets.forEach(t => syncUniverse.add(t))
+}
+
+// Two process-specific variants BY DESIGN (do not merge — see both headers).
+const INTENTIONAL_FORKS = {
+    "ThemeConfig": "bar/config + settings/config — the shared core is theme-ingest.mjs/theme-core.mjs"
+}
+
+// SSOT state files → their ONE writer (RULE 2).
+const SSOT_WRITERS = {
+    "bar-config.json":      ["bar/config/BarConfigWriter.qml"],
+    "settings-config.json": ["settings/services/SettingsConfigService.qml"],
+    "colors.json":          ["settings/services/ThemeService.qml"],
+    "plugins-state.json":   ["bar/engine/PluginRegistry.qml"],
+}
+
+function walk(d, out) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name)
+        if (e.isDirectory()) { if (e.name !== ".git" && e.name !== "node_modules") walk(p, out) }
+        else out.push(p)
+    }
+    return out
+}
+
+// ── RULE 1: singleton names are unique (up to synced copies / declared forks)
+const qmldirs = ["bar", "settings", "plugins"].flatMap(d =>
+    walk(d, []).filter(f => f.endsWith("/qmldir") || f === "qmldir"))
+const byName = {}   // name → [{loc, file}]
+for (const q of qmldirs) {
+    fs.readFileSync(q, "utf8").split("\n").forEach((l, i) => {
+        const m = /^\s*singleton\s+(\S+)\s+\S+\s+(\S+)\s*$/.exec(l)
+        if (!m) return
+        ;(byName[m[1]] = byName[m[1]] || []).push({ loc: `${q}:${i + 1}`, file: path.join(path.dirname(q), m[2]) })
+    })
+}
+for (const [name, rows] of Object.entries(byName)) {
+    if (rows.length === 1) continue
+    if (INTENTIONAL_FORKS[name]) continue   // declared fork — nothing to prove here
+    const allSynced = rows.every(r => syncUniverse.has(r.file))
+    if (!allSynced)
+        fail(rows[0].loc, 0, `singleton "${name}" declared ${rows.length}× (${rows.map(r => r.file).join(", ")}) — one service type per name; merge the copies or exempt them here`)
+}
+
+// ── RULE 2: SSOT files have exactly their declared writers
+const qmlFiles = ["bar", "settings", "plugins", "shared"].flatMap(d =>
+    walk(d, []).filter(f => f.endsWith(".qml")))
+const WRITE_IDIOM = /printf|mv -f|_atomicWrite|tee -a|>>\s*["']?[$\w]/
+for (const [frag, writers] of Object.entries(SSOT_WRITERS)) {
+    for (const w of writers) {
+        if (!fs.existsSync(w)) fail(w, 0, `declared writer of "${frag}" does not exist`)
+        else if (!fs.readFileSync(w, "utf8").includes(frag))
+            fail(w, 0, `declared writer of "${frag}" no longer references it — fix the table`)
+    }
+    for (const f of qmlFiles) {
+        if (writers.includes(f)) continue
+        fs.readFileSync(f, "utf8").split("\n").forEach((l, i) => {
+            const c = l.replace(/\/\/.*$/, "")   // comments document, they don't write
+            if (c.includes(frag) && WRITE_IDIOM.test(c))
+                fail(f, i + 1, `write idiom targeting SSOT "${frag}" outside its declared writer (${writers.join(", ")}) — route through the writer`)
+        })
+    }
+}
+
+if (bad === 0) console.log(`check-ssot: OK (${Object.keys(byName).length} singleton names, ${Object.keys(SSOT_WRITERS).length} SSOT writers)`)
+process.exit(bad ? 1 : 0)

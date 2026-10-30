@@ -621,38 +621,10 @@ Item {
         w.running = true
     }
 
-    // -------------------------------------------------------------------------
-    // IPC INGEST — system / daemon entry point
-    // -------------------------------------------------------------------------
-    IpcHandler {
-        target: "notifications"
-
-        // args = single JSON string: {appName, summary, body, urgency}
-        function add(json: string) {
-            var d = null
-            try { d = JSON.parse(json) } catch (e) {
-                console.warn("[NotificationService] IPC add: bad json:", json)
-                return
-            }
-            root.add(d.appName, d.summary, d.body, d.urgency, d.clickId, d.appIcon)
-        }
-
-        function clear() { root.clearAll() }        // soft: hides, undo with restore()
-
-        // Bring cleared rows back (the panel footer's RESTORE does the same).
-        function restore() { root.restoreCleared() }
-
-        // DnD switch (same path as the panel toggle: memory + persisted flag).
-        function dnd(on: bool) { root.setDnd(on) }
-
-        // Inspection / scripting hooks: mark everything read and dump the model.
-        function readAll() { root.markAllRead() }
-        function list(): string {
-            var rows = []
-            for (var i = 0; i < root.model.count; i++) rows.push(root.model.get(i))
-            return JSON.stringify(rows)
-        }
-    }
+    // (IPC INGEST moved to shell.qml — P2: an IpcHandler inside a qmldir
+    // singleton registers from EVERY import-split copy of the file, and the
+    // J2 mirror copy lost the registration race with a boot WARN every time.
+    // shell.qml's copy of the surface lands on the pinned instance anyway.)
 
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._dndFlag]

@@ -461,6 +461,34 @@ ShellRoot {
         }
     }
 
+    // notifications ingest/control — moved here from NotificationService.qml
+    // (P2): IpcHandlers live in shell.qml (the qmldir-singleton placement
+    // double-registers under the J2 import split — the losing mirror logged a
+    // WARN on every boot). Same surface; it lands on the pinned instance via
+    // this file's import either way. Ingest docs on NotificationService.
+    IpcHandler {
+        target: "notifications"
+        // args = single JSON string: {appName, summary, body, urgency}
+        function add(json: string) {
+            var d = null
+            try { d = JSON.parse(json) } catch (e) {
+                console.warn("[shell] notifications add: bad json:", json)
+                return
+            }
+            Services.NotificationService.add(d.appName, d.summary, d.body, d.urgency, d.clickId, d.appIcon)
+        }
+        function clear() { Services.NotificationService.clearAll() }   // soft: undo with restore()
+        function restore() { Services.NotificationService.restoreCleared() }
+        function dnd(on: bool) { Services.NotificationService.setDnd(on) }
+        function readAll() { Services.NotificationService.markAllRead() }
+        function list(): string {
+            var rows = []
+            var m = Services.NotificationService.model
+            for (var i = 0; i < m.count; i++) rows.push(m.get(i))
+            return JSON.stringify(rows)
+        }
+    }
+
     // Bar visibility toggle (for Hyprland keybind)
     IpcHandler {
         id: barToggleIpc
