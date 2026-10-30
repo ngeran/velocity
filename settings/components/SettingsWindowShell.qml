@@ -514,8 +514,7 @@ Item {
         // =====================================================================
         // TAB 6: SETTINGS (rail + fixed panes — SettingsModule; same
         // architecture as Control/Core. Extracted from the former inline
-        // scrolling block. Settings are managed by SettingsConfigService /
-        // HypridleService and persisted on every change.)
+        // scrolling block. Settings are managed by SettingsConfigService and persisted on every change.)
         // =====================================================================
 
         Loader {

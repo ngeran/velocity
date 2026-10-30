@@ -8,26 +8,34 @@
 #              shell .qml under bar/ and settings/ (handlers may live in
 #              components/services; the code is the truth
 #              for what exists)
-#   USED     — `ipc -c <proc> call <target> <fn>` strings found in
-#              ~/.omni-nix/configs/hypr/keybindings.lua and across this repo
+#   USED     — `ipc -c <proc> call <target> <fn>` callers found in
+#              tools/keybinds-default.json (P3.6: THE keybind single source —
+#              omni-nix's keybindings.lua keeps only non-velocity binds now),
+#              omni-nix configs, and across this repo
 #   MANIFEST — tools/ipc-surface.txt, the reviewed contract (what each
 #              handler is FOR: bound / internal / manual / unused)
 #
 # Hard failures:
 #   - a USED pair with no DECLARED handler      (silent no-op keybind)
 #   - a MANIFEST entry with no DECLARED handler (stale contract)
-#   - a `bound` entry whose keybind vanished from keybindings.lua
+#   - a `bound` entry with no available keybind in keybinds-default.json
+#   - a keybind pair NOT marked bound in the manifest (drift, other direction)
 #   - an `internal` entry with no call site found in the repo
-# Warnings (exit 0): `unused` handlers, MANIFEST entries missing from USED.
+#   - bar/lib/keybinds-default.mjs (the cheat-sheet fallback) out of sync
+#     with the single source
+# Warnings (exit 0): `unused` handlers, MANIFEST entries missing from USED,
+# a missing keybinds-default.json (fixtures/dev trees) — bound checks skip.
 #
 # Environment overrides (for testing): IPC_QS_DIR (this repo),
-# IPC_OMNI_DIR (omni-nix checkout), IPC_SURFACE (manifest path).
+# IPC_OMNI_DIR (omni-nix checkout), IPC_SURFACE (manifest path),
+# IPC_BINDS_JSON (keybinds single source).
 set -euo pipefail
 
 QS_DIR="${IPC_QS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 OMNI_DIR="${IPC_OMNI_DIR:-$HOME/.omni-nix}"
 SURFACE="${IPC_SURFACE:-$QS_DIR/tools/ipc-surface.txt}"
 KEYBINDS="$OMNI_DIR/configs/hypr/keybindings.lua"
+BINDS_JSON="${IPC_BINDS_JSON:-$QS_DIR/tools/keybinds-default.json}"
 
 status=0
 fail() { echo "check-ipc: FAIL: $*" >&2; status=1; }
@@ -86,6 +94,37 @@ used_raw="$(
   }' | sort -u
 )"
 
+# --- P3.6: the keybinds single source ------------------------------------------
+# tools/keybinds-default.json is THE keybind table (D2/D3); the HM module
+# renders velocity-binds.lua + the cheat-sheet json from it. Its AVAILABLE
+# `ipc` actions are callers like any other: they must hit DECLARED handlers,
+# the manifest must mark them bound, and bar/lib/keybinds-default.mjs (the
+# overlay's embedded fallback) must match row-for-row. Parsed with node —
+# jq is not in the flake-gates closure; node is.
+json_ipc=""
+if [[ -f $BINDS_JSON ]]; then
+  json_ipc="$(node -e '
+    const fs = require("fs");
+    const doc = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    let bad = 0;
+    for (const b of (doc.binds || [])) {
+      if (b.available === false) continue;
+      const toks = String(b.action).split(" ");
+      if (toks[0] === "ipc" && toks.length >= 3) console.log(toks[1] + "." + toks[2]);
+      else if (toks[0] !== "exec" || toks.length < 2) { console.error("bad action: " + b.action); bad = 1; }
+    }
+    process.exit(bad);
+  ' "$BINDS_JSON" 2>/dev/null || true)"
+  # a keybind to a nonexistent handler is the silent-no-op class itself
+  while IFS= read -r pair; do
+    [[ -n $pair ]] || continue
+    grep -qxF "$pair" <<< "$declared" || fail "keybinds-default.json dispatches to undeclared handler '$pair'"
+  done <<< "$json_ipc"
+  used_raw="$(sort -u <<< "$used_raw"$'\n'"bar|$json_ipc")"
+else
+  warn "keybinds single source missing ($BINDS_JSON) — bound checks skipped (fixtures/dev trees only)"
+fi
+
 # --- checks -------------------------------------------------------------------
 while IFS='|' read -r proc pair; do
   [[ -n $pair ]] || continue
@@ -102,7 +141,12 @@ while read -r pair klass rest; do
   fi
   case $klass in
     bound)
-      if ! grep -q "call ${pair%%.*} ${pair#*.}" "$KEYBINDS" 2>/dev/null; then
+      # The single source must carry this pair as an AVAILABLE ipc action.
+      if [[ -f $BINDS_JSON ]]; then
+        if ! grep -qxF "$pair" <<< "$json_ipc"; then
+          fail "'$pair' is marked bound but no available keybind dispatches it in $BINDS_JSON"
+        fi
+      elif ! grep -q "call ${pair%%.*} ${pair#*.}" "$KEYBINDS" 2>/dev/null; then
         fail "'$pair' is marked bound but no keybind dispatches it in $KEYBINDS"
       fi ;;
     internal)
@@ -123,6 +167,31 @@ done < "$SURFACE"
 while IFS= read -r d; do
   grep -q "^$d[[:space:]]" "$SURFACE" || warn "declared '$d' is not in $SURFACE (add it with a class)"
 done <<< "$declared"
+
+# Reverse drift: every available JSON keybind pair must be marked bound.
+if [[ -n $json_ipc ]]; then
+  while IFS= read -r pair; do
+    [[ -n $pair ]] || continue
+    grep -q "^$pair[[:space:]]" "$SURFACE" || fail "keybind '$pair' is not marked bound in $SURFACE"
+  done <<< "$json_ipc"
+fi
+
+# The cheat-sheet's embedded fallback must never diverge from the source.
+if [[ -f $BINDS_JSON && -f $QS_DIR/bar/lib/keybinds-default.mjs ]]; then
+  if ! node -e '
+    const fs = require("fs");
+    const want = JSON.parse(fs.readFileSync(process.argv[1], "utf8")).binds;
+    import(process.argv[2]).then((m) => {
+      const norm = (r) => JSON.stringify({ key: r.key, action: r.action, label: r.label,
+                                           section: r.section, available: r.available, order: r.order });
+      const a = want.map(norm).join("\n");
+      const b = (m.KEYBINDS_DEFAULT || []).map(norm).join("\n");
+      if (a !== b) { console.error("embedded copy diverged from the single source"); process.exit(1); }
+    }).catch((e) => { console.error(e.message); process.exit(1); });
+  ' "$BINDS_JSON" "$QS_DIR/bar/lib/keybinds-default.mjs"; then
+    fail "bar/lib/keybinds-default.mjs is out of sync with $BINDS_JSON (regenerate the embedded copy)"
+  fi
+fi
 
 # --- P1.6: one CLI call form in THIS repo -------------------------------------
 # `qs -c <proc> ipc call …` is the recorded form (P0 Facts: both spellings

@@ -480,6 +480,9 @@ ShellRoot {
         function clear() { Services.NotificationService.clearAll() }   // soft: undo with restore()
         function restore() { Services.NotificationService.restoreCleared() }
         function dnd(on: bool) { Services.NotificationService.setDnd(on) }
+        // Keybind form (SUPER+SHIFT+N): typed IPC params are required, so the
+        // toggle variant is its own no-arg verb.
+        function dndToggle() { Services.NotificationService.setDnd(!Services.NotificationService.dnd) }
         function readAll() { Services.NotificationService.markAllRead() }
         function list(): string {
             var rows = []
@@ -553,6 +556,29 @@ ShellRoot {
     IpcHandler {
         target: "controlCenter"
         function toggle() { shellRoot.toggleControlCenter() }
+        // P3.8 page <name>: deep page entry from the keybinds table
+        // (SUPER+COMMA → "bar"). Today "bar" opens the bar-settings overlay
+        // (styles/edge/modules — the closest existing bar-config surface);
+        // P4.7/P4.8 re-targets it to the Control Center's own BAR page.
+        function page(name: string) {
+            if (name === "bar")
+                return Engine.PluginRegistry.call("velocity.bar-settings", "toggle", "")
+            console.warn("[shell] controlCenter.page: unknown page:", name)
+            return ""
+        }
+    }
+
+    // Launcher (P3.8): thin forwarder to the velocity.launcher overlay
+    // plugin — `qs -c bar ipc call launcher toggle|open|close`. SUPER+SPACE
+    // (D3) replaces the old rofi exec bind.
+    IpcHandler {
+        target: "launcher"
+
+        // void, NOT string: PluginRegistry.call's "ok" return leaking through a
+        // typed handler makes Qt log its coerce-to-void error on every call.
+        function toggle(): void { Engine.PluginRegistry.call("velocity.launcher", "toggle", "") }
+        function open(): void { Engine.PluginRegistry.call("velocity.launcher", "open", "") }
+        function close(): void { Engine.PluginRegistry.call("velocity.launcher", "close", "") }
     }
 
     // Keybinds overlay toggle (for SUPER+K — see ~/.config/hypr/keybindings.lua)

@@ -3,17 +3,18 @@
 // =============================================================================
 // Same architecture as the Control and Core tabs: the shared ControlSectionNav (icon
 // chips, active dot, compact collapse) swaps one fixed pane per key. The
-// dense panes (DESKTOP, IDLE) scroll internally via ScrollColumn — they
+// dense DESKTOP pane scrolls internally via ScrollColumn — it
 // hold more rows than the smallest viewport (480px card floor) can fit;
 // unclipped they used to paint outside the settings window. Extracted from
 // SettingsWindowShell's inline ~730-line
 // Flickable block; every write path is byte-identical:
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
-//   IDLE & LOCK— dim/lock/off timeouts, suspend   (HypridleService + saveConfig)
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
 // (The BAR pane was consolidated away — the logo's velocity.bar-settings
-// overlay is the one bar-settings surface; T23/T24.)
+// overlay is the one bar-settings surface; T23/T24. The IDLE & LOCK pane was
+// removed in P3.9 — hypridle is omni-nix-owned (D9), its config is a read-only
+// HM symlink and the runtime template writer was already inert.)
 // =============================================================================
 
 import QtQuick
@@ -46,8 +47,7 @@ Item {
 
     readonly property var navItems: [
         { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
-        { key: "desktop",    label: "DESKTOP",    icon: "󰍹" },
-        { key: "idle",       label: "IDLE & LOCK", icon: "󰌾" }
+        { key: "desktop",    label: "DESKTOP",    icon: "󰍹" }
     ]
 
     // ── left rail — the SHARED ControlSectionNav (identical UX to Control / Core) ──
@@ -323,6 +323,28 @@ Item {
                         text: "Tab to navigate · Space/Enter to activate · Escape to close"
                         color: Config.ThemeConfig.colors.textDim; opacity: 0.7
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
+                    // Reset — one-click escape hatch (moved here from the IDLE
+                    // & LOCK pane, which was removed in P3.9 — D9)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Item { Layout.fillWidth: true }
+                        Rectangle {
+                            width: resetLbl.implicitWidth + 20; height: 26
+                            radius: Config.ControlConfig.radiusPill
+                            color: resetMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.16)
+                                   : "transparent"
+                            border.color: Config.ThemeConfig.colors.error; border.width: 1
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { id: resetLbl; anchors.centerIn: parent
+                                text: "RESET TO DEFAULTS"
+                                color: Config.ThemeConfig.colors.error
+                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
+                                font.bold: true; font.letterSpacing: 0.8 }
+                            MouseArea { id: resetMA; anchors.fill: parent
+                                hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: Services.SettingsConfigService.resetToDefaults() }
+                        }
+                    }
                 }
             }
         }
@@ -397,116 +419,5 @@ Item {
             }
         }
 
-        // ── IDLE & LOCK ────────────────────────────────────────────────
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Config.ControlConfig.space4
-            visible: root.active === "idle"
-            spacing: Config.ControlConfig.space4
-
-            SettingsHeaderCard { Layout.fillWidth: true; eyebrow: "SETTINGS"; title: "Idle & Lock"
-                subtitle: "Hypridle timeouts — applied to hypridle.conf on save" }
-
-            Card { variant: "core";
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                accent: Config.ThemeConfig.colors.warning
-                ScrollColumn {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-
-                    SettingRow {
-                        label: "DIM AFTER"
-                        section: "idle"
-                        value: Math.round(Services.HypridleService.dimTimeout / 60) + " min"
-                        Repeater {
-                            model: [1, 2, 3, 5, 10]
-                            delegate: OptSeg {
-                                text: modelData + "m"
-                                active: Services.HypridleService.dimTimeout === modelData * 60
-                                onPicked: { Services.HypridleService.dimTimeout = modelData * 60; Services.HypridleService.saveConfig() }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "LOCK AFTER"
-                        section: "idle"
-                        keywords: "hyprlock"
-                        value: Math.round(Services.HypridleService.lockTimeout / 60) + " min"
-                        Repeater {
-                            model: [2, 5, 10, 15, 30]
-                            delegate: OptSeg {
-                                text: modelData + "m"
-                                active: Services.HypridleService.lockTimeout === modelData * 60
-                                onPicked: { Services.HypridleService.lockTimeout = modelData * 60; Services.HypridleService.saveConfig() }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "DISPLAY OFF"
-                        section: "idle"
-                        keywords: "screen off dpms"
-                        value: Math.round(Services.HypridleService.displayOffTimeout / 60) + " min"
-                        Repeater {
-                            model: [5, 10, 15, 20, 30]
-                            delegate: OptSeg {
-                                text: modelData + "m"
-                                active: Services.HypridleService.displayOffTimeout === modelData * 60
-                                onPicked: { Services.HypridleService.displayOffTimeout = modelData * 60; Services.HypridleService.saveConfig() }
-                            }
-                        }
-                    }
-                    SettingRow {
-                        label: "SUSPEND"
-                        section: "idle"
-                        keywords: "sleep memory"
-                        value: Services.HypridleService.suspendEnabled
-                               ? (Services.HypridleService.suspendTimeout / 60) + " min" : "OFF"
-                        ToggleSwitch {
-                            checked: Services.HypridleService.suspendEnabled
-                            onToggled: {
-                                Services.HypridleService.suspendEnabled = !Services.HypridleService.suspendEnabled
-                                Services.HypridleService.saveConfig()
-                            }
-                        }
-                    }
-                    SettingRow {
-                        visible: Services.HypridleService.suspendEnabled
-                        label: "SUSPEND AFTER"
-                        section: "idle"
-                        Repeater {
-                            model: [15, 30, 45, 60]
-                            delegate: OptSeg {
-                                text: modelData + "m"
-                                active: Services.HypridleService.suspendTimeout === modelData * 60
-                                onPicked: { Services.HypridleService.suspendTimeout = modelData * 60; Services.HypridleService.saveConfig() }
-                            }
-                        }
-                    }
-
-                    // Reset — one-click escape hatch
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Item { Layout.fillWidth: true }
-                        Rectangle {
-                            width: resetLbl.implicitWidth + 20; height: 26
-                            radius: Config.ControlConfig.radiusPill
-                            color: resetMA.containsMouse ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.error, 0.16)
-                                   : "transparent"
-                            border.color: Config.ThemeConfig.colors.error; border.width: 1
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                            Text { id: resetLbl; anchors.centerIn: parent
-                                text: "RESET TO DEFAULTS"
-                                color: Config.ThemeConfig.colors.error
-                                font.family: Config.ControlConfig.fontMono; font.pixelSize: 10
-                                font.bold: true; font.letterSpacing: 0.8 }
-                            MouseArea { id: resetMA; anchors.fill: parent
-                                hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.SettingsConfigService.resetToDefaults() }
-                        }
-                    }
-                }
-            }
-        }
     }
 }

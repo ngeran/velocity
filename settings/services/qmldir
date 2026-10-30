@@ -3,7 +3,6 @@ BoundedProcess 1.0 BoundedProcess.qml
 singleton CommandService 1.0 CommandService.qml
 singleton WallpaperService 1.0 WallpaperService.qml
 singleton SettingsConfigService 1.0 SettingsConfigService.qml
-singleton HypridleService 1.0 HypridleService.qml
 singleton MonitorService 1.0 MonitorService.qml
 singleton KernelEventReader 1.0 KernelEventReader.qml
 singleton PluginManagerService 1.0 PluginManagerService.qml

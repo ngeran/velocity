@@ -41,23 +41,27 @@ config.reload            manual    # P2.5: the writer (bar's BarConfigWriter) re
                                    # BarConfig in-process; the verb stays for external
                                    # writers (scripts/hand-edit tooling that want an
                                    # instant apply instead of the 60s backstop)
-barToggle.toggle         bound     # SUPER+SHIFT+B; also HypridleService on-resume
+barToggle.toggle         bound     # SUPER+SHIFT+B (velocity-binds.lua); also hypridle.conf on-resume
 # keyboard.* = TRANSITIONAL forwarders to `plugins call nikos.keyboard <verb>`;
 # remove with the handler once the keybind uses plugins.call.
 keyboard.next            bound     # SUPER+SHIFT+SPACE (cycle; nikos.keyboard)
 keyboard.prev            manual    # cycle backwards
 keyboard.set             manual    # set <index|layout|spec> e.g. `set gr(polytonic)`
 keyboard.status          manual    # JSON: keyboard/keymap/layouts/options/hotkey/led/prefs
-clipboard.toggle          manual    # velocity.clipboard picker (J8; no keybind yet — omni-nix decision)
+clipboard.toggle          bound     # SUPER+SHIFT+V (velocity-binds.lua, D3)
+launcher.toggle           bound     # SUPER+SPACE (velocity-binds.lua, D3; velocity.launcher)
+launcher.open             manual    # (velocity.launcher)
+launcher.close            manual    # (velocity.launcher)
 clipboard.open            manual
 record.start             manual    # velocity.record (J9): start region|output
 record.stop              manual    # SIGINT finalize → ~/Videos mp4 + notification
 record.startMode          manual    # start <region|output> (typed arg variant)
-record.toggle            manual
+record.toggle            bound     # SUPER+SHIFT+R (velocity-binds.lua, D3)
 record.status            manual    # JSON: recording/elapsed/file
 clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
-controlCenter.toggle     manual    # keybind pending in omni-nix (e.g. SUPER+C)
+controlCenter.toggle     bound     # SUPER+N (velocity-binds.lua, D3)
+controlCenter.page       bound     # (page) SUPER+COMMA → "bar" (D3; P4.8 re-targets to the CC BAR page)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
@@ -74,6 +78,7 @@ notifications.add                 manual    # ingest surface (docs in Notificati
 notifications.clear               manual    # soft clear
 notifications.restore              manual    # undo the soft clear
 notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
+notifications.dndToggle           bound    # SUPER+SHIFT+N (velocity-binds.lua, D3)
 notifications.readAll             manual    # mark all read
 notifications.list                manual    # dump the visible model (truth probes)
 # ---- settings surfaces (hosted in the bar process since P2.1) ------------------------------------------------------
@@ -112,7 +117,7 @@ display.revertProbe               manual    # keep/revert cycle probe: stage the
 display.revertState               manual    # pending keep/revert window (label + secondsLeft) or "none"
 display.revertKeep                manual    # cancel the pending window (stops the external revert timer)
 wallpaper-service.toggleCycling   manual    # cycle pill toggles in-process; IPC kept external
-wallpaper-service.cycleNow       manual    # skip to next wallpaper in the cycle
+wallpaper-service.cycleNow       bound    # SUPER+SHIFT+W (velocity-binds.lua, D3)
 wallpaper-service.getCount       manual    # wallpaper count (scripting)
 wallpaper-service.getCurrentInfo manual    # current wallpaper info (scripting)
 wallpaper-service.getCyclingEnabled manual # cycle state (scripting)

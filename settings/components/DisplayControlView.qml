@@ -82,7 +82,6 @@ ColumnLayout {
     readonly property var guardItems: [
         { label: "10-BIT COLOR DEPTH", probeOk: view.mon ? Services.MonitorService.liveBitdepth() === 10 : false },
         { label: "VRR ENABLED", probeOk: Services.MonitorService.vrrMode !== 0 },
-        { label: "AUTO BLANK ≤ 10 MIN", probeOk: Services.HypridleService.displayOffTimeout <= 600 },
         { label: "HDR SDR-WHITE ≤ 250 NITS", probeOk: !view.hdrOn || view.mon.sdrMaxLuminance <= 250 },
         { label: "SDR BRIGHTNESS ≤ 1.2", probeOk: !view.hdrOn || (view.mon.sdrBrightness || 1) <= 1.2 }
     ]
@@ -95,14 +94,12 @@ ColumnLayout {
     function applyOledPreset() {
         var s = Services.MonitorService
         // Burn-in-first QD-OLED baseline: 10-bit, VRR on, HDR with reference
-        // SDR white (203 nits), neutral saturation, plus a 5-min auto-blank.
+        // SDR white (203 nits), neutral saturation. (The 5-min auto-blank leg
+        // went with HypridleService in P3.9 — idle timeouts are omni-nix's
+        // hypridle.conf, D9.)
         s.applyRule({ bitdepth: 10, vrr: s.vrrMode === 0 ? 2 : s.vrrMode, cm: "hdredid",
                       sdrbrightness: 1.0, sdrsaturation: 1.0,
                       sdr_min_luminance: 0.2, sdr_max_luminance: 203 })
-        if (Services.HypridleService.displayOffTimeout > 600) {
-            Services.HypridleService.displayOffTimeout = 300
-            Services.HypridleService.saveConfig()
-        }
         CommandService.pushLog("[display] QD-OLED safe preset applied", "success")
     }
 
@@ -843,36 +840,8 @@ ColumnLayout {
                     }
                 }
 
-                // Auto-blank timer (hypridle display-off) — READ-ONLY here (H3):
-                // Idle & Lock owns the editor; this row mirrors the value and
-                // jumps there. One writer through HypridleService either way.
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.ControlConfig.space2
-
-                    Text {
-                        text: "AUTO-BLANK (BURN-IN PROTECTION)"
-                        font.family: Config.ControlConfig.fontSans
-                        font.pixelSize: 10
-                        font.bold: true
-                        font.letterSpacing: 1.0
-                        font.capitalization: Font.AllUppercase
-                        color: Config.ThemeConfig.colors.textDim
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: implicitWidth
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: Math.round(Services.HypridleService.displayOffTimeout / 60) + " MIN"
-                        font.family: Config.ControlConfig.fontMono
-                        font.pixelSize: 10
-                        color: Config.ThemeConfig.colors.text
-                    }
-                    Pill {
-                        text: "IDLE & LOCK ›"
-                        onActivated: if (view.dash) view.dash.openSettingsSection("idle")
-                    }
-                }
+                // (The AUTO-BLANK row went with HypridleService in P3.9 — idle
+                // timeouts live in omni-nix's hypridle.conf, D9.)
 
                 Pill {
                     Layout.alignment: Qt.AlignHCenter

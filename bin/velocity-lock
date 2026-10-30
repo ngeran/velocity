@@ -13,8 +13,9 @@
 # SECURITY: without /etc/pam.d/velocity-lock the lock cannot authenticate and
 # would wedge the session (recovery: TTY → `loginctl unlock-session`, or
 # hyprlock takeover via misc.allow_session_lock_restore). Refuse instead.
-# The PAM service comes from omni-nix hosts/desktop/default.nix
-# (security.pam.services.velocity-lock) — same trap as the hyprlock note there.
+# The PAM service comes from this flake's nixosModules.default
+# (security.pam.services.velocity-lock) — imported by omni-nix
+# hosts/desktop/default.nix; same trap as the hyprlock note there.
 # =============================================================================
 
 # PATH only — a hard-coded store/profile path rots on every rebuild (P1.8).

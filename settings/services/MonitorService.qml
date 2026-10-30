@@ -431,7 +431,7 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // DPMS — proven verb pair from HypridleService (hl.dsp.dpms enable/disable)
+    // DPMS — the hl.dsp.dpms enable/disable verb pair (proven in the former HypridleService, removed P3.9)
     // -------------------------------------------------------------------------
     Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
         id: dpmsProc

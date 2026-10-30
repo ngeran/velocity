@@ -57,22 +57,27 @@ check required git         "PluginManagerService install-from-git pipeline"
 check feature qrencode     "settings Wi-Fi QR share (WifiListView)"
 check feature upower       "battery daemon behind the native UPower client"
 check feature bluetoothctl "settings bluetooth control services"
-check feature wpctl        "settings audio control services"
 check feature node         "plugin tooling that shells out to node"
 check feature nvidia-smi   "settings GPU telemetry section (this is the NVIDIA box)"
 check feature jq           "tools/qa harness asserts + ipc-surface/layer evidence"
+# P3-owned: the flake ships these (programs.velocity.runtimeInputs); a miss
+# here means the omni-apply didn't include the module or was rolled back.
+check feature cliphist     "velocity.clipboard history store (velocity-cliphist unit)"
+check feature wl-copy      "velocity.clipboard paste-back (wl-clipboard)"
+check feature wf-recorder  "velocity.record screen recording (with slurp/grim)"
+check feature wtype        "tools/qa keyboard steps SKIP without it (keybinds-via-keybind)"
+check feature velocity-lock "the lock (SUPER+L, hypridle lock_cmd) — programs.velocity.lock.enable"
+# P7 futures, shipped early per P3.1 (harmless until their features land):
+check optional qalc        "charms calculator (P7 G3)"
+check optional swappy      "screenshot annotation (P7 G2)"
 
 # --- optional: degrade gracefully by design ---------------------------------
 check optional fastfetch   "FastfetchOverlay hides itself without it"
-check optional cliphist    "velocity.clipboard picker hides itself without it (with wl-clipboard)"
-check optional wl-copy     "velocity.clipboard paste-back (ships with wl-clipboard)"
-check optional wf-recorder "velocity.record screen recording (with slurp — slurp already present)"
 check optional ping        "settings network engineer view latency"
 check optional powerprofilesctl "Control Center power-profile tile hides without it"
 check optional brightnessctl "Control Center brightness (backlight); falls back to ddcutil"
 check optional ddcutil    "Control Center brightness on external monitors (DDC/CI)"
 check optional grim       "tools/qa screenshot evidence (shot steps fail without it)"
-check optional wtype      "tools/qa keyboard steps SKIP without it (keybinds-via-keybind)"
 
 if (( fail )); then
   echo "check-tools: FAIL — add the missing tools to ~/.omni-nix and omni-apply" >&2
