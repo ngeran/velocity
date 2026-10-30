@@ -127,8 +127,10 @@ Item {
     // State lives HERE (NotificationService is the domain owner); persisted to
     // notifications-schedule.json beside the other notification state files,
     // through the same one-shot printf funnel as the dnd flag. The window
-    // re-evaluates on the ZERO-POLL SystemClock minutes tick (boundary-exact,
-    // no timer wakes beyond the clock): enabled → in-window turns DnD on,
+    // re-evaluates on the ZERO-POLL SystemClock minutes tick (no timer wakes
+    // beyond the clock; minute-precision means the flip can land up to ~75 s
+    // past the wall boundary on this build — measured live 2026-10-30, fine
+    // for a DnD window): enabled → in-window turns DnD on,
     // out-of-window turns it off. A manual setDnd() still works between ticks
     // (the next minute boundary re-asserts the window — that IS the feature:
     // the schedule wins over the toggle while enabled). start === end reads

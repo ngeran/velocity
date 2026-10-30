@@ -24,6 +24,7 @@ wallpaper-config.json
 # dir (tools/deploy-link), so the bar/settings write these in place:
 /dnd.flag
 /notifications.cleared
+/notifications-schedule.json
 /plugins-state.json
 /custom-themes.json
 /deepcool-config.json

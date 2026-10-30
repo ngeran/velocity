@@ -108,8 +108,8 @@ Item {
 
     // J5: OSD track style — same silent funnel as style/edge.
     function setOsdStyle(style: string): string {
-        if (style !== "bar" && style !== "segments")
-            return "error: osd style must be bar|segments"
+        if (style !== "bar" && style !== "segments" && style !== "edge")
+            return "error: osd style must be bar|segments|edge"
         Services.SettingsConfigService.osdStyle = String(style)
         return _barMerge({ osdStyle: String(style) })
     }
