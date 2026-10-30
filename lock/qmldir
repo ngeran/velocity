@@ -1,1 +1,2 @@
 singleton LockConfig 1.0 LockConfig.qml
+LockScreen 1.0 LockScreen.qml

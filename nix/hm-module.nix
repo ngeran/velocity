@@ -256,11 +256,13 @@ let
   # ── velocity-lock (P3.4) ─────────────────────────────────────────────────────
   # The repo script is the ONE implementation (P1.8: resolves quickshell via
   # command -v); packaging it puts the STORE quickshell on PATH so the check
-  # resolves deterministically. The PAM service comes from
+  # resolves deterministically. procps (pgrep) backs the script's re-entry
+  # guard — hypridle's unit PATH is a closed set, so the wrapper must carry
+  # every command the script calls. The PAM service comes from
   # velocity.nixosModules.default (omni-nix imports it for the desktop host).
   velocityLock = pkgs.writeShellApplication {
     name = "velocity-lock";
-    runtimeInputs = [ cfg.quickshellPackage ];
+    runtimeInputs = [ cfg.quickshellPackage pkgs.procps ];
     text = builtins.readFile ../bin/velocity-lock;
   };
 

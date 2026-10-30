@@ -122,7 +122,7 @@ Rectangle {
         id: pam
         config: "velocity-lock"
         user: Quickshell.env("USER")
-        onMessage: {
+        onPamMessage: {
             if (responseRequired && root.checking && root._queued !== "") {
                 pam.respond(root._queued)
             }

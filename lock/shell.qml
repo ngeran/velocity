@@ -29,6 +29,10 @@ ShellRoot {
         visible: root.preview
         color: LockConfig.bg
         exclusiveZone: -1
+        anchors.top: true
+        anchors.bottom: true
+        anchors.left: true
+        anchors.right: true
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 

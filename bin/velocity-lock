@@ -35,6 +35,14 @@ case "${1-}" in
       echo "velocity-lock: /etc/pam.d/velocity-lock missing — omni-apply the PAM module first; refusing to lock" >&2
       exit 1
     fi
+    # Re-entry guard (P3.4): hypridle can fire lock-session twice (idle
+    # listener + before_sleep) while SUPER+L races them — ext_session_lock_v1
+    # allows ONE holder, so a second process would sit waiting for a lock it
+    # can never take. Already-locked = this request is satisfied; exit 0.
+    if pgrep -f "$QS_BIN -c lock" >/dev/null 2>&1; then
+      echo "velocity-lock: session already locked" >&2
+      exit 0
+    fi
     exec "$QS_BIN" -c lock
     ;;
   *)
