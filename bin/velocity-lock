@@ -25,6 +25,15 @@ if [ -z "$QS_BIN" ]; then
   exit 1
 fi
 
+# The lock UI's FileViews shell out via `sh -c cat` (bar-config, theme,
+# plugin state). hypridle's unit PATH is a closed set with NO sh — without
+# this line every one of those reads failed and the lock silently ran on
+# defaults (live evidence: hypridle journal, P3 lock test). The session PATH
+# is the established fix shape on this host (cf. brightnessctl in
+# hypridle.conf). PAM and Wayland are unaffected either way.
+PATH="/run/current-system/sw/bin:$PATH"
+export PATH
+
 case "${1-}" in
   preview)
     exec env VELOCITY_LOCK_PREVIEW=1 "$QS_BIN" -c lock
