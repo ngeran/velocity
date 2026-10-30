@@ -52,7 +52,7 @@ Item {
     property string barPosition: "top"
     // OSD track style (J5): "bar" = continuous fill, "segments" = segment
     // track — mirrors bar-config.json; the bar's Osd/island read it live.
-    property string osdStyle: "bar"
+    property string osdStyle: "segments"
     property int workspaceCount: 5             // 3, 5, 7, 9
 
     // Auto-regenerate the palette from the active wallpaper via matugen
@@ -149,7 +149,7 @@ Item {
         root.barPosition = "top"
         root.workspaceCount = 5
         root.barStyle = "vector"
-        root.osdStyle = "bar"
+        root.osdStyle = "segments"
         root.islandBurnGuard = true
         root.stripBurnGuard = true
         root.matugenOnWallpaperChange = false
@@ -189,7 +189,7 @@ Item {
             root.barStyle = data.barStyle
         if (data.barPosition === "top" || data.barPosition === "bottom")
             root.barPosition = data.barPosition
-        if (data.osdStyle === "bar" || data.osdStyle === "segments")
+        if (data.osdStyle === "bar" || data.osdStyle === "segments" || data.osdStyle === "edge")
             root.osdStyle = data.osdStyle
         if ([3, 5, 7, 9].indexOf(data.workspaceCount) !== -1)
             root.workspaceCount = data.workspaceCount

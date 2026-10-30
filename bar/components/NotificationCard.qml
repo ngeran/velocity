@@ -76,7 +76,7 @@ Rectangle {
                 text: model.glyph !== undefined && model.glyph !== ""
                       ? model.glyph : "󰂚"
                 font.family: Config.BarConfig.fontNerd
-                font.pixelSize: 13
+                font.pixelSize: Config.PopupMetrics.px(13)
                 color: card.urgencyColor
             }
         }
@@ -103,7 +103,7 @@ Rectangle {
                     textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: model.appName
                     color: Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Config.PopupMetrics.px(10)
                     font.bold: true
                     font.capitalization: Font.AllUppercase
                     font.letterSpacing: 0.6
@@ -116,7 +116,7 @@ Rectangle {
                     textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: relativeTime(model.timestamp, Services.NotificationService.now)
                     color: Config.ThemeConfig.colors.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Config.PopupMetrics.px(10)
                     font.family: Config.BarConfig.fontFamily
                     opacity: 0.75
                 }
@@ -125,7 +125,7 @@ Rectangle {
                 Text {
                     textFormat: Text.PlainText   // notification text is untrusted — never render HTML
                     text: "✕"
-                    font.pixelSize: 11
+                    font.pixelSize: Config.PopupMetrics.px(11)
                     font.family: Config.BarConfig.fontFamily
                     opacity: cardMa.containsMouse ? 1.0 : 0.0
                     color: dismissMa.containsMouse
@@ -155,9 +155,9 @@ Rectangle {
                 text: model.summary
                 color: model.read ? Config.ThemeConfig.colors.textDim
                                   : Config.ThemeConfig.colors.text
-                font.pixelSize: 13
+                font.pixelSize: Config.PopupMetrics.px(13)
                 font.bold: !model.read
-                font.family: Config.BarConfig.fontFamily
+                font.family: Config.BarConfig.fontUi
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 maximumLineCount: 2
@@ -171,8 +171,8 @@ Rectangle {
                 text: stripImages(model.body)
                 onLinkActivated: (link) => Qt.openUrlExternally(link)
                 color: Config.ThemeConfig.colors.textDim
-                font.pixelSize: 11
-                font.family: Config.BarConfig.fontFamily
+                font.pixelSize: Config.PopupMetrics.px(11)
+                font.family: Config.BarConfig.fontUi
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 maximumLineCount: 3
@@ -233,7 +233,7 @@ Rectangle {
                             textFormat: Text.PlainText   // action labels are untrusted too
                             text: parent.label
                             color: Config.ThemeConfig.colors.text
-                            font.pixelSize: 10
+                            font.pixelSize: Config.PopupMetrics.px(10)
                             font.family: Config.BarConfig.fontFamily
                         }
                         MouseArea {

@@ -177,13 +177,16 @@ PanelWindow {
 
         Keys.onEscapePressed: root.close()
 
-        // unread accent hairline — top edge reads "there's something new"
-        Rectangle {
+        // unread accent dot rule — top edge reads "there's something new"
+        // (P6.2: dotted accent instead of a solid 2 px bar — the signal stays
+        // transient-only, and the ~30 % dot fill is far kinder to the panel)
+        DotRule {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             height: Config.PopupMetrics.px(2)
-            color: Config.BarConfig.colorAccent
+            dotSize: Config.PopupMetrics.px(2)
+            dotColor: Config.BarConfig.colorAccent
             visible: root.unreadCount > 0
         }
 
@@ -278,12 +281,10 @@ PanelWindow {
                 }
 
                 // header divider
-                Rectangle {
+                DotRule {
                     anchors.left: parent.left; anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    height: root.hair
-                    color: Config.ThemeConfig.colors.border
-                    opacity: 0.6
+                    dotColor: Config.ThemeConfig.colors.outlineVariant
                 }
             }
 
@@ -380,9 +381,9 @@ PanelWindow {
                 spacing: Config.PopupMetrics.px(6)
                 visible: Services.NotificationService.history.count > 0
 
-                Rectangle {
-                    Layout.fillWidth: true; height: root.hair
-                    color: Config.ThemeConfig.colors.border; opacity: 0.6
+                DotRule {
+                    Layout.fillWidth: true
+                    dotColor: Config.ThemeConfig.colors.outlineVariant
                 }
 
                 RowLayout {
@@ -445,12 +446,10 @@ PanelWindow {
                 visible: Services.NotificationService.model.count > 0 ||
                          Services.NotificationService.clearedCount > 0
 
-                Rectangle {
+                DotRule {
                     anchors.left: parent.left; anchors.right: parent.right
                     anchors.top: parent.top
-                    height: root.hair
-                    color: Config.ThemeConfig.colors.border
-                    opacity: 0.6
+                    dotColor: Config.ThemeConfig.colors.outlineVariant
                 }
 
                 Text {

@@ -93,7 +93,7 @@ RowLayout {
     Text {
         visible: root.suffix !== ""
         text: Math.round(root.value) + root.suffix
-        font.family: "JetBrains Mono"
+        font.family: "Space Mono"
         font.pixelSize: Math.round(9 * root.uiScale)
         color: root.dim ? root.dimColor : root.textColor
         Layout.preferredWidth: visible ? Math.round(34 * root.uiScale) : 0

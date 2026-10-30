@@ -44,7 +44,7 @@ Item {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
-        font.family: "JetBrains Mono"
+        font.family: "Space Mono"
         font.pixelSize: Math.round(10 * root.uiScale)
         font.letterSpacing: 1 * root.uiScale
         color: root.labelColor
@@ -63,7 +63,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: root.value
-        font.family: "JetBrains Mono"
+        font.family: "Space Mono"
         font.pixelSize: Math.round(13 * root.uiScale)
         font.bold: root.valueBold
         color: root.muted ? root.labelColor : root.valueColor

@@ -57,7 +57,10 @@ PanelWindow {
             || _screenName === ""
             || Services.HyprlandService.focusedMonitor === _screenName)
     readonly property bool hasTrack: act !== null && act.progress !== undefined
-    visible: !islandOwnsOsd && (osdWindow.shown || card.opacity > 0)
+    // P6.6: "edge" = the glyph edge light — a 3 px strip on the bar's screen
+    // edge instead of the bottom-center card.
+    readonly property bool edgeStyle: Config.BarConfig.osdStyle === "edge"
+    visible: !islandOwnsOsd && (osdWindow.shown || card.opacity > 0 || edgeStrip.opacity > 0)
 
     // QD-OLED (J0 doctrine, island-Scene parity): an activity holds full
     // alpha for ≤ 3 s of stillness, then dims to the rest level until its
@@ -107,6 +110,7 @@ PanelWindow {
 
     Rectangle {
         id: card
+        visible: !osdWindow.edgeStyle
         width: osdWindow.hair + osdWindow.pad + osdWindow.contentWidth + osdWindow.pad + osdWindow.hair   // hairline border per side
         height: osdWindow.hair + osdWindow.pad + osdWindow.iconPixelSize + osdWindow.pad + osdWindow.hair
         anchors.horizontalCenter: parent.horizontalCenter
@@ -197,6 +201,35 @@ PanelWindow {
                       : Config.BarConfig.colorAccent
                 elide: Text.ElideRight
                 maximumLineCount: 1
+            }
+        }
+    }
+
+    // ── "edge" style (P6.6) — glyph edge light: a 3 px luminous strip flush
+    // on the bar's screen edge (top bar → top edge; bottom bar → bottom).
+    // Length = the value (a message feedback runs full width); accent colour
+    // (a critical's own accent wins). Rides the card's 3 s stillness dim and
+    // retracts with a ≤ 1.5 s fade to black. No box, no text.
+    Rectangle {
+        id: edgeStrip
+        visible: osdWindow.edgeStyle && osdWindow.shown
+        x: 0
+        y: Config.BarConfig.barAtBottom ? parent.height - height : 0
+        width: parent.width
+        height: Config.PopupMetrics.px(3)
+        color: "transparent"
+        opacity: osdWindow.shown ? osdWindow.actAlpha : 0
+        Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+
+        Rectangle {
+            width: parent.width
+                * (osdWindow.hasTrack ? Math.max(0, Math.min(100, osdWindow.act.progress)) / 100 : 1)
+            height: parent.height
+            color: (osdWindow.act && osdWindow.act.accent) ? osdWindow.act.accent
+                                                           : Config.BarConfig.colorAccent
+            Behavior on width {
+                enabled: edgeStrip.visible
+                NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
             }
         }
     }

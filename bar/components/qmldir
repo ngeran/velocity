@@ -38,5 +38,6 @@ CardFrame 1.0 CardFrame.qml
 ListRow 1.0 ListRow.qml
 CardSlider 1.0 CardSlider.qml
 CardToggle 1.0 CardToggle.qml
+DotRule 1.0 DotRule.qml
 CardRow 1.0 CardRow.qml
 Sparkline 1.0 Sparkline.qml

@@ -80,7 +80,7 @@ Item {
 
         Text {
             text: pill.icon
-            font.family: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontNerd : "monospace"
+            font.family: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontNerd : "Space Mono"
             font.pixelSize: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontSizeIcon : 13
             color: pill.hot || pill.active ? pill.accent : pill.restColor
             anchors.verticalCenter: parent.verticalCenter
@@ -89,7 +89,7 @@ Item {
         Text {
             visible: pill.expanded
             text: pill.label
-            font.family: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontFamily : "monospace"
+            font.family: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontFamily : "Space Mono"
             font.pixelSize: pill.ctx && pill.ctx.bar ? pill.ctx.bar.fontSizeLabel : 11
             color: pill.ctx && pill.ctx.theme ? pill.ctx.theme.colors.text : "#aaaaaa"
             anchors.verticalCenter: parent.verticalCenter

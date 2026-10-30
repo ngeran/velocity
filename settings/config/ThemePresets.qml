@@ -3,7 +3,7 @@
 // Curated theme presets — views over the canonical seed
 // =============================================================================
 //
-// This singleton holds the token bundles for the 6 curated presets.
+// This singleton holds the token bundles for the 7 curated presets.
 // ThemeService, ThemeModule, and ThemePresetCard all read from here. The
 // CANONICAL seed — "OLED Pure Black" — is shared/theme-core.mjs
 // DEFAULT_BUNDLE (synced to ../lib/theme-core.mjs; the VFS cannot cross
@@ -66,6 +66,18 @@ QtObject {
             border: "#44475a", outline: "#6272a4", outlineVariant: "#21222c",
             primary: "#bd93f9", secondary: "#8be9fd", accent: "#ff79c6",
             success: "#50fa7b", warning: "#f1fa8c", error: "#ff5555", info: "#8be9fd"
+        },
+        // P6: the glyph identity ramp — "black, white dots, one red". Strict
+        // monochrome ramp + the single red; semantics collapse into it (error
+        // IS the red, success/warning/info read as ramp greys). Stored at the
+        // true glyph values; clampOLED v2 tones what exceeds the caps (text,
+        // outline) at apply time, like every other preset.
+        "Glyph": {
+            background: "#000000", surface: "#0e0e0e", surfaceVariant: "#1a1a1a",
+            surfaceContainer: "#1a1a1a", text: "#f2f2f2", textDim: "#8c8c8c",
+            border: "#2a2a2a", outline: "#4a4a4a", outlineVariant: "#1a1a1a",
+            primary: "#d71921", secondary: "#8c8c8c", accent: "#d71921",
+            success: "#8c8c8c", warning: "#8c8c8c", error: "#d71921", info: "#8c8c8c"
         }
     })
 
@@ -87,6 +99,7 @@ QtObject {
         "Tokyo Night",
         "Nord",
         "Gruvbox Dark",
-        "Dracula"
+        "Dracula",
+        "Glyph"
     ]
 }

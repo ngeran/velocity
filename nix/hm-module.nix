@@ -266,6 +266,39 @@ let
     text = builtins.readFile ../bin/velocity-lock;
   };
 
+  # ── velocity-lock-watchdog (P6.5 fail-safe) ──────────────────────────────────
+  # Repairs a wedged lock instead of leaving the user to reboot: heartbeat
+  # staleness (hung loop), locked=false zombie (hung quit), and the DPMS
+  # surfaceless race — see the script header for the decision table. Timer
+  # every 20 s; exits 0 instantly whenever no real lock is held. jq/procps/
+  # systemd come from runtimeInputs (writeShellApplication PATH); velocity-lock
+  # itself resolves through the unit PATH (servicePath carries the per-user
+  # profile) with the script's own profile fallback as belt-and-braces.
+  lockWatchdog = pkgs.writeShellApplication {
+    name = "velocity-lock-watchdog";
+    runtimeInputs = [ pkgs.coreutils pkgs.procps pkgs.jq pkgs.systemd ];
+    text = builtins.readFile ../tools/velocity-lock-watchdog;
+  };
+
+  lockWatchdogUnit = {
+    Unit.Description = "Velocity lock watchdog (repair a wedged velocity-lock)";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${lockWatchdog}/bin/velocity-lock-watchdog";
+      Environment = [ "PATH=${servicePath}" ];
+    };
+  };
+
+  lockWatchdogTimer = {
+    Unit.Description = "Periodic velocity-lock wedge repair";
+    Timer = {
+      OnBootSec = "90s";
+      OnUnitActiveSec = "20s";
+      AccuracySec = "5s";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
 in
 {
   options.programs.velocity = {
@@ -446,9 +479,18 @@ in
       binds = keybindsList;
     };
 
-    systemd.user.services = lib.mkIf cfg.systemd.enable {
-      quickshell-bar = barUnit;
-      velocity-cliphist = cliphistUnit;
+    systemd.user.services = lib.mkMerge [
+      (lib.mkIf cfg.systemd.enable {
+        quickshell-bar = barUnit;
+        velocity-cliphist = cliphistUnit;
+      })
+      (lib.mkIf (cfg.systemd.enable && cfg.lock.enable) {
+        velocity-lock-watchdog = lockWatchdogUnit;
+      })
+    ];
+
+    systemd.user.timers = lib.mkIf (cfg.systemd.enable && cfg.lock.enable) {
+      velocity-lock-watchdog = lockWatchdogTimer;
     };
   };
 }

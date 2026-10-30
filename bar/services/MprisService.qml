@@ -29,7 +29,7 @@ Item {
     // re-fire; reassign on the model's own signal instead.
     property var _players: []
 
-    Component.onCompleted: _resync()
+    Component.onCompleted: { _resync(); _announceMedia() }
     Connections {
         target: Mpris.players
         function onValuesChanged() { root._resync() }
@@ -83,7 +83,45 @@ Item {
     function previous(id)   { const p = _player(id); if (p) p.previous() }
     function raise(id)      { const p = _player(id); if (p) p.raise() }
 
-    onRowsChanged: console.log("[MprisService] players " + rows.length +
-        (active ? " active=" + active.identity +
-         " playing=" + active.isPlaying : ""))
+    // ── now-playing island activity (P6.7) ──────────────────────────────────
+    // A TRACK CHANGE (or pause → resume) while playing announces itself as a
+    // transient "progress"-rank activity (ttl 4 s) — never a persistent
+    // surface (QD-OLED: accents only while something is happening). POLICY
+    // here, DELIVERY in shell.qml — the dual-instance law: this singleton
+    // instantiates under a second URI, so its own ../engine would resolve to
+    // a PopupCoordinator no renderer reads (see NotificationService._peek).
+    property var mediaActivitySpec: null
+    property int mediaActivityRev: 0
+    property string _announcedKey: ""
+    readonly property string _mediaIcon: "\u{f0369}"   // nerd note (control-center's glyph)
+    function _trim(t, n) {
+        t = String(t || "").trim()
+        return t.length > n ? t.substring(0, n - 1) + "…" : t
+    }
+    onRowsChanged: {
+        console.log("[MprisService] players " + rows.length +
+            (active ? " active=" + active.identity +
+             " playing=" + active.isPlaying : ""))
+        _announceMedia()
+    }
+    function _announceMedia() {
+        const playing = active !== null && active.isPlaying
+        if (!playing) {
+            if (_announcedKey !== "") { _announcedKey = ""; mediaActivitySpec = null; mediaActivityRev++ }
+            return
+        }
+        const key = (active.identity || "") + "|" + (active.title || "") + "|" + (active.artist || "")
+        if (key === _announcedKey) return
+        _announcedKey = key
+        const label = _trim(active.title || active.identity || "Now playing", 34) +
+                      (active.artist ? " — " + _trim(active.artist, 22) : "")
+        mediaActivitySpec = {
+            key: "media",
+            priority: "progress",
+            icon: _mediaIcon,
+            label: label,
+            ttlMs: 4000
+        }
+        mediaActivityRev++
+    }
 }

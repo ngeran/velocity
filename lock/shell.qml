@@ -18,11 +18,47 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 
 ShellRoot {
     id: root
 
     readonly property bool preview: Quickshell.env("VELOCITY_LOCK_PREVIEW") === "1"
+
+    // ── Heartbeat — the watchdog's ground truth (P6.5 fail-safe) ─────────────
+    // While a REAL lock is held, write $XDG_RUNTIME_DIR/velocity-lock-state
+    // every 5 s: {"locked":<bool>,"screens":<n>,"ts":<epoch-s>}. The watchdog
+    // (systemd timer → tools/velocity-lock-watchdog) keys every repair to a
+    // live holder + this file, so it can tell a healthy lock from:
+    //   · stale ts    → hung event loop (kill + relaunch)
+    //   · locked=false while alive → unlock fired but quit hung (kill only —
+    //     the session is already open; relaunching would re-lock it)
+    //   · locked=true, screens=0, monitor present → the DPMS output-teardown
+    //     race: surface died on a removed wl_output, never rebuilt (kill +
+    //     relaunch; a FRESH process maps its surface when the output returns).
+    // Preview writes nothing — a QA overlay is never a lock holder.
+    function _beat() {
+        if (root.preview) return       // preview writes nothing — never a holder
+        _heartbeat.command = [
+            "sh", "-c", 'printf \'%s\' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"',
+            "sh",
+            (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/velocity-lock-state",
+            JSON.stringify({
+                locked: lock.locked,
+                screens: Quickshell.screens.length,
+                ts: Math.floor(Date.now() / 1000)
+            })
+        ]
+        _heartbeat.running = true
+    }
+    property Process _heartbeat: Process { command: [] }
+    Timer {
+        interval: 5000
+        repeat: true
+        running: !root.preview
+        onTriggered: root._beat()
+        Component.onCompleted: root._beat()
+    }
 
     // ── PREVIEW — plain overlay window on the focused screen, no lock ───────
     PanelWindow {
@@ -57,6 +93,7 @@ ShellRoot {
                     anchors.fill: parent
                     onUnlockRequested: {
                         lock.locked = false
+                        root._beat()            // mark locked=false NOW: if the quit below hangs, the watchdog sees a harmless zombie instead of a wedge
                         Qt.callLater(Qt.quit)   // exit = unlock for hypridle's bookkeeping
                     }
                 }

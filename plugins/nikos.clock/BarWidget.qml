@@ -55,7 +55,7 @@ Item {
         id: compactProbe
         visible: false
         text: root._formattedTime(clk.date)
-        font.family: ctx ? ctx.bar.fontFamily : "monospace"
+        font.family: ctx ? ctx.bar.fontFamily : "Space Mono"
         font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
     }
     readonly property real compactWidth: 24 + anchorRow.spacing
@@ -110,7 +110,7 @@ Item {
                 id: timeText
                 text: (ctx && ctx.fit === "compact") ? root._formattedTime(clk.date)
                                                      : root._formattedDate(clk.date)
-                font.family: ctx ? ctx.bar.fontFamily : "monospace"
+                font.family: ctx ? ctx.bar.fontFamily : "Space Mono"
                 font.pixelSize: Math.max(9, Math.round(12 * (ctx ? ctx.bar.contentScale : 1)))
                 color: timeHover.hovered ? ctx.theme.colors.accent
                                          : (ctx ? ctx.theme.colors.text : "#ddd")

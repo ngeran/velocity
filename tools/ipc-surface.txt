@@ -78,6 +78,7 @@ notifications.add                 manual    # ingest surface (docs in Notificati
 notifications.clear               manual    # soft clear
 notifications.restore              manual    # undo the soft clear
 notifications.dnd                 manual    # DnD switch (same path as the panel toggle)
+notifications.schedule             manual    # P6.5 DND window {enabled,start,end} ("HH:MM", wraps midnight)
 notifications.dndToggle           bound    # SUPER+SHIFT+N (velocity-binds.lua, D3)
 notifications.readAll             manual    # mark all read
 notifications.list                manual    # dump the visible model (truth probes)

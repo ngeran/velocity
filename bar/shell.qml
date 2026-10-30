@@ -379,6 +379,18 @@ ShellRoot {
         }
     }
 
+    // Now-playing delivery (P6.7): MprisService owns the announce POLICY; the
+    // dual-instance law routes delivery through this file's coordinator (the
+    // service's own ../engine would be a second, unseen instance).
+    Connections {
+        target: Services.MprisService
+        function onMediaActivityRevChanged() {
+            var s = Services.MprisService.mediaActivitySpec
+            if (s) Engine.PopupCoordinator.activity(s)
+            else Engine.PopupCoordinator.endActivity("media")
+        }
+    }
+
     // =========================================================================
     // OSD — volume / mute feedback card (renders OsdService state)
     // =========================================================================
@@ -500,6 +512,15 @@ ShellRoot {
         function clear() { Services.NotificationService.clearAll() }   // soft: undo with restore()
         function restore() { Services.NotificationService.restoreCleared() }
         function dnd(on: bool) { Services.NotificationService.setDnd(on) }
+        // P6.5 DND schedule: json = {enabled, start, end} ("HH:MM", wraps midnight)
+        function schedule(json: string) {
+            var d = null
+            try { d = JSON.parse(json) } catch (e) {
+                console.warn("[shell] notifications schedule: bad json:", json)
+                return
+            }
+            Services.NotificationService.setSchedule(d.enabled, d.start, d.end)
+        }
         // Keybind form (SUPER+SHIFT+N): typed IPC params are required, so the
         // toggle variant is its own no-arg verb.
         function dndToggle() { Services.NotificationService.setDnd(!Services.NotificationService.dnd) }

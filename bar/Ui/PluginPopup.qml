@@ -174,19 +174,19 @@ PanelWindow {
                 spacing: 8
                 Text {
                     text: panelRoot.icon
-                    font.family: panelRoot._bar ? panelRoot._bar.fontNerd : "monospace"; font.pixelSize: 14
+                    font.family: panelRoot._bar ? panelRoot._bar.fontNerd : "Space Mono"; font.pixelSize: panelRoot._bar ? Math.round(panelRoot._bar.uiScale * 14) : 14
                     color: panelRoot._bar ? panelRoot._bar.colorAccent : "#00dce5"
                 }
                 Text {
                     text: panelRoot.title.toUpperCase()
-                    font.family: panelRoot._bar ? panelRoot._bar.fontFamily : "monospace"; font.pixelSize: 10
+                    font.family: panelRoot._bar ? panelRoot._bar.fontFamily : "Space Mono"; font.pixelSize: panelRoot._bar ? Math.round(panelRoot._bar.uiScale * 10) : 10
                     font.bold: true; font.letterSpacing: 2.5
                     color: panelRoot._bar ? panelRoot._bar.colorText : "#cccccc"
                     Layout.fillWidth: true
                 }
                 Text {
                     text: "✕"
-                    font.pixelSize: 11
+                    font.pixelSize: panelRoot._bar ? Math.round(panelRoot._bar.uiScale * 11) : 11
                     color: !panelRoot._bar ? "#888888" : closeArea.containsMouse ? panelRoot._bar.colorAccent : panelRoot._bar.colorTextDim
                     Behavior on color { ColorAnimation { duration: 100 } }
                     MouseArea {

@@ -51,7 +51,7 @@ Item {
         id: barObj
         readonly property color barForeground: CT.Theme.colors.text
         readonly property color foreground: CT.Theme.colors.text
-        readonly property string fontFamily: "monospace"
+        readonly property string fontFamily: "Space Mono"
         readonly property int fontSize: 12
         property bool centerHoverRevealSuppressed: false
         function run(cmd) {

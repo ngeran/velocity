@@ -96,7 +96,7 @@ Rectangle {
             Text {
                 visible: root.title !== ""
                 text: root.title
-                font.family: "JetBrains Mono"
+                font.family: "Space Mono"
                 font.pixelSize: Math.round(11 * root.uiScale)
                 font.bold: true
                 color: root.textColor
@@ -108,7 +108,7 @@ Rectangle {
             Text {
                 visible: root.detail !== ""
                 text: root.detail
-                font.family: "JetBrains Mono"
+                font.family: "Space Mono"
                 font.pixelSize: Math.round(9 * root.uiScale)
                 color: root.detailColor
                 elide: Text.ElideRight

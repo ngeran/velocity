@@ -51,7 +51,7 @@ Rectangle {
         Text {
             visible: root.title !== ""
             text: root.title
-            font.family: "JetBrains Mono"
+            font.family: "Space Mono"
             font.pixelSize: Math.round(9 * root.uiScale)
             font.letterSpacing: 1.2 * root.uiScale
             color: root.titleColor

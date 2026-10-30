@@ -8,6 +8,9 @@
 
 module.exports = {
   'shared/MotionConfig.qml': ['bar/config/MotionConfig.qml', 'settings/config/MotionConfig.qml'],
+  // P6.1: identity tokens (font families, spacing, radii) — the lock root is
+  // a separate -c root too, so it gets its own synced copy.
+  'shared/Tokens.qml': ['bar/config/Tokens.qml', 'settings/config/Tokens.qml', 'lock/Tokens.qml'],
   'shared/DebugConfig.qml': ['bar/config/DebugConfig.qml', 'settings/config/DebugConfig.qml'],
   'shared/BoundedProcess.qml': ['bar/services/BoundedProcess.qml', 'settings/services/BoundedProcess.qml'],
   'shared/LogService.qml': ['bar/services/LogService.qml'],   // P2.4: settings tab reads HostBridge.log
@@ -20,6 +23,10 @@ module.exports = {
   'shared/components/CardRow.qml': ['bar/components/CardRow.qml', 'settings/components/CardRow.qml'],
   'shared/components/CardSlider.qml': ['bar/components/CardSlider.qml', 'settings/components/CardSlider.qml'],
   'shared/components/CardToggle.qml': ['bar/components/CardToggle.qml', 'settings/components/CardToggle.qml'],
+  // P6.2: the dot-matrix divider — replaces 1 px hairlines in overlays/cards.
+  // The lock root renders dot rules too (lock is a separate -c root).
+  'shared/components/DotRule.qml': ['bar/components/DotRule.qml', 'settings/components/DotRule.qml',
+                                    'lock/DotRule.qml'],
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
   // P4.9: the keybinds table fallback — KeybindsOverlay (bar) and the
   // settings KEYBINDS page both render it when ~/.config/velocity/keybinds.json

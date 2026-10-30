@@ -39,18 +39,38 @@ case "${1-}" in
     exec env VELOCITY_LOCK_PREVIEW=1 "$QS_BIN" -c lock
     ;;
   ""|lock)
+    # Real mode must never run as a preview, even if the var leaked into the
+    # environment (hypridle's or the shell's): a preview over the desktop with
+    # exclusive keyboard, no PAM and no exit is a lockout, not a QA tool.
+    unset VELOCITY_LOCK_PREVIEW
     # real mode — refuse to lock without the PAM service (see SECURITY above)
     if [ ! -f /etc/pam.d/velocity-lock ]; then
       echo "velocity-lock: /etc/pam.d/velocity-lock missing — omni-apply the PAM module first; refusing to lock" >&2
       exit 1
     fi
-    # Re-entry guard (P3.4): hypridle can fire lock-session twice (idle
-    # listener + before_sleep) while SUPER+L races them — ext_session_lock_v1
-    # allows ONE holder, so a second process would sit waiting for a lock it
-    # can never take. Already-locked = this request is satisfied; exit 0.
-    if pgrep -f "$QS_BIN -c lock" >/dev/null 2>&1; then
+    # Re-entry guard (P3.4), preview-aware (P6.5): a forgotten
+    # `velocity-lock preview` has the SAME cmdline as the real lock but
+    # authenticates nothing and has no exit — honoring it as "already locked"
+    # wedged the session behind it (2026-10-30: hypridle logged "session
+    # already locked" while the user stared at a preview overlay). Kill
+    # previews on sight; only a REAL holder (environ without the preview var)
+    # satisfies the guard.
+    _killed_preview=0
+    for _pid in $(pgrep -f "$QS_BIN -c lock" 2>/dev/null); do
+      if tr '\0' '\n' < "/proc/$_pid/environ" 2>/dev/null | grep -qx 'VELOCITY_LOCK_PREVIEW=1'; then
+        kill "$_pid" 2>/dev/null || true
+        _killed_preview=1
+        continue
+      fi
       echo "velocity-lock: session already locked" >&2
       exit 0
+    done
+    if [ "$_killed_preview" = 1 ]; then
+      # let the preview overlay actually close before the real lock maps
+      for _ in 1 2 3 4 5 6; do
+        pgrep -f "$QS_BIN -c lock" >/dev/null 2>&1 || break
+        sleep 0.25
+      done
     fi
     # P5.6 auto-pause: the panel is covered for the whole lock — freeze the
     # live wallpaper decode through the service (reason "lock"), lift it the

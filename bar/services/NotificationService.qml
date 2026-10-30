@@ -25,6 +25,7 @@ pragma Singleton
 
 import QtQuick
 import Qt.labs.platform
+import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import "../engine/lib/activity-queue.mjs" as Aq
@@ -121,6 +122,83 @@ Item {
     // True while some row can auto-expire (read, not critical) — gates the sweep.
     property bool _hasExpiring: false
     readonly property string _dndFlag: root.homeDir + "/.config/quickshell/dnd.flag"
+
+    // ── DnD schedule (P6.5) — an optional daily window that drives DnD ──────
+    // State lives HERE (NotificationService is the domain owner); persisted to
+    // notifications-schedule.json beside the other notification state files,
+    // through the same one-shot printf funnel as the dnd flag. The window
+    // re-evaluates on the ZERO-POLL SystemClock minutes tick (boundary-exact,
+    // no timer wakes beyond the clock): enabled → in-window turns DnD on,
+    // out-of-window turns it off. A manual setDnd() still works between ticks
+    // (the next minute boundary re-asserts the window — that IS the feature:
+    // the schedule wins over the toggle while enabled). start === end reads
+    // as "whole day".
+    property bool scheduleEnabled: false
+    property string scheduleStart: "22:00"
+    property string scheduleEnd: "07:00"
+    readonly property string _schedulePath: root.homeDir + "/.config/quickshell/notifications-schedule.json"
+
+    function setSchedule(enabled, start, end) {
+        const valid = function(s) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) }
+        if (!valid(start)) start = "22:00"
+        if (!valid(end)) end = "07:00"
+        root.scheduleEnabled = enabled === true
+        root.scheduleStart = start
+        root.scheduleEnd = end
+        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
+        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh",
+                     JSON.stringify({ enabled: root.scheduleEnabled, start: start, end: end }),
+                     root._schedulePath]
+        w.onExited.connect(function() { w.destroy() })
+        w.running = true
+        root._applySchedule()
+    }
+
+    function _minutesOf(hhmm) {
+        var p = /^(\d{1,2}):(\d{2})$/.exec(hhmm || "")
+        return p ? Number(p[1]) * 60 + Number(p[2]) : -1
+    }
+
+    function _inScheduleWindow(date) {
+        if (!root.scheduleEnabled) return false
+        var s = _minutesOf(root.scheduleStart), e = _minutesOf(root.scheduleEnd)
+        if (s < 0 || e < 0) return false
+        if (s === e) return true                          // whole day
+        var m = date.getHours() * 60 + date.getMinutes()
+        return s < e ? (m >= s && m < e) : (m >= s || m < e)   // wraps midnight
+    }
+
+    function _applySchedule() {
+        if (!root.scheduleEnabled) return
+        var want = _inScheduleWindow(new Date())
+        if (root.dnd !== want) setDnd(want)
+    }
+
+    SystemClock {
+        id: _scheduleClock
+        precision: SystemClock.Minutes
+        onDateChanged: root._applySchedule()
+    }
+
+    Process {   // unbounded-ok: one-shot schedule read, exits at EOF
+        id: _scheduleReader
+        command: []
+        running: false
+        property string buffer: ""
+        stdout: SplitParser { onRead: function(data) { _scheduleReader.buffer += data + "\n" } }
+        onRunningChanged: if (!running) {
+            try {
+                var d = JSON.parse(_scheduleReader.buffer)
+                if (d && typeof d === "object") {
+                    root.scheduleEnabled = d.enabled === true
+                    if (typeof d.start === "string") root.scheduleStart = d.start
+                    if (typeof d.end === "string") root.scheduleEnd = d.end
+                }
+            } catch (e) {}
+            _scheduleReader.buffer = ""
+            root._applySchedule()
+        }
+    }
 
     // -------------------------------------------------------------------------
     // PERSISTENCE — notifications.jsonl through the bar's write funnel
@@ -635,6 +713,8 @@ Item {
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._dndFlag]
         _dndReader.running = true
+        _scheduleReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._schedulePath]
+        _scheduleReader.running = true
         _clearedReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root.clearedPath]
         _clearedReader.running = true   // chains the store read (routing needs clearedAt)
         _busProbe.running = true        // static command — decides the ingest path (J1a)

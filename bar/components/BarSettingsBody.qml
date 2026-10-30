@@ -141,7 +141,12 @@ ColumnLayout {
     // BarConfig in-process.
     function _pickStyle(name) { Config.BarConfigWriter.merge({ barStyle: String(name) }) }
     function _pickPosition(p) { Config.BarConfigWriter.merge({ barPosition: p === "bottom" ? "bottom" : "top" }) }
-    function _pickOsdStyle(s) { Config.BarConfigWriter.merge({ osdStyle: s === "segments" ? "segments" : "bar" }) }
+    function _pickOsdStyle(s) {
+        // P6.6: "edge" joins the set (the glyph edge light). Anything unknown
+        // falls back to the D5 default.
+        const known = s === "segments" || s === "edge"
+        Config.BarConfigWriter.merge({ osdStyle: known ? s : "segments" })
+    }
     function _pickHeight(h) {
         var v = Math.round(Number(h))
         if (v >= 18 && v <= 64) Config.BarConfigWriter.merge({ barHeight: v })
@@ -463,6 +468,11 @@ ColumnLayout {
                     label: "SEGMENTS"
                     active: Config.BarConfig.osdStyle === "segments"
                     onPicked: root._pickOsdStyle("segments")
+                }
+                SegPill {
+                    label: "EDGE"
+                    active: Config.BarConfig.osdStyle === "edge"
+                    onPicked: root._pickOsdStyle("edge")
                 }
             }
 

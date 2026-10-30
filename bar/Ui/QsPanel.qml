@@ -47,7 +47,7 @@ PanelWindow {
         id: compatBar
         readonly property color foreground: Theme.colors.text
         readonly property color barForeground: Theme.colors.text
-        readonly property string fontFamily: "monospace"
+        readonly property string fontFamily: "Space Mono"
         readonly property int fontSize: 12
         property bool centerHoverRevealSuppressed: false
         function run(cmd) {

@@ -44,7 +44,7 @@ QtObject {
     // Settings ▸ Plugins writes). Read-only, keys fall back to the manifest
     // defaults ("plain" / false) when absent. The dot face (Doto, ROND 100)
     // applies ONLY to the 104 px clock — the ≥ 26 px rule from CalendarPanel.
-    property bool clockDot: false
+    property bool clockDot: true   // P6.3 (D5): dot face is the identity default; user store overrides
     property bool clockBlink: false
 
     // ── one-shot intakes (Process `cat`, the proven zero-fork pattern; the

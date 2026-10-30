@@ -1,0 +1,156 @@
+#!/bin/sh
+# =============================================================================
+# velocity-lock-watchdog — auto-repair a wedged velocity-lock (P6.5 fail-safe)
+# =============================================================================
+# ext-session-lock has no client-independent unlock: a lock process that
+# wedges WITHOUT a working password UI (or without exiting on unlock) keeps
+# the session locked forever — until 2026-10-30 the only escape was a reboot.
+# This runs as a 20 s systemd timer and repairs the three wedge classes,
+# keyed to the lock's own heartbeat file (lock/shell.qml, written every 5 s):
+#
+#   $XDG_RUNTIME_DIR/velocity-lock-state = {"locked":B,"screens":N,"ts":S}
+#
+#   1. holder alive, ts stale (> MAX_AGE)      → hung event loop → kill+relaunch
+#   2. holder alive, locked=false              → unlock fired, quit hung →
+#                                                kill ONLY (session already
+#                                                open; relaunch would re-lock)
+#   3. holder alive, locked=true, screens=0,
+#      yet hyprctl still reports a monitor     → DPMS output-teardown race:
+#                                                the surface died on a removed
+#                                                wl_output and is never
+#                                                rebuilt → kill+relaunch
+#
+# Rules that keep this safe:
+#   · A `velocity-lock preview` QA overlay is NEVER a holder (environ check) —
+#     and the watchdog never launches a lock on its own: every action is
+#     keyed to an existing real holder.
+#   · screens=0 with NO monitor in hyprctl = the screen is legitimately off
+#     (DPMS, output removed) — do nothing until the user wakes it.
+#   · Repairs are capped (CAP per WINDOW s) so a systemic wedge cannot become
+#     a kill/relaunch loop.
+#   · Relaunch goes through systemd-run so the fresh lock escapes this
+#     service's cgroup (a plain child would die when this oneshot exits).
+#     misc.allow_session_lock_restore lets the fresh client re-acquire after
+#     the kill.
+# =============================================================================
+
+set -u
+
+STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/velocity-lock-state"
+MAX_AGE="${WATCHDOG_MAX_AGE:-45}"
+WINDOW=600
+CAP=3
+
+QS_BIN="$(command -v quickshell || true)"
+[ -n "$QS_BIN" ] || exit 0
+
+log() { echo "velocity-lock-watchdog: $*" >&2; }
+
+# The one real holder, if any. Previews are skipped: same cmdline, but the
+# preview var in their environ says "authenticates nothing".
+find_holder() {
+  for pid in $(pgrep -f "$QS_BIN -c lock" 2>/dev/null); do
+    if tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qx 'VELOCITY_LOCK_PREVIEW=1'; then
+      continue
+    fi
+    echo "$pid"
+    return 0
+  done
+  return 1
+}
+
+# Kill the holder, wait for it to actually release, clear the heartbeat.
+stop_holder() {
+  kill "$1" 2>/dev/null || true
+  for _ in 1 2 3 4 5 6; do
+    kill -0 "$1" 2>/dev/null || break
+    sleep 0.5
+  done
+  kill -9 "$1" 2>/dev/null || true
+  rm -f "$STATE" "$STATE.tmp"
+}
+
+relaunch() {
+  r_bin="$(command -v velocity-lock 2>/dev/null ||
+    echo "/etc/profiles/per-user/$(id -un)/bin/velocity-lock")"
+  [ -x "$r_bin" ] || { log "no velocity-lock binary — cannot relaunch"; return 1; }
+  systemd-run --user --collect --quiet \
+    --unit="velocity-lock-repair-$(date +%s)" "$r_bin" ||
+    log "systemd-run failed — lock is DOWN and not relaunched"
+}
+
+# $1 = pid, $2 = relaunch(0|1), $3 = reason
+repair() {
+  logf="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/velocity-lock-repairs"
+  r_now=$(date +%s)
+  count=0
+  : >"${logf}.tmp"
+  if [ -f "$logf" ]; then
+    while read -r t; do
+      case $t in '' | *[!0-9]*) continue ;; esac
+      if [ $((r_now - t)) -le "$WINDOW" ]; then
+        echo "$t" >>"${logf}.tmp"
+        count=$((count + 1))
+      fi
+    done <"$logf"
+  fi
+  if [ "$count" -ge "$CAP" ]; then
+    log "repair cap reached ($CAP in ${WINDOW}s) — NOT repairing: $3"
+    rm -f "${logf}.tmp"
+    exit 1
+  fi
+  echo "$r_now" >>"${logf}.tmp"
+  mv -f "${logf}.tmp" "$logf"
+
+  log "repair #$((count + 1)): $3"
+  stop_holder "$1"
+  if [ "$2" = 1 ]; then
+    relaunch
+  else
+    log "not relaunching (holder class does not re-lock)"
+  fi
+}
+
+holder="$(find_holder)" || exit 0   # unlocked — nothing to service, ever
+
+# ── Class 2: unlock fired, quit hung → harmless zombie, kill only ──────────
+# NOTE: no `// default` here — jq's `//` treats false as falsy, so
+# `.locked // "null"` turned a REAL locked=false into "null" and the class
+# never fired (caught by the T3 decision-table test). Bare `.locked` prints
+# "null" for an absent field, which the comparison rejects.
+if [ -f "$STATE" ] &&
+  [ "$(jq -r '.locked' "$STATE" 2>/dev/null)" = "false" ]; then
+  repair "$holder" 0 "lock released but process still alive (hung quit)"
+  exit 0
+fi
+
+# ── Class 1: heartbeat stale → hung event loop ─────────────────────────────
+now=$(date +%s)
+if [ ! -f "$STATE" ]; then
+  # Missing state: grace for startup (a fresh lock writes within 5 s), but a
+  # holder that has been alive for ages without ever beating is hung.
+  pid_age=$((now - $(stat -c %Y "/proc/$holder" 2>/dev/null || echo "$now")))
+  if [ "$pid_age" -gt "$MAX_AGE" ]; then
+    repair "$holder" 1 "no heartbeat after ${pid_age}s (hung at startup?)"
+  fi
+  exit 0
+fi
+ts=$(jq -r '.ts' "$STATE" 2>/dev/null || echo 0)
+case $ts in '' | *[!0-9]*) ts=0 ;; esac
+if [ $((now - ts)) -gt "$MAX_AGE" ]; then
+  repair "$holder" 1 "heartbeat stale $((now - ts))s (hung event loop)"
+  exit 0
+fi
+
+# ── Class 3: surfaceless holder while a monitor is visible ─────────────────
+locked=$(jq -r '.locked' "$STATE" 2>/dev/null)
+screens=$(jq -r '.screens' "$STATE" 2>/dev/null || echo 0)
+case $screens in '' | *[!0-9]*) screens=0 ;; esac
+if [ "$locked" = "true" ] && [ "$screens" -eq 0 ]; then
+  mons=$(hyprctl -j monitors 2>/dev/null | jq 'length // 0' 2>/dev/null || echo 0)
+  if [ "${mons:-0}" -gt 0 ]; then
+    repair "$holder" 1 "locked with ${screens} screens but ${mons} monitor(s) present (death-screen race)"
+  else
+    log "surfaceless while no monitor present — screen is off, waiting"
+  fi
+fi

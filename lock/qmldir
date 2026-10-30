@@ -1,2 +1,4 @@
 singleton LockConfig 1.0 LockConfig.qml
+singleton Tokens 1.0 Tokens.qml
+DotRule 1.0 DotRule.qml
 LockScreen 1.0 LockScreen.qml

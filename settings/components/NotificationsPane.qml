@@ -11,6 +11,7 @@
 // =============================================================================
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
@@ -32,9 +33,33 @@ Item {
         return (d.getMonth() + 1) + "/" + d.getDate() + " " + hhmm
     }
 
-    Component.onCompleted: Services.SearchIndex.register({
-        title: "Notifications", tab: "settings", section: "notifications",
-        keywords: "dnd do not disturb clear history bell archive", item: null })
+    // P6.5 schedule commit. `enabledArg` comes from the toggle (whose checked
+    // already flipped); the fields' editingFinished keeps the current value.
+    function _commitSchedule(enabledArg) {
+        if (root.n === null) return
+        const on = enabledArg === undefined ? root.n.scheduleEnabled : enabledArg
+        const s = /^\d\d:\d\d$/.test(startField.text) ? startField.text : root.n.scheduleStart
+        const e = /^\d\d:\d\d$/.test(endField.text) ? endField.text : root.n.scheduleEnd
+        root.n.setSchedule(on, s, e)
+    }
+
+    // Mirror the service into the fields once the bridge attaches (the pane
+    // can complete before barServices lands) — and never while a field has
+    // focus (freeze-while-editing). The initial call rides the pane's existing
+    // Component.onCompleted (only one is legal per object).
+    onNChanged: root._syncScheduleFields()
+    function _syncScheduleFields() {
+        if (root.n === null) return
+        if (!startField.activeFocus) startField.text = root.n.scheduleStart
+        if (!endField.activeFocus) endField.text = root.n.scheduleEnd
+    }
+
+    Component.onCompleted: {
+        Services.SearchIndex.register({
+            title: "Notifications", tab: "settings", section: "notifications",
+            keywords: "dnd do not disturb clear history bell archive", item: null })
+        root._syncScheduleFields()
+    }
     Component.onDestruction: Services.SearchIndex.unregister(this)
 
     ColumnLayout {
@@ -86,6 +111,92 @@ Item {
                     textColor: Config.ThemeConfig.colors.text
                     outlineColor: Config.ThemeConfig.colors.outlineVariant
                     onToggled: if (root.n) root.n.setDnd(!root.n.dnd)
+                }
+            }
+
+            // ── schedule (P6.5): the daily window that drives DnD ──────────
+            // Fields write through n.setSchedule (the service owns the file);
+            // the sub-line reports the live window. start === end = whole day.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Config.ControlConfig.space2
+
+                ColumnLayout {
+                    spacing: 2
+                    Text {
+                        text: "SCHEDULE"
+                        color: Config.ThemeConfig.colors.textDim
+                        font.family: Config.Tokens.fontMono; font.pixelSize: 10
+                        font.letterSpacing: 1.2; font.bold: true
+                    }
+                    Text {
+                        text: {
+                            if (root.n === null || !root.n.scheduleEnabled)
+                                return "off — DnD is manual"
+                            const w = root.n.scheduleStart + " → " + root.n.scheduleEnd
+                            return root.n.dnd ? w + " · active" : w
+                        }
+                        color: Config.ThemeConfig.colors.textDim; opacity: 0.7
+                        font.family: Config.ControlConfig.fontSans; font.pixelSize: 10
+                    }
+                }
+                Item { Layout.fillWidth: true }
+
+                Text {
+                    text: "FROM"
+                    color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.Tokens.fontMono; font.pixelSize: 10
+                    font.letterSpacing: 1
+                }
+                TextField {
+                    id: startField
+                    inputMask: "00:00"
+                    maximumLength: 5
+                    font.family: Config.Tokens.fontMono; font.pixelSize: 11
+                    color: Config.ThemeConfig.colors.text
+                    horizontalAlignment: TextInput.AlignHCenter
+                    implicitWidth: 58; implicitHeight: 24
+                    background: Rectangle {
+                        color: Config.ThemeConfig.colors.surfaceVariant
+                        radius: 4
+                        border.width: 1
+                        border.color: startField.activeFocus
+                                      ? Config.ControlConfig.accent
+                                      : Config.ThemeConfig.colors.outlineVariant
+                    }
+                    onEditingFinished: root._commitSchedule()
+                }
+                Text {
+                    text: "TO"
+                    color: Config.ThemeConfig.colors.textDim
+                    font.family: Config.Tokens.fontMono; font.pixelSize: 10
+                    font.letterSpacing: 1
+                }
+                TextField {
+                    id: endField
+                    inputMask: "00:00"
+                    maximumLength: 5
+                    font.family: Config.Tokens.fontMono; font.pixelSize: 11
+                    color: Config.ThemeConfig.colors.text
+                    horizontalAlignment: TextInput.AlignHCenter
+                    implicitWidth: 58; implicitHeight: 24
+                    background: Rectangle {
+                        color: Config.ThemeConfig.colors.surfaceVariant
+                        radius: 4
+                        border.width: 1
+                        border.color: endField.activeFocus
+                                      ? Config.ControlConfig.accent
+                                      : Config.ThemeConfig.colors.outlineVariant
+                    }
+                    onEditingFinished: root._commitSchedule()
+                }
+                CardToggle {
+                    checked: root.n !== null && root.n.scheduleEnabled
+                    dimmed: root.n === null
+                    accentColor: Config.ControlConfig.accent
+                    textColor: Config.ThemeConfig.colors.text
+                    outlineColor: Config.ThemeConfig.colors.outlineVariant
+                    onToggled: root._commitSchedule(checked)
                 }
             }
 

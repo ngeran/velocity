@@ -44,7 +44,7 @@ Item {
     // the continuous fill; "segments" = Ui.SegmentTrack (Osd card + the
     // island's activity row). Writes route through the settings funnel
     // (SettingsWindow.setOsdStyle) like barStyle/barPosition.
-    property string osdStyle: "bar"
+    property string osdStyle: "segments"   // D5 default (P6.6: code now matches the writer's canonical default)
     // Island style QD-OLED guard (orbit drift + idle dim of the rest clock).
     property bool islandBurnGuard: true
     // Strip styles' QD-OLED guard: content orbit (BurnOrbit) on
@@ -94,7 +94,7 @@ Item {
                 barStyle = data.barStyle
             if (data.barPosition === "top" || data.barPosition === "bottom")
                 barPosition = data.barPosition
-            if (data.osdStyle === "bar" || data.osdStyle === "segments")
+            if (data.osdStyle === "bar" || data.osdStyle === "segments" || data.osdStyle === "edge")
                 osdStyle = data.osdStyle
             if (typeof data.islandBurnGuard === "boolean")
                 islandBurnGuard = data.islandBurnGuard
@@ -177,8 +177,13 @@ Item {
     // TYPOGRAPHY
     // =========================================================================
 
-    readonly property string fontFamily: "monospace"
-    readonly property string fontNerd: "JetBrainsMono Nerd Font"
+    // P6.1 glyph identity — families come from Tokens (shared/Tokens.qml, the
+    // synced canonical). Roles: mono = data + caps metadata, ui = prose,
+    // display = Doto numerals (≥ Tokens.minDisplayPx only), nerd = icons.
+    readonly property string fontFamily: Tokens.fontMono
+    readonly property string fontNerd: Tokens.fontIcons
+    readonly property string fontUi: Tokens.fontUi
+    readonly property string fontDisplay: Tokens.fontDisplay
     readonly property int fontSizeClock: Math.max(10, Math.round(14 * _contentScale))
     readonly property int fontSizeDate: Math.max(7, Math.round(9 * _contentScale))
     readonly property int fontSizeIcon: Math.max(10, Math.round(14 * _contentScale))   // tray glyph
