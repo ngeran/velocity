@@ -182,8 +182,14 @@ run_step() {
             SKIP_NOW=1
             return 0
         fi
-        echo "[key] wtype ${p[*]:1}" >>"$EV/steps.log"
-        wtype "${p[@]:1}" >>"$EV/steps.log" 2>&1
+        # wtype names Super "logo" — scenarios write the Hyprland/D3 name
+        # ("super") and the harness translates (P3 keybind QA).
+        wargs=("${p[@]:1}")
+        for i in "${!wargs[@]}"; do
+            [ "${wargs[$i]}" = "super" ] && wargs[$i]="logo"
+        done
+        echo "[key] wtype ${wargs[*]}" >>"$EV/steps.log"
+        wtype "${wargs[@]}" >>"$EV/steps.log" 2>&1
         rc=$?
         if (( rc != 0 )); then
             echo "  STEP FAILED (wtype rc=$rc)" >>"$EV/steps.log"

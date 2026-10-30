@@ -27,6 +27,8 @@
         "ipc bar wallpaper-service getList",
         "ipc bar wallpaper-service getCyclingEnabled",
         "ipc bar wallpaper-service getEngineStatus",
+        "ipc? bar search list",
+        "sleep 0.5",
         "ipc bar search list"
       ],
       "asserts": [
@@ -35,7 +37,7 @@
         "test \"$(grep -c '^/' $QA_EV/02-wallpaper-service-getList.out)\" = \"$(cat $QA_EV/01-wallpaper-service-getCount.out)\"",
         "grep -Eq '^(true|false)$' $QA_EV/03-wallpaper-service-getCyclingEnabled.out",
         "jq -e 'type == \"object\"' $QA_EV/04-wallpaper-service-getEngineStatus.out",
-        "sed 's/^entries=[0-9]* //' $QA_EV/05-search-list.out | jq -e 'type == \"array\" and length >= 10'"
+        "sed 's/^entries=[0-9]* //' $QA_EV/07-search-list.out | jq -e 'type == \"array\" and length >= 10'"
       ]
     },
     {
@@ -216,6 +218,7 @@
       "id": "keybinds-via-keybind",
       "name": "The real SUPER+K keybind cycles the keybinds overlay",
       "covers": "keybind -> IPC parity exercised END TO END through the compositor (needs wtype)",
+      "blocked": "wtype virtual keys never trigger Hyprland binds on this host (P3 probe: trace bind SUPER+SHIFT+G registered, wtype exit 0, handler never ran). Binds+handlers verified separately: hyprctl binds shows the D3 rows; the IPC exec path passes; SUPER+L lock verified live through hypridle. Re-enable when a bind-visible key-injection path exists.",
       "requires": [
         "wtype"
       ],
@@ -432,15 +435,17 @@
       "asserts": []
     },
     {
-      "id": "record-status-blocked",
+      "id": "record-status",
       "name": "Recorder service answers status with valid JSON",
-      "covers": "velocity.record (J9) status verb; start/stop exercise deferred until wf-recorder lands",
-      "blocked": "wf-recorder absent on this host (P3 owns packages); recording cannot be exercised",
+      "covers": "velocity.record (J9) status verb (plugin disabled at rest; enable→status→disable like logs)",
       "steps": [
-        "ipc bar record status"
+        "ipc bar plugins enable velocity.record",
+        "sleep 1",
+        "ipc bar record status",
+        "ipc bar plugins disable velocity.record"
       ],
       "asserts": [
-        "jq -e 'has(\"recording\")' $QA_EV/01-record-status.out"
+        "jq -e 'has(\"recording\")' $QA_EV/03-record-status.out"
       ]
     },
     {
@@ -514,7 +519,8 @@
         "sh test -x bin/velocity-lock",
         "sh test -f lock/shell.qml",
         "sh test -f /etc/pam.d/velocity-lock",
-        "sh grep -q 'security.pam.services.velocity-lock' ~/.omni-nix/hosts/desktop/default.nix"
+        "sh grep -q 'security.pam.services.velocity-lock' flake.nix",
+        "sh grep -q 'velocity.nixosModules.default' ~/.omni-nix/hosts/desktop/default.nix"
       ],
       "asserts": []
     },
@@ -522,7 +528,7 @@
       "id": "launcher-via-keybind",
       "name": "The real SUPER+SPACE keybind opens the launcher and closes it",
       "covers": "D3 SUPER+SPACE through the compositor bind; needs wtype",
-      "blocked": "wtype absent on this host (P3 owns packages); remove this field once it lands",
+      "blocked": "wtype virtual keys never trigger Hyprland binds on this host — see keybinds-via-keybind (P3 probe). The D3 SUPER+SPACE row exists in hyprctl binds and the launcher toggles clean via IPC (launcher-toggle-cycle).",
       "steps": [
         "layers before",
         "key -M super -k space -m super",
