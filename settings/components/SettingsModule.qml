@@ -11,8 +11,10 @@
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
-// (The BAR pane was consolidated away — the logo's velocity.bar-settings
-// overlay is the one bar-settings surface; T23/T24. The IDLE & LOCK pane was
+// (The BAR pane was consolidated away in T23/T24; bar settings live in the
+// Control Center's BAR page since P4.7 — the logo's bar-settings overlay was
+// deleted in P4.8, and P4.9 re-adds the pane here hosting the same
+// BarSettingsBody. The IDLE & LOCK pane was
 // removed in P3.9 — hypridle is omni-nix-owned (D9), its config is a read-only
 // HM symlink and the runtime template writer was already inert.)
 // =============================================================================

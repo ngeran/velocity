@@ -202,6 +202,21 @@ ShellRoot {
         if (!win && insts.length > 0) win = insts[0]
         if (win) shellRoot.toggleTray(win, "control", null)
     }
+
+    // P4.7: force-open the Control Center on one of its in-body pages
+    // (controlCenter.page IPC — SUPER+COMMA → "bar"). Unlike the toggle this
+    // never closes an open card; the page name hands over via TrayCard.
+    function openControlCenterPage(name) {
+        var insts = (styleLoader.item && styleLoader.item.instances) || []
+        var mon = Services.HyprlandService.focusedMonitor
+        var win = null
+        for (var i = 0; i < insts.length; i++)
+            if (insts[i].screen && insts[i].screen.name === mon) { win = insts[i]; break }
+        if (!win && insts.length > 0) win = insts[0]
+        if (!win) { console.warn("[shell] openControlCenterPage: no bar instance"); return }
+        if (!shellRoot.trayOpenOn(win, "control")) shellRoot.toggleTray(win, "control", null)
+        trayCard.openControlPage(name)
+    }
     function closeTray() {
         if (shellRoot.activeTray === "") return
         shellRoot.activeTray = ""
@@ -270,6 +285,7 @@ ShellRoot {
     // Follows the tray OWNER (the bar that opened the card): state AND screen.
     // =========================================================================
     Components.TrayCard {
+        id: trayCard
         activeTray: shellRoot.activeTray
         anchorItem: shellRoot.trayAnchor
         shellApi: shellRoot
@@ -557,12 +573,11 @@ ShellRoot {
         target: "controlCenter"
         function toggle() { shellRoot.toggleControlCenter() }
         // P3.8 page <name>: deep page entry from the keybinds table
-        // (SUPER+COMMA → "bar"). Today "bar" opens the bar-settings overlay
-        // (styles/edge/modules — the closest existing bar-config surface);
-        // P4.7/P4.8 re-targets it to the Control Center's own BAR page.
+        // (SUPER+COMMA → "bar"). P4.8: "bar" is the Control Center's own
+        // in-body BAR page (BarSettingsBody) — the bar-settings overlay is
+        // deleted.
         function page(name: string) {
-            if (name === "bar")
-                return Engine.PluginRegistry.call("velocity.bar-settings", "toggle", "")
+            if (name === "bar") { shellRoot.openControlCenterPage("bar"); return "ok" }
             console.warn("[shell] controlCenter.page: unknown page:", name)
             return ""
         }

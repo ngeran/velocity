@@ -69,8 +69,7 @@ unit's MainPID filter is the zombie-immune open/close signal.
 | `popup-controlcenter-cycle` | Control Center maps exactly one alive surface and closes clean; screenshot evidence; journal silence |
 | `overlay-keybinds-cycle` | same contract for the keybinds overlay (toggleOverlay family) |
 | `launcher-toggle-cycle` | the native launcher (SUPER-space overlay) maps exactly one alive surface and closes clean |
-| `barsettings-toggle-cycle` | the bar-settings reveal (logo overlay, C4) maps exactly one alive surface and closes clean |
-| `barsettings-style-roundtrip` | bar-side style/edge picks travel `SettingsWindow.setBar*` → settings save funnel → `config reload` nudge; live swap shot; bad names rejected; `bar-config.json` byte-identical after the roundtrip (single-writer proof) |
+| `barconfig-style-roundtrip` | bar-side style/edge picks travel `SettingsWindow.setBar*` → settings save funnel → `config reload` nudge; live swap shot; bad names rejected; `bar-config.json` byte-identical after the roundtrip (single-writer proof) |
 | `clock-calendar-toggle-cycle` | the calendar popup (clock click, C1) maps exactly one alive surface and closes clean; the weather state cache holds a real Open-Meteo payload (`raw.current.temperature_2m` numeric) before the panel opens |
 | `storage-toggle-cycle` | the storage popup (drive click, C2) maps exactly one alive surface and closes clean; the headless service mounted and warmed the inventory (journal); local `lsblk` serves ≥1 block device |
 | `network-toggle-cycle` | the NETWORK tray card (C3, `plugins call velocity.network toggle`) maps exactly one alive surface and closes clean; card renders hero + AP list + speed row (shot) |

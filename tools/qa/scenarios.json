@@ -60,7 +60,7 @@
     {
       "id": "plugins-settings-roundtrip",
       "name": "Plugin settings transport: schema read, noop write accepted, bad value rejected, stored values stable",
-      "covers": "plugins settings/setSetting IPC \u2014 the exact transport the Plugins pane settings form uses; schema coercion and rejection paths; no state drift. The noop write may materialize an implicit default as an explicit stored value (zone Local == absent zone Local), so stability means: every key present in the FIRST read is unchanged and still present after the write \u2014 not byte-identical objects (P1: the strict diff flaked on first-ever runs, exactly per this covers note)",
+      "covers": "plugins settings/setSetting IPC — the exact transport the Plugins pane settings form uses; schema coercion and rejection paths; no state drift. The noop write may materialize an implicit default as an explicit stored value (zone Local == absent zone Local), so stability means: every key present in the FIRST read is unchanged and still present after the write — not byte-identical objects (P1: the strict diff flaked on first-ever runs, exactly per this covers note)",
       "steps": [
         "ipc bar plugins settings nikos.clock",
         "sh v=$(jq -r '.values.zone // \"Local\"' \"$QA_EV/01-plugins-settings.out\"); qs -c bar ipc call plugins setSetting nikos.clock zone \"\\\"$v\\\"\"",
@@ -88,7 +88,7 @@
     {
       "id": "popup-controlcenter-cycle",
       "name": "Control Center opens one layer surface and closes it clean",
-      "covers": "PopupCoordinator claim/release; Popover window map/unmap; journal silence. Layer asserts use .alive (bar-MainPID-owned surfaces) \u2014 zombie layers from past restarts are reaped asynchronously and must not fail deltas",
+      "covers": "PopupCoordinator claim/release; Popover window map/unmap; journal silence. Layer asserts use .alive (bar-MainPID-owned surfaces) — zombie layers from past restarts are reaped asynchronously and must not fail deltas",
       "steps": [
         "layers before",
         "ipc bar controlCenter toggle",
@@ -240,33 +240,8 @@
       ]
     },
     {
-      "id": "barsettings-toggle-cycle",
-      "name": "The bar-settings reveal maps one layer surface and closes it clean",
-      "covers": "velocity.bar-settings overlay plugin (C4 logo reveal); style/edge/module surface; PopupCoordinator claim via PluginHost",
-      "steps": [
-        "ipc bar plugins list",
-        "layers before",
-        "ipc bar plugins call velocity.bar-settings open \"\"",
-        "sleep 2.5",
-        "shot open",
-        "layers open",
-        "ipc bar plugins call velocity.bar-settings close \"\"",
-        "sleep 2.5",
-        "layers closed"
-      ],
-      "asserts": [
-        "jq -e 'any(.[]; .id == \"velocity.bar-settings\" and .status == \"ready\")' $QA_EV/01-plugins-list.out",
-        "test -s $QA_EV/05-shot-open.png",
-        "test $(( $(cat $QA_EV/06-layers-open.alive) - $(cat $QA_EV/02-layers-before.alive) )) -eq 1",
-        "test \"$(cat $QA_EV/09-layers-closed.alive)\" = \"$(cat $QA_EV/02-layers-before.alive)\""
-      ],
-      "teardown": [
-        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ] && break; qs -c bar ipc call plugins call velocity.bar-settings close \"\" >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/02-layers-before.alive)\" ]"
-      ]
-    },
-    {
-      "id": "barsettings-style-roundtrip",
-      "name": "Bar-side style and edge picks round-trip through the settings writer byte-identical",
+      "id": "barconfig-style-roundtrip",
+      "name": "Bar config style and edge picks round-trip through the settings writer byte-identical",
       "covers": "C4 single-writer transport: SettingsWindow.setBarStyle/setBarPosition -> saveBarConfig funnel (extras merge + config-reload nudge); live style swap; rejection paths",
       "steps": [
         "sh cp $HOME/.config/quickshell/bar-config.json $QA_EV/before.json",

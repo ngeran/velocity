@@ -185,6 +185,73 @@ ColumnLayout {
     }
     Item { height: 10; visible: Services.BluetoothService.hasBluetooth }
 
+    // ── SCAN toggle — auto-stops after 30 s (P4.2) ───────────────────────────
+    // Runs BluetoothService.scanDevices(); the countdown is the service's own
+    // scanSecondsLeft, so a scan started from settings shows here too.
+    Rectangle {
+        visible: Services.BluetoothService.hasBluetooth && Services.BluetoothService.powered
+        Layout.fillWidth: true; height: Config.PopupMetrics.px(30)
+        radius: Config.PopupMetrics.px(6)
+        color: {
+            if (Services.BluetoothService.scanning) return Config.ThemeConfig.accentTint
+            return scanArea.containsMouse ? Config.ThemeConfig.fillHover : Config.ThemeConfig.fillRest
+        }
+        border.color: Services.BluetoothService.scanning ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorBorder
+        border.width: _hair
+        Behavior on color { ColorAnimation { duration: 150 } }
+        RowLayout {
+            anchors.centerIn: parent; spacing: Config.PopupMetrics.px(6)
+            Text {
+                text: Services.BluetoothService.scanning
+                      ? "SCANNING  ·  " + Services.BluetoothService.scanSecondsLeft + "s  ·  TAP TO STOP"
+                      : "SCAN FOR DEVICES"
+                font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(8); font.bold: true; font.letterSpacing: 1.5
+                color: Services.BluetoothService.scanning ? Config.ThemeConfig.colors.primary : Config.BarConfig.colorTextDim
+            }
+        }
+        MouseArea {
+            id: scanArea
+            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            onClicked: Services.BluetoothService.scanning
+                       ? Services.BluetoothService.cancelScan()
+                       : Services.BluetoothService.scanDevices()
+        }
+    }
+    Item { height: Config.PopupMetrics.px(8); visible: Services.BluetoothService.hasBluetooth }
+
+    // ── PAIRED & NOT CONNECTED — tap to connect (P4.2) ───────────────────────
+    // Frozen slice: only reassigns when the paired set's membership changes,
+    // so per-scan rebuilds never reset the rows mid-click (array-identity law).
+    CardFrame {
+        visible: Services.BluetoothService.hasBluetooth && body._pairedList.length > 0
+        title: "PAIRED"
+        uiScale: Config.PopupMetrics.scale
+        titleColor: Config.BarConfig.colorTextDim
+        hairlineColor: Config.ThemeConfig.hairline
+        Layout.fillWidth: true
+
+        Repeater {
+            model: body._pairedList
+
+            ListRow {
+                // Inline member access only (Repeater idiom — a bare
+                // `property var dev: modelData` capture does not resolve).
+                uiScale: Config.PopupMetrics.scale
+                textColor: Config.BarConfig.colorText
+                detailColor: Config.BarConfig.colorTextDim
+                accentColor: Config.BarConfig.colorAccent
+                glyph: modelData.icon !== "" ? modelData.icon : "\u{f05aa}"
+                glyphColor: Config.BarConfig.colorTextDim
+                title: modelData.name
+                detail: Services.BluetoothService.connectingTo === modelData.mac
+                        ? "connecting…" : modelData.mac
+                dimmed: Services.BluetoothService.connectingTo === modelData.mac
+                onClicked: Services.BluetoothService.connect(modelData.mac)
+            }
+        }
+    }
+    Item { height: Config.PopupMetrics.px(8); visible: Services.BluetoothService.hasBluetooth && body._pairedList.length > 0 }
+
     // ── DISABLE / ENABLE BLUETOOTH footer (mockup full-width pill) ──
     Rectangle {
         visible: Services.BluetoothService.hasBluetooth
@@ -200,4 +267,28 @@ ColumnLayout {
         MouseArea { id: btBtnArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Services.BluetoothService.togglePower() }
     }
     SettingsLink { visible: Services.BluetoothService.hasBluetooth; verb: "openControlBluetooth"; onActivated: function(v) { body.settingsRequested(v) } }
+
+    // ── derived: paired-but-disconnected rows, membership-diffed ─────────────
+    // The service reassigns `devices` on every scan tick (native ∪ beacon
+    // merge); this slice only moves when a mac joins/leaves the paired set,
+    // so the Repeater keeps its delegates (clicks survive live scans).
+    property var _pairedList: []
+    property string _pairedKey: ""
+    Connections {
+        target: Services.BluetoothService
+        function onDevicesChanged() {
+            var devs = Services.BluetoothService.devices
+            var picked = []
+            var key = ""
+            for (var i = 0; i < devs.length; i++) {
+                var d = devs[i]
+                if (!d.paired || d.connected) continue
+                picked.push(d)
+                key += d.mac + ";" + d.name + ";"
+            }
+            if (key === body._pairedKey) return
+            body._pairedKey = key
+            body._pairedList = picked
+        }
+    }
 }

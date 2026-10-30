@@ -211,7 +211,7 @@ Item {
     // ── bar-config mirror read (read-only since P2.5) ────────────────────────
     // The mirror (barHeight/barStyle/…) only feeds the settings window's own
     // reads (slide-in offset). Writes go through the bar's BarConfigWriter —
-    // including the bar-settings overlay's direct picks, which bypass this
+    // including BarSettingsBody's direct picks, which bypass this
     // mirror entirely — so the mirror just follows the file (watchChanges).
     FileView {
         path: StandardPaths.writableLocation(StandardPaths.ConfigLocation).toString().replace("file://", "") + "/quickshell/bar-config.json"

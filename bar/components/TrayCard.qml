@@ -69,6 +69,23 @@ PanelWindow {
     property bool _privacyEverOpened: false
     property bool _controlEverOpened: false
 
+    // P4.7: deep page entry — the shell's controlCenter.page IPC lands here
+    // AFTER it has forced the card open (activeTray is the shell's state).
+    // The body may still be loading (lazy) — the page name parks until the
+    // loader's onLoaded hands it over.
+    property string _pendingControlPage: ""
+    function openControlPage(name) {
+        _controlEverOpened = true
+        _pendingControlPage = String(name || "")
+        _applyControlPage()
+    }
+    function _applyControlPage() {
+        if (controlLoader.item && _pendingControlPage !== "") {
+            controlLoader.item.page = _pendingControlPage
+            _pendingControlPage = ""
+        }
+    }
+
     // HOVER-OUT DISMISSAL: lives in the Popover primitive (hoverClose +
     // hoverCloseNeedsEntry — the entered-guard idiom this card introduced).
     onActiveTrayChanged: {
@@ -83,6 +100,8 @@ PanelWindow {
             Services.BrightnessService.refresh()
             Services.PowerProfileService.refresh()
         }
+        // Leaving the CC resets its in-body page — the next open is the grid.
+        if (activeTray !== "control" && controlLoader.item) controlLoader.item.page = "main"
         // Popup-gated polling: detail probes run only while their popup is the
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
@@ -263,6 +282,13 @@ PanelWindow {
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // Nested-layout law: without an explicit minimum of 0 a layout
+            // child is fixed at its implicit size — StackLayout's implicit is
+            // the MAX over all pages, so the tallest body (network) would
+            // force every other card's viewport open and stretch the short
+            // bodies' columns (gaps + overflow past the card surface).
+            Layout.minimumWidth: 0
+            Layout.minimumHeight: 0
             currentIndex: {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
@@ -312,6 +338,7 @@ PanelWindow {
                 id: controlLoader
                 active: card._controlEverOpened
                 Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
+                onLoaded: card._applyControlPage()   // parked page handover (P4.7)
                 sourceComponent: ControlCenterBody {
                     shellApi: card.shellApi
                     onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }

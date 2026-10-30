@@ -14,12 +14,13 @@
 //                        cross-process writer and is gone with it).
 //
 // Pre-P2.5 the writer lived in the settings process (SettingsConfigService:
-// cat re-read → merge → write → `qs ipc` nudge retry loop) and the bar's own
-// velocity.bar-settings overlay shelled out to it (`qs -c settings ipc call
+// cat re-read → merge → write → `qs ipc` nudge retry loop) and the bar's old
+// bar-settings overlay shelled out to it (`qs -c settings ipc call
 // SettingsWindow.setBarStyle …`) — a round trip that died outright when P2.1
 // merged the processes and deleted the settings unit.
 //
-// Callers: BarSettingsOverlay picks (direct, same process), the SettingsWindow
+// Callers: BarSettingsBody picks (direct, same process — Control Center BAR
+// page and the settings app's pane), the SettingsWindow
 // setBar* verbs via SettingsBootstrap (scripting funnel), SettingsConfigService
 // (the Settings-tab reset persists the bar keys it resets).
 // =============================================================================

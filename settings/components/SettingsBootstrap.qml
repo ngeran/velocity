@@ -79,7 +79,8 @@ Item {
     function networkLatency(): string { return networkIpc.latency() }
     function networkEngineer(): string { return networkIpc.engineer() }
 
-    // ── C4: bar-owned keys written FROM the bar (velocity.bar-settings) ─────
+    // ── C4: bar-owned keys written FROM the bar surfaces (BarSettingsBody
+    // picks; the old velocity.bar-settings overlay was deleted in P4.8) ──────
     // Moved verbatim from the old settings/shell.qml SettingsWindow IpcHandler
     // (P2.1). They stay silent writes: no window is opened. Since P2.5 they
     // hand the validated change straight to the bar's BarConfigWriter (one

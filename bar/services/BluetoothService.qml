@@ -225,11 +225,12 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // SCAN — 8s `bluetoothctl --timeout 8 scan on`, consumed incrementally
+    // SCAN — 30s `bluetoothctl --timeout 30 scan on`, consumed incrementally
+    // (P4.2: the card's scan toggle auto-stops after 30 s; cancelable)
     // -------------------------------------------------------------------------
     Process {   // unbounded-ok: one-shot local command — timeout migration queued
         id: scanProc
-        command: ["bluetoothctl", "--timeout", "8", "scan", "on"]
+        command: ["bluetoothctl", "--timeout", "30", "scan", "on"]
         property string buffer: ""
         stdout: SplitParser { onRead: function(data) { scanProc.buffer += data + "\n" } }
         onExited: function(code) {
@@ -282,10 +283,24 @@ Item {
         root._scanCache = ({})   // fresh scan → drop stale beacons
         scanProc.buffer = ""
         root.scanning = true
-        root.scanSecondsLeft = 8
-        console.log("[BluetoothService] scanning for 8s...")
+        root.scanSecondsLeft = 30
+        console.log("[BluetoothService] scanning for 30s...")
         scanProc.running = true
         scanCountdown.start()
+    }
+
+    // P4.2 card toggle: stop a running scan early (kills the child, settles
+    // the model — the same path the natural timeout takes, minus the parse).
+    function cancelScan() {
+        if (!root.scanning) return
+        scanCountdown.stop()
+        root.scanSecondsLeft = 0
+        scanProc.buffer = ""
+        scanProc.running = false     // kills `bluetoothctl --timeout …`
+        root.scanning = false
+        root._rebuildDevices()
+        root.refresh()
+        console.log("[BluetoothService] scan cancelled")
     }
 
     // SCAN STREAM PARSER — populate _scanCache from `bluetoothctl scan on` output

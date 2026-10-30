@@ -79,7 +79,12 @@ Item {
     // ── tool probe (one-shot at mount) ───────────────────────────────────────
     Process {   // unbounded-ok: one-shot tool probe at mount
         id: probe
-        command: ["sh", "-c", "wf-recorder --help >/dev/null 2>&1 && slurp --help >/dev/null 2>&1"]
+        // presence check (command -v) — slurp rejects --help ("invalid
+        // option"), so the old help-probe reported both tools missing forever
+        command: ["sh", "-c", "command -v wf-recorder >/dev/null 2>&1 && command -v slurp >/dev/null 2>&1"]
+        // commands-ok: `command` is the shell builtin doing the presence
+        // probe — the external tools it checks (wf-recorder, slurp) are
+        // already declared in manifest.commands.
         running: false
         onExited: function(code, status) {
             root.supported = (code === 0)

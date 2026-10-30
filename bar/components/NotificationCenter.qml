@@ -64,6 +64,71 @@ PanelWindow {
     readonly property real hair: Config.PopupMetrics.hairline(panel)
     readonly property int unreadCount: Services.NotificationService.unreadCount
 
+    // ── grouped-by-app view (P4.6) ───────────────────────────────────────────
+    // The canonical ListModel stays arrival-ordered (the service's ordering
+    // invariant) — grouping is a VIEW: a view-local ListModel holding the
+    // same rows with each app's rows made CONTIGUOUS (newest group first,
+    // newest row first within the group), fed to the ListView with
+    // section.property: "appName" so each app renders one header. A ListModel
+    // (not a JS array) because delegates read `model.<role>` — a JS-array
+    // ListView exposes only modelData, which would blank every card field.
+    // Frozen-slice law: the model refills only when membership or a read-mark
+    // changes (keyed diff); rows are snapshotted plain (ListModel.get()
+    // results go stale once their model is mutated).
+    property ListModel groupsModel: ListModel {}
+    property string _flatKey: ""
+
+    function _regroup() {
+        const m = Services.NotificationService.model
+        let key = ""
+        const groups = []   // [[rows]] in first-seen (= newest) app order
+        const at = {}       // app name → index in groups
+        for (let i = 0; i < m.count; i++) {
+            const r = m.get(i)
+            key += r.id + ":" + (r.read ? 1 : 0) + ";"
+            let g = at[r.appName]
+            if (g === undefined) {
+                g = groups.length
+                at[r.appName] = g
+                groups.push([])
+            }
+            // Native extras are copied ONLY when the source row carries them:
+            // the card's guards test `!== undefined`, and ListModel turns an
+            // always-present array role into a nested-list accessor (no
+            // .filter) — the plain-IPC rows must keep having NO actions role,
+            // exactly as in the canonical model.
+            const snap = {
+                id: r.id, clickId: r.clickId || 0,
+                appName: String(r.appName || ""), appIcon: r.appIcon || "",
+                glyph: r.glyph || "", summary: String(r.summary || ""), body: String(r.body || ""),
+                urgency: r.urgency, timestamp: r.timestamp || 0, read: r.read === true
+            }
+            if (r.actions !== undefined) snap.actions = r.actions
+            if (r.image !== undefined && r.image !== "") snap.image = r.image
+            if (r.progress !== undefined && r.progress >= 0) snap.progress = r.progress
+            groups[g].push(snap)
+        }
+        if (key === root._flatKey) return
+        root._flatKey = key
+        groupsModel.clear()
+        for (let k = 0; k < groups.length; k++)
+            for (let j = 0; j < groups[k].length; j++) groupsModel.append(groups[k][j])
+    }
+
+    // Rows currently under one app (the section header's live count).
+    function sectionCount(name) {
+        let n = 0
+        for (let i = 0; i < groupsModel.count; i++)
+            if (groupsModel.get(i).appName === name) n++
+        return n
+    }
+
+    Component.onCompleted: root._regroup()
+    Connections {
+        target: Services.NotificationService
+        function onRevChanged() { root._regroup() }
+    }
+
     // ---- dim backdrop (click-outside = dismiss) ----
     Rectangle {
         id: backdrop
@@ -222,7 +287,7 @@ PanelWindow {
                 }
             }
 
-            // ----- list -----
+            // ----- list (grouped by app — one header per app, P4.6) -----
             ListView {
                 id: list
                 Layout.fillWidth: true
@@ -230,7 +295,43 @@ PanelWindow {
                 Layout.margins: Config.PopupMetrics.px(12)
                 clip: true
                 spacing: Config.PopupMetrics.px(8)
-                model: Services.NotificationService.model
+                model: root.groupsModel
+                section.property: "appName"
+                section.criteria: ViewSection.FullString
+                section.delegate: Item {
+                    id: secHead
+                    required property string section
+                    width: list.width
+                    height: secRow.implicitHeight + Config.PopupMetrics.px(4)
+                    Row {
+                        id: secRow
+                        anchors.bottom: parent.bottom
+                        spacing: Config.PopupMetrics.px(6)
+                        Text {
+                            text: Services.NotificationService.appGlyph(secHead.section, "")
+                            font.family: Config.BarConfig.fontNerd
+                            font.pixelSize: Config.PopupMetrics.px(10)
+                            color: Config.BarConfig.colorTextDim
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: secHead.section
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
+                            font.letterSpacing: 1.2
+                            font.capitalization: Font.AllUppercase
+                            font.family: Config.BarConfig.fontFamily
+                            opacity: 0.7
+                        }
+                        Text {
+                            text: "· " + root.sectionCount(secHead.section)
+                            color: Config.ThemeConfig.colors.textDim
+                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
+                            font.family: Config.BarConfig.fontFamily
+                            opacity: 0.45
+                        }
+                    }
+                }
                 delegate: StaggerIn {
                     index: model.index
                     NotificationCard {}

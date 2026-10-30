@@ -28,6 +28,7 @@ Rectangle {
 
     width: parent ? parent.width : 360
     implicitHeight: row.implicitHeight + 24
+    height: implicitHeight   // paint at delegate height (ListView sizes from implicit)
     color: cardMa.containsMouse ? Config.ThemeConfig.colors.surfaceVariant
                                  : Config.ThemeConfig.colors.surface
     border.width: 1

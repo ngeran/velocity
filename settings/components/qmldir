@@ -53,3 +53,8 @@ Header 1.0 Header.qml
 SidebarNav 1.0 SidebarNav.qml
 SettingsBootstrap 1.0 SettingsBootstrap.qml
 SettingsHostWindow 1.0 SettingsHostWindow.qml
+CardFrame 1.0 CardFrame.qml
+ListRow 1.0 ListRow.qml
+CardSlider 1.0 CardSlider.qml
+CardToggle 1.0 CardToggle.qml
+CardRow 1.0 CardRow.qml

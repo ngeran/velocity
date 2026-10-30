@@ -18,5 +18,5 @@
     "collapsePriority": 90
   },
   "commands": [],
-  "ipc": []
+  "ipc": ["toggle"]
 }

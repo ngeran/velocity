@@ -6,4 +6,6 @@ Components.NotificationButton {
     property var ctx: null
     isActive: !!ctx && !!ctx.host && ctx.host.ncShown
     onCenterRequested: if (ctx && ctx.host) ctx.host.toggleNotificationCenter()
+    // IPC parity (P4): `qs -c bar ipc call plugins call velocity.notifications toggle ""`
+    function toggle() { if (ctx && ctx.host) ctx.host.toggleNotificationCenter() }
 }

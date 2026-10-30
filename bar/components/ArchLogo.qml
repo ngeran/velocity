@@ -1,7 +1,7 @@
 // =============================================================================
-// ArchLogo.qml — Arch Linux logo; left click = bar-settings reveal,
+// ArchLogo.qml — Arch Linux logo; left click = launcher spotlight,
 // right click = fastfetch overlay (the logo's original action, kept one
-// click away when the reveal took over the left button — C4).
+// click away — C4; left repointed to the launcher in P4.8).
 // =============================================================================
 
 import QtQuick
@@ -13,7 +13,7 @@ Item {
     width: Config.BarConfig.iconSize
     height: Config.BarConfig.iconSize
 
-    // Left click → the bar-settings reveal (velocity.bar-settings).
+    // Left click → the launcher spotlight (velocity.launcher).
     signal triggered()
     // Right click → the fastfetch overlay (kept from the pre-C4 left click).
     signal altTriggered()

@@ -101,7 +101,7 @@ SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
 SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path
 SettingsWindow.openSettings       manual    # Control Center footer (in-process via shellApi since P2.1)
 SettingsWindow.openThemeTab       manual    # Control Center THEME tile (in-process via shellApi)
-SettingsWindow.setBarStyle        manual    # P2.5: velocity.bar-settings picks call
+SettingsWindow.setBarStyle        manual    # P2.5: BarSettingsBody picks call
 SettingsWindow.setBarPosition     manual    # BarConfigWriter.merge() directly (one
 SettingsWindow.setBarHeight       manual    # process); these verbs remain the scripting
 SettingsWindow.setWorkspaceCount  manual    # funnel — validated, silent writes to

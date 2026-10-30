@@ -27,11 +27,17 @@ Item {
 
     // Single-content sizing: the wrapper is the delegate root, so it must
     // adopt the wrapped item's implicit size (and let the item fill it).
+    // holder is a PLAIN Item — its implicit size never derives from its
+    // children, so read the content child's implicit size directly (the
+    // single-content contract makes children[0] the wrapped item). Binding
+    // these to holder.implicit* offered height 0 and collapsed every list
+    // this wrapped (delegates stacked on one spot).
     default property alias content: holder.data
-    implicitWidth: holder.implicitWidth
-    implicitHeight: holder.implicitHeight
-    width: holder.implicitWidth
-    height: holder.implicitHeight
+    readonly property var _content: holder.children.length > 0 ? holder.children[0] : null
+    implicitWidth: _content ? _content.implicitWidth : 0
+    implicitHeight: _content ? _content.implicitHeight : 0
+    width: implicitWidth
+    height: implicitHeight
 
     property bool revealed: false
 

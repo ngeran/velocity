@@ -6,6 +6,7 @@ singleton HyprlandService 1.0 HyprlandService.qml
 singleton NetworkService 1.0 NetworkService.qml
 singleton BluetoothService 1.0 BluetoothService.qml
 singleton AudioService 1.0 AudioService.qml
+singleton MprisService 1.0 MprisService.qml
 singleton PrivacyService 1.0 PrivacyService.qml
 singleton NotificationService 1.0 NotificationService.qml
 singleton ZaiUsageService 1.0 ZaiUsageService.qml

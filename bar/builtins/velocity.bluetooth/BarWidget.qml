@@ -11,4 +11,9 @@ Components.BluetoothIcon {
 
     isActive: !!host && host.trayOpenOn(ctx.window, "bluetooth")
     onTrayRequested: if (host) host.toggleTray(ctx.window, "bluetooth", root)
+
+    // IPC parity with the plugin pills (QA scenarios open the card this way).
+    function toggle() {
+        if (host) host.toggleTray(ctx.window, "bluetooth", root)
+    }
 }

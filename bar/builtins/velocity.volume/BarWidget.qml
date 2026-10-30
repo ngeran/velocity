@@ -11,4 +11,9 @@ Components.VolumeIcon {
 
     isActive: !!host && host.trayOpenOn(ctx.window, "volume")
     onTrayRequested: if (host) host.toggleTray(ctx.window, "volume", root)
+
+    // IPC parity with the plugin pills (QA scenarios open the card this way).
+    function toggle() {
+        if (host) host.toggleTray(ctx.window, "volume", root)
+    }
 }

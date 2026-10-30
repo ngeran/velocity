@@ -40,6 +40,11 @@ Item {
     property ListModel model: ListModel {}
     property int unreadCount: 0
     property int nextId: 1
+    // View-model change counter: every mutation (add, read, dismiss, clear,
+    // restore, reaper, store load) funnels through _recount(), so grouped
+    // views (NotificationCenter P4.6) watch this ONE counter instead of
+    // chasing ListModel dataChanged per mutation path.
+    property int rev: 0
 
     // Live-arrival hook. Emitted for EVERY add() — the J2 arrival peek is
     // driven by this service itself (see _peek); the signal stays public for
@@ -294,6 +299,7 @@ Item {
         }
         root.unreadCount = n
         root._hasExpiring = expiring
+        root.rev++
     }
 
     // -------------------------------------------------------------------------

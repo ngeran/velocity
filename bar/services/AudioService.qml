@@ -16,13 +16,14 @@
 //
 // PROPERTIES
 //   volume / muted / hasAudio          default sink (as before)
-//   micMuted / hasMic                  default source
+//   micVolume / micMuted / hasMic      default source (P4.3: input slider)
 //   hwLabel                            short node id for the popup header
 //   defaultSink / defaultSource        string ids of the default nodes
 //   sinks / sources / sinkInputs       device rows for the settings views:
 //                                      { id, name, desc, isDefault, volume(0-100), mute }
 //                                      sinkInputs rows: { id, app, volume, mute }
-// METHODS: setVolume, toggleMute, volumeUp/Down, toggleMicMute (default nodes)
+// METHODS: setVolume, toggleMute, volumeUp/Down, setMicVolume, toggleMicMute
+//          (default nodes)
 //          setDefaultSink/Source, setSinkVolume, toggleSinkMute,
 //          setSinkInputVolume, toggleSinkInputMute, setSourceVolume,
 //          toggleSourceMute (per-id; the settings rows)
@@ -82,6 +83,8 @@ Scope {
     // ── INPUT SOURCE (microphone) ──
     property bool hasMic: root.source != null
     property bool micMuted: root.source ? root.source.audio.muted : false
+    property int micVolume: root.source
+        ? Math.round(Math.min(root.source.audio.volume, 1.0) * 100) : 0
 
     // ── DEVICE ROWS (settings dashboard views) ──────────────────────────────
     // Flag semantics (verified live): audio nodes carry Audio + Sink/Source.
@@ -161,6 +164,11 @@ Scope {
 
     function volumeUp()   { setVolume(root.volume + 5) }
     function volumeDown() { setVolume(root.volume - 5) }
+
+    function setMicVolume(val) {
+        if (!root.source) return
+        root.source.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
+    }
 
     function toggleMicMute() {
         if (!root.source) return

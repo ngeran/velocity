@@ -116,6 +116,7 @@ Item {
         subnet: "",       // "/24" — from IP4.ADDRESS
         gateway: "",      // from ip route / IP4.GATEWAY
         dns: "",          // first IP4.DNS entry
+        ip6: "",          // first global/link IP6.ADDRESS (P4.1 card row)
         mac: "",          // GENERAL.HWADDR
         linkSpeed: "",    // GENERAL.SPEED, e.g. "144 Mb/s"
         band: "",         // "2.4 GHz" / "5 GHz" — from enriched AP freq
@@ -445,7 +446,7 @@ Item {
             const sig = Math.round((n.signalStrength || 0) * 100)
             const row = {
                 ssid: ssid, signal: sig, security: _secString(n.security),
-                inUse: n.connected, chan: "", bssid: "", band: ""
+                inUse: n.connected, known: n.known === true, chan: "", bssid: "", band: ""
             }
             const e = root._enrichBySsid[ssid]       // chan/bssid from nmcli fork
             if (e) { row.chan = e.chan; row.bssid = e.bssid; row.band = e.band; row.freq = e.freq || 0 }
@@ -474,6 +475,7 @@ Item {
             const x = a[i], y = b[i]
             if (x.ssid !== y.ssid || x.signal !== y.signal ||
                 x.security !== y.security || x.inUse !== y.inUse ||
+                x.known !== y.known ||
                 x.chan !== y.chan || x.bssid !== y.bssid) return false
         }
         return true
@@ -512,6 +514,7 @@ Item {
         for (var i = 0; i < lines.length; i++) {
             var L = lines[i], m
             if ((m = L.match(/IP4\.ADDRESS\[\d+\]:\s*([\d.]+)\/(\d+)/))) { patch.ip = m[1]; patch.subnet = "/" + m[2] }
+            else if ((m = L.match(/IP6\.ADDRESS\[\d+\]:\s*(\S+)/)) && !patch.ip6) patch.ip6 = m[1].split("/")[0]
             else if ((m = L.match(/IP4\.GATEWAY:\s*([\d.]+)/))) patch.gateway = m[1]
             else if ((m = L.match(/IP4\.DNS\[\d+\]:\s*([\d.]+)/)) && !patch.dns) patch.dns = m[1]
             else if ((m = L.match(/GENERAL\.HWADDR:\s*(\S+)/))) patch.mac = m[1]
@@ -595,6 +598,47 @@ Item {
             root._sampleLink()
             root._sampleEnrich()
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // VPN / WIREGUARD — read-only card row (P4.1). One bounded probe over the
+    // ACTIVE connections; first vpn/wireguard type wins. Terse -t output
+    // escapes ':' inside NAME as '\:' — the tail fields (TYPE, DEVICE) never
+    // contain a colon, so read the type as the second-to-last split piece.
+    // -------------------------------------------------------------------------
+    property var vpnStatus: ({ active: false, name: "", type: "" })
+
+    BoundedProcess {
+        id: vpnProbe
+        timeoutMs: 8000
+        onDone: function(out) {
+            var hit = null
+            var lines = out.split("\n")
+            for (var i = 0; i < lines.length; i++) {
+                var f = lines[i].split(":")
+                if (f.length < 2) continue
+                var type = f[f.length - 2]
+                if (type === "vpn" || type === "wireguard") {
+                    hit = { active: true, name: f.slice(0, f.length - 2).join(":")
+                            .replace(/\\:/g, ":"), type: type }
+                    break
+                }
+            }
+            root.vpnStatus = hit || { active: false, name: "", type: "" }
+        }
+    }
+
+    function _sampleVpn() {
+        vpnProbe.command = ["sh", "-c",
+            "nmcli -t -f NAME,TYPE,DEVICE connection show --active 2>/dev/null"]
+        vpnProbe.run()
+    }
+
+    Timer {
+        interval: 10000
+        repeat: true
+        running: root.popupOpen && root.isConnected
+        onTriggered: { root._sampleVpn(); root._sampleLink() }
     }
 
     // -------------------------------------------------------------------------
@@ -951,6 +995,10 @@ Item {
         // Fetch-on-open: no waiting for the next timer tick.
         if (isConnected) getIP()
         if (isConnected) root._sampleCounters()
+        root._sampleVpn()
+        if (isConnected) root._sampleLink()     // gateway/dns/speed/ip6 for the card's LINK rows
+        if (isConnected) root._sampleEnrich()   // band/channel (rate-limited to 20s internally)
+        root.refreshLastTest()
     }
 
     // ── Panel-gated speed test (C3) ───────────────────────────────────────

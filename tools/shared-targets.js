@@ -12,7 +12,14 @@ module.exports = {
   'shared/BoundedProcess.qml': ['bar/services/BoundedProcess.qml', 'settings/services/BoundedProcess.qml'],
   'shared/LogService.qml': ['bar/services/LogService.qml'],   // P2.4: settings tab reads HostBridge.log
   'shared/LogModel.js': ['bar/services/LogModel.js'],         // P2.4: settings copy deleted with its service
-  'shared/components/Sparkline.qml': ['settings/components/Sparkline.qml'],
+  'shared/components/Sparkline.qml': ['settings/components/Sparkline.qml', 'bar/components/Sparkline.qml'],   // P4.1: card traffic sparkline
+  // P4.10: the quick-access card set (frame/row/slider/toggle) — every bar
+  // card body embeds these; settings pages that host card bodies reuse them.
+  'shared/components/CardFrame.qml': ['bar/components/CardFrame.qml', 'settings/components/CardFrame.qml'],
+  'shared/components/ListRow.qml': ['bar/components/ListRow.qml', 'settings/components/ListRow.qml'],
+  'shared/components/CardRow.qml': ['bar/components/CardRow.qml', 'settings/components/CardRow.qml'],
+  'shared/components/CardSlider.qml': ['bar/components/CardSlider.qml', 'settings/components/CardSlider.qml'],
+  'shared/components/CardToggle.qml': ['bar/components/CardToggle.qml', 'settings/components/CardToggle.qml'],
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
   'shared/b64.mjs': ['bar/lib/b64.mjs'],
   'shared/theme-core.mjs': ['bar/lib/theme-core.mjs', 'settings/lib/theme-core.mjs'],
