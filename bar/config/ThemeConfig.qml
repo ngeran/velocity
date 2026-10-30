@@ -12,9 +12,10 @@
 // that don't nudge (all zero-fork; see EXTERNAL INTAKE below).
 //
 // =============================================================================
-// SYNC WITH: settings/config/ThemeConfig.qml — the 16 color-token defaults,
-// metadata defaults, updateColorToken(), and applyTheme()'s token-mapping MUST
-// stay identical (bar + settings are separate processes). Divergences here are
+// SYNC WITH: settings/config/ThemeConfig.qml — the shared core (16 color-token
+// defaults, metadata defaults, updateColorToken, applyTheme()'s token-mapping,
+// and the raw-read parse/dedupe) lives in shared/theme-ingest.mjs (P2.7), so
+// there is nothing left to keep byte-identical by hand. Divergences here are
 // INTENTIONAL (don't "fix" them): no isUserInitiated (the bar is READ-ONLY — it
 // only reads colors.json that settings wrote), a defensive OLED clamp on ingest
 // that calls the SHARED theme-core clampOLED (same module as ThemeService —
@@ -34,6 +35,7 @@ import Quickshell.Io
 import "." as Config
 import "../lib/theme-mix.mjs" as Mix
 import "../lib/theme-core.mjs" as ThemeCore
+import "../lib/theme-ingest.mjs" as ThemeIngest
 
 Item {
     id: root
@@ -43,34 +45,11 @@ Item {
     // THEME COLORS (reactive - update when cache file changes)
     // =========================================================================
 
-    property var colors: ({
-        // --- Tier 1: Structural Foundations ---
-        "background":      "#000000",
-        "surface":         "#0a0a0a",
-        "surfaceVariant":  "#111111",
-        "surfaceContainer":"#111111",
-        "text":            "#e0e0e0",
-        "textDim":         "#808080",
-        "border":          "#1a1a1a",
-        "outline":         "#2a2a2a",
-        "outlineVariant":  "#1a1a1a",
-        // --- Tier 2: Accent Fields (mutable) ---
-        "primary":         "#7c6bf0",
-        "secondary":       "#00dce5",
-        "accent":          "#f87171",
-        "success":         "#34d399",
-        "warning":         "#fbbf24",
-        "error":           "#f87171",
-        "info":            "#00dce5"
-    })
-
-    property var metadata: ({
-        "name":           "OLED Pure Black",
-        "source":         "preset",
-        "applied":        "",
-        "oledClamp":      true,
-        "matugenEnabled": false
-    })
+    // Boot palette + tracking defaults: the shared theme-ingest copies (kept
+    // separate from ThemeService's DEFAULT_BUNDLE seed on purpose — see the
+    // module header). applyTheme/ingestThemeText reassign fresh objects.
+    property var colors: ThemeIngest.DEFAULT_COLORS
+    property var metadata: ThemeIngest.DEFAULT_METADATA
 
     // =========================================================================
     // THEME FILE PATH
@@ -183,16 +162,10 @@ Item {
     // SINGLE-TOKEN MUTATION HELPER
     // =========================================================================
 
+    // Shared core: rebuild + reassign (nested var keys don't notify on
+    // in-place edit — the reassign is the QML signal).
     function updateColorToken(key, value) {
-        var next = {}
-        var k
-        for (k in root.colors) {
-            if (Object.prototype.hasOwnProperty.call(root.colors, k)) {
-                next[k] = root.colors[k]
-            }
-        }
-        next[key] = value
-        root.colors = next
+        root.colors = ThemeIngest.withToken(root.colors, key, value)
     }
 
     // Relative luminance (0..1, sRGB) of a "#rrggbb" string — the math lives
@@ -232,51 +205,14 @@ Item {
     // =========================================================================
 
     function applyTheme(data) {
-        if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] applyTheme called with theme:", data.metadata ? data.metadata.name : "unknown")
+        if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] applyTheme:", data && data.metadata ? data.metadata.name : "unknown")
+        if (!data) return
 
-        if (!data) {
-            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] ERROR: No data provided")
-            return
-        }
-
-        var next = null
-        if (data.colors) {
-            var c = data.colors
-            next = {
-                // Tier 1
-                "background":       c.background       || root.colors.background,
-                "surface":          c.surface          || root.colors.surface,
-                "surfaceVariant":   c.surfaceVariant   || root.colors.surfaceVariant,
-                "surfaceContainer": c.surfaceContainer || c.surfaceVariant || root.colors.surfaceContainer,
-                "text":             c.text             || root.colors.text,
-                "textDim":          c.textDim          || root.colors.textDim,
-                "border":           c.border           || root.colors.border,
-                "outline":          c.outline          || root.colors.outline,
-                "outlineVariant":   c.outlineVariant   || root.colors.outlineVariant,
-                // Tier 2
-                "primary":          c.primary          || root.colors.primary,
-                "secondary":        c.secondary        || root.colors.secondary,
-                "accent":           c.accent           || root.colors.accent,
-                "success":          c.success          || root.colors.success,
-                "warning":          c.warning          || root.colors.warning,
-                "error":            c.error            || root.colors.error,
-                "info":             c.info             || root.colors.info
-            }
-        }
-
-        if (data.metadata) {
-            var m = data.metadata
-            var newOledClamp = (m.oledClamp !== undefined) ? m.oledClamp : root.metadata.oledClamp
-
-            root.metadata = {
-                "name":           m.name           || root.metadata.name,
-                "source":         m.source         || (m.mode || root.metadata.source),
-                "applied":        m.applied        || root.metadata.applied,
-                "oledClamp":      newOledClamp,
-                "matugenEnabled": (m.matugenEnabled !== undefined) ? m.matugenEnabled : root.metadata.matugenEnabled
-            }
-            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Metadata applied. oledClamp:", root.metadata.oledClamp)
-        }
+        // Shared core: per-field fallbacks over the current palette/metadata
+        // (via theme-core's normalizeBundle — intake uses the writer's own
+        // token validation). Each half is null when the payload omits it.
+        var mapped = ThemeIngest.mapPayload(data, root.colors, root.metadata)
+        if (mapped.metadata) root.metadata = mapped.metadata
 
         // QD-OLED Safe: force pure-black backgrounds. Clamped IN PLACE on the
         // mapped palette BEFORE the cross-fade, so the fade target is final
@@ -285,13 +221,13 @@ Item {
         // clamp is the SHARED theme-core one (its text rescue falls back to
         // DEFAULT_BUNDLE — the same hardcoded #e0e0e0/#808080 this block used
         // to carry, now divergence-proof).
-        if (next && root.metadata.oledClamp) {
-            ThemeCore.clampOLED(next, true, ThemeCore.DEFAULT_BUNDLE)
+        if (mapped.colors && root.metadata.oledClamp) {
+            ThemeCore.clampOLED(mapped.colors, true, ThemeCore.DEFAULT_BUNDLE)
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] OLED clamp applied")
         }
 
-        if (next) {
-            root._setColors(next)
+        if (mapped.colors) {
+            root._setColors(mapped.colors)
             root.applyHyprlandBorders()
             if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Colors applied. New background:", root.colors.background)
         }
@@ -311,18 +247,16 @@ Item {
     property string lastCachedTimestamp: ""
 
     // Single ingest path for startup restore, inotify hits, and timer reloads.
+    // Shared core (theme-ingest.parseIngest) does trim/dedupe/parse — null
+    // means empty, byte-identical to the last applied read (nudge racing the
+    // fallback poll must be free), or mid-write garbage (silent retry).
     function ingestThemeText(raw) {
-        var newData = (raw || "").trim()
-        if (newData.length === 0 || newData === root.lastCachedData) return
-        try {
-            var dataObj = JSON.parse(newData)
-            root.lastCachedData = newData
-            if (dataObj.metadata && dataObj.metadata.applied) root.lastCachedTimestamp = dataObj.metadata.applied
-            root.applyTheme(dataObj)
-            if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
-        } catch (e) {
-            // Silent retry on parse error (file might be mid-write)
-        }
+        var hit = ThemeIngest.parseIngest(raw, root.lastCachedData)
+        if (!hit) return
+        root.lastCachedData = raw.trim()
+        if (hit.applied) root.lastCachedTimestamp = hit.applied
+        root.applyTheme(hit.data)
+        if (Config.DebugConfig.debugTheme) console.log("[Bar ThemeConfig] Cache file changed, re-applying theme")
     }
 
     // IPC nudge entry point (theme.reload) — the settings process fires this

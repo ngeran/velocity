@@ -16,6 +16,7 @@ module.exports = {
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
   'shared/b64.mjs': ['bar/lib/b64.mjs'],
   'shared/theme-core.mjs': ['bar/lib/theme-core.mjs', 'settings/lib/theme-core.mjs'],
+  'shared/theme-ingest.mjs': ['bar/lib/theme-ingest.mjs', 'settings/lib/theme-ingest.mjs'],   // P2.7: both ThemeConfig.qml's pure core
   'shared/orbit.mjs': ['bar/lib/orbit.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],
   'shared/weather.mjs': ['plugins/nikos.clock/lib/weather.mjs', 'settings/lib/weather.mjs'],

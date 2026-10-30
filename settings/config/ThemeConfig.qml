@@ -54,14 +54,15 @@
 //   resolving Config.ThemeConfig.colors.* and Config.ThemeConfig.metadata.*.
 //
 // =============================================================================
-// SYNC WITH: bar/config/ThemeConfig.qml — the 16 color-token defaults, metadata
-// defaults, updateColorToken(), and applyTheme()'s token-mapping MUST stay
-// identical (bar + settings are separate processes). Divergences are INTENTIONAL:
-// settings has isUserInitiated (it's the WRITER — ThemeService mutates in-process)
-// and DELEGATES the OLED clamp to ThemeService; the bar has no isUserInitiated
-// (read-only) + a defensive clamp on ingest that calls the SHARED
-// shared/theme-core.mjs clampOLED (the same module ThemeService delegates to) +
-// a poll intake. Both clamps produce the same result (verified).
+// SYNC WITH: bar/config/ThemeConfig.qml — the shared core (16 color-token
+// defaults, metadata defaults, updateColorToken, applyTheme()'s token-mapping,
+// and the raw-read parse/dedupe) lives in shared/theme-ingest.mjs (P2.7), so
+// there is nothing left to keep byte-identical by hand. Divergences are
+// INTENTIONAL: settings has isUserInitiated (it's the WRITER — ThemeService
+// mutates in-process) and DELEGATES the OLED clamp to ThemeService; the bar has
+// no isUserInitiated (read-only) + a defensive clamp on ingest that calls the
+// SHARED shared/theme-core.mjs clampOLED (the same module ThemeService
+// delegates to) + a poll intake. Both clamps produce the same result (verified).
 // =============================================================================
 
 pragma Singleton
@@ -71,6 +72,7 @@ import Qt.labs.platform
 import Quickshell.Io
 import "./" as Config
 import "../lib/theme-mix.mjs" as Mix
+import "../lib/theme-ingest.mjs" as ThemeIngest
 import "../lib/tier.mjs" as Tier
 
 Item {
@@ -92,27 +94,21 @@ Item {
     // NetworkRing.qml resolve it instead of falling back to undefined.
     // =========================================================================
 
-    property var colors: ({
-        // --- Tier 1: Structural Foundations ---
-        "background":      "#000000",
-        "surface":         "#0a0a0a",
-        "surfaceVariant":  "#111111",
-        "surfaceContainer":"#111111",
-        "text":            "#e0e0e0",
-        "textDim":         "#808080",
-        "border":          "#1a1a1a",
-        "outline":         "#2a2a2a",
-        "outlineVariant":  "#1a1a1a",
+    // =========================================================================
+    // TIER 1 + TIER 2 — COLOR TOKEN OBJECT
+    // -------------------------------------------------------------------------
+    // Tier 1 (structural, pure-dark foundation): background, surface,
+    //   surfaceVariant, surfaceContainer, text, textDim, border, outline,
+    //   outlineVariant.
+    // Tier 2 (accents, runtime-mutable): primary, secondary, accent, success,
+    //   warning, error, info.
+    // surfaceContainer is added here (canonical) so the Colors.qml shim and
+    // NetworkRing.qml resolve it instead of falling back to undefined.
+    // Boot values: the shared theme-ingest DEFAULT_COLORS (kept separate from
+    // ThemeService's DEFAULT_BUNDLE seed on purpose — see the module header).
+    // =========================================================================
 
-        // --- Tier 2: Accent Fields (mutable) ---
-        "primary":         "#7c6bf0",
-        "secondary":       "#00dce5",
-        "accent":          "#f87171",
-        "success":         "#34d399",
-        "warning":         "#fbbf24",
-        "error":           "#f87171",
-        "info":            "#00dce5"
-    })
+    property var colors: ThemeIngest.DEFAULT_COLORS
 
     // =========================================================================
     // TIER 3 — THEME METADATA TRACKING
@@ -124,13 +120,7 @@ Item {
     // matugenEnabled: whether Matugen wallpaper-driven generation is active
     // =========================================================================
 
-    property var metadata: ({
-        "name":           "OLED Pure Black",
-        "source":         "preset",
-        "applied":        "",
-        "oledClamp":      true,
-        "matugenEnabled": false
-    })
+    property var metadata: ThemeIngest.DEFAULT_METADATA
 
     // =========================================================================
     // SINGLE-TOKEN MUTATION HELPER
@@ -141,15 +131,9 @@ Item {
     // =========================================================================
 
     function updateColorToken(key, value) {
-        var next = {}
-        var k
-        for (k in root.colors) {
-            if (Object.prototype.hasOwnProperty.call(root.colors, k)) {
-                next[k] = root.colors[k]
-            }
-        }
-        next[key] = value
-        root.colors = next
+        // Shared core: rebuild + reassign so every colors.<key> binding (and
+        // the Colors.qml shim aliases) re-evaluates.
+        root.colors = ThemeIngest.withToken(root.colors, key, value)
     }
 
     // =========================================================================
@@ -199,85 +183,24 @@ Item {
     // =========================================================================
 
     function applyTheme(data, isUserInitiated) {
-        if (Config.DebugConfig.debugTheme) {
-            if (Config.DebugConfig.debugTheme) console.log("=== Config.ThemeConfig.applyTheme CALLED ===")
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Input data:", JSON.stringify(data))
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] isUserInitiated:", isUserInitiated, "(type:", typeof isUserInitiated, ")")
-        }
-
         // Set flag if this is a user-initiated change
-        if (isUserInitiated === true) {
-            root.userInitiatedChange = true
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Set userInitiatedChange flag")
-        }
+        if (isUserInitiated === true) root.userInitiatedChange = true
+        if (!data) return
 
-        if (!data) {
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] ERROR: No data provided")
-            return
-        }
+        // Shared core: per-field fallbacks over the current palette/metadata.
+        // Each half is null when the payload omits it.
+        var mapped = ThemeIngest.mapPayload(data, root.colors, root.metadata)
 
-        if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Current metadata.oledClamp BEFORE:", root.metadata.oledClamp)
-
-        var next = null
-        if (data.colors) {
-            var c = data.colors
-            next = {
-                // Tier 1
-                "background":       c.background       || root.colors.background,
-                "surface":          c.surface          || root.colors.surface,
-                "surfaceVariant":   c.surfaceVariant   || root.colors.surfaceVariant,
-                "surfaceContainer": c.surfaceContainer || c.surfaceVariant || root.colors.surfaceContainer,
-                "text":             c.text             || root.colors.text,
-                "textDim":          c.textDim          || root.colors.textDim,
-                "border":           c.border           || root.colors.border,
-                "outline":          c.outline          || root.colors.outline,
-                "outlineVariant":   c.outlineVariant   || root.colors.outlineVariant,
-                // Tier 2
-                "primary":          c.primary          || root.colors.primary,
-                "secondary":        c.secondary        || root.colors.secondary,
-                "accent":           c.accent           || root.colors.accent,
-                "success":          c.success          || root.colors.success,
-                "warning":          c.warning          || root.colors.warning,
-                "error":            c.error            || root.colors.error,
-                "info":             c.info             || root.colors.info
-            }
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Colors mapped. New background:", next.background)
-        }
-
-        if (data.metadata) {
-            var m = data.metadata
-            if (Config.DebugConfig.debugTheme) {
-                if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Processing metadata. m.oledClamp:", m.oledClamp, "(undefined?", m.oledClamp === undefined, ")")
-                console.log("[applyTheme] Current root.metadata.oledClamp:", root.metadata.oledClamp)
-            }
-
-            var newOledClamp = (m.oledClamp !== undefined) ? m.oledClamp : root.metadata.oledClamp
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] NEW oledClamp will be:", newOledClamp)
-
-            root.metadata = {
-                "name":           m.name           || root.metadata.name,
-                "source":         m.source         || (m.mode || root.metadata.source),
-                "applied":        m.applied        || root.metadata.applied,
-                "oledClamp":      newOledClamp,
-                "matugenEnabled": (m.matugenEnabled !== undefined) ? m.matugenEnabled : root.metadata.matugenEnabled
-            }
-
-            if (Config.DebugConfig.debugTheme) console.log("[applyTheme] Metadata APPLIED. root.metadata.oledClamp AFTER:", root.metadata.oledClamp)
-        }
+        if (mapped.metadata) root.metadata = mapped.metadata
 
         // Cross-fade route (see PALETTE CROSS-FADE block) — after the metadata
         // assignment above so the startup instant-path check reads a stamped
         // `applied` (mirrors the bar copy's ordering).
-        if (next) root._setColors(next)
+        if (mapped.colors) root._setColors(mapped.colors)
 
         // NOTE: no inline OLED clamp here. ThemeService is the SOLE pre-clamping
         // writer — every bundle reaching applyTheme (in-process or via colors.json
         // intake) is already clamped. The bar keeps its own clamp as defense.
-
-        if (Config.DebugConfig.debugTheme) {
-            console.log("[applyTheme] Final metadata.oledClamp:", root.metadata.oledClamp)
-            console.log("=== Config.ThemeConfig.applyTheme COMPLETE ===")
-        }
     }
 
     // =========================================================================
@@ -354,43 +277,30 @@ Item {
         onFileChanged: {
             // FileView.text is a METHOD (not a property) in this Quickshell build
             let raw = cacheWatcher.text();
-            if (!raw || raw.trim() === "") return;
+            // Shared core (theme-ingest.parseIngest): trim/dedupe/parse — null
+            // on empty, byte-identical re-read, or unparseable (mid-write;
+            // silent retry on the next event — matches the bar's intake).
+            let hit = ThemeIngest.parseIngest(raw, root.lastCachedData);
+            if (!hit) return;
 
-            try {
-                var newData = raw.trim();
-                var data = JSON.parse(newData);
+            if (hit.applied) root.lastCachedTimestamp = hit.applied;
 
-                // Check if data actually changed by comparing timestamps
-                var newTimestamp = data.metadata && data.metadata.applied ? data.metadata.applied : "";
-                if (newTimestamp === root.lastCachedTimestamp && newData === root.lastCachedData) {
-                    return;  // No actual change
-                }
-
-                // Update timestamp
-                if (newTimestamp) {
-                    root.lastCachedTimestamp = newTimestamp;
-                }
-
-                // Only apply if not a user-initiated change in the last 100ms
-                // This window prevents race conditions where an external write
-                // during a user action would silently drop the user's intent
-                var timeSinceUserChange = Date.now() - (root.metadata.applied ? new Date(root.metadata.applied).getTime() : 0);
-                if (timeSinceUserChange < 100 && root.userInitiatedChange) {
-                    if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] External write during user action, skipping");
-                    root.lastCachedData = newData;  // Update tracking but don't apply
-                    return;
-                }
-
-                if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Cache file changed, re-applying theme");
-                root.lastCachedData = newData;
-                root.applyTheme(data);
-
-                // Reset user-initiated flag after applying
-                root.userInitiatedChange = false;
-            } catch (e) {
-                console.warn("[ThemeConfig] colors.json parse error:", e)
-                if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Parse error reading cache:", e);
+            // Only apply if not a user-initiated change in the last 100ms
+            // This window prevents race conditions where an external write
+            // during a user action would silently drop the user's intent
+            var timeSinceUserChange = Date.now() - (root.metadata.applied ? new Date(root.metadata.applied).getTime() : 0);
+            if (timeSinceUserChange < 100 && root.userInitiatedChange) {
+                if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] External write during user action, skipping");
+                root.lastCachedData = raw.trim();  // Update tracking but don't apply
+                return;
             }
+
+            if (Config.DebugConfig.debugFile) console.log("[ThemeConfig] Cache file changed, re-applying theme");
+            root.lastCachedData = raw.trim();
+            root.applyTheme(hit.data);
+
+            // Reset user-initiated flag after applying
+            root.userInitiatedChange = false;
         }
     }
 
@@ -406,14 +316,13 @@ Item {
         stdout: SplitParser { onRead: function(data) { startupReader.buffer += data + "\n" } }
         onRunningChanged: {
             if (!running && startupReader.buffer.trim().length > 0) {
-                try {
-                    var raw = startupReader.buffer.trim()
-                    var data = JSON.parse(raw)
-                    root.lastCachedData = raw
-                    if (data.metadata && data.metadata.applied) root.lastCachedTimestamp = data.metadata.applied
-                    root.applyTheme(data)
-                } catch (e) {
-                    // no/invalid cache yet — keep defaults
+                // Shared core parse — same dedupe/parse rules as the live
+                // watch; no/invalid cache yet → keep defaults.
+                var hit = ThemeIngest.parseIngest(startupReader.buffer, root.lastCachedData)
+                if (hit) {
+                    root.lastCachedData = startupReader.buffer.trim()
+                    if (hit.applied) root.lastCachedTimestamp = hit.applied
+                    root.applyTheme(hit.data)
                 }
                 startupReader.buffer = ""
             }
