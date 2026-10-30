@@ -312,6 +312,7 @@ ShellRoot {
             audio: Services.AudioService,
             network: Services.NetworkService,
             metrics: Services.MetricsService,
+            notifications: Services.NotificationService,
             configWriter: Config.BarConfigWriter
         })
     }

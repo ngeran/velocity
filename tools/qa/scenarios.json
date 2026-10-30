@@ -148,31 +148,34 @@
     {
       "id": "wallpaper-engine-live",
       "name": "The engine plays a live wallpaper and the service routes it end to end",
-      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper restored. PRECONDITION: libraryMode must be all|live — under the saved 'still' mode getList hides videos and step 3 greps empty. SKIPs until the engine binary exists (post-rebuild). Run after restarting quickshell-bar once so the engine probe re-runs",
+      "covers": "wallpaper-engine integration: daemon status JSON, set routing to mpvpaper (instance heals up), service state follows, previous wallpaper AND libraryMode restored. Self-sufficient: step 1 saves the saved libraryMode and flips it to 'all' (under 'still' getList hides videos and the pick greps empty); the last step + teardown restore it.",
       "requires": [
         "wallpaper-engine"
       ],
       "steps": [
+        "sh qs -c bar ipc call wallpaper-service getLibraryMode && qs -c bar ipc call wallpaper-service setLibraryMode all",
         "ipc bar wallpaper-service getEngineStatus",
         "ipc bar wallpaper-service getCurrentInfo",
         "sh qs -c bar ipc call wallpaper-service getList | grep -E '\\.(mp4|webm|mkv|mov)$' | head -1",
-        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-sh.out)\"",
+        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/04-sh.out)\"",
         "sleep 3",
         "ipc bar wallpaper-service getEngineStatus",
         "ipc bar wallpaper-service getCurrentInfo",
-        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\"",
+        "sh qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-wallpaper-service-getCurrentInfo.out)\"",
         "sleep 1",
-        "ipc bar wallpaper-service getCurrentInfo"
+        "ipc bar wallpaper-service getCurrentInfo",
+        "sh qs -c bar ipc call wallpaper-service setLibraryMode \"$(cat $QA_EV/01-sh.out)\""
       ],
       "asserts": [
-        "jq -e '.running == true' $QA_EV/01-wallpaper-service-getEngineStatus.out",
-        "test -s $QA_EV/03-sh.out",
-        "jq -e '.running == true and .instances >= 1' $QA_EV/06-wallpaper-service-getEngineStatus.out",
-        "diff $QA_EV/03-sh.out $QA_EV/07-wallpaper-service-getCurrentInfo.out",
-        "diff $QA_EV/02-wallpaper-service-getCurrentInfo.out $QA_EV/10-wallpaper-service-getCurrentInfo.out"
+        "jq -e '.running == true' $QA_EV/02-wallpaper-service-getEngineStatus.out",
+        "test -s $QA_EV/04-sh.out",
+        "jq -e '.running == true and .instances >= 1' $QA_EV/07-wallpaper-service-getEngineStatus.out",
+        "diff $QA_EV/04-sh.out $QA_EV/08-wallpaper-service-getCurrentInfo.out",
+        "diff $QA_EV/03-wallpaper-service-getCurrentInfo.out $QA_EV/11-wallpaper-service-getCurrentInfo.out"
       ],
       "teardown": [
-        "qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/02-wallpaper-service-getCurrentInfo.out)\" >/dev/null 2>&1"
+        "qs -c bar ipc call wallpaper-service setWallpaperByPath \"$(cat $QA_EV/03-wallpaper-service-getCurrentInfo.out)\" >/dev/null 2>&1",
+        "qs -c bar ipc call wallpaper-service setLibraryMode \"$(cat $QA_EV/01-sh.out)\" >/dev/null 2>&1; true"
       ]
     },
     {

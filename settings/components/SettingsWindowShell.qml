@@ -542,6 +542,8 @@ Item {
 
             sourceComponent: Components.SettingsModule {
                 anchors.fill: parent
+                // Shell root for cross-tab jumps (BAR pane's PLUGINS ›).
+                dash: root
             }
         }
 

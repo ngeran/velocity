@@ -1,3 +1,4 @@
+// GENERATED from shared/keybinds-default.mjs by tools/sync-shared — do not edit
 // keybinds-default.mjs — embedded fallback of the keybinds table for
 // KeybindsOverlay. Canonical copy: tools/keybinds-default.json (the single
 // source the HM module renders ~/.config/velocity/keybinds.json from and

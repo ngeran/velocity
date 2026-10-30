@@ -21,6 +21,11 @@ module.exports = {
   'shared/components/CardSlider.qml': ['bar/components/CardSlider.qml', 'settings/components/CardSlider.qml'],
   'shared/components/CardToggle.qml': ['bar/components/CardToggle.qml', 'settings/components/CardToggle.qml'],
   'shared/theme-mix.mjs': ['bar/lib/theme-mix.mjs', 'settings/lib/theme-mix.mjs'],
+  // P4.9: the keybinds table fallback — KeybindsOverlay (bar) and the
+  // settings KEYBINDS page both render it when ~/.config/velocity/keybinds.json
+  // is missing. tools/keybinds-default.json stays the semantic SSOT; check-ipc
+  // keeps this file in lockstep with it.
+  'shared/keybinds-default.mjs': ['bar/lib/keybinds-default.mjs', 'settings/lib/keybinds-default.mjs'],
   'shared/b64.mjs': ['bar/lib/b64.mjs'],
   'shared/theme-core.mjs': ['bar/lib/theme-core.mjs', 'settings/lib/theme-core.mjs'],
   'shared/theme-ingest.mjs': ['bar/lib/theme-ingest.mjs', 'settings/lib/theme-ingest.mjs'],   // P2.7: both ThemeConfig.qml's pure core

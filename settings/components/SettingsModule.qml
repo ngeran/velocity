@@ -11,10 +11,10 @@
 //   APPEARANCE — animation speed, corner radius   (SettingsConfigService + saveSettings)
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
-// (The BAR pane was consolidated away in T23/T24; bar settings live in the
-// Control Center's BAR page since P4.7 — the logo's bar-settings overlay was
-// deleted in P4.8, and P4.9 re-adds the pane here hosting the same
-// BarSettingsBody. The IDLE & LOCK pane was
+// (The BAR pane hosts the bar tree's BarSettingsBody since P4.9 — the same
+// body the Control Center's BAR page mounts, file://-loaded across the
+// import split (BarSettingsPane). NOTIFICATIONS / KEYBINDS / ABOUT panes
+// joined in P4.9 too. The IDLE & LOCK pane was
 // removed in P3.9 — hypridle is omni-nix-owned (D9), its config is a read-only
 // HM symlink and the runtime template writer was already inert.)
 // =============================================================================
@@ -36,6 +36,10 @@ Item {
 
     property string active: "appearance"
 
+    // SettingsWindowShell root — handed to the panes that jump tabs (the BAR
+    // pane's PLUGINS › → CONTROL › plugins; TerminalBody.dash convention).
+    property var dash: null
+
     // Search navigation: after the pane switch, scroll the target row into
     // view (panes wrapped in ScrollColumn). Walks ancestors for the wrapper —
     // rows in unwrapped panes just no-op.
@@ -48,8 +52,12 @@ Item {
     }
 
     readonly property var navItems: [
-        { key: "appearance", label: "APPEARANCE", icon: "󰀯" },
-        { key: "desktop",    label: "DESKTOP",    icon: "󰍹" }
+        { key: "appearance",    label: "APPEARANCE",    icon: "󰀯" },
+        { key: "desktop",       label: "DESKTOP",       icon: "󰍹" },
+        { key: "bar",           label: "BAR",           icon: "󰒓" },
+        { key: "notifications", label: "NOTIFICATIONS", icon: "󰂚" },
+        { key: "keybinds",      label: "KEYBINDS",      icon: "󰌌" },
+        { key: "about",         label: "ABOUT",         icon: "󰂛" }
     ]
 
     // ── left rail — the SHARED ControlSectionNav (identical UX to Control / Core) ──
@@ -419,6 +427,33 @@ Item {
                         font.family: Config.ControlConfig.fontSans; font.pixelSize: 10 }
                 }
             }
+        }
+
+        // ── BAR — hosts the bar tree's BarSettingsBody (P4.9) ─────────
+        BarSettingsPane {
+            anchors.fill: parent
+            visible: root.active === "bar"
+            dash: root.dash
+        }
+
+        // ── NOTIFICATIONS — HostBridge.notifications (P4.9) ──────────
+        NotificationsPane {
+            anchors.fill: parent
+            visible: root.active === "notifications"
+        }
+
+        // ── KEYBINDS — read-only single-source view (P4.9) ────────────
+        KeybindsPane {
+            anchors.fill: parent
+            visible: root.active === "keybinds"
+            // Re-read on every entry — the render lands after omni-apply.
+            onVisibleChanged: if (visible) refresh()
+        }
+
+        // ── ABOUT / HEALTH — last check-runtime + probes (P4.9) ───────
+        AboutPane {
+            anchors.fill: parent
+            visible: root.active === "about"
         }
 
     }

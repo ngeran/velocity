@@ -91,5 +91,22 @@ fi
 
 # ── 6 · verdict ─────────────────────────────────────────────────────────────
 echo "warnings=$WARNINGS cpu=${CPU}% rss=$RSS spawns/min=$SPAWNS qa=$QA"
+
+# ── 7 · summary JSON — the settings ABOUT pane's "last summary" (P4.9) ──────
+# This script RESTARTS the bar, so the pane must never run it — it reads the
+# last run's verdict from here instead. Atomic tmp+mv; a failed write is
+# non-fatal (the pane shows "never run" for a missing file).
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/velocity"
+JSON_OK=false; [ "$fail" -eq 0 ] && JSON_OK=true
+if mkdir -p "$STATE_DIR" 2>/dev/null \
+   && printf '{"ts":"%s","warnings":"%s","cpu":"%s","rss":"%s","spawns":"%s","qa":"%s","ok":%s}\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" "$WARNINGS" "$CPU" "$RSS" "$SPAWNS" "$QA" "$JSON_OK" \
+        > "$STATE_DIR/check-runtime.json.tmp" 2>/dev/null \
+   && mv -f "$STATE_DIR/check-runtime.json.tmp" "$STATE_DIR/check-runtime.json" 2>/dev/null; then
+    :
+else
+    echo "check-runtime: warn: could not write $STATE_DIR/check-runtime.json" >&2
+fi
+
 [ "$fail" -eq 0 ] && echo "check-runtime: OK"
 exit "$fail"

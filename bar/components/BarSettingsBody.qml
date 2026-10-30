@@ -3,7 +3,9 @@
 // =============================================================================
 // The bar-settings sections (originally the P4.7 overlay's card body) so the
 // same body hosts in every bar-settings surface — today the Control Center's
-// BAR page; P4.9 adds the settings app's BAR pane via HostBridge:
+// BAR page, and since P4.9 the settings app's BAR pane (file://-loaded by
+// settings/components/BarSettingsPane.qml across the import split; PLUGINS ›
+// jumps to that dashboard's CONTROL › plugins via the pane's dash link):
 //
 //   STYLE     every scanned style (bar/styles/*/Scene.qml) as a card — a pick
 //             swaps the bar live. The pick calls Config.BarConfigWriter.merge()

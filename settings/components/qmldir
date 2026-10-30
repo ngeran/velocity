@@ -58,3 +58,7 @@ ListRow 1.0 ListRow.qml
 CardSlider 1.0 CardSlider.qml
 CardToggle 1.0 CardToggle.qml
 CardRow 1.0 CardRow.qml
+BarSettingsPane 1.0 BarSettingsPane.qml
+NotificationsPane 1.0 NotificationsPane.qml
+KeybindsPane 1.0 KeybindsPane.qml
+AboutPane 1.0 AboutPane.qml
