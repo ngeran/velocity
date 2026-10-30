@@ -306,3 +306,34 @@ export function gtkColorsCss(colors) {
         "@define-color borders " + colors.border + ";\n" +
         "@define-color insensitive_fg_color " + colors.textDim + ";\n"
 }
+
+// ── dominant color (P5.3/5: matugen 4.x source-color pre-step) ──────────────
+// matugen 4.x picks the source color from an image INTERACTIVELY (arrow-key
+// picker; "IO error: not a terminal" headless — the bar has no TTY ever), so
+// ThemeService feeds it `matugen color hex <dom>` instead of `image`. The
+// dominant comes from ffmpeg's 16×16 rawvideo rgb24 dump (hex chars, one byte
+// pair per channel) — quantized to 4 bits/channel and mode-counted here.
+// Tie-break: the DARKEST winner (matugen's old `--prefer darkness` intent);
+// the OLED clamp reshapes everything else downstream.
+export function dominantHexFromRgbBytes(hexChars) {
+    var s = String(hexChars || "").toLowerCase().replace(/[^0-9a-f]/g, "")
+    var bytes = s.length - (s.length % 2)
+    if (bytes < 3) return ""
+    var counts = {}
+    var best = null
+    for (var o = 0; o + 5 < bytes; o += 6) {
+        var r = parseInt(s.substring(o, o + 2), 16)
+        var g = parseInt(s.substring(o + 2, o + 4), 16)
+        var b = parseInt(s.substring(o + 4, o + 6), 16)
+        // 4-bit quantization: <<4 restores a representative 8-bit level
+        var k = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)
+        var e = counts[k]
+        if (!e) { e = counts[k] = { n: 0, r: (r >> 4) << 4, g: (g >> 4) << 4, b: (b >> 4) << 4 } }
+        e.n++
+        if (best === null || e.n > best.n ||
+            (e.n === best.n && (e.r + e.g + e.b) < (best.r + best.g + best.b))) best = e
+    }
+    if (best === null) return ""
+    var hx = v => ("0" + v.toString(16)).slice(-2)
+    return ("#" + hx(best.r) + hx(best.g) + hx(best.b)).toUpperCase()
+}

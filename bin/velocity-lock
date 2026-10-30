@@ -52,7 +52,15 @@ case "${1-}" in
       echo "velocity-lock: session already locked" >&2
       exit 0
     fi
-    exec "$QS_BIN" -c lock
+    # P5.6 auto-pause: the panel is covered for the whole lock — freeze the
+    # live wallpaper decode through the service (reason "lock"), lift it the
+    # moment this process exits (unlock). No `exec`: the shell must survive
+    # to run the resume. `|| true` — a down/absent bar must never block the
+    # lock itself. The service keeps the reason transient and honors the
+    # user's own HOLD, so this cannot un-pause something the user froze.
+    "$QS_BIN" ipc -c bar call wallpaper-service pauseFor lock >/dev/null 2>&1 || true
+    "$QS_BIN" -c lock
+    "$QS_BIN" ipc -c bar call wallpaper-service resumeFor lock >/dev/null 2>&1 || true
     ;;
   *)
     echo "usage: velocity-lock [preview]" >&2

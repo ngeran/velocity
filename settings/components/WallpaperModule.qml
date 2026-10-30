@@ -512,12 +512,44 @@ Item {
                     }
                     MouseArea {
                         anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            Services.SettingsConfigService.matugenOnWallpaperChange = !Services.SettingsConfigService.matugenOnWallpaperChange
-                            Services.SettingsConfigService.saveSettings()
-                        }
+                        onClicked: Services.SettingsConfigService.setMatugenOnWallpaperChange(
+                                       !Services.SettingsConfigService.matugenOnWallpaperChange)
                     }
                 }
+            }
+
+            // DARK_ONLY (P5.7): rotation skips bright images (mean luma
+            // > 0.25, from the thumb pass). Opt-in — entries without a
+            // known luma always stay, so the filter can't blank the pool.
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 4
+                Text { text: "PICK_FILTER"; color: Config.ThemeConfig.colors.textDim; font.family: root.fMono; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1 }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+                Rectangle {
+                    Layout.fillWidth: true; height: 22
+                    color: Services.WallpaperService.darkOnly ? Config.ThemeConfig.tint(Config.ThemeConfig.colors.secondary, 0.18) : Config.ThemeConfig.colors.surfaceVariant
+                    border.color: Services.WallpaperService.darkOnly ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.border; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: Services.WallpaperService.darkOnly ? "DARK ONLY: ON" : "DARK ONLY: OFF"
+                        color: Services.WallpaperService.darkOnly ? Config.ThemeConfig.colors.secondary : Config.ThemeConfig.colors.textDim
+                        font.family: root.fMono; font.pixelSize: 8; font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.WallpaperService.setDarkOnly(!Services.WallpaperService.darkOnly)
+                    }
+                }
+            }
+
+            // OLED hint (P5.7) — pure guidance, dim by doctrine: the pick
+            // default is STILLS + 20-min rotation; LIVE content decodes 24/7.
+            Text {
+                Layout.fillWidth: true
+                text: "OLED: stills + dark-only are kindest — live wallpapers decode 24/7"
+                color: Config.ThemeConfig.colors.textDim
+                font.family: root.fMono; font.pixelSize: 7
+                wrapMode: Text.WordWrap
             }
 
             Item { Layout.fillHeight: true }   // top-align the sections
@@ -559,6 +591,7 @@ Item {
                     anchors.fill: parent
                     clip: true
                     cellWidth: 108; cellHeight: 80
+                    cacheBuffer: 320
                     model: root.wallpaperList
                     boundsBehavior: Flickable.StopAtBounds
 

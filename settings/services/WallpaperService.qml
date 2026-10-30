@@ -49,8 +49,14 @@
 //   setAnimationPaused  — Freeze/resume live playback (engine pause or awww)
 //   toggleAnimationPause— Flip playback state
 //   getAnimationPaused  — Returns bool (true = frozen)
+//   pauseFor <reason>   — Auto-pause freeze (lock|idle|fullscreen); transient,
+//                         never persisted, respects the user HOLD (P5.6)
+//   resumeFor <reason>  — Lift one auto-pause reason
+//   getAutoPause        — Active auto-pause reasons, comma-joined
 //   setLibraryMode      — all | still | live (what rotation may pick)
 //   getLibraryMode      — Returns current mode
+//   setDarkOnly         — P5.7: rotation skips bright images (luma > 0.25)
+//   getDarkOnly         — Returns bool
 //   setLiveDir          — Change the live library directory and re-scan
 //   getLiveDir          — Returns the live library directory
 //   getEngineStatus     — Returns engine status as a JSON string
@@ -75,8 +81,11 @@ Item {
     // CONFIGURATION
     // =========================================================================
 
-    /// Auto-cycle interval in milliseconds (default: 5 minutes)
-    property int cycleInterval: 300000
+    /// Auto-cycle interval in milliseconds. P5.7 seed: 20 minutes — on a
+    /// QD-OLED every rotation is a full-screen flash; 5 min was MPV-player
+    /// thinking, not wallpaper thinking. Seed only: an existing
+    /// wallpaper-config.json overrides it (loadedConfigPatch).
+    property int cycleInterval: 1200000
 
     /// awww transition style: any | outer | inner | fade | wipe | simple | wave
     property string transitionType: "fade"
@@ -99,8 +108,16 @@ Item {
     property bool   scanInProgress: false
     property string currentMonitor: ""  // Target monitor for wallpaper (empty = all)
 
-    /// What rotation may pick: "all" | "still" | "live"
-    property string libraryMode: "all"
+    /// What rotation may pick: "all" | "still" | "live". P5.7 seed "still":
+    /// the engine decodes video 24/7 — rotation defaulting to live content
+    /// was the one standing OLED-fatigue source; stills are opt-in via the
+    /// LIVE filter. Seed only — an existing config file overrides it.
+    property string libraryMode: "still"
+
+    /// P5.7 DARK ONLY: rotation skips bright images (mean luma > 0.25).
+    /// Opt-in (off by default); entries whose luma isn't known yet are kept,
+    /// so the filter never blanks the library before the thumb pass lands.
+    property bool   darkOnly: false
 
     /// Raw per-library lists — wallpaperList is the filtered view.
     property var    stillList: []
@@ -111,7 +128,12 @@ Item {
     property bool   animationPaused: false
 
     /// liveDir path → cached poster frame (png) for grid thumbnails + matugen.
+    /// P5.8: stills get thumbs too (the grid never decodes a full 4K file).
     property var    thumbMap: ({})
+
+    /// path → mean luma 0..1 from the thumb pass (P5.7 dark-only filter).
+    /// Same mtime+size cache key as the thumb, so they invalidate together.
+    property var    lumaMap: ({})
 
     // --- engine (wallpaper-engine CLI) state, refreshed by status polling ---
     property bool   engineAvailable: false   // CLI found on PATH
@@ -149,11 +171,13 @@ Item {
         return Wm.isEngined(path, root.liveDir)
     }
 
-    /// THE preview resolver (§1 dedup): stills use the file itself, engine
-    /// content uses its cached poster frame ("" until extracted — callers
-    /// show a placeholder). The gallery (WallpaperModule.thumbFor) and the
-    /// dashboard card (ActiveWallpaperCard.previewSource) both delegate here
-    /// — the two copies had drifted into near-identical shapes.
+    /// THE preview resolver (§1 dedup): a cached thumb wins for any path
+    /// (P5.8 — stills included, so nothing ever decodes a full 4K file);
+    /// engine content without a frame yet → "" (placeholder glyph); a still
+    /// before its first thumb pass → the file itself. The gallery
+    /// (WallpaperModule.thumbFor) and the dashboard card
+    /// (ActiveWallpaperCard.previewSource) both delegate here — the two
+    /// copies had drifted into near-identical shapes.
     function previewSourceFor(path: string): string {
         return Wm.previewSource(path, root.thumbMap, root.liveDir)
     }
@@ -183,6 +207,7 @@ Item {
             if (patch.currentWallpaper !== undefined) root.currentWallpaper = patch.currentWallpaper
             if (patch.liveDir          !== undefined) root.liveDir          = patch.liveDir
             if (patch.libraryMode      !== undefined) root.libraryMode      = patch.libraryMode
+            if (patch.darkOnly         !== undefined) root.darkOnly         = patch.darkOnly
             // Writers add the trailing slash, but a hand-edited or older
             // config may not have it — isEngined() prefix-matches with "/".
             root.wallpaperDir = Wm.normalizeDir(root.wallpaperDir)
@@ -315,6 +340,17 @@ Item {
             var lines = Wm.parseFileList(out, code)
             root.stillList = lines
 
+            // P5.8: the still library feeds the same thumb/luma pass as the
+            // live one — a mid-session dir change (or new files) must thumb
+            // without waiting for the next live scan. The mtime+size key
+            // makes a re-walk stat-only when nothing is missing.
+            if (lines.length > 0 && !thumbWorker.running) {
+                var missing = false
+                for (var i = 0; i < lines.length; i++)
+                    if (!root.thumbMap[lines[i]]) { missing = true; break }
+                if (missing) startThumbWorker()
+            }
+
             if (lines.length === 0 && root.wallpaperDir.length > 0) {
                 console.warn("[WallpaperService] No wallpapers found in:", root.wallpaperDir)
                 console.warn("[WallpaperService] Check that the directory exists and contains image files")
@@ -414,11 +450,13 @@ Item {
     }
 
     // =========================================================================
-    // THUMBNAILS — poster frames for the live library
+    // THUMBNAILS — cached previews for BOTH libraries (P5.8)
     // ---------------------------------------------------------------------------
-    // Qt can't decode video (or animated webp) into an Image, so each live
-    // entry gets a cached poster frame: ~/.cache/quickshell/wallpaper-thumbs/
-    // The same frame feeds matugen when an animated wallpaper is applied.
+    // Qt can't decode video (or animated webp) into an Image, so live entries
+    // always needed a cached poster frame: ~/.cache/quickshell/wallpaper-thumbs/
+    // P5.8 extends the pass to stills — the gallery and ActiveWallpaperCard
+    // then serve 640px thumbs instead of decoding full 4K files. The same
+    // frame feeds matugen when an animated wallpaper is applied.
     // One worker process per scan; cache keys include mtime+size like the
     // engine's transcode cache, so edits invalidate naturally.
     // =========================================================================
@@ -437,29 +475,51 @@ Item {
 
         onRunningChanged: {
             if (!running) {
-                var map = Wm.parseThumbMap(thumbWorker.buf)
+                var s = Wm.parseThumbStats(thumbWorker.buf)
                 thumbWorker.buf = ""
-                root.thumbMap = map
-                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(map).length)
+                root.thumbMap = s.thumbs
+                root.lumaMap  = s.luma
+                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(s.thumbs).length,
+                                                                 "luma:", Object.keys(s.luma).length)
             }
         }
     }
 
+    // BOTH libraries (P5.8): stills used to have no thumbs, so the gallery
+    // and the ActiveWallpaperCard decoded full-size files. One pass covers
+    // the union of the two scans' extensions; the mean-luma extraction
+    // (signalstats YAVG of the 640px thumbnail — P5.7's dark-only filter
+    // reads it) rides the same pass, so it costs one extra thumbnail-sized
+    // decode per UNCACHED file only.
     function startThumbWorker() {
         thumbWorker.buf = ""
         thumbWorker.command = ["bash", "-c",
-            'd="$1"; c="$2"; mkdir -p "$c"; find -L "$d" -maxdepth 1 -type f ' +
-            '\\( -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mkv" -o -iname "*.mov" ' +
-            '-o -iname "*.gif" -o -iname "*.webp" -o -iname "*.apng" \\) -print0 | ' +
+            'c="$1"; d1="$2"; d2="$3"; mkdir -p "$c"; ' +
+            'for d in "$d1" "$d2"; do ' +
+            '[ -n "$d" ] || continue; ' +
+            'find -L "$d" -maxdepth 1 -type f ' +
+            '\\( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" ' +
+            '-o -iname "*.gif" -o -iname "*.apng" ' +
+            '-o -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mkv" -o -iname "*.mov" \\) -print0 | ' +
             'while IFS= read -r -d "" f; do ' +
             'key=$(printf "%s" "$f$(stat -c %Y:%s "$f")" | sha1sum | cut -c1-12); ' +
             'out="$c/$(basename "${f%.*}")-$key.png"; ' +
-            '[ -s "$out" ] || ffmpeg -nostdin -loglevel error -y -ss 1 -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null ' +
-            '|| ffmpeg -nostdin -loglevel error -y -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null ' +
-            '|| rm -f "$out"; ' +
-            '[ -f "$out" ] && printf "%s\\t%s\\n" "$f" "$out"; ' +
-            'done',
-            "thumb-worker", root.liveDir, root.thumbCacheDir]
+            // Stage order matters: `-ss 1` first (video poster = frame at 1s,
+            // not the black intro), no-seek second (stills/static webp — a
+            // single-frame input seeks PAST its only frame and exits rc=0
+            // with NO output, which is why the stages are separated by
+            // existence checks, never `||`: a "successful" no-output run
+            // would short-circuit the chain and every still would vanish).
+            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -ss 1 -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null; fi; ' +
+            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null; fi; ' +
+            '[ -s "$out" ] || rm -f "$out"; ' +
+            'if [ -s "$out" ]; then ' +
+            'yavg=$(ffmpeg -nostdin -i "$out" -vf signalstats,metadata=print -f null - 2>&1 | ' +
+            'sed -n "s/.*YAVG=\\([0-9.]*\\).*/\\1/p" | head -1); ' +
+            'printf "%s\\t%s\\t%s\\n" "$f" "$out" "$yavg"; ' +
+            'fi; ' +
+            'done; done',
+            "thumb-worker", root.thumbCacheDir, root.wallpaperDir, root.liveDir]
         thumbWorker.running = true
     }
 
@@ -483,6 +543,7 @@ Item {
     // =========================================================================
 
     /// Returns a random path from the filtered list, avoiding immediate repeats.
+    /// darkOnly (P5.7) narrows the pool first: mean luma ≤ 0.25, unknowns kept.
     function selectRandomWallpaper(): string {
         if (root.wallpaperList.length === 0) {
             if (Config.DebugConfig.debugService) console.log("[WallpaperService] List empty — triggering re-scan")
@@ -490,11 +551,19 @@ Item {
             return ""
         }
 
-        // (I8: the repeat-avoiding pick lives in ../lib/wallpaper.mjs.)
-        var newIndex = Wm.pickRandom(root.wallpaperList, root.lastIndex, Math.random)
+        var pool = root.wallpaperList
+        if (root.darkOnly) {
+            var dark = Wm.filterDarkOnly(pool, root.lumaMap, 0.25)
+            if (dark.length > 0) pool = dark   // all-too-bright library → full list (never blank)
+        }
 
-        root.lastIndex = newIndex
-        var path = root.wallpaperList[newIndex]
+        // (I8: the repeat-avoiding pick lives in ../lib/wallpaper.mjs.)
+        var newIndex = Wm.pickRandom(pool, root.lastIndex, Math.random)
+
+        var path = pool[newIndex]
+        // lastIndex indexes the FULL list; the dark pool is a subset, so
+        // map the pick back before storing (index spaces must not mix).
+        root.lastIndex = root.wallpaperList.indexOf(path)
         if (Config.DebugConfig.debugService) console.log("[WallpaperService] Selected [" + newIndex + "]:", path)
         return path
     }
@@ -580,14 +649,10 @@ Item {
 
         // A fresh apply resumes playback (a paused backend swallows the new
         // image's transition / starts the new file frozen). HOLD is re-armed
-        // by the user afterwards. Resume the backend that was holding.
+        // by the user afterwards. Resume the backend that was holding (the
+        // routing reads currentWallpaper — still the OLD path here).
         if (root.animationPaused) {
-            if (root.currentWallpaper.length > 0 && root.isEngined(root.currentWallpaper) && root.engineAvailable) {
-                engineAct(["resume"])
-            } else {
-                pauseCtl.command = ["awww", "unpause"]
-                pauseCtl.run()
-            }
+            _applyPause(false)
             root.animationPaused = false
         }
 
@@ -615,6 +680,12 @@ Item {
         Config.SharedState.updateWallpaper(path)
         saveConfig()
 
+        // Auto-pause re-assert (P5.6): the apply above just resumed the
+        // backend, but standing auto reasons (lock/idle/fullscreen) still
+        // own the screen. Engine case: the `pause` lands AFTER the queued
+        // `set` in the FIFO — new file loaded, then frozen.
+        if (root.autoPaused) _applyPause(true)
+
         // Auto-theme from the new wallpaper via matugen (instant, no rebuild)
         // when the matugenOnWallpaperChange toggle is on. Engine content gets
         // its extracted poster frame instead of the (undecodable) video path.
@@ -623,7 +694,9 @@ Item {
                 themeFromEngineWallpaper(path)
             } else {
                 if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from wallpaper via matugen:", path)
-                Services.ThemeService.applyDynamicTheme(path)
+                // P5.8: hand ThemeService the cached thumb — the matugen
+                // dominant pre-step then decodes 640px, never the 4K source.
+                Services.ThemeService.applyDynamicTheme(path, previewSourceFor(path))
             }
         }
     }
@@ -633,7 +706,7 @@ Item {
         var t = root.thumbMap[path]
         if (t) {
             if (Config.DebugConfig.debugService) console.log("[WallpaperService] Auto-theming from poster frame:", t)
-            Services.ThemeService.applyDynamicTheme(t)
+            Services.ThemeService.applyDynamicTheme(t, t)
             return
         }
         // Frame not cached yet — extract it now, then theme. Positional sh
@@ -656,7 +729,8 @@ Item {
 
         onDone: function(out, err, code) {
             if (code === 0 && Services.SettingsConfigService.matugenOnWallpaperChange) {
-                Services.ThemeService.applyDynamicTheme(root.thumbCacheDir + "/matugen-frame.png")
+                var poster = root.thumbCacheDir + "/matugen-frame.png"
+                Services.ThemeService.applyDynamicTheme(poster, poster)
             } else if (code !== 0) {
                 console.warn("[WallpaperService] matugen frame extraction failed for", targetPath)
             }
@@ -700,11 +774,11 @@ Item {
         }
     }
 
-    /// Freeze (true) or resume (false) live-wallpaper playback.
-    function setAnimationPaused(paused: bool) {
-        root.animationPaused = paused
-        saveConfig()
-
+    /// Backend routing ONLY — no state writes. Engine content → mpv pause
+    /// (decode stops), everything else → awww pause (gif/apng HOLD). Shared
+    /// by the user HOLD (setAnimationPaused) and the auto-pause reasons so
+    /// both freeze through the exact same path.
+    function _applyPause(paused: bool) {
         if (root.currentWallpaper.length > 0 && root.isEngined(root.currentWallpaper) && root.engineAvailable) {
             engineAct([paused ? "pause" : "resume"])
         } else {
@@ -713,8 +787,70 @@ Item {
         }
     }
 
+    /// Freeze (true) or resume (false) live-wallpaper playback.
+    function setAnimationPaused(paused: bool) {
+        root.animationPaused = paused
+        saveConfig()
+        _applyPause(paused)
+    }
+
     function toggleAnimationPause() {
         root.setAnimationPaused(!root.animationPaused)
+    }
+
+    // =========================================================================
+    // AUTO-PAUSE (P5.6) — transient decode-freeze reasons owned by EXTERNAL
+    // screens: "lock" (velocity-lock), "idle" (hypridle Stage-1 dim),
+    // "fullscreen" (socket2). Purely in-memory — never persisted (saveConfig
+    // writes only the user's HOLD), and the HOLD is never touched here:
+    // effective pause = userHold || any(reason). A stale reason must fail
+    // toward PLAYING, so exits use last-writer-wins, never counters.
+    // =========================================================================
+
+    property var _autoPause: ({ "lock": false, "idle": false, "fullscreen": false })
+
+    readonly property bool autoPaused:
+        root._autoPause["lock"] || root._autoPause["idle"] || root._autoPause["fullscreen"]
+
+    function _setAutoPause(reason: string, on: bool) {
+        if (root._autoPause[reason] === on) return
+        var next = {}
+        for (var k in root._autoPause) next[k] = root._autoPause[k]
+        next[reason] = on
+        root._autoPause = next    // reassign — member writes don't notify bindings
+    }
+
+    function pauseFor(reason: string) {
+        if (reason.length === 0) return
+        _setAutoPause(reason, true)
+        if (root.autoPaused && !root.animationPaused) _applyPause(true)
+    }
+
+    function resumeFor(reason: string) {
+        _setAutoPause(reason, false)
+        // A standing user HOLD owns the freeze — an auto exit must not lift it.
+        if (!root.autoPaused && !root.animationPaused) _applyPause(false)
+    }
+
+    /// Active reasons, comma-joined ("" when playing) — IPC health surface.
+    function autoPauseReasons(): string {
+        var out = []
+        for (var k in root._autoPause) if (root._autoPause[k]) out.push(k)
+        return out.join(",")
+    }
+
+    // Fullscreen watch: the bar owns the ONE socket2 consumer
+    // (HyprlandService) — settings reads re-emitted lines through the
+    // HostBridge handoff, never a second socket. `fullscreen>>1` pauses,
+    // `fullscreen>>0` resumes (no monitor token on this compositor).
+    Connections {
+        target: Services.HostBridge.hypr
+        function onSocketEvent(line) {
+            var ev = Wm.parseFullscreenEvent(line)
+            if (ev === null) return
+            if (ev.active) root.pauseFor("fullscreen")
+            else root.resumeFor("fullscreen")
+        }
     }
 
     // =========================================================================
@@ -906,6 +1042,14 @@ Item {
         saveConfig()
     }
 
+    /// P5.7 DARK ONLY: rotation skips bright wallpapers (mean luma > 0.25).
+    function setDarkOnly(on: bool) {
+        console.log("[WallpaperService] setDarkOnly", on)
+        root.darkOnly = on
+        root.lastIndex = -1
+        saveConfig()
+    }
+
     /// Change the live library directory and re-scan it.
     function setLiveDir(dir: string) {
         console.log("[WallpaperService] setLiveDir", dir)
@@ -916,6 +1060,7 @@ Item {
         root.liveDir   = dir.endsWith("/") ? dir : dir + "/"
         root.liveList  = []
         root.thumbMap  = ({})
+        root.lumaMap   = ({})
         root.lastIndex = -1
         saveConfig()
         startLiveScan()
@@ -1026,6 +1171,22 @@ Item {
             root.toggleAnimationPause()
         }
 
+        /// Auto-pause: freeze decode while an external screen owns the panel
+        /// (reason: lock | idle | fullscreen). Transient — never persisted.
+        function pauseFor(reason: string) {
+            root.pauseFor(reason)
+        }
+
+        /// Lift one auto-pause reason (does NOT touch the user HOLD)
+        function resumeFor(reason: string) {
+            root.resumeFor(reason)
+        }
+
+        /// Return active auto-pause reasons, comma-joined ("" = playing)
+        function getAutoPause(): string {
+            return root.autoPauseReasons()
+        }
+
         /// Return whether playback is currently frozen
         function getAnimationPaused(): bool {
             return root.animationPaused
@@ -1054,6 +1215,16 @@ Item {
         /// Return the current library mode
         function getLibraryMode(): string {
             return root.libraryMode
+        }
+
+        /// P5.7: skip bright wallpapers in rotation (mean luma > 0.25)
+        function setDarkOnly(on: bool) {
+            root.setDarkOnly(on)
+        }
+
+        /// Return the DARK ONLY filter state
+        function getDarkOnly(): bool {
+            return root.darkOnly
         }
 
         /// Return the live library directory

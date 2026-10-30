@@ -105,6 +105,16 @@ Item {
     // PUBLIC API
     // =========================================================================
 
+    /// FOLLOW WALLPAPER (P5.3) — one write funnel for both toggles that
+    /// surface it (Wallpapers page's AUTO-THEME pill + the Themes page's
+    /// FOLLOW WALLPAPER switch). Flip + persist in one call; direct property
+    /// writes alone would lose the setting on reboot (persistence is explicit
+    /// via saveSettings).
+    function setMatugenOnWallpaperChange(on) {
+        root.matugenOnWallpaperChange = on
+        root.saveSettings()
+    }
+
     function saveSettings() {
         // Bar keys live only in bar-config.json (saveBarConfig).
         var config = {

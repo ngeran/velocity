@@ -178,3 +178,15 @@ const b4 = T.matugenSchemeToBundle({ colors: {
 ok(b4.background === D.background, "light-only variant ignored (dark scheme contract)")
 
 console.log(`theme-sync.test: ${n} asserts`)
+
+// ── dominant color (P5) ─────────────────────────────────────────────────────
+// 2×2 image: three #64B2CB-ish blue pixels, one #F87171 red → blue wins on
+// count, red loses; quantization folds near-identical neighbors together.
+const two = "64b2cb" + "66b4c9" + "62b0c7" + "f87171"
+ok(T.dominantHexFromRgbBytes(two) === "#60B0C0", "dominant: mode count wins (quantized)")
+// tie 1-1 → darkest wins (matugen --prefer darkness intent)
+const tie = "f87171" + "201830"
+ok(T.dominantHexFromRgbBytes(tie) === "#201030", "dominant: tie breaks darkest")
+// odd junk tolerated
+ok(T.dominantHexFromRgbBytes("zz64b2c") === "", "dominant: non-hex/short → empty")
+ok(T.dominantHexFromRgbBytes("") === "", "dominant: empty → empty")

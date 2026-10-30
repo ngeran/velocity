@@ -28,6 +28,7 @@ module.exports = {
   'shared/keybinds-default.mjs': ['bar/lib/keybinds-default.mjs', 'settings/lib/keybinds-default.mjs'],
   'shared/b64.mjs': ['bar/lib/b64.mjs'],
   'shared/theme-core.mjs': ['bar/lib/theme-core.mjs', 'settings/lib/theme-core.mjs'],
+  'shared/theme-port.mjs': ['bar/lib/theme-port.mjs', 'settings/lib/theme-port.mjs'],   // P5.5: import/export (JSON + base16 YAML)
   'shared/theme-ingest.mjs': ['bar/lib/theme-ingest.mjs', 'settings/lib/theme-ingest.mjs'],   // P2.7: both ThemeConfig.qml's pure core
   'shared/orbit.mjs': ['bar/lib/orbit.mjs'],
   'shared/tz.mjs': ['settings/lib/tz.mjs', 'plugins/nikos.timezones/lib/tz.mjs', 'plugins/nikos.clock/lib/tz.mjs'],

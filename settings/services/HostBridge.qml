@@ -35,6 +35,7 @@ QtObject {
     readonly property var engine: bar ? bar.engine : null
     readonly property var configWriter: bar ? bar.configWriter : null
     readonly property var notifications: bar ? bar.notifications : null
+    readonly property var hypr: bar ? bar.hypr : null
 
     function attach(services) {
         if (services && services !== bridge.bar)

@@ -240,7 +240,10 @@ Item {
                         anchors.fill: parent
                         enabled: !Services.ThemeService.isRegenerating
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.ThemeService.applyDynamicTheme(Services.WallpaperService.currentWallpaper)
+                        onClicked: Services.ThemeService.applyDynamicTheme(
+                                       Services.WallpaperService.currentWallpaper,
+                                       Services.WallpaperService.previewSourceFor(
+                                           Services.WallpaperService.currentWallpaper))
                     }
                 }
 

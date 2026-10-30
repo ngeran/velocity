@@ -101,6 +101,7 @@ SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
 SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path
 SettingsWindow.openSettings       manual    # Control Center footer (in-process via shellApi since P2.1)
 SettingsWindow.openThemeTab       manual    # Control Center THEME tile (in-process via shellApi)
+SettingsWindow.openWallpapers     manual    # deep-link to the Wallpapers tab (scripting/QA)
 SettingsWindow.setBarStyle        manual    # P2.5: BarSettingsBody picks call
 SettingsWindow.setBarPosition     manual    # BarConfigWriter.merge() directly (one
 SettingsWindow.setBarHeight       manual    # process); these verbs remain the scripting
@@ -133,6 +134,8 @@ wallpaper-service.getWallpaperDir manual    # wallpaper dir (scripting)
 wallpaper-service.refreshList     manual    # rescan the wallpaper dir
 wallpaper-service.getLibraryMode  manual    # VIEW filter: all|still|live (scripting)
 wallpaper-service.setLibraryMode  manual    # (mode) — gallery VIEW filter (scripting)
+wallpaper-service.getDarkOnly     manual    # P5.7 dark-only rotation filter state (scripting)
+wallpaper-service.setDarkOnly     manual    # (on) — skip bright wallpapers in rotation (scripting)
 wallpaper-service.getLiveDir      manual    # live-wallpaper directory (scripting)
 wallpaper-service.setLiveDir      manual    # (dir) — live library root (scripting)
 wallpaper-service.getEngineStatus manual    # mpvpaper engine status JSON (scripting)
@@ -142,6 +145,9 @@ wallpaper-service.engineTogglePause manual  # toggle engine pause (scripting)
 wallpaper-service.getAnimationPaused manual  # animation pause state (scripting)
 wallpaper-service.setAnimationPaused manual  # (paused) — pause awww OR engine
 wallpaper-service.toggleAnimationPause manual # toggle animation pause
+wallpaper-service.pauseFor         manual    # (reason) auto-pause freeze — velocity-lock + hypridle Stage-1 (P5.6)
+wallpaper-service.resumeFor        manual    # (reason) lift one auto-pause reason
+wallpaper-service.getAutoPause     manual    # active auto-pause reasons, comma-joined (scripting/health)
 wallpaper-service.setCyclingEnabled manual  # cycle on/off (scripting)
 display.selftest                  manual    # synthetic twin-EDID keying assertions
 network.latency                  manual    # two-leg latency folds (scripting/truth probes)

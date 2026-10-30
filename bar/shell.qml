@@ -313,7 +313,10 @@ ShellRoot {
             network: Services.NetworkService,
             metrics: Services.MetricsService,
             notifications: Services.NotificationService,
-            configWriter: Config.BarConfigWriter
+            configWriter: Config.BarConfigWriter,
+            // P5.6: socket2 re-emitter — settings-side wallpaper auto-pause
+            // reads fullscreen>> lines through HostBridge (ONE socket consumer).
+            hypr: Services.HyprlandService
         })
     }
 
@@ -657,6 +660,7 @@ ShellRoot {
         function openControlPlugins() { return shellRoot.settingsCall("openControlPlugins") }
         function openSettings() { return shellRoot.settingsCall("openSettings") }
         function openThemeTab() { return shellRoot.settingsCall("openThemeTab") }
+        function openWallpapers() { return shellRoot.settingsCall("openWallpapers") }
         function openCore(section: string) { return shellRoot.settingsCall("openCore", section) }
 
         // C4: bar-owned keys written FROM the bar — silent funnel through the

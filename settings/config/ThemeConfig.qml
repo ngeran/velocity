@@ -270,6 +270,15 @@ Item {
         paletteFade.start()
     }
 
+    // HOVER PREVIEW (P5.4, settings copy only — the bar never previews):
+    // fades `colors` to `next` through the same cross-fade WITHOUT the
+    // commit path (applyTheme's metadata stamp / colors.json write stay on
+    // the ThemeService side). endPreview() just calls this again with the
+    // committed palette — the fade machinery is fully symmetric.
+    function previewColors(next) {
+        root._setColors(next)
+    }
+
     // FileView watcher for event-driven theme sync
     property var cacheWatcher: FileView {
         path: root.externalCachePath

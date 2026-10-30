@@ -32,6 +32,7 @@ import Quickshell.Io
 import "../config" as Config
 import "../lib/theme-core.mjs" as ThemeCore
 import "../lib/theme-sync.mjs" as ThemeSync
+import "../lib/theme-port.mjs" as ThemePort
 
 Item {
     id: themeService
@@ -73,8 +74,9 @@ Item {
     readonly property var presetPalettes: Config.ThemePresets.palettes
 
     // =========================================================================
-    // CUSTOM SCHEMES — user-saved palettes (max 5), persisted to
-    // ~/.config/quickshell/custom-themes.json so they survive reboot.
+    // CUSTOM SCHEMES — user-saved palettes (uncapped since P5.4 — the Themes
+    // page's grid scrolls), persisted to ~/.config/quickshell/custom-themes.json
+    // so they survive reboot.
     // =========================================================================
     property var customThemes: []
     readonly property string customThemesPath: themeService.homeDir + "/.config/quickshell/custom-themes.json"
@@ -210,6 +212,37 @@ Item {
         }
     }
 
+    // =========================================================================
+    // HOVER PREVIEW (P5.4) — blend-only theme preview through the ThemeConfig
+    // cross-fade. Commits NOTHING: no metadata stamp, no colors.json write,
+    // no external-app sync. previewTheme(palette) fades to the palette AS IT
+    // WOULD BE APPLIED (normalize + live OLED clamp); endPreview() fades back
+    // to the committed palette. Clicking a card runs the real apply path —
+    // which lands on the already-previewed bundle without a second fade
+    // (_setColors' palettesEqual guard).
+    // =========================================================================
+    property bool previewActive: false
+    property var _committedColors: null
+
+    function previewTheme(palette) {
+        if (!palette) return
+        if (!themeService.previewActive) {
+            themeService._committedColors = Config.ThemeConfig.colors
+            themeService.previewActive = true
+        }
+        var bundle = themeService.normalizeBundle(palette)
+        themeService.clampOLED(bundle, themeService.isOledClampActive)
+        Config.ThemeConfig.previewColors(bundle)
+    }
+
+    function endPreview() {
+        if (!themeService.previewActive) return
+        themeService.previewActive = false
+        if (themeService._committedColors)
+            Config.ThemeConfig.previewColors(themeService._committedColors)
+        themeService._committedColors = null
+    }
+
     /**
      * Apply a curated preset palette (instant in-process recolor + cache write).
      */
@@ -319,7 +352,7 @@ Item {
      * The OLED-clamp param is honoured via the live clamp state (matugen's
      * surfaces get clamped like any other source).
      */
-    function applyDynamicTheme(wallpaperPath, applyOLEDClamp_unused) {
+    function applyDynamicTheme(wallpaperPath, thumbPath) {
         if (Config.DebugConfig.debugTheme) console.log("=== applyDynamicTheme (matugen) CALLED ===", wallpaperPath)
 
         var actualPath = wallpaperPath || Config.SharedState.wallpaperPath
@@ -347,8 +380,50 @@ Item {
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
         matugenProc.pendingWallpaper = cleanPath;
         matugenProc.buffer = "";
-        matugenProc.command = ["matugen", "image", cleanPath, "--json", "hex", "--prefer", "darkness", "-m", "dark"];
-        matugenProc.running = true;
+        // Dominant-color pre-step (P5.3): matugen 4.x picks the source color
+        // from an image with an INTERACTIVE picker ("IO error: not a
+        // terminal" headless — the bar has no TTY ever), so we extract the
+        // dominant color ourselves and drive `matugen color hex <dom>` (same
+        // Material-You output, same downstream parser). The caller passes
+        // the cached thumb when one exists (P5.8 — no 4K re-decode per
+        // rotation); NO services import here: WallpaperService→ThemeService
+        // is already a cycle, the thumb rides the call instead.
+        var src = (thumbPath && thumbPath.length > 0) ? thumbPath : cleanPath
+        var srcPath = src.startsWith("file://") ? src.substring(7) : src
+        _dominantProc.pendingWallpaper = cleanPath
+        _dominantProc.command = ["sh", "-c",
+                                 'exec ffmpeg -nostdin -loglevel error -i "$1" ' +
+                                 '-vf scale=16:16 -f rawvideo -pix_fmt rgb24 pipe:1 ' +
+                                 '| od -An -v -tx1',
+                                 "sh", srcPath]
+        _dominantProc.running = true
+    }
+
+    // 16×16 rawvideo dump | od -tx1 → dominantHexFromRgbBytes (lib, node-
+    // tested; it strips od's whitespace) → `matugen color hex`. Text, not
+    // bytes: Quickshell 0.3.0 has NO HexParser (only SplitParser), so the
+    // binary→hex conversion happens in the pipeline. matugenProc's onExited
+    // (parse + clamp + write + sync) is unchanged — `color` emits the same
+    // JSON as `image` did.
+    BoundedProcess {
+        id: _dominantProc
+        timeoutMs: 15000
+        maxBytes: 65536
+        property string pendingWallpaper: ""
+        onDone: function(out, err, code) {
+            var dom = ThemeSync.dominantHexFromRgbBytes(out)
+            var path = _dominantProc.pendingWallpaper
+            if (code !== 0 || dom === "") {
+                console.error("[ThemeService] dominant color extraction failed for", path)
+                themeService.isRegenerating = false
+                themeService._matugenFallback(path, "dominant color extraction failed")
+                return
+            }
+            matugenProc.pendingWallpaper = path
+            matugenProc.buffer = ""
+            matugenProc.command = ["matugen", "color", "hex", dom, "-m", "dark", "-j", "hex"]
+            matugenProc.running = true
+        }
     }
 
     // Latest wallpaper requested while a matugen run was in flight (see the
@@ -535,9 +610,10 @@ Item {
         for (var k in c) {
             if (Object.prototype.hasOwnProperty.call(c, k)) entry.colors[k] = c[k]
         }
+        // No cap (P5.4): the Themes page's custom grid scrolls — a saved
+        // palette must never silently evict another.
         var arr = themeService.customThemes.filter(function(e) { return e.name !== n })
         arr.unshift(entry)
-        if (arr.length > 5) arr = arr.slice(0, 5)
         themeService.customThemes = arr
         themeService._writeCustomThemes()
     }
@@ -570,6 +646,97 @@ Item {
 
     function _writeCustomThemes() {
         themeService._atomicWrite(themeService.customThemesPath, JSON.stringify(themeService.customThemes));
+    }
+
+    // =========================================================================
+    // IMPORT / EXPORT (P5.5) — formats + validation live in ../lib/theme-port.mjs
+    // (synced from shared/theme-port.mjs, node-tested). Export serializes the
+    // LIVE palette (post-clamp — what you see is what ships); import validates
+    // against the schema, then clamps over the LIVE clamp state, saves as a
+    // CUSTOM theme and applies it. Export targets: a file (atomic write) or
+    // the clipboard (wl-copy). Import sources: a path or the clipboard.
+    // =========================================================================
+    readonly property string exportDir: themeService.homeDir + "/.cache/theme/export"
+
+    // Last port action's human-readable outcome for the Themes page row.
+    property string portStatus: ""
+    property string portError: ""
+
+    function exportThemePayload(fmt) {
+        var name = Config.ThemeConfig.metadata.name || "velocity theme"
+        var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors)
+        return fmt === "base16" ? ThemePort.exportBase16Yaml(name, bundle)
+                                : ThemePort.exportJson(name, bundle)
+    }
+
+    function exportToFile(fmt, path) {
+        var payload = themeService.exportThemePayload(fmt)
+        var ext = fmt === "base16" ? ".yaml" : ".json"
+        var p = (path || "").trim()
+        if (p.length === 0) {
+            var slug = String(Config.ThemeConfig.metadata.name || "theme")
+                .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+            p = themeService.exportDir + "/" + (slug || "theme") + ext
+        }
+        themeService._atomicWrite(p, payload, function(ok) {
+            if (ok) { themeService.portStatus = "exported " + fmt + " → " + p; themeService.portError = "" }
+            else themeService.portError = "export write failed: " + p
+        })
+    }
+
+    function exportToClipboard(fmt) {
+        var payload = themeService.exportThemePayload(fmt)
+        themeService._runSh('printf \'%s\' "$1" | wl-copy', "clipboard export",
+            function(ok) {
+                if (ok) { themeService.portStatus = "exported " + fmt + " → clipboard"; themeService.portError = "" }
+                else themeService.portError = "wl-copy failed (is wl-clipboard installed?)"
+            }, [payload])
+    }
+
+    function importThemeText(text) {
+        var r = ThemePort.parseAny(text)
+        if (!r.ok) { themeService.portError = "import rejected: " + r.error; themeService.portStatus = ""; return }
+        var bundle = themeService.normalizeBundle(r.colors)
+        themeService.clampOLED(bundle, themeService.isOledClampActive)
+        // Save as a CUSTOM theme (dedupe by scheme name), then apply through
+        // the normal custom-theme path — one apply path for both.
+        themeService.customThemes =
+            [{ name: r.name, colors: bundle }].concat(
+                themeService.customThemes.filter(function(e) { return e.name !== r.name }))
+        themeService._writeCustomThemes()
+        themeService.applyCustomTheme(r.name)
+        var note = (r.invalid && r.invalid.length > 0)
+            ? " (" + r.invalid.length + " bad token(s) skipped: " + r.invalid.join(",") + ")" : ""
+        themeService.portStatus = "imported \"" + r.name + "\"" + note
+        themeService.portError = ""
+    }
+
+    function importFromPath(path) {
+        var p = (path || "").trim()
+        if (p.length === 0) { themeService.portError = "no path given"; return }
+        themeService._portProc.onDone = function(out, err, code) {
+            if (code !== 0 || String(out).trim().length === 0)
+                themeService.portError = "cannot read " + p
+            else themeService.importThemeText(out)
+        }
+        themeService._portProc.command = ["cat", p]
+        themeService._portProc.running = true
+    }
+
+    function importFromClipboard() {
+        themeService._portProc.onDone = function(out, err, code) {
+            if (code !== 0 || String(out).trim().length === 0)
+                themeService.portError = "clipboard empty or wl-paste failed"
+            else themeService.importThemeText(out)
+        }
+        themeService._portProc.command = ["wl-paste", "--no-newline"]
+        themeService._portProc.running = true
+    }
+
+    property var _portProc: BoundedProcess {
+        timeoutMs: 8000
+        maxBytes: 262144
+        onDone: function(out, err, code) { /* replaced per call */ }
     }
 
     // =========================================================================

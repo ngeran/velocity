@@ -39,11 +39,15 @@ export function isEngined(path, liveDir) {
 // THE preview resolver (§1 dedup): stills use the file itself, engine content
 // uses its cached poster frame ("" until extracted — callers show a
 // placeholder).
+// Grid/preview source for a library entry (P5.8): a cached thumbnail wins
+// for ANY path (stills included — the grid used to decode full 4K files);
+// engine content without a frame → "" (placeholder glyph); a still before
+// its thumb pass → the file itself.
 export function previewSource(path, thumbMap, liveDir) {
     if (!path) return ""
-    if (!isEngined(path, liveDir)) return "file://" + path
     var t = thumbMap ? thumbMap[path] : undefined
-    return t ? "file://" + t : ""
+    if (t) return "file://" + t
+    return isEngined(path, liveDir) ? "" : "file://" + path
 }
 
 // Filtered pick list — rotation, IPC index access and the gallery all read
@@ -71,17 +75,35 @@ export function parseFileList(out, code) {
     return lines
 }
 
-// Thumbnail worker buffer (lines of "source\tposter.png") → {source: poster}.
-// Malformed lines are skipped; a pair with an empty value is kept (only the
-// key must be non-empty — mirrors the worker's printf contract).
-export function parseThumbMap(buf) {
-    var map = {}
+// Thumb-worker stdout → { thumbs: {path → png}, luma: {path → number} }.
+// One line per file: `path\tpng\tyavg` (yavg = ffmpeg signalstats YAVG of
+// the thumbnail, mean luma 0..255 — P5.7's dark-only filter reads it;
+// absent/invalid stays absent). The png path embeds an mtime+size hash, so
+// both caches invalidate together on edit.
+export function parseThumbStats(buf) {
+    var thumbs = {}, luma = {}
     var lines = (buf || "").trim().split("\n")
     for (var i = 0; i < lines.length; i++) {
         var parts = lines[i].split("\t")
-        if (parts.length === 2 && parts[0].length > 0) map[parts[0]] = parts[1]
+        if (parts.length !== 3 || parts[0].length === 0 || parts[1].length === 0) continue
+        thumbs[parts[0]] = parts[1]
+        var y = parseFloat(parts[2])
+        if (!isNaN(y) && y >= 0 && y <= 255) luma[parts[0]] = y / 255
     }
-    return map
+    return { thumbs: thumbs, luma: luma }
+}
+
+// P5.7 dark-only pick filter: keep entries with KNOWN mean luma ≤ threshold
+// (0..1). Unknown luma (thumb pass hasn't reached the file) stays — the
+// filter must never blank the library just because thumbs are pending.
+export function filterDarkOnly(list, lumaMap, threshold) {
+    var cap = threshold > 0 ? threshold : 0.25
+    var out = []
+    for (var i = 0; i < list.length; i++) {
+        var l = lumaMap ? lumaMap[list[i]] : undefined
+        if (l === undefined || l <= cap) out.push(list[i])
+    }
+    return out
 }
 
 // One `wallpaper-engine status` output → {running, paused, instances, raw},
@@ -132,6 +154,20 @@ export function buildAwwwCmd(path, transitionType, fps, step, monitor) {
     return cmd
 }
 
+// One Hyprland socket2 line → { active } for fullscreen transitions, or null
+// for anything that is not a fullscreen event (the caller ignores those).
+// Verified live on this compositor (0.55.4): enter `fullscreen>>1`, exit
+// `fullscreen>>0` — no monitor token. Newer/other builds may append one
+// (",MONITOR"); the suffix is ignored. `fullscreen<<` is treated as an exit
+// defensively. Any non-zero state counts as active (2 = full/maximize modes).
+export function parseFullscreenEvent(line) {
+    var s = String(line == null ? "" : line)
+    if (s.startsWith("fullscreen<<")) return { active: false }
+    if (!s.startsWith("fullscreen>>")) return null
+    var state = parseInt(s.substring(12), 10)
+    return { active: state !== 0 && !isNaN(state) }
+}
+
 // Config dirs are stored slashed (writers add it, isEngined prefix-matches
 // with "/"); an empty dir stays empty.
 export function normalizeDir(d) {
@@ -151,7 +187,8 @@ export function configPayload(st) {
         wallpaperDir:     st.wallpaperDir,
         currentWallpaper: st.currentWallpaper,
         liveDir:          st.liveDir,
-        libraryMode:      st.libraryMode
+        libraryMode:      st.libraryMode,
+        darkOnly:         st.darkOnly
     }
 }
 
@@ -171,5 +208,6 @@ export function loadedConfigPatch(data) {
     if (data.currentWallpaper !== undefined) p.currentWallpaper = data.currentWallpaper
     if (data.liveDir         !== undefined) p.liveDir          = data.liveDir
     if (data.libraryMode     !== undefined) p.libraryMode      = data.libraryMode
+    if (data.darkOnly        !== undefined) p.darkOnly         = data.darkOnly
     return p
 }

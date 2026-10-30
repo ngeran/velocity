@@ -184,6 +184,13 @@ Item {
         dashboard.openThemeTab()
     }
 
+    // Deep-link to the Wallpapers tab (library grid + cycling + dark-only)
+    function openWallpapers() {
+        hostRoot.shown = true
+        panelWindow.visible = true
+        dashboard.openWallpapersTab()
+    }
+
     // Deep-link to the Core tab (defaults to Processors; section keys:
     // processors | gpu | memoryenv | lcd | events)
     function openCore(section: string) {

@@ -6,6 +6,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../config" as Config
+import "../lib/theme-core.mjs" as ThemeCore
 
 Rectangle {
     id: root
@@ -32,6 +33,25 @@ Rectangle {
     signal clicked()
     signal editClicked()
     signal deleteClicked()
+    // HOVER PREVIEW (P5.4): the caller fades the live palette to this card's
+    // theme on enter and back on leave. Emitted from the card-wide area only
+    // (EDIT/✕ hovers bubble through it — acceptable: previewing while aiming
+    // at a corner action is the same theme).
+    signal previewEntered()
+    signal previewExited()
+
+    // RAW palette behind the card (override for custom, curated lookup else)
+    // — the contrast badge judges the palette AS SAVED, before any clamp.
+    readonly property var sourcePalette:
+        root.paletteOverride || Config.ThemePresets.getPalette(root.themeName)
+        || Config.ThemePresets.getPalette("OLED Pure Black")
+
+    // P5.4 contrast badge: text legible against black (lum ≤ 0.70, the clamp
+    // cap) and the accent visible on black (lum ≥ 0.10). Healthy cards show a
+    // dim "AA"; a failing palette gets a warning-tinted "LOW".
+    readonly property bool contrastOk:
+        ThemeCore.luminance(root.sourcePalette.text) <= 0.705
+        && ThemeCore.luminance(root.sourcePalette.accent) >= 0.10
 
     // =========================================================================
     // RECONCILED PRESET COLOR MAP DICTIONARY
@@ -171,6 +191,8 @@ Rectangle {
         cursorShape:  Qt.PointingHandCursor
         hoverEnabled: true
         onClicked: root.clicked()
+        onEntered: root.previewEntered()
+        onExited:  root.previewExited()
     }
 
     // Clean terminal press luminance modifier canvas overlay element
@@ -183,6 +205,22 @@ Rectangle {
         Behavior on opacity {
             NumberAnimation { duration: Config.MotionConfig.animDurationFast; easing.type: Easing.OutQuad }
         }
+    }
+
+    // Contrast badge (P5.4) — dim "AA" when the palette is legible on black
+    // by design, warning-tinted "LOW" when text or accent fails the check.
+    // Bottom-right: the top corners belong to ✓ / EDIT / ✕.
+    Text {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: 5
+        anchors.bottomMargin: 3
+        text: root.contrastOk ? "AA" : "LOW"
+        font.family: Config.SettingsConfig.fontFamily
+        font.pixelSize: 7
+        font.bold: true
+        font.letterSpacing: 1
+        color: root.contrastOk ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.warning
     }
 
     // =========================================================================
