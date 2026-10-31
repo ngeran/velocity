@@ -5,6 +5,7 @@ singleton ThemePresets 1.0 ThemePresets.qml
 singleton Tokens 1.0 Tokens.qml
 singleton SharedState 1.0 SharedState.qml
 singleton ControlConfig 1.0 ControlConfig.qml
+singleton HudConfig 1.0 HudConfig.qml
 singleton DebugConfig 1.0 DebugConfig.qml
 singleton UIScale 1.0 UIScale.qml
 singleton MotionConfig 1.0 MotionConfig.qml

@@ -10,3 +10,4 @@ singleton BarWatchService 1.0 BarWatchService.qml
 singleton HyprSettingsService 1.0 HyprSettingsService.qml
 singleton SearchIndex 1.0 SearchIndex.qml
 singleton HostBridge 1.0 HostBridge.qml
+singleton LcdConfigService 1.0 LcdConfigService.qml

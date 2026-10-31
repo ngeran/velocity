@@ -6,6 +6,10 @@ ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 SystemInfoTab 1.0 SystemInfoTab.qml
+HudLedBar 1.0 HudLedBar.qml
+HudMeterBar 1.0 HudMeterBar.qml
+HudChip 1.0 HudChip.qml
+LcdControllerPanel 1.0 LcdControllerPanel.qml
 ActiveWallpaperCard 1.0 ActiveWallpaperCard.qml
 ControlTab 1.0 ControlTab.qml
 ControlSectionNav 1.0 ControlSectionNav.qml
@@ -19,7 +23,6 @@ SourceListView 1.0 SourceListView.qml
 DisplayControlView 1.0 DisplayControlView.qml
 WallpaperModule 1.0 WallpaperModule.qml
 CoreEngineTab 1.0 CoreEngineTab.qml
-CoreDashBand 1.0 CoreDashBand.qml
 CoreDashDial 1.0 CoreDashDial.qml
 CoreLcdPane 1.0 CoreLcdPane.qml
 Card 1.0 Card.qml
