@@ -1,0 +1,434 @@
+// =============================================================================
+// shell.qml — QuickShell Settings Dashboard Entry Point
+//
+// This is the entry point QuickShell auto-discovers and launches.
+// It sets up a transparent full-width top stage + centered sliding card
+// that animates down from the bar (26px tall). The card's top edge aligns
+// with the bar's bottom when shown.
+//
+// All visual content lives in SettingsWindowShell.qml — this file only handles
+// the window geometry, animation, and IPC dispatch.
+//
+// =============================================================================
+
+import Quickshell
+import Quickshell.Wayland
+import Quickshell.Io
+import QtQuick
+import "components" as Components
+import "config" as Config
+import "services" as Services
+
+ShellRoot {
+    id: root
+
+    // =========================================================================
+    // STATE
+    // =========================================================================
+
+    property bool shown: false
+
+    // Eagerly instantiate the Core Engine publisher. QML singletons are lazy —
+    // nothing references SystemMetricsService until the Core tab is opened, but the
+    // deepcool-py LCD feed (~/.cache/deepcool/metrics.json) must publish
+    // continuously for the process lifetime. Accessing it here (in onCompleted,
+    // which always runs, unlike an unread binding) creates it; a singleton then
+    // lives for the engine's lifetime and pulls in GpuService + ThermalService.
+    Component.onCompleted: {
+        // Reading a property (not a bare reference, which the JS engine treats
+        // as dead code) forces the lazy singleton to instantiate so its 1s
+        // publish Timer runs for the process lifetime.
+        Services.SystemMetricsService.metricsPath
+        // Shibumi UI-scale — feed the singleton our live logical width (a
+        // binding, so output changes propagate). Singletons can't use the
+        // Screen attached property (not part of a scene), so the window
+        // injects it instead.
+        Config.UIScale.sourceWidth = Qt.binding(function() { return root.availableWidth })
+    }
+
+    // Screen-adaptive sizing — scale based on available window dimensions.
+    // PanelWindow spans the full screen, so its width/height map to the screen.
+    readonly property real availableWidth: panelWindow.width || 1920
+    readonly property real availableHeight: panelWindow.height || 1080
+
+    // Base design size (1100×640) — the perfect size on the 4K OLED. On smaller
+    // screens each dimension is capped to a fraction of the panel so the card
+    // never swamps the display (a fixed 640px height covered ~all of a 768p
+    // laptop); floors keep it usable on tiny screens. Caps preserve the 4K look.
+    readonly property real cardWidth:  Math.max(720, Math.min(1100, availableWidth  * 0.60))
+    readonly property real cardHeight: Math.max(480, Math.min(640,  availableHeight * 0.75))
+
+    // =========================================================================
+    // HIDE TIMER — defer visible=false until slide-up completes
+    // =========================================================================
+    Timer {
+        id: hideTimer
+        interval: Config.MotionConfig.animDurationSlow
+
+        onTriggered: {
+            if (!root.shown) {
+                panelWindow.visible = false
+            }
+        }
+    }
+
+    // Trigger hide timer when shown becomes false
+    onShownChanged: {
+        // Broadcast open/close so background services can gate their poll timers
+        // (see SharedState.dashboardVisible). Every shown mutation funnels here.
+        Config.SharedState.dashboardVisible = root.shown
+        if (!shown) {
+            hideTimer.restart()
+        }
+    }
+
+    // =========================================================================
+    // WORKSPACE WATCHER — auto-close when the user switches workspace.
+    // Event-driven via Hyprland's socket2 (no polling latency). `nc -U` streams
+    // events line-by-line (socat isn't installed on this system; nc -U is the
+    // verified equivalent — see bar/services/HyprlandService.qml); we dismiss on
+    // workspace>> / workspacev2>> / focusedmon>> (focus to another monitor ≈ switch).
+    // =========================================================================
+    Process {
+        id: workspaceWatcher
+        command: ["sh", "-c", "nc -U \"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock\""]
+        running: true
+        stdout: SplitParser {
+            onRead: function(line) {
+                var ev = "" + line
+                if (ev.indexOf("workspace>>") === 0
+                    || ev.indexOf("workspacev2>>") === 0
+                    || ev.indexOf("focusedmon>>") === 0) {
+                    if (root.shown) root.shown = false
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // BAR FAILURE BANNER — "the bar is down and here's why" (BarWatch feeds
+    // it; auto-shows on bar death, auto-hides on recovery).
+    // =========================================================================
+    Components.BarFailureBanner { }
+
+    // Display-section IPC (status/stage probes) — component-owned so it reads
+    // the "../services" MonitorService instance, not this file's twin.
+    Components.DisplayIpc { }
+
+    // Network-section IPC (latency/engineer probes) — same instance trap.
+    Components.NetworkIpc { }
+
+    // =========================================================================
+    // IPC HANDLER — toggle window visibility from other instances (e.g. bar)
+    // =========================================================================
+    IpcHandler {
+        id: settingsWindowIpc
+        target: "SettingsWindow"
+
+        function toggle() {
+            if (panelWindow.visible && !root.shown) {
+                // Already hiding — do nothing
+                return
+            }
+            // Every generic open lands on the dashboard — the window no
+            // longer reopens on the tab you left. Only when actually opening
+            // (not on the close half of the toggle).
+            if (!root.shown) dashboard.openDashboardTab()
+            root.shown = !root.shown
+            panelWindow.visible = true
+        }
+
+        function show() {
+            dashboard.openDashboardTab()
+            root.shown = true
+            panelWindow.visible = true
+        }
+
+        function hide() {
+            root.shown = false
+        }
+
+        // Read-only probe: key of the visible top-level tab (dashboard |
+        // themes | …). Makes the dashboard-start behavior scriptable —
+        // generic opens must land on "dashboard" no matter what was open.
+        function activeTab(): string { return dashboard.currentTabKey }
+
+        // Deep-link to Control tab sections (Quickshell IPC doesn't support
+        // arbitrary arguments, so individual functions per section)
+        function openControlNetwork() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("network")
+        }
+
+        function openControlBluetooth() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("bluetooth")
+        }
+
+        function openControlAudio() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("audio")
+        }
+
+        // Deep-link to the Display control section (live mode/HDR/VRR/scale)
+        function openControlDisplay() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("display")
+        }
+
+        // Deep-link to the plugin manager (Control ▸ Plugins)
+        function openControlPlugins() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openControlTab("plugins")
+        }
+
+        // Generic "open the settings app" verb (Control Center's SETTINGS ›,
+        // the bar gear). Starts at the dashboard like every generic open —
+        // the SETTINGS tab itself stays reachable from the sidebar.
+        function openSettings() {
+            dashboard.openDashboardTab()
+            root.shown = true
+            panelWindow.visible = true
+        }
+
+        // Deep-link to the Theme tab (presets + custom palettes + editor)
+        function openThemeTab() {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openThemeTab()
+        }
+
+        // Deep-link to the Core tab (defaults to Processors; section keys:
+        // processors | gpu | memoryenv | lcd | events)
+        function openCore(section: string) {
+            root.shown = true
+            panelWindow.visible = true
+            dashboard.openCoreTab(section || "system")
+        }
+
+        // ── C4: bar-owned keys written FROM the bar (velocity.bar-settings) ──
+        // The settings app stays bar-config.json's single writer — the in-bar
+        // overlay routes style/edge picks through these verbs so the write
+        // lands via the same funnel as the Bar pane (extras merge → atomic
+        // write → `config reload` nudge) and a later settings-side save can't
+        // clobber a bar-side pick. No window is opened: a silent write.
+        function setBarStyle(name: string): string {
+            if (!/^[a-z0-9][a-z0-9-]*$/.test(String(name)))
+                return "error: style name must match [a-z0-9-]"
+            Services.SettingsConfigService.barStyle = String(name)
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        function setBarPosition(pos: string): string {
+            if (pos !== "top" && pos !== "bottom")
+                return "error: position must be top|bottom"
+            Services.SettingsConfigService.barPosition = String(pos)
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        // J5: OSD track style — same silent funnel as style/edge.
+        function setOsdStyle(style: string): string {
+            if (style !== "bar" && style !== "segments")
+                return "error: osd style must be bar|segments"
+            Services.SettingsConfigService.osdStyle = String(style)
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        // Consolidation: the logo overlay (velocity.bar-settings) is THE one
+        // bar-settings surface — these are its remaining writes (the Settings
+        // ▸ Bar pane was removed). Same funnel: set → saveSettings →
+        // saveBarConfig → atomic write → `config reload` nudge.
+        function setBarHeight(h: string): string {
+            var v = Math.round(Number(h))
+            if (!(v >= 18 && v <= 64))
+                return "error: height must be an int 18..64"
+            Services.SettingsConfigService.barHeight = v
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        function setWorkspaceCount(n: string): string {
+            var v = Math.round(Number(n))
+            if ([3, 5, 7, 9].indexOf(v) === -1)
+                return "error: workspace count must be 3|5|7|9"
+            Services.SettingsConfigService.workspaceCount = v
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+
+        // scope: "strip" (vector/notch/ryoku BurnOrbit) | "island" (island
+        // dim/orbit clock) — two knobs because the island's guard also dims.
+        function setBurnGuard(scope: string, val: string): string {
+            if (scope !== "strip" && scope !== "island")
+                return "error: scope must be strip|island"
+            if (val !== "on" && val !== "off")
+                return "error: val must be on|off"
+            if (scope === "strip")
+                Services.SettingsConfigService.stripBurnGuard = (val === "on")
+            else
+                Services.SettingsConfigService.islandBurnGuard = (val === "on")
+            Services.SettingsConfigService.saveSettings()
+            return "ok"
+        }
+    }
+
+    // =========================================================================
+    // IPC HANDLER — plugin pipeline (install/convert from the CLI and tests)
+    // =========================================================================
+    IpcHandler {
+        target: "PluginManager"
+        function installFromGit(url: string): string {
+            Services.PluginManagerService.installGit(url)
+            return "installing"
+        }
+        function refresh(): string {
+            return JSON.stringify(Services.PluginManagerService.plugins)
+        }
+    }
+
+    // =========================================================================
+    // IPC HANDLER — toggle the PowerMenu overlay (bar PowerIcon / SUPER+P)
+    // =========================================================================
+    IpcHandler {
+        id: powerMenuIpc
+        target: "powerMenu"
+
+        function toggle() {
+            powerMenu.showing = !powerMenu.showing
+        }
+    }
+
+    // =========================================================================
+    // IPC HANDLER — dashboard search (scripting / truth probes / deep-link).
+    // Runs through dashboard.* bridges: the search index singleton lives under
+    // the components' "../services" import, a DIFFERENT instance from this
+    // file's "services" (see SettingsWindowShell — the SharedState trap).
+    //   qs -c settings ipc call search query lock
+    // =========================================================================
+    IpcHandler {
+        target: "search"
+
+        function query(q: string): string { return dashboard.searchIpcQuery(q) }
+
+        // Open the palette pre-filled. NOT named "show" — that word is a
+        // `quickshell ipc` CLI subcommand, so it can't serve as a verb here.
+        function open(q: string) { dashboard.searchIpcOpen(q) }
+
+        // run the query, activate the first hit (navigation end-to-end probe)
+        function activateFirst(q: string) { return dashboard.searchIpcActivateFirst(q) }
+
+        function list(): string { return dashboard.searchIpcList() }
+    }
+
+    // =========================================================================
+    // PANEL WINDOW — transparent full-width top stage
+    // =========================================================================
+    PanelWindow {
+        id: panelWindow
+
+        // Full-screen overlay so ANY click outside the card closes the window.
+        anchors {
+            top: true
+            left: true
+            right: true
+            bottom: true
+        }
+
+        // Transparent stage — backdrop + card provide the visuals
+        color: "transparent"
+
+        // Don't reserve screen space
+        exclusionMode: ExclusionMode.Ignore
+
+        // Stay above other windows
+        aboveWindows: true
+
+        // Allow keyboard focus (Escape to close)
+        focusable: true
+
+        // Start hidden
+        visible: false
+
+        // Dim backdrop — also makes the surface input-solid so clicks register
+        // anywhere outside the card. (A bare MouseArea on a transparent layer
+        // doesn't catch input in Wayland — the dim Rectangle is what registers
+        // the input region.) Fades in/out with the card.
+        Rectangle {
+            id: backdrop
+            anchors.fill: parent
+            color: Config.ThemeConfig.colors.background
+            opacity: root.shown ? 0.6 : 0.0
+            visible: opacity > 0.01
+            Behavior on opacity {
+                NumberAnimation { duration: Config.MotionConfig.animDurationSlow }
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.shown = false
+            }
+
+            // Key handler — Escape closes. Lives on the backdrop (OverlayShell
+            // card pattern): a Keys attached property on the PanelWindow root
+            // can't attach — the window is not an Item (P1.11 journal fix).
+            Keys.onEscapePressed: {
+                root.shown = false
+            }
+        }
+
+        // =====================================================================
+        // DASHBOARD CARD — centered, animates down from bar
+        // =====================================================================
+        Components.SettingsWindowShell {
+            id: dashboard
+
+            // Injected so SettingsWindowShell can funnel visibility into the
+            // SharedState instance the services read (see its windowShown).
+            windowShown: root.shown
+
+            z: 1   // paint above the dim backdrop
+            width: root.cardWidth
+            height: root.cardHeight
+
+            // Center horizontally, animate vertically
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            // Hidden: y = barHeight - height (above stage)
+            // Shown:  y = barHeight (top edge flush with bar bottom)
+            // H10: the live mirror (ingested from bar-config.json) — the old
+            // hardcoded SettingsConfig.barHeight token drifted the moment the
+            // bar height changed via IPC.
+            y: root.shown ? Services.SettingsConfigService.barHeight
+                          : (Services.SettingsConfigService.barHeight - height)
+
+            // Smooth slide animation
+            Behavior on y {
+                NumberAnimation {
+                    duration: Config.MotionConfig.animDurationSlow
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            // Focus handling — close when losing focus to outside
+            focus: true
+
+            Keys.onEscapePressed: {
+                root.shown = false
+            }
+        }
+    }
+
+    // =========================================================================
+    // POWER MENU — full-screen overlay (toggled via the 'powerMenu' IPC target)
+    // =========================================================================
+    Components.PowerMenu {
+        id: powerMenu
+    }
+}

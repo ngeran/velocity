@@ -9,7 +9,7 @@
 
 import QtQuick
 import QtQuick.Layouts
-import bar.config as Config
+import "../config" as Config
 
 Item {
     id: link

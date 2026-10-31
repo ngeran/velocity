@@ -48,7 +48,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform                   // StandardPaths (ThemeService idiom)
 import Quickshell.Io
-import bar.config as Config
+import "../config" as Config
 
 Item {
     id: root

@@ -10,9 +10,9 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
-import bar.services as Services
-import bar.engine as Engine
-import bar.config as Config
+import "../services" as Services
+import "../engine" as Engine
+import "../config" as Config
 
 PanelWindow {
     id: card

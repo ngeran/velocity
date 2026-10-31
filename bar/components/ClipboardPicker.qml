@@ -31,8 +31,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
-import bar.config as Config
-import bar.services as Services
+import "../config" as Config
+import "../services" as Services
 import "../lib/clip.mjs" as Clip
 import "../lib/launcher-search.mjs" as Launcher
 

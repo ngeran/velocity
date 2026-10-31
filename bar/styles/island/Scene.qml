@@ -37,9 +37,9 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import "../../components" as Bar
-import bar.config as Config
-import bar.engine as Engine
-import bar.services as Services
+import "../../config" as Config
+import "../../engine" as Engine
+import "../../services" as Services
 import "../../Ui" as Ui
 import "lib/island.mjs" as Isl
 

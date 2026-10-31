@@ -25,8 +25,8 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import bar.services as Services
-import bar.config as Config
+import "../services" as Services
+import "../config" as Config
 
 PanelWindow {
     id: win

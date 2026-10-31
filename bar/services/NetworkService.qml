@@ -12,7 +12,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
-import bar.config as Config
+import "../config" as Config
 import "../lib/network-model.mjs" as Model
 import "../lib/network-control-model.mjs" as ConnectModel
 import "../lib/history.mjs" as History

@@ -33,7 +33,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.Pipewire
-import bar.config as Config
+import "../config" as Config
 
 Scope {
     id: root

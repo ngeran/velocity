@@ -16,8 +16,8 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
-import bar.services as Services
-import bar.config as Config
+import "../services" as Services
+import "../config" as Config
 
 Row {
     id: widget

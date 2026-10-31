@@ -14,8 +14,8 @@
 // =============================================================================
 
 import QtQuick
-import bar.config as Config
-import bar.services as Services
+import "../config" as Config
+import "../services" as Services
 
 Item {
     id: root

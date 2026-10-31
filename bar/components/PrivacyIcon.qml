@@ -4,8 +4,8 @@
 // privacy tray body in the shared TrayCard, same contract as NetworkIcon.
 import QtQuick
 import Quickshell.Services.Pipewire
-import bar.config as Config
-import bar.services as Services
+import "../config" as Config
+import "../services" as Services
 
 Item {
     id: root

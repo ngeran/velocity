@@ -35,8 +35,8 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import "../../components" as Bar
-import bar.config as Config
-import bar.engine as Engine
+import "../../config" as Config
+import "../../engine" as Engine
 
 Item {
     id: sceneRoot

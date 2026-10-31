@@ -18,8 +18,8 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
-import bar.config as Config
-import bar.services as Services
+import "../config" as Config
+import "../services" as Services
 
 // Shared overlay chrome (DU11): backdrop/Esc/card/timer live in OverlayShell;
 // this file contributes the HUD interior + the service side effects.

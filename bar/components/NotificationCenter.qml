@@ -18,8 +18,8 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
-import bar.config as Config
-import bar.services as Services
+import "../config" as Config
+import "../services" as Services
 
 PanelWindow {
     id: root

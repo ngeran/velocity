@@ -9,8 +9,8 @@
 
 import QtQuick
 import QtQuick.Layouts
-import bar.services as Services
-import bar.config as Config
+import "../services" as Services
+import "../config" as Config
 
 ColumnLayout {
     id: body

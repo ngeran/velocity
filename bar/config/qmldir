@@ -1,6 +1,6 @@
 # qmldir for config module
 
-module bar.config
+module config
 singleton BarConfig 1.0 BarConfig.qml
 singleton Tokens 1.0 Tokens.qml
 singleton BarConfigWriter 1.0 BarConfigWriter.qml

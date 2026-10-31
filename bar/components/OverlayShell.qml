@@ -16,7 +16,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import bar.config as Config
+import "../config" as Config
 
 PanelWindow {
     id: root

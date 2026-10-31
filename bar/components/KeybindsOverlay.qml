@@ -14,7 +14,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
-import bar.config as Config
+import "../config" as Config
 import "../lib/keybinds-default.mjs" as KeybindsLib
 
 // Shared overlay chrome (DU11): backdrop/Esc/card/timer live in OverlayShell;

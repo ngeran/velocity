@@ -20,9 +20,9 @@ import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 import "components" as Components
-import bar.config as Config
-import bar.engine as Engine
-import bar.services as Services
+import "config" as Config
+import "engine" as Engine
+import "services" as Services
 
 ShellRoot {
     id: shellRoot
