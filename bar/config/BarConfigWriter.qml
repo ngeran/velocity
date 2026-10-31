@@ -43,6 +43,17 @@ Item {
     // one (last pick wins — the UI only ever reflects the latest values).
     property var _queuedMerge: null
 
+    // THE SAME FILE instantiates TWICE in the deployed one-process shell:
+    // the bar's qrc domain (qs -c bar packs this tree into the VFS) and the
+    // file:// domain the settings pane file://-loads BarSettingsBody from —
+    // two import specifiers for one directory = two singleton instances, so
+    // the settings-side picks run THIS writer as a file:// twin. Only the
+    // qrc instance's reloadFromDisk() below reaches the live bar; the twin
+    // wakes it through the `config reload` IPC verb (the proven hand-edit
+    // nudge) so a UI pick applies instantly on BOTH sides.
+    property bool _isVfsInstance:
+        Qt.resolvedUrl("qmldir").toString().indexOf("qrc:") === 0
+
     function merge(changes, cb) {
         if (readProc.running || writeProc.running) {
             root._queuedMerge = { changes: changes, cb: cb }
@@ -108,8 +119,31 @@ Item {
             writeProc.onDone = null
             if (!ok) console.log("[BarConfigWriter] write failed (exit " + code + ")")
             if (cb) cb(ok)
+            // The atomic tmp+mv write swaps the file's inode, which this
+            // build's FileView watch does not see — without an explicit
+            // reload every pick waits on the 60s backstop (or later).
+            // Reload the in-process readers NOW (the same call the
+            // `config reload` IPC verb makes); dedup makes it idempotent
+            // against the watch's own late event.
+            if (ok) {
+                BarConfig.reloadFromDisk()
+                MotionConfig.reloadFromDisk()
+                // file:// twin only: wake the bar's qrc singletons — their
+                // FileView watch is blind to this tmp+mv too. In dev -p mode
+                // the call finds no bar and fails harmlessly (that domain is
+                // single-instance; the local reload above covered it).
+                if (!root._isVfsInstance) nudgeProc.running = true
+            }
             var q = root._queuedMerge
             if (q) { root._queuedMerge = null; root.merge(q.changes, q.cb) }
         }
+    }
+
+    // file://-twin's wake call: the `config reload` verb on the bar's qrc
+    // domain. One cheap one-shot fork per pick (the merge already forked
+    // cat + sh); dedup makes the resulting reload idempotent.
+    Process {
+        id: nudgeProc
+        command: ["qs", "-c", "bar", "ipc", "call", "config", "reload"]
     }
 }

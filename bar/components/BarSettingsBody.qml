@@ -22,9 +22,10 @@
 //             BurnOrbit on vector/notch/ryoku) and ISLAND (its own dim+orbit
 //             knob, shown only while the island style is active).
 //   MODULES   the plugin engine is IN this process: enable/disable and section
-//             placement call PluginRegistry directly (the bar is
-//             plugins-state.json's only writer — no fork, no drift). Rows are
-//             rebuilt imperatively after every action (array-identity law).
+//             placement call the BAR's PluginRegistry (injected by the hosting
+//             pane as barRegistry = HostBridge.engine — the body's own
+//             ../engine import is a file:// twin; array-identity law applies
+//             to the rows).
 //
 // Host wiring: PLUGINS › emits pluginsRequested() (the overlay deep-links and
 // closes; the settings pane routes into its own Plugins page); showBack adds
@@ -47,6 +48,17 @@ ColumnLayout {
     signal pluginsRequested()
     property bool showBack: false
     property real viewportHeight: 0    // >0: fixed-height scroll area (in-card)
+    // The BAR's PluginRegistry (HostBridge.engine — the qrc instance the bar
+    // renders from), injected by the hosting pane. This body file://-loads
+    // across the import split, so its own `../engine` import yields a TWIN
+    // registry the bar never sees: toggling THAT flips the twin's state and
+    // writes plugins-state.json the bar's registry (by contract its only
+    // reader, loaded once at boot) will ignore — and later clobber. Null
+    // fallback keeps dev -p mode working (single domain there: the local
+    // instance IS the bar's registry).
+    property var barRegistry: null
+    onBarRegistryChanged: _refresh()
+    function _registry() { return barRegistry || Engine.PluginRegistry }
 
     spacing: Config.PopupMetrics.px(10)
 
@@ -106,14 +118,15 @@ ColumnLayout {
     // file:// vs deployed-path resolution — don't fork it via StandardPaths.
     readonly property string _stylesDir: Engine.PluginRegistry.repoDir + "/bar/styles"
 
-    // ---- engine actions (same process; the bar owns plugins-state.json) ----
+    // ---- engine actions (through the BAR's registry — see barRegistry) ----
     function _refresh() {
+        var reg = root._registry()
         var rows = []
-        var ps = Engine.PluginRegistry.plugins
+        var ps = reg.plugins
         var rank = { left: 0, center: 1, right: 2 }
         for (var i = 0; i < ps.length; i++) {
             if (ps[i].kinds.indexOf("bar-widget") === -1) continue
-            var sec = Engine.PluginRegistry.sectionOf(ps[i].id) || ""
+            var sec = reg.sectionOf(ps[i].id) || ""
             rows.push({ pid: ps[i].id, pname: ps[i].name || ps[i].id,
                         penabled: ps[i].enabled === true, psection: sec,
                         prank: rank[sec] !== undefined ? rank[sec] : 3 })
@@ -126,12 +139,12 @@ ColumnLayout {
     }
 
     function _toggleModule(pid, enabled) {
-        Engine.PluginRegistry.setEnabled(pid, !enabled)
+        root._registry().setEnabled(pid, !enabled)
         _refresh()
     }
 
     function _placeModule(pid, section) {
-        Engine.PluginRegistry.place(pid, section, -1)   // end of the target section
+        root._registry().place(pid, section, -1)   // end of the target section
         _refresh()
     }
 

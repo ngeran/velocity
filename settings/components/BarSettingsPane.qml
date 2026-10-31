@@ -9,10 +9,13 @@
 // The settings tree must not `import "../bar/…"` (import-split law: a
 // directory under two specifiers yields two singleton instances), so the body
 // arrives through a file:// Loader: its own relative imports keep resolving
-// inside the bar tree, so it reads and writes the LIVE bar singletons of this
-// same process (BarConfig, BarConfigWriter, PluginRegistry). The settings tree
-// is always disk-loaded (it lives outside the bar config root's VFS), so
-// Qt.resolvedUrl from here lands on the repo root.
+// inside the bar tree — but onto file:// TWINS of the bar's singletons, not
+// the qrc instances the bar itself renders from. Two consequences, both
+// handled: the config writer twin nudges the bar's `config reload` verb after
+// its writes (BarConfigWriter), and module actions are re-pointed at the
+// bar's real PluginRegistry injected below as `barRegistry` (HostBridge.engine).
+// The settings tree is always disk-loaded (it lives outside the bar config
+// root's VFS), so Qt.resolvedUrl from here lands on the repo root.
 //
 // PLUGINS › inside the body jumps to the dashboard's own plugin manager
 // (CONTROL › plugins) via the shell root passed down as `dash` — the same
@@ -73,6 +76,11 @@ Item {
                     onLoaded: {
                         // No in-card ‹ BACK row here (the rail is the navigation).
                         item.showBack = false
+                        // Module actions must land on the BAR's registry (the
+                        // qrc instance the bar renders from) — the body's own
+                        // ../engine import is a file:// twin. Null-safe: the
+                        // body falls back to its local registry when unset.
+                        item.barRegistry = Services.HostBridge.engine
                         item.pluginsRequested.connect(function() {
                             if (root.dash && root.dash.openControlTab)
                                 root.dash.openControlTab("plugins")
