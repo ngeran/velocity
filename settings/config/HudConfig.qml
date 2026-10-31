@@ -49,9 +49,10 @@ QtObject {
     readonly property int radiusMd: 6
     readonly property real glowAlpha: 0.45
 
-    // --- Typography (both installed on this host) ---
+    // --- Typography (all installed on this host) ---
     readonly property string fontUi:   "Space Grotesk"   // labels, eyebrows
     readonly property string fontData: "JetBrains Mono"  // telemetry digits
+    readonly property string fontDoto: "Doto"            // dot-matrix gauges
 
     // --- PCIe link rate: gen N ≈ 2.5 · 2^(N−1) GT/s per lane (gen 5 → 32) ---
     function gtRate(gen) { return Math.round(2.5 * Math.pow(2, gen - 1) * 10) / 10 }

@@ -219,53 +219,28 @@ Rectangle {
                     Item { Layout.fillWidth: true }
                 }
                 RowLayout {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14
-                    spacing: 4
-                    Text {
-                        text: root.m.util > 0 ? Math.round(root.m.util) : "—"
-                        color: Config.HudConfig.textHi
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 40; font.bold: true
-                    }
-                    Text {
-                        text: "%"
-                        color: Config.HudConfig.amber
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 15; font.bold: true
-                        Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 7
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: root.m.clockMHz > 0 ? Math.round(root.m.clockMHz) + " MHZ" : "— MHZ"
-                        color: Config.HudConfig.textDim
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true
-                        Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 7
-                    }
-                }
-                RowLayout {
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    Layout.leftMargin: 10; Layout.rightMargin: 10
-                    spacing: 10
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 4
+                    spacing: 12
 
-                    Item {
-                        Layout.fillHeight: true
-                        Layout.preferredWidth: Math.min(250, height * 1.6)
-                        CoreDashDial {
-                            anchors.fill: parent
-                            anchors.bottomMargin: 10
-                            value: root.m.util
-                        }
-                        Text {
-                            anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
-                            text: "TACH"
-                            color: Config.HudConfig.textFaint
-                            font.family: Config.HudConfig.fontUi; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.4
-                        }
+                    // Dot-matrix ring gauge (Doto numeral core) — GPU util
+                    // inside, core temp as the caption ring reads like the
+                    // Doto reference: number in the dots' circle.
+                    HudDotRing {
+                        Layout.preferredWidth: 172
+                        Layout.preferredHeight: 172
+                        Layout.alignment: Qt.AlignVCenter
+                        value: root.m.util
+                        valueText: "" + Math.round(root.m.util)
+                        caption: root.m.temp > 0 ? "GPU · " + root.m.temp.toFixed(0) + "°C" : "GPU"
+                        accent: root.m.util >= 85 ? Config.HudConfig.red : Config.HudConfig.amber
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true; Layout.fillHeight: true
                         Layout.minimumWidth: 0
                         spacing: 3
+                        Item { Layout.fillHeight: true }   // center the grid block
                         RowLayout {
                             Layout.fillWidth: true; spacing: 10
                             StatCell { Layout.fillWidth: true; label: "BUS"
@@ -291,6 +266,13 @@ Rectangle {
                                 value: root.m.fanPct > 0 ? root.m.fanPct.toFixed(0) + "%" : "STOP 0DB"
                                 accent: root.m.fanPct > 0 ? Config.HudConfig.textBody : Config.HudConfig.textFaint }
                         }
+                        Item { Layout.fillHeight: true }
+                    }
+                    Text {
+                        text: root.m.clockMHz > 0 ? Math.round(root.m.clockMHz) + " MHZ" : "— MHZ"
+                        color: Config.HudConfig.textDim
+                        font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true
+                        Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 7
                     }
                 }
                 ColumnLayout {
@@ -342,30 +324,31 @@ Rectangle {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14
-                    spacing: 12
-                    ColumnLayout {
-                        spacing: 0
-                        RowLayout {
-                            spacing: 4
-                            Text {
-                                text: Math.round(root.m.ramPct)
-                                color: Config.HudConfig.textHi
-                                font.family: Config.HudConfig.fontData; font.pixelSize: 40; font.bold: true
-                            }
-                            Text {
-                                text: "%"
-                                color: Config.HudConfig.cyan
-                                font.family: Config.HudConfig.fontData; font.pixelSize: 15; font.bold: true
-                                Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 7
-                            }
-                        }
-                        Micro { text: root.m.ramUsedGB.toFixed(1) + " / " + root.m.ramTotalGB.toFixed(1) + " GiB · SYSTEM MEMORY" }
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 4
+                    spacing: 10
+
+                    // Dot-matrix ring pair (Doto), mirroring the reference
+                    // cluster: CPU load ring + MEM pressure ring, the CPU/MEM
+                    // rail stacked to their right.
+                    HudDotRing {
+                        Layout.preferredWidth: 124
+                        Layout.preferredHeight: 124
+                        value: root.m.cpuUsage
+                        valueText: "" + Math.round(root.m.cpuUsage)
+                        caption: root.m.cpuTemp > 0 ? "CPU · " + root.m.cpuTemp.toFixed(0) + "°C" : "CPU"
+                        accent: root.loadTier(root.m.cpuUsage)
+                    }
+                    HudDotRing {
+                        Layout.preferredWidth: 124
+                        Layout.preferredHeight: 124
+                        value: root.m.ramPct
+                        valueText: "" + Math.round(root.m.ramPct)
+                        caption: "MEM · " + root.m.ramUsedGB.toFixed(1) + "G"
+                        accent: Config.HudConfig.cyan
                     }
                     Item { Layout.fillWidth: true }
                     ColumnLayout {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: 2
+                        Layout.alignment: Qt.AlignVCenter
                         spacing: 2
                         Text { text: "MAX BOOST " + root.m.cpuMaxGhz.toFixed(2) + " GHZ"
                             color: Config.HudConfig.textDim
