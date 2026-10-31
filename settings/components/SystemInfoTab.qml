@@ -18,9 +18,8 @@
 // FULL-CHROME PASS (same day, window raised to the mockup's ~1100×1000): the
 // mockup's remaining furniture is in — command strip (NODE/PROFILE chips +
 // live clock; the shell header already has the power actions + operator),
-// footer ticker (DAEMON ONLINE / IPC · distro right), shelf action bar
-// (SYSTEM CONFIGURATION path + REV chip from /run/current-system), sensor
-// footer (CPU temp · FAN · COOLANT hwmon feeds), gradient sensor bars, and
+// footer ticker (DAEMON ONLINE / IPC · distro right), sensor
+// footer (CPU temp · FAN · COOLANT hwmon feeds), LED segment meters, and
 // fixed-height network rows so slack pools under them instead of stretching
 // the LOCAL IP panel. The mockup's rebuild/rollback buttons stay out — the
 // dashboard reads, omni-apply writes.
@@ -90,25 +89,16 @@ Item {
         return ""
     }
 
-    // ── Nix generation + system store path (mockup: "Gen #142 (Active)" and
-    // the shelf's "SYSTEM CONFIGURATION: <path>" / FLAKE-REVISION chip) ──────
-    // One readlink pair at tab construction — both only move on a rebuild,
-    // so a per-session snapshot is plenty.
+    // ── Nix generation (mockup: "Gen #142 (Active)" chip in SESSION) ────────
+    // One readlink at tab construction — it only moves on a rebuild, so a
+    // per-session snapshot is plenty.
     property string nixGen: ""
-    property string sysPath: ""     // /run/current-system store path
-    property string sysRev: ""      // first 8 chars of its store hash
     Services.BoundedProcess {
         id: genProbe
-        command: ["sh", "-c", "readlink /nix/var/nix/profiles/system; readlink /run/current-system"]
+        command: ["sh", "-c", "readlink /nix/var/nix/profiles/system"]
         onDone: function(out) {
-            var lines = out.trim().split("\n")
-            var g = (lines[0] || "").match(/-(\d+)-link/)
+            var g = (out.trim() || "").match(/-(\d+)-link/)
             if (g) root.nixGen = g[1]
-            if (lines.length > 1 && lines[1]) {
-                root.sysPath = lines[1]
-                var h = lines[1].match(/\/([a-z0-9]{32})-/)
-                if (h) root.sysRev = h[1].substring(0, 8)
-            }
         }
     }
 
@@ -1244,27 +1234,6 @@ Item {
                             }
                         }
 
-                        // Action bar (mockup shelf footer: config path +
-                        // revision chip; the mockup's rebuild buttons stay
-                        // out — the dashboard reads, omni-apply writes).
-                        Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.ControlConfig.space2
-                            Rectangle { width: 6; height: 6; radius: 3; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
-                            Text { text: "SYSTEM CONFIGURATION"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
-                            Text {
-                                text: root.sysPath || "—"
-                                color: root.cText; font.family: root.fontM; font.pixelSize: 9
-                                elide: Text.ElideMiddle
-                                Layout.fillWidth: true; Layout.minimumWidth: 0
-                            }
-                            HudChip {
-                                visible: root.sysRev !== ""
-                                label: "REV #" + root.sysRev
-                                chipColor: root.cAccent2
-                            }
-                        }
                     }
                 }
             }
