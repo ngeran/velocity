@@ -594,6 +594,18 @@ ShellRoot {
         function status(): string { return Engine.PluginRegistry.call("velocity.record", "status", "") }
     }
 
+    // Screenshots (P7 G2, same pattern): thin forwarder to the velocity.shot
+    // service — `qs -c bar ipc call screenshot region|output|window|status`.
+    // Every capture rides wl-copy + ~/Pictures/Screenshots; answers
+    // "unavailable: …" while grim/slurp/wl-copy are absent.
+    IpcHandler {
+        target: "screenshot"
+        function region(): string { return Engine.PluginRegistry.call("velocity.shot", "region", "") }
+        function output(): string { return Engine.PluginRegistry.call("velocity.shot", "output", "") }
+        function window(): string { return Engine.PluginRegistry.call("velocity.shot", "window", "") }
+        function status(): string { return Engine.PluginRegistry.call("velocity.shot", "status", "") }
+    }
+
     IpcHandler {
         target: "controlCenter"
         function toggle() { shellRoot.toggleControlCenter() }

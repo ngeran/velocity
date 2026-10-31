@@ -58,6 +58,14 @@ record.stop              manual    # SIGINT finalize → ~/Videos mp4 + notifica
 record.startMode          manual    # start <region|output> (typed arg variant)
 record.toggle            bound     # SUPER+SHIFT+R (velocity-binds.lua, D3)
 record.status            manual    # JSON: recording/elapsed/file
+# screenshot.* = velocity.shot (P7 G2): grim captures — region (shared slurp
+# picker with record), focused output, active window; every capture is copied
+# with wl-copy AND saved to ~/Pictures/Screenshots; transient toast card
+# (thumbnail + EDIT swappy / OPEN folder)
+screenshot.region         bound     # SUPER+SHIFT+S (velocity-binds.lua, D3)
+screenshot.output         bound     # PRINT (velocity-binds.lua, D3)
+screenshot.window         manual    # active-window geometry via hyprctl -j
+screenshot.status         manual    # JSON: lastFile/dir
 clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
 controlCenter.toggle     bound     # SUPER+N (velocity-binds.lua, D3)

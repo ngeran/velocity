@@ -13,7 +13,16 @@
   "entryPoints": {
     "overlay": "Overlay.qml"
   },
-  "commands": [],
+  "commands": [
+    "bash",
+    "hyprctl",
+    "qalc",
+    "sh",
+    "printf",
+    "wl-copy",
+    "ghostty",
+    "xdg-open"
+  ],
   "ipc": [
     "toggle",
     "open",

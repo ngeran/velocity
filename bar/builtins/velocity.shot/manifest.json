@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.shot",
+  "name": "Screenshot",
+  "version": "1.0.0",
+  "description": "Built-in service: screenshots (P7 G2). region (shared slurp picker), focused output, or active window — every capture is copied with wl-copy AND saved to ~/Pictures/Screenshots/<ts>.png; a transient toast card offers EDIT (swappy) and OPEN (folder).",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "ServiceRoot.qml"
+  },
+  "commands": [
+    "sh",
+    "hyprctl",
+    "mkdir",
+    "grim",
+    "slurp",
+    "wl-copy",
+    "swappy",
+    "xdg-open"
+  ],
+  "ipc": [
+    "region",
+    "output",
+    "window",
+    "status"
+  ]
+}

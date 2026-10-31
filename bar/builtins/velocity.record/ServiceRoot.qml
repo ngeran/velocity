@@ -29,6 +29,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../../components" as Components
 
 Item {
     id: root
@@ -56,7 +57,7 @@ Item {
         if (root.recording) return "already recording"
         if (!root.ctx) return "not ready"
         var mode = String(argument || "region")
-        if (mode === "region") { slurpProc.running = true; return "ok" }
+        if (mode === "region") { picker.pick(); return "ok" }
         if (mode === "output") { mkdirProc.running = true; return "ok" }   // full output, no slurp
         return "error: mode must be region|output"
     }
@@ -94,24 +95,12 @@ Item {
         }
     }
 
-    // ── region pick (interactive; Esc = code 1 = quiet abort) ────────────────
-    // slurp prints one line "x,y WxH" — SplitParser is exact here (per-line,
-    // newline stripped; single line in, single line out).
+    // ── region pick (shared components/RegionPicker; Esc = quiet abort) ──────
     property string _geometry: ""
-    Process {   // unbounded-ok: interactive region pick, lives until the user draws
-        id: slurpProc
-        running: false
-        command: ["slurp", "-b", "#00000055", "-c", "#00dce5", "-w", "2"]
-        stdout: SplitParser {
-            onRead: function(data) { root._geometry = data.trim() }
-        }
-        onExited: function(code, status) {
-            if (code !== 0) {
-                if (code !== 1) console.log("[velocity.record] slurp aborted: code " + code)
-                root._geometry = ""
-                return   // Esc-cancelled pick — silent
-            }
-            if (root._geometry.length === 0) return
+    Components.RegionPicker {
+        id: picker
+        onPicked: function(geometry) {
+            root._geometry = geometry
             mkdirProc.running = true
         }
     }

@@ -1,6 +1,6 @@
 // launcher-search.test.mjs — the launcher's rank/highlight/selection core.
 import { strict as assert } from "node:assert"
-import { rank, highlight, segments, resultKey, reconcileSelection } from "./launcher-search.mjs"
+import { rank, highlight, segments, resultKey, reconcileSelection, route, windowEntries } from "./launcher-search.mjs"
 
 let n = 0
 function ok(name, fn) { fn(); n++; console.log("  ok " + name) }
@@ -110,5 +110,51 @@ ok("query trim + case insensitivity end to end", () => {
     const out = rank(APPS, "  CHROM ", {})
     assert.equal(out[0].id, "chromium.desktop")
 })
+
+ok("route: bare query = apps provider, arg verbatim", () => {
+    assert.deepEqual(route("chrom"), { provider: "apps", arg: "chrom" })
+    assert.deepEqual(route(""), { provider: "apps", arg: "" })
+})
+
+ok("route: = > ? prefixes strip the sigil (shell/web trim)", () => {
+    assert.deepEqual(route("=2+2"), { provider: "calc", arg: "2+2" })
+    assert.deepEqual(route("> kitty -ls"), { provider: "shell", arg: "kitty -ls" })
+    assert.deepEqual(route("? nix flake"), { provider: "web", arg: "nix flake" })
+})
+
+ok("windowEntries: hyprctl clients rows → search entries", () => {
+    const json = JSON.stringify([
+        { address: "0xabc", title: "nvim init.lua", class: "kitty", workspace: { id: 2 } },
+        { address: "0xdef", title: "", class: "chromium" },
+        { address: "", title: "no address", class: "x" },
+    ])
+    const out = windowEntries(json)
+    assert.equal(out.length, 2)
+    assert.deepEqual(out[0], { id: "0xabc", name: "nvim init.lua", genericName: "kitty" })
+    assert.equal(out[1].name, "chromium")   // class fallback when the title is empty
+})
+
+ok("windowEntries: malformed input → empty (apps-only launcher)", () => {
+    assert.deepEqual(windowEntries("not json"), [])
+    assert.deepEqual(windowEntries('{"a":1}'), [])
+    assert.deepEqual(windowEntries(""), [])
+})
+
+// P7 TEST bar: a keystroke over 1000 entries must stay under 50 ms. The
+// benchmark runs the worst realistic case — a subsequence query that walks
+// every field of every entry, then a sort over the matches.
+{
+    const big = []
+    for (let i = 0; i < 1000; i++)
+        big.push({ id: "app" + i, name: "Application " + i, genericName: "Category " + (i % 20), keywords: ["kw" + (i % 50), "tag" + i] })
+    const t0 = process.hrtime.bigint()
+    let hits = 0
+    for (const q of ["app", "application", "app999", "kw7tag3", "zzzznope", "cation 4", "tag99"])
+        hits += rank(big, q, { app3: 5 }).length
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6
+    assert.ok(hits > 0, "benchmark queries matched nothing")
+    assert.ok(ms < 50, "rank over 1000 entries x 7 queries took " + ms.toFixed(1) + " ms (budget 50)")
+    ok("benchmark: 7 keystrokes over 1000 entries in " + ms.toFixed(1) + " ms (< 50)", () => {})
+}
 
 console.log("launcher-search: " + n + " assertions passed")

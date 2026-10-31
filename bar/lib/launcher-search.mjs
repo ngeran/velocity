@@ -115,6 +115,41 @@ export function segments(name, spans) {
     return out
 }
 
+// ── provider routing (P7 G1) ─────────────────────────────────────────────────
+// The first character selects a provider: `=` calculator, `>` shell command,
+// `?` web search, anything else = applications (+ open windows in the QML
+// layer). Everything downstream (ranking, selection stability, highlight)
+// stays provider-agnostic — rows are entries with id/name[/genericName].
+export function route(query) {
+    var q = String(query || "")
+    if (q.indexOf("=") === 0) return { provider: "calc", arg: q.slice(1) }
+    if (q.indexOf(">") === 0) return { provider: "shell", arg: q.slice(1).trim() }
+    if (q.indexOf("?") === 0) return { provider: "web", arg: q.slice(1).trim() }
+    return { provider: "apps", arg: q }
+}
+
+// `hyprctl -j clients` output → launcher entries: id = the Wayland address
+// (the focus target), name = title (class as fallback), genericName = class.
+// Malformed/empty input → [] (the launcher stays an apps-only list).
+export function windowEntries(clientsJson) {
+    var out = []
+    var arr
+    try { arr = JSON.parse(String(clientsJson || "")) } catch (e) { return out }
+    if (!Array.isArray(arr)) return out
+    for (var i = 0; i < arr.length; i++) {
+        var c = arr[i]
+        if (!c || !c.address) continue
+        var title = String(c.title || "").trim()
+        var klass = String(c.class || "").trim()
+        out.push({
+            id: c.address,
+            name: title.length > 0 ? title : (klass.length > 0 ? klass : String(c.address)),
+            genericName: klass
+        })
+    }
+    return out
+}
+
 // ── selection stability ─────────────────────────────────────────────────────
 // Identity key for a result row (provider is implied — apps — but the shape
 // keeps the door open for prefixed providers later).

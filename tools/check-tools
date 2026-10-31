@@ -68,7 +68,7 @@ check feature wf-recorder  "velocity.record screen recording (with slurp/grim)"
 check feature wtype        "tools/qa keyboard steps SKIP without it (keybinds-via-keybind)"
 check feature velocity-lock "the lock (SUPER+L, hypridle lock_cmd) — programs.velocity.lock.enable"
 # P7 futures, shipped early per P3.1 (harmless until their features land):
-check optional qalc        "charms calculator (P7 G3)"
+check optional qalc        "launcher =calc provider (P7 G1)"
 check optional swappy      "screenshot annotation (P7 G2)"
 
 # --- optional: degrade gracefully by design ---------------------------------
