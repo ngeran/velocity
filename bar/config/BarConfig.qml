@@ -57,7 +57,8 @@ Item {
     // Gap between right-section widgets. What sits where is the engine's
     // layout (plugins-state.json); bar-config.json's old "rightLayout" is
     // read once by the engine's schema-2 migration and ignored after.
-    readonly property int slotMargin: 8
+    // 8 → 18 (user call: the keyboard/wifi/bt/volume cluster felt cramped).
+    readonly property int slotMargin: 18
 
     // =========================================================================
     // CONFIG FILE LOADING
