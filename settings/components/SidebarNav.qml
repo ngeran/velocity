@@ -260,7 +260,12 @@ Rectangle {
                         Layout.preferredHeight: 28
 
                         readonly property string subKey: modelData.key
-                        readonly property bool subActive: sidebarRoot.coreSection === subKey
+                        // ACTIVE only when the CORE tab is open AND this is
+                        // its live section — coreSection defaults to "system",
+                        // so an unguarded comparison lit TELEMETRY + LCD from
+                        // every other tab.
+                        readonly property bool subActive: navItem.isActive
+                                                          && sidebarRoot.coreSection === subKey
 
                         // connector line (mock's border-l rail)
                         Rectangle {
