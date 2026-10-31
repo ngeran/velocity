@@ -563,15 +563,24 @@ Rectangle {
                 Eyebrow { Layout.leftMargin: 14; Layout.topMargin: 8; text: "PER-CORE LOAD" }
                 Micro { Layout.leftMargin: 14; text: root.coreCount + " THREADS"
                     color: Config.HudConfig.textFaint; font.pixelSize: 7 }
-                Item { Layout.fillWidth: true; Layout.fillHeight: true
+                Item {
+                    id: coreWell
+                    Layout.fillWidth: true; Layout.fillHeight: true
                     Grid {
+                        id: coreGrid
                         anchors.centerIn: parent
                         columns: 8
-                        columnSpacing: 3; rowSpacing: 3
+                        columnSpacing: 6; rowSpacing: 6
+                        // square cells scaled to the well — bounded by the
+                        // tighter axis so 2×8 always fits (cell reads the
+                        // well Item, never the Grid, or the binding loops)
+                        property real cell: Math.max(8, Math.min(
+                            (coreWell.width - 7 * columnSpacing) / 8,
+                            (coreWell.height - rowSpacing) / 2))
                         Repeater {
                             model: 16
                             Rectangle {
-                                width: 11; height: 11; radius: 2
+                                width: coreGrid.cell; height: coreGrid.cell; radius: 3
                                 readonly property real _load: root.m.perCoreLoad.length > index
                                                               ? root.m.perCoreLoad[index] : 0
                                 color: _load > 1 ? root.loadTier(_load) : Config.HudConfig.ledDim

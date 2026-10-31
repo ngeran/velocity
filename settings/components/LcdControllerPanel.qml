@@ -344,7 +344,7 @@ Rectangle {
                             // how tall the header/footer strips run
                             Row {
                                 anchors.top: parent.top
-                                anchors.topMargin: 12
+                                anchors.topMargin: 17
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 spacing: 12
                                 Text {
@@ -363,17 +363,37 @@ Rectangle {
                                     font.bold: true
                                 }
                             }
-                            // the main dial — dead center of the circle
+                            // the main dial — dead center of the circle.
+                            // The unit glyph splits off the digits so the
+                            // number itself centers exactly over MAIN (a
+                            // trailing ° in the string would shift the
+                            // digit group left of center)
                             Column {
+                                id: mainReadout
                                 anchors.centerIn: parent
                                 spacing: 2
-                                Text {
+                                readonly property string full: root.lcd.metricValue(root.lcd.mainTempSource)
+                                readonly property string digits: full.length > 1 ? full.substring(0, full.length - 1) : full
+                                readonly property string unit: full.length > 1 ? full.substring(full.length - 1) : ""
+                                Row {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: root.lcd.metricValue(root.lcd.mainTempSource)
-                                    color: Config.HudConfig.amber
-                                    font.family: Config.HudConfig.fontDoto
-                                    font.weight: Font.Black
-                                    font.pixelSize: 40
+                                    spacing: 3
+                                    Text {
+                                        text: mainReadout.digits
+                                        color: Config.HudConfig.amber
+                                        font.family: Config.HudConfig.fontDoto
+                                        font.weight: Font.Black
+                                        font.pixelSize: 40
+                                    }
+                                    Text {
+                                        text: mainReadout.unit
+                                        color: Config.HudConfig.amber
+                                        font.family: Config.HudConfig.fontDoto
+                                        font.weight: Font.Black
+                                        font.pixelSize: 20
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: 10
+                                    }
                                 }
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
