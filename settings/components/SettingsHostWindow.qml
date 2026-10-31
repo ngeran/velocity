@@ -39,11 +39,13 @@ Item {
     readonly property real availableWidth: panelWindow.width || 1920
     readonly property real availableHeight: panelWindow.height || 1080
 
-    // Base design size (1100×640) — the perfect size on the 4K OLED. On smaller
-    // screens each dimension is capped to a fraction of the panel so the card
-    // never swamps the display; floors keep it usable on tiny screens.
+    // Base design size (1100×1000) — matches the mission-control mockup's
+    // ~1.1:1 card (user call: the 640-tall card left the dashboard tiles
+    // squat). On smaller screens each dimension is capped to a fraction of
+    // the panel so the card never swamps the display; floors keep it usable
+    // on tiny screens.
     readonly property real cardWidth:  Math.max(720, Math.min(1100, availableWidth  * 0.60))
-    readonly property real cardHeight: Math.max(480, Math.min(640,  availableHeight * 0.75))
+    readonly property real cardHeight: Math.max(480, Math.min(1000, availableHeight * 0.78))
 
     // Shibumi UI-scale — feed the singleton our live logical width (a binding,
     // so output changes propagate). Singletons can't use the Screen attached

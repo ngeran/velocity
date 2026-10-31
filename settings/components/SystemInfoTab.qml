@@ -14,6 +14,16 @@
 // need). Card chrome follows the hud language: radius 10, corner brackets
 // (accent top-left, primary bottom-right), dot + caps header, right chip.
 //
+// FULL-CHROME PASS (same day, window raised to the mockup's ~1100×1000): the
+// mockup's remaining furniture is in — command strip (NODE/PROFILE chips +
+// live clock; the shell header already has the power actions + operator),
+// footer ticker (DAEMON ONLINE / IPC · distro right), shelf action bar
+// (SYSTEM CONFIGURATION path + REV chip from /run/current-system), sensor
+// footer (CPU temp · FAN · COOLANT hwmon feeds), gradient sensor bars, and
+// fixed-height network rows so slack pools under them instead of stretching
+// the LOCAL IP panel. The mockup's rebuild/rollback buttons stay out — the
+// dashboard reads, omni-apply writes.
+//
 // Data comes through HostBridge (import-split law — this tree never imports
 // "../bar/…"): bar MetricsService + NetworkService. MetricsService is
 // lease-gated AND profile-lazy (boot runs refreshStatic only), so the tab
@@ -73,24 +83,45 @@ Item {
         return ""
     }
 
-    // ── Nix generation (mockup: "Gen #142 (Active)") ────────────────────────
-    // One readlink at tab construction — the generation only moves on a
-    // rebuild, so a per-session snapshot is plenty.
+    // ── Nix generation + system store path (mockup: "Gen #142 (Active)" and
+    // the shelf's "SYSTEM CONFIGURATION: <path>" / FLAKE-REVISION chip) ──────
+    // One readlink pair at tab construction — both only move on a rebuild,
+    // so a per-session snapshot is plenty.
     property string nixGen: ""
+    property string sysPath: ""     // /run/current-system store path
+    property string sysRev: ""      // first 8 chars of its store hash
     Services.BoundedProcess {
         id: genProbe
-        command: ["sh", "-c", "readlink /nix/var/nix/profiles/system"]
+        command: ["sh", "-c", "readlink /nix/var/nix/profiles/system; readlink /run/current-system"]
         onDone: function(out) {
-            var g = out.trim().match(/-(\d+)-link/)
+            var lines = out.trim().split("\n")
+            var g = (lines[0] || "").match(/-(\d+)-link/)
             if (g) root.nixGen = g[1]
+            if (lines.length > 1 && lines[1]) {
+                root.sysPath = lines[1]
+                var h = lines[1].match(/\/([a-z0-9]{32})-/)
+                if (h) root.sysRev = h[1].substring(0, 8)
+            }
         }
+    }
+
+    // ── command-strip clock (mockup header: "Saturday 09:08:42") ────────────
+    // Gated 1 s Timer (not SystemClock): costs nothing while the window is
+    // hidden, and the tab lives for the whole session once opened.
+    property date hudNow: new Date()
+    Timer {
+        interval: 1000
+        running: root.shown && root.visible
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.hudNow = new Date()
     }
 
     // ── row height ──────────────────────────────────────────────────────────
     // The two card rows split the height the window gives the tab (mockup
     // rows are equal). Clamped so a shrunken window scrolls instead of
     // crushing the cards.
-    readonly property int softwareStripH: 106
+    readonly property int softwareStripH: 150
     readonly property real rowH: Math.max(180, (flick.height - softwareStripH - 2 * Config.ControlConfig.space3) / 2)
 
     // =========================================================================
@@ -249,6 +280,63 @@ Item {
         anchors.margins: Config.ControlConfig.space4
         spacing: Config.ControlConfig.space3
 
+        // ── COMMAND STRIP (mockup header centre/right: node · profile · live
+        // clock; the window shell already carries the power actions and the
+        // operator card, so those are not duplicated here) ───────────────────
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 24
+            readonly property color chipBg: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.5)
+            Row {
+                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                spacing: Config.ControlConfig.space2
+                Rectangle {
+                    height: 20; width: nodeRow.implicitWidth + 16; radius: 10
+                    color: parent.parent.chipBg; border.color: root.cOutline; border.width: 1
+                    Row {
+                        id: nodeRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text { text: "NODE:"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: (root.m && root.m.hostname && root.m.hostname !== "unknown") ? root.m.hostname.toUpperCase() : "—"
+                            color: root.cPrimary; font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 20; width: profRow.implicitWidth + 16; radius: 10
+                    color: parent.parent.chipBg; border.color: root.cOutline; border.width: 1
+                    Row {
+                        id: profRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text { text: "PROFILE:"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: (root.m && root.m.osCodename) ? root.m.osCodename.toUpperCase() : "—"
+                            color: root.cAccent2; font.family: root.fontM; font.pixelSize: 9; font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+            }
+            Row {
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                spacing: 8
+                Text {
+                    text: Qt.formatDateTime(root.hudNow, "dddd").toUpperCase()
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: 9
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    text: Qt.formatDateTime(root.hudNow, "HH:mm:ss")
+                    color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+
         // ---- card rows (scrollable on the 480px-floor viewport) ----
         Flickable {
             id: flick
@@ -322,7 +410,8 @@ Item {
                                                 Text { text: "CPU"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1 }
                                                 Item { Layout.fillWidth: true }
                                                 Text {
-                                                    text: Math.round(root.m ? root.m.cpuUsage : 0) + "% LOAD"
+                                                    text: (root.m && root.m.cpuTemp > 0 ? Math.round(root.m.cpuTemp) + "°C · " : "")
+                                                          + Math.round(root.m ? root.m.cpuUsage : 0) + "% LOAD"
                                                     color: root.loadColor(root.m ? root.m.cpuUsage : 0)
                                                     font.family: root.fontM; font.pixelSize: 9; font.bold: true
                                                 }
@@ -431,7 +520,7 @@ Item {
                                     spacing: 6
 
                                     Item {
-                                        width: 104; height: 104
+                                        width: 128; height: 128
                                         Layout.alignment: Qt.AlignHCenter
                                         Canvas {
                                             id: ramRadial
@@ -477,7 +566,7 @@ Item {
                                                 Layout.alignment: Qt.AlignHCenter
                                                 text: Math.round(root.m ? root.m.memPct : 0) + "%"
                                                 color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 19; font.bold: true
+                                                font.family: root.fontM; font.pixelSize: 22; font.bold: true
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
@@ -538,6 +627,8 @@ Item {
                             HudHeader {
                                 title: "SESSION"
                                 dotColor: root.cPrimary
+                                chipLabel: "HYPRLAND"
+                                chipColor: root.cPrimary
                             }
 
                             // Hero uptime counter
@@ -557,7 +648,7 @@ Item {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: root.m ? root.m.uptimeStr : "—"
                                         color: root.cText
-                                        font.family: root.fontM; font.pixelSize: 24; font.bold: true
+                                        font.family: root.fontM; font.pixelSize: 32; font.bold: true
                                     }
                                 }
                             }
@@ -634,56 +725,67 @@ Item {
                                 chipColor: root.cPrimary
                             }
 
-                            ColumnLayout {
+                            // Disk rows — plain anchored stack (the unit-row
+                            // pattern; a Repeater inside a fillHeight
+                            // ColumnLayout pooled its stretch into one dead
+                            // gap here at the taller card height).
+                            Item {
+                                id: stBody
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                spacing: Config.ControlConfig.space2
+                                readonly property int n: (root.m && root.m.profileDisks) ? root.m.profileDisks.length : 0
+                                readonly property real rowH2: n > 0 ? Math.max(44, (height - (n - 1) * 8) / n) : 0
                                 Repeater {
                                     model: root.m ? root.m.profileDisks : []
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        spacing: 3
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            Text {
-                                                text: modelData.dev
-                                                color: root.cText; font.family: root.fontM; font.pixelSize: 10; font.bold: true
+                                    Item {
+                                        width: stBody.width
+                                        height: stBody.rowH2
+                                        y: index * (stBody.rowH2 + 8)
+                                        Column {
+                                            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+                                            spacing: 3
+                                            RowLayout {
+                                                width: parent.width
+                                                spacing: 6
+                                                Text {
+                                                    text: modelData.dev
+                                                    color: root.cText; font.family: root.fontM; font.pixelSize: 10; font.bold: true
+                                                }
+                                                Text {
+                                                    text: modelData.mount === "/" ? "(/)" : "(" + modelData.mount + ")"
+                                                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8
+                                                }
+                                                Item { Layout.fillWidth: true }
+                                                Text { text: modelData.usedLabel + " / " + modelData.totalLabel; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
                                             }
-                                            Text {
-                                                text: modelData.mount === "/" ? "(/)" : "(" + modelData.mount + ")"
-                                                color: root.cDim; font.family: root.fontM; font.pixelSize: 8
+                                            Item {
+                                                width: parent.width
+                                                height: 6
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7)
+                                                    radius: 2
+                                                }
+                                                Rectangle {
+                                                    anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
+                                                    width: parent.width * Math.min(modelData.pct, 100) / 100
+                                                    color: root.diskColor(modelData.pct)
+                                                    radius: 2
+                                                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                                    Behavior on color { ColorAnimation { duration: 200 } }
+                                                }
                                             }
-                                            Item { Layout.fillWidth: true }
-                                            Text { text: modelData.usedLabel + " / " + modelData.totalLabel; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
-                                        }
-                                        Item {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 5
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7)
-                                                radius: 2
-                                            }
-                                            Rectangle {
-                                                anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                                width: parent.width * Math.min(modelData.pct, 100) / 100
-                                                color: root.diskColor(modelData.pct)
-                                                radius: 2
-                                                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                                Behavior on color { ColorAnimation { duration: 200 } }
-                                            }
-                                        }
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            Text {
-                                                text: "FS: " + (root.fsTypeFor(modelData.mount) || "—")
-                                                color: root.cDim; font.family: root.fontM; font.pixelSize: 8
-                                            }
-                                            Item { Layout.fillWidth: true }
-                                            Text {
-                                                text: Math.round(modelData.pct) + "% USED"
-                                                color: root.diskColor(modelData.pct); font.family: root.fontM; font.pixelSize: 8; font.bold: true
+                                            RowLayout {
+                                                width: parent.width
+                                                Text {
+                                                    text: "FS: " + (root.fsTypeFor(modelData.mount) || "—")
+                                                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8
+                                                }
+                                                Item { Layout.fillWidth: true }
+                                                Text {
+                                                    text: Math.round(modelData.pct) + "% USED"
+                                                    color: root.diskColor(modelData.pct); font.family: root.fontM; font.pixelSize: 8; font.bold: true
+                                                }
                                             }
                                         }
                                     }
@@ -732,8 +834,7 @@ Item {
                                 // LOCAL IP
                                 InsetPanel {
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    Layout.minimumHeight: 30
+                                    Layout.preferredHeight: 56
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 10
                                         ColumnLayout {
@@ -757,8 +858,7 @@ Item {
                                 // SSID + signal
                                 InsetPanel {
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    Layout.minimumHeight: 30
+                                    Layout.preferredHeight: 56
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 10
                                         spacing: Config.ControlConfig.space2
@@ -788,8 +888,7 @@ Item {
                                 // GEO / gateway
                                 InsetPanel {
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    Layout.minimumHeight: 30
+                                    Layout.preferredHeight: 56
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 10
                                         spacing: Config.ControlConfig.space2
@@ -813,6 +912,11 @@ Item {
                                         }
                                     }
                                 }
+
+                                // Slack pools here — the three spec rows keep
+                                // mockup height and the footer pins to the
+                                // card bottom instead of the rows stretching.
+                                Item { Layout.fillHeight: true }
                             }
 
                             // Live throughput footer (dashboard lease keeps the
@@ -891,15 +995,18 @@ Item {
                                     }
                                 }
                                 Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 5
+                                    Layout.fillWidth: true; Layout.preferredHeight: 7
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
                                     Rectangle {
                                         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
                                         width: parent.width * Math.min((root.m ? root.m.gpuTempC : 0) / 85, 1)
-                                        color: root.tempColor(root.m ? root.m.gpuTempC : 0)
                                         radius: 2
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: root.cSuccess }
+                                            GradientStop { position: 0.55; color: root.cWarn }
+                                            GradientStop { position: 1.0; color: root.cErr }
+                                        }
                                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                        Behavior on color { ColorAnimation { duration: 200 } }
                                     }
                                 }
                                 Item { Layout.fillHeight: true }
@@ -921,13 +1028,16 @@ Item {
                                     }
                                 }
                                 Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 5
+                                    Layout.fillWidth: true; Layout.preferredHeight: 7
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
                                     Rectangle {
                                         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
                                         width: parent.width * Math.min((root.m ? root.m.gpuPowerW : 0) / 450, 1)
-                                        color: root.cSecondary
                                         radius: 2
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: root.cPrimary }
+                                            GradientStop { position: 1.0; color: root.cWarn }
+                                        }
                                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                                     }
                                 }
@@ -950,17 +1060,38 @@ Item {
                                     }
                                 }
                                 Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 5
+                                    Layout.fillWidth: true; Layout.preferredHeight: 7
                                     Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
                                     Rectangle {
                                         anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
                                         width: parent.width * Math.min((root.m ? root.m.gpuUsagePct : 0), 100) / 100
-                                        color: root.cAccent2
                                         radius: 2
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: root.cAccent2 }
+                                            GradientStop { position: 1.0; color: root.cWarn }
+                                        }
                                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                                     }
                                 }
                                 Item { Layout.fillHeight: true }
+                            }
+
+                            // Sensor footer (mockup fan/AIO row — cpu temp and
+                            // fan duty are the hwmon feeds we actually have)
+                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    text: "CPU " + ((root.m && root.m.cpuTemp > 0) ? Math.round(root.m.cpuTemp) + "°C" : "—")
+                                          + " · FAN " + Math.round(root.m ? root.m.gpuFanPct : 0) + "%"
+                                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8
+                                }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    visible: root.m && root.m.coolantTemp > 0
+                                    text: "COOLANT " + Math.round(root.m ? root.m.coolantTemp : 0) + "°C"
+                                    color: root.cSuccess; font.family: root.fontM; font.pixelSize: 8; font.bold: true
+                                }
                             }
                         }
                     }
@@ -1066,8 +1197,68 @@ Item {
                                 }
                             }
                         }
+
+                        // Action bar (mockup shelf footer: config path +
+                        // revision chip; the mockup's rebuild buttons stay
+                        // out — the dashboard reads, omni-apply writes).
+                        Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.ControlConfig.space2
+                            Rectangle { width: 6; height: 6; radius: 3; color: root.cSuccess; Layout.alignment: Qt.AlignVCenter }
+                            Text { text: "SYSTEM CONFIGURATION"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                            Text {
+                                text: root.sysPath || "—"
+                                color: root.cText; font.family: root.fontM; font.pixelSize: 9
+                                elide: Text.ElideMiddle
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
+                            }
+                            HudChip {
+                                visible: root.sysRev !== ""
+                                label: "REV #" + root.sysRev
+                                chipColor: root.cAccent2
+                            }
+                        }
                     }
                 }
+            }
+        }
+
+        // ── TICKER (mockup footer strip: daemon state left, distro right) ───
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 18
+            Row {
+                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                spacing: 8
+                Rectangle {
+                    width: 6; height: 6; radius: 3; color: root.cSuccess
+                    anchors.verticalCenter: parent.verticalCenter
+                    SequentialAnimation on opacity {
+                        running: root.visible; loops: Animation.Infinite
+                        NumberAnimation { from: 1; to: 0.25; duration: 1100 }
+                        NumberAnimation { from: 0.25; to: 1; duration: 1100 }
+                    }
+                }
+                Text {
+                    text: "DAEMON ONLINE"
+                    color: root.cPrimary; font.family: root.fontM; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text { text: "|"; color: root.cBorder; font.family: root.fontM; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter }
+                Text {
+                    text: "IPC: HYPRLAND SOCKET2"
+                    color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+            Text {
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                text: (root.m && root.m.osName)
+                      ? ((root.m.osName + (root.m.osVersion ? " " + root.m.osVersion : "")).toUpperCase()
+                         + ((root.m && root.m.arch) ? "  ·  " + root.m.arch.toUpperCase() : ""))
+                      : ""
+                color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1
             }
         }
     }
