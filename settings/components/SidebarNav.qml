@@ -408,45 +408,7 @@ Rectangle {
             }
         }
 
-        // --- SESSION card (labeled; moved from the Core tab footer) ----------
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 58
-            visible: !sidebarRoot.compact
-            radius: 4
-            color: Config.HudConfig.wellDeep
-            border.color: Config.HudConfig.borderHi
-            border.width: 1
-            Column {
-                anchors.fill: parent
-                anchors.margins: 10
-                spacing: 3
-                Text {
-                    text: "SESSION"
-                    color: Config.HudConfig.textFaint
-                    font.family: Config.HudConfig.fontData
-                    font.pixelSize: 7
-                    font.bold: true
-                    font.letterSpacing: 1.2
-                }
-                Text {
-                    text: (sidebarRoot.metrics ? sidebarRoot.metrics.userName : "").toUpperCase()
-                    color: Config.HudConfig.textHi
-                    font.family: Config.HudConfig.fontData
-                    font.pixelSize: 11
-                    font.bold: true
-                    elide: Text.ElideRight
-                    width: parent.width
-                }
-                Text {
-                    text: (sidebarRoot.metrics ? sidebarRoot.metrics.hostname : "").toUpperCase()
-                    color: Config.HudConfig.amber
-                    font.family: Config.HudConfig.fontData
-                    font.pixelSize: 9
-                    elide: Text.ElideRight
-                    width: parent.width
-                }
-            }
-        }
+        // (The SESSION card lived here until it duplicated the header's
+        // identity badge — NIKOS twice. Identity stays in the header only.)
     }
 }

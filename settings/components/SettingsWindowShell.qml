@@ -256,12 +256,19 @@ Item {
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "core") { idx = i; break }
         }
+        // Capture this BEFORE the assignment — currentTabKey is tested below,
+        // and after `currentTab = idx` it would always read "core".
+        var wasOnCore = root.currentTabKey === "core"
         if (idx >= 0) root.currentTab = idx
         root.coreActiveSection = section || "system"
-        // Already sitting on the Core tab? No visible transition will fire to
-        // consume the deep-link flag — set the pane directly instead of arming
-        // it (an armed link would otherwise misfire on the NEXT entry).
-        if (root.currentTabKey === "core" && coreLoader.item) {
+        // Genuinely already sitting on the Core tab? No visible transition
+        // will fire to consume the deep-link flag — set the pane directly
+        // instead of arming it (an armed link would misfire on the NEXT
+        // entry). When arriving from another tab, ARM the link: the tab's
+        // onVisibleChanged resets the pane to SYSTEM on every entry and
+        // would clobber a direct set (the "TELEMETRY + LCD is always
+        // highlighted" bug).
+        if (wasOnCore && coreLoader.item) {
             coreLoader.item.active = root.coreActiveSection
             root.coreDeepLink = false
         } else {
