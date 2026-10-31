@@ -27,7 +27,10 @@ Rectangle {
     clip: true   // safety net — nothing here should ever overflow the bar,
                  // but if content grows, clip instead of bleeding onto tabs.
 
-    color: Config.ThemeConfig.colors.background
+    // Transparent — the shell's background card (same color) shows beneath,
+    // and the window's rounded top corners stay visible (this strip spans the
+    // full width; painting it opaque would square the top-right corner off).
+    color: "transparent"
     radius: 0
 
     // The LOGS launcher deep-links INTO this app (LogsTab, tab index 5) —

@@ -46,7 +46,9 @@ Rectangle {
     // VISUALS
     // =========================================================================
     width: 64
-    color: Config.ThemeConfig.colors.background
+    // Transparent — the shell's background card (same color) shows beneath;
+    // painting this column opaque would square off the window's left corners.
+    color: "transparent"
     radius: 0
 
     // Right border separates sidebar from content area (was bottom border on

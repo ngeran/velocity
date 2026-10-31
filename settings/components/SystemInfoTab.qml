@@ -28,6 +28,10 @@ import "../services" as Services
 Item {
     id: root
 
+    // The wallpaper card's OPEN click deep-links to the Wallpaper tab —
+    // SettingsWindowShell owns the tab switcher (openWallpapersTab()).
+    signal wallpaperRequested()
+
     // ── bar services (null until the bar shell attaches; bindings re-run) ──
     readonly property var m: Services.HostBridge.metrics
     readonly property var net: Services.HostBridge.network
@@ -113,7 +117,7 @@ Item {
             GridLayout {
                 id: grid
                 width: flick.width
-                columns: 3
+                columns: 4
                 rowSpacing: Config.ControlConfig.space3
                 columnSpacing: Config.ControlConfig.space3
 
@@ -357,6 +361,17 @@ Item {
                 }
 
                 // =========================================================
+                // ACTIVE WALLPAPER (recovered from the bento OverviewTab —
+                // identity card: live preview + name + path; click → tab 2)
+                // =========================================================
+                Components.ActiveWallpaperCard {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 200
+                    Layout.minimumWidth: 0
+                    onChangeRequested: root.wallpaperRequested()
+                }
+
+                // =========================================================
                 // SESSION
                 // =========================================================
                 Rectangle {
@@ -433,9 +448,10 @@ Item {
                 }
 
                 // =========================================================
-                // STORAGE
+                // STORAGE (span 2 — fills the 4-col row beside Network+Health)
                 // =========================================================
                 Rectangle {
+                    Layout.columnSpan: 2
                     Layout.fillWidth: true
                     Layout.preferredHeight: 160
                     clip: true
@@ -684,7 +700,7 @@ Item {
                 // SOFTWARE & OS (full width)
                 // =========================================================
                 Rectangle {
-                    Layout.columnSpan: 3
+                    Layout.columnSpan: 4
                     Layout.fillWidth: true
                     Layout.preferredHeight: 106
                     color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)

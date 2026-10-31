@@ -6,6 +6,7 @@ ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 SystemInfoTab 1.0 SystemInfoTab.qml
+ActiveWallpaperCard 1.0 ActiveWallpaperCard.qml
 ControlTab 1.0 ControlTab.qml
 ControlSectionNav 1.0 ControlSectionNav.qml
 TerminalBody 1.0 TerminalBody.qml

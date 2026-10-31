@@ -285,7 +285,13 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Config.ThemeConfig.colors.background
-        radius: Config.SettingsConfig.radiusMd
+        // Rounded window shell — a fixed 12 (the design system's top radius
+        // step), deliberately NOT the widget cornerRadius setting (default 0,
+        // "OLED-sharp" applies to in-card widgets, not the window chrome).
+        // The header + sidebar paint transparent so the rounding reads at all
+        // four corners; clip stays off (Rectangle clip is rectangular and
+        // would square the corners right back off).
+        radius: 12
         // Border: on dark themes the card is background-on-backdrop (the dim
         // layer is the SAME color at 0.6) — without an edge the top rounding
         // reads as "cut off under the bar". Every inner card has a border;
@@ -378,6 +384,7 @@ Item {
 
             sourceComponent: Components.SystemInfoTab {
                 anchors.fill: parent
+                onWallpaperRequested: root.openWallpapersTab()
             }
         }
 
