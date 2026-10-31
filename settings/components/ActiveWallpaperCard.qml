@@ -33,11 +33,35 @@ Rectangle {
     readonly property color cOutline: Config.ThemeConfig.colors.outlineVariant
     readonly property color cSurface: Config.ThemeConfig.colors.surface
     readonly property color cSuccess: Config.ThemeConfig.colors.success
+    readonly property color cPrimary: Config.ThemeConfig.colors.primary
     readonly property string fontM:   Config.ControlConfig.fontMono
 
     color: Qt.rgba(cSurface.r, cSurface.g, cSurface.b, 0.35)
     border.color: cBorder; border.width: 1
+    radius: 10
     clip: true
+
+    // Corner brackets — the dashboard's hud-card chrome (SystemInfoTab's
+    // HudTag, mirrored here so the wallpaper tile reads as the same family).
+    component Tag: Item {
+        property color tagColor: root.cSuccess
+        property bool flip: false            // false = top-left, true = bottom-right
+        width: 8; height: 8
+        Rectangle {
+            width: 8; height: 2; color: parent.tagColor; opacity: 0.9
+            anchors.top: parent.flip ? undefined : parent.top
+            anchors.bottom: parent.flip ? parent.bottom : undefined
+            anchors.left: parent.flip ? parent.right : parent.left
+        }
+        Rectangle {
+            width: 2; height: 8; color: parent.tagColor; opacity: 0.9
+            anchors.top: parent.flip ? undefined : parent.top
+            anchors.bottom: parent.flip ? parent.bottom : undefined
+            anchors.left: parent.flip ? parent.right : parent.left
+        }
+    }
+    Tag { anchors { top: parent.top; left: parent.left; margins: 2 } }
+    Tag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
     function previewSource() {
         return Services.WallpaperService.previewSourceFor(Config.SharedState.wallpaperPath)
