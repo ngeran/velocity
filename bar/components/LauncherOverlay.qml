@@ -9,7 +9,7 @@
 //
 // Hosted as the overlay plugin velocity.launcher (builtins/): the PluginHost
 // claims the PopupCoordinator slot ("overlay:velocity.launcher") off `shown`,
-// exactly like the keybinds/fastfetch/logs overlays. Window contract is
+// exactly like the keybinds/logs overlays. Window contract is
 // KeybindsOverlay's (shown / visible + fade-out timer); `focusable: true`
 // gives the surface exclusive keyboard focus while mapped, and focus returns
 // on unmap — no grab handback machinery needed because the window dies closed.

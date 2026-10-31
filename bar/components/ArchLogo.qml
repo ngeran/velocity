@@ -1,7 +1,8 @@
 // =============================================================================
-// ArchLogo.qml — Arch Linux logo; left click = launcher spotlight,
-// right click = fastfetch overlay (the logo's original action, kept one
-// click away — C4; left repointed to the launcher in P4.8).
+// ArchLogo.qml — Arch Linux logo; left click = launcher spotlight
+// (repointed from bar-settings in P4.8). Right click was the fastfetch
+// overlay — removed with it (its data lives in the dashboard's SYS INFO
+// tab, which reads the same MetricsService).
 // =============================================================================
 
 import QtQuick
@@ -15,8 +16,6 @@ Item {
 
     // Left click → the launcher spotlight (velocity.launcher).
     signal triggered()
-    // Right click → the fastfetch overlay (kept from the pre-C4 left click).
-    signal altTriggered()
 
     // Two pre-encoded Arch SVGs (text-colour + accent). Baking both up front
     // means a hover only flips opacity between two already-decoded textures —
@@ -62,12 +61,9 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        acceptedButtons: Qt.LeftButton
         cursorShape: Qt.PointingHandCursor
-        onClicked: function (mouse) {
-            if (mouse.button === Qt.RightButton) icon.altTriggered()
-            else icon.triggered()
-        }
+        onClicked: icon.triggered()
     }
 
     // Tooltip on hover
@@ -75,7 +71,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.bottom
         anchors.topMargin: 4
-        text: "Bar Settings ·  right: System Info"
+        text: "Launcher"
         font.family: Config.BarConfig.fontFamily
         font.pixelSize: Math.max(8, Math.round(10 * Config.BarConfig.contentScale))
         color: Config.ThemeConfig.colors.textDim

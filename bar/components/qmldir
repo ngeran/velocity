@@ -14,7 +14,6 @@ BluetoothBody 1.0 BluetoothBody.qml
 VolumeBody 1.0 VolumeBody.qml
 PrivacyBody 1.0 PrivacyBody.qml
 NotificationCenter 1.0 NotificationCenter.qml
-FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 OverlayShell 1.0 OverlayShell.qml
 LauncherOverlay 1.0 LauncherOverlay.qml

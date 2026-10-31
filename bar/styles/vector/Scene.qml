@@ -6,7 +6,7 @@
 // window chrome; WHAT renders in its left/center/right comes from the engine
 // layout (Engine.BarSection — built-ins and plugins alike).
 // The HOST (shell.qml) owns IPC handlers, shared overlays (TrayCard,
-// notification center, logs/keybinds/zai/fastfetch, OSD), and services.
+// notification center, logs/keybinds/zai, OSD), and services.
 //
 // Contract with the host (injected as `host`):
 //   host.trayOwner / activeTray / closeTray() — empty-bar click closes the

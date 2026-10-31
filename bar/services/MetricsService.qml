@@ -1,5 +1,5 @@
 /** Version: 1 — P2.3: the ONE metrics service. Absorbs SystemInfoService
- ** (fastfetch profile + overlay live metrics + geo), SystemMetricsService
+ ** (fastfetch profile + live metrics + geo), SystemMetricsService
  ** (1s /proc FileView engine, lsblk disks, deepcool-py feed, host identity),
  ** GpuService (GPU telemetry — now DIRECT properties, the runtime metrics.json
  ** round-trip is gone) and ThermalService (hwmon temps). **/
@@ -657,7 +657,7 @@ Item {
     // HOST IDENTITY — hostname / user (static per boot, one-shot reads) +
     // uptime string (parsed from the same /proc/uptime FileView as the
     // overlay's). No board/DMI/kernel fields here — the static profile above
-    // owns board identity for FastfetchOverlay.
+    // owns board identity for the dashboard's SYS INFO tab.
     // =========================================================================
     property string hostname: "unknown"
     property string uptime: "—"

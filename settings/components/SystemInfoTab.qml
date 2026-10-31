@@ -2,7 +2,8 @@
 // SystemInfoTab.qml — tab 0: the telemetry dashboard
 // =============================================================================
 // Replaces the bento OverviewTab as the dashboard landing tab (the bar's
-// FastfetchOverlay interior, rehosted as an embedded settings view).
+// old FastfetchOverlay interior, rehosted as an embedded settings view;
+// the overlay plugin itself was removed — this tab is the system info).
 //
 // MOCKUP REWORK (2026-10-31, user call: "make the Control Settings look like
 // the Stitch mockup, adapting the active theme colors"): the grid follows the

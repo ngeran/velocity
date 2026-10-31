@@ -87,8 +87,8 @@ ShellRoot {
     // =========================================================================
     // LAZY OVERLAYS — load-on-first-use, keep-warm afterwards.
     // -------------------------------------------------------------------------
-    // NotificationCenter loads on its first toggle and stays warm. Fastfetch,
-    // Keybinds, the log viewer and Z.ai usage are overlay built-ins
+    // NotificationCenter loads on its first toggle and stays warm. Keybinds,
+    // the log viewer and Z.ai usage are overlay built-ins
     // (builtins/velocity.*, same lazy wrapper) — enable/disable them in
     // Settings ▸ Plugins; toggleOverlay/overlayShown are their host verbs.
     // =========================================================================

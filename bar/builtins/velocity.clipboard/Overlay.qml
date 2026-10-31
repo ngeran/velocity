@@ -6,8 +6,8 @@
 //
 // Tool probe: one `cliphist list` at mount (exit 0 = present AND the store
 // opens; 127 = absent). Missing cliphist/wl-clipboard → the picker never
-// instantiates and every verb no-ops, logged once — the fastfetch/
-// powerprofilesctl degrade, not a wired-but-dead feature.
+// instantiates and every verb no-ops, logged once — the probe-and-degrade
+// pattern, not a wired-but-dead feature.
 //
 // Capture watcher: `wl-paste --watch cliphist store` arms here on the FIRST
 // open and lives for the bar session (a store that only ran while the picker
