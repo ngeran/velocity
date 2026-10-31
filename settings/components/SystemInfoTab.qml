@@ -54,18 +54,24 @@ Item {
     readonly property var net: Services.HostBridge.network
 
     // ── palette (every accent token; recolours with the live theme) ────────
-    readonly property color cText:      Config.ThemeConfig.colors.text
-    readonly property color cDim:       Config.ThemeConfig.colors.textDim
-    readonly property color cBorder:    Config.ThemeConfig.colors.border
-    readonly property color cOutline:   Config.ThemeConfig.colors.outlineVariant
-    readonly property color cSurface:   Config.ThemeConfig.colors.surfaceVariant
-    readonly property color cSecondary: Config.ThemeConfig.colors.secondary   // hardware / radial / storage
-    readonly property color cPrimary:   Config.ThemeConfig.colors.primary     // session / software / lock
-    readonly property color cSuccess:   Config.ThemeConfig.colors.success     // network / healthy
-    readonly property color cWarn:      Config.ThemeConfig.colors.warning     // restart / temp tiers
-    readonly property color cErr:       Config.ThemeConfig.colors.error       // shutdown
-    readonly property color cAccent2:   Config.ThemeConfig.colors.accent      // GPU util highlight
-    readonly property string fontM:     Config.ControlConfig.fontMono
+    // FIXED HUD tokens — this tab is HUD chrome now, the same instrument
+    // cluster language as CoreSystemPane (deliberately theme-independent).
+    readonly property color cText:      Config.HudConfig.textHi
+    readonly property color cDim:       Config.HudConfig.textDim
+    readonly property color cBorder:    Config.HudConfig.borderLo
+    readonly property color cOutline:   Config.HudConfig.borderHi
+    readonly property color cSurface:   Config.HudConfig.well
+    readonly property color cSecondary: Config.HudConfig.cyan       // hardware / radial / storage
+    readonly property color cPrimary:   Config.HudConfig.amber      // session / software
+    readonly property color cSuccess:   Config.HudConfig.cyan       // network / healthy (telemetry cool)
+    readonly property color cWarn:      Config.HudConfig.amber      // restart / temp tiers
+    readonly property color cErr:       Config.HudConfig.red        // shutdown / hot
+    readonly property color cAccent2:   Config.HudConfig.amber      // GPU util highlight
+    readonly property string fontM:     Config.HudConfig.fontData
+
+    // active-theme card data (ThemeConfig stays the user-theme SSOT; read-only here)
+    readonly property var themeMeta:   Config.ThemeConfig.metadata
+    readonly property var themeColors: Config.ThemeConfig.colors
 
     function diskColor(pct) { if (pct >= 90) return cErr; if (pct >= 75) return cWarn; return cSecondary }
     function tempColor(c)   { if (!c) return cDim; if (c >= 80) return cErr; if (c >= 60) return cWarn; return cSuccess }
@@ -128,25 +134,6 @@ Item {
     // =========================================================================
     // HUD KIT — card chrome shared by every tile (mockup hud-card language)
     // =========================================================================
-
-    // Corner brackets: accent pair top-left, primary pair bottom-right.
-    component HudTag: Item {
-        property color tagColor: root.cSecondary
-        property bool flip: false            // false = top-left, true = bottom-right
-        width: 8; height: 8
-        Rectangle {
-            width: 8; height: 2; color: parent.tagColor; opacity: 0.9
-            anchors.top: parent.flip ? undefined : parent.top
-            anchors.bottom: parent.flip ? parent.bottom : undefined
-            anchors.left: parent.flip ? parent.right : parent.left
-        }
-        Rectangle {
-            width: 2; height: 8; color: parent.tagColor; opacity: 0.9
-            anchors.top: parent.flip ? undefined : parent.top
-            anchors.bottom: parent.flip ? parent.bottom : undefined
-            anchors.left: parent.flip ? parent.right : parent.left
-        }
-    }
 
     // Bordered status chip (mockup badges: REAL-TIME, NOMINAL, Gen #…).
     component HudChip: Rectangle {
@@ -225,7 +212,7 @@ Item {
 
     // Inset spec panel (the mockup's obsidian-850 boxes).
     component InsetPanel: Rectangle {
-        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.4)
+        color: root.cSurface                      // HUD well
         border.color: root.cOutline; border.width: 1
         radius: 4
     }
@@ -415,13 +402,11 @@ Item {
                         id: hwCard
                         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
                         width: parent.unit * 5
-                        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                        color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
-                        radius: 10
+                        radius: 0
                         clip: true
 
-                        HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                        HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 14
@@ -480,17 +465,13 @@ Item {
                                                 elide: Text.ElideRight
                                                 Layout.fillWidth: true; Layout.minimumWidth: 0
                                             }
-                                            Item {
-                                                Layout.fillWidth: true; Layout.preferredHeight: 3
-                                                Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 1 }
-                                                Rectangle {
-                                                    anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                                    width: parent.width * Math.min(Math.max((root.m ? root.m.cpuUsage : 0), 0), 100) / 100
-                                                    color: root.loadColor(root.m ? root.m.cpuUsage : 0)
-                                                    radius: 1
-                                                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                                    Behavior on color { ColorAnimation { duration: 200 } }
-                                                }
+                                            Components.HudMeterBar {
+                                                Layout.fillWidth: true
+                                                barHeight: 3
+                                                glowAlpha: 0.25
+                                                value: root.m ? root.m.cpuUsage : 0
+                                                fill: root.loadColor(root.m ? root.m.cpuUsage : 0)
+                                                wellColor: root.cOutline
                                             }
                                         }
                                     }
@@ -568,62 +549,15 @@ Item {
                                     Layout.alignment: Qt.AlignVCenter
                                     spacing: 6
 
-                                    Item {
+                                    // the cluster's dot ring (HudDotRing):
+                                    // 40 dots, Doto numeral core
+                                    Components.HudDotRing {
                                         width: 128; height: 128
                                         Layout.alignment: Qt.AlignHCenter
-                                        Canvas {
-                                            id: ramRadial
-                                            anchors.fill: parent
-                                            property real pct: root.m ? root.m.memPct : 0
-                                            function rgba(c, a) {
-                                                return "rgba(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + "," + a + ")"
-                                            }
-                                            onPctChanged: requestPaint()
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                ctx.reset()
-                                                ctx.clearRect(0, 0, width, height)
-                                                var cx = width / 2, cy = height / 2
-                                                var r = Math.min(width, height) / 2 - 9
-                                                var start = -Math.PI / 2
-                                                var frac = Math.min(100, Math.max(0, pct)) / 100
-                                                var ac = root.cSecondary
-                                                ctx.strokeStyle = rgba(ac, 0.20)
-                                                ctx.lineWidth = 12
-                                                ctx.beginPath(); ctx.arc(cx, cy, r, start, start + Math.PI * 2 * frac); ctx.stroke()
-                                                ctx.strokeStyle = rgba(ac, 0.12)
-                                                ctx.lineWidth = 8
-                                                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
-                                                ctx.strokeStyle = rgba(ac, 1)
-                                                ctx.lineWidth = 8
-                                                ctx.beginPath(); ctx.arc(cx, cy, r, start, start + Math.PI * 2 * frac); ctx.stroke()
-                                            }
-                                            Connections {
-                                                target: root.m
-                                                function onMemPctChanged() { ramRadial.requestPaint() }
-                                            }
-                                            Connections {
-                                                target: root
-                                                function onCSecondaryChanged() { ramRadial.requestPaint() }
-                                            }
-                                            Component.onCompleted: ramRadial.requestPaint()
-                                        }
-                                        ColumnLayout {
-                                            anchors.centerIn: parent
-                                            spacing: 0
-                                            Text {
-                                                Layout.alignment: Qt.AlignHCenter
-                                                text: Math.round(root.m ? root.m.memPct : 0) + "%"
-                                                color: root.cText
-                                                font.family: root.fontM; font.pixelSize: 22; font.bold: true
-                                            }
-                                            Text {
-                                                Layout.alignment: Qt.AlignHCenter
-                                                text: "RAM USAGE"
-                                                color: root.cDim
-                                                font.family: root.fontM; font.pixelSize: 7; font.letterSpacing: 1; font.bold: true
-                                            }
-                                        }
+                                        value: root.m ? root.m.memPct : 0
+                                        valueText: String(Math.round(root.m ? root.m.memPct : 0))
+                                        caption: "RAM · " + (root.m ? root.m.memUsedGiB : 0).toFixed(0) + "G"
+                                        accent: root.cSecondary
                                     }
                                     ColumnLayout {
                                         Layout.alignment: Qt.AlignHCenter
@@ -661,13 +595,11 @@ Item {
                     Rectangle {
                         anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
                         width: parent.unit * 3
-                        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                        color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
-                        radius: 10
+                        radius: 0
                         clip: true
 
-                        HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                        HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 14
@@ -743,25 +675,23 @@ Item {
                 }
 
                 // ═════════════════════════════════════════════════════════
-                // ROW 2 — STORAGE (4) · NETWORK (4) · HEALTH (4)
+                // ROW 2 — STORAGE · NETWORK · HEALTH · ACTIVE THEME (3 each)
                 // ═════════════════════════════════════════════════════════
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: root.rowH
-                    readonly property real unit: (width - 2 * Config.ControlConfig.space3) / 12
+                    readonly property real unit: (width - 3 * Config.ControlConfig.space3) / 12
 
                     // ── STORAGE ──────────────────────────────────────────────
                     Rectangle {
                         id: stCard
                         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                        width: parent.unit * 4
-                        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                        width: parent.unit * 3
+                        color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
-                        radius: 10
+                        radius: 0
                         clip: true
 
-                        HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                        HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 14
@@ -804,25 +734,21 @@ Item {
                                                     text: modelData.mount === "/" ? "(/)" : "(" + modelData.mount + ")"
                                                     color: root.cDim; font.family: root.fontM; font.pixelSize: 8
                                                 }
-                                                Item { Layout.fillWidth: true }
-                                                Text { text: modelData.usedLabel + " / " + modelData.totalLabel; color: root.cDim; font.family: root.fontM; font.pixelSize: 9 }
+                                                Text {
+                                                    text: modelData.usedLabel + " / " + modelData.totalLabel
+                                                    color: root.cDim; font.family: root.fontM; font.pixelSize: 9
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                                                    horizontalAlignment: Text.AlignRight
+                                                }
                                             }
-                                            Item {
+                                            Components.HudMeterBar {
                                                 width: parent.width
-                                                height: 6
-                                                Rectangle {
-                                                    anchors.fill: parent
-                                                    color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7)
-                                                    radius: 2
-                                                }
-                                                Rectangle {
-                                                    anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                                    width: parent.width * Math.min(modelData.pct, 100) / 100
-                                                    color: root.diskColor(modelData.pct)
-                                                    radius: 2
-                                                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                                    Behavior on color { ColorAnimation { duration: 200 } }
-                                                }
+                                                barHeight: 6
+                                                glowAlpha: 0.25
+                                                value: Math.min(modelData.pct, 100)
+                                                fill: root.diskColor(modelData.pct)
+                                                wellColor: root.cOutline
                                             }
                                             RowLayout {
                                                 width: parent.width
@@ -845,18 +771,17 @@ Item {
 
                     // ── NETWORK ──────────────────────────────────────────────
                     Rectangle {
+                        id: netCard
                         anchors {
                             left: stCard.right; leftMargin: Config.ControlConfig.space3
                             top: parent.top; bottom: parent.bottom
                         }
-                        width: parent.unit * 4
-                        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                        width: parent.unit * 3
+                        color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
-                        radius: 10
+                        radius: 0
                         clip: true
 
-                        HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                        HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 14
@@ -1003,15 +928,17 @@ Item {
 
                     // ── HEALTH ───────────────────────────────────────────────
                     Rectangle {
-                        anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
-                        width: parent.unit * 4
-                        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                        id: healthCard
+                        anchors {
+                            left: netCard.right; leftMargin: Config.ControlConfig.space3
+                            top: parent.top; bottom: parent.bottom
+                        }
+                        width: parent.unit * 3
+                        color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
-                        radius: 10
+                        radius: 0
                         clip: true
 
-                        HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                        HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 14
@@ -1043,20 +970,13 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 7
-                                    Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
-                                    Rectangle {
-                                        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                        width: parent.width * Math.min((root.m ? root.m.gpuTempC : 0) / 85, 1)
-                                        radius: 2
-                                        gradient: Gradient {
-                                            GradientStop { position: 0.0; color: root.cSuccess }
-                                            GradientStop { position: 0.55; color: root.cWarn }
-                                            GradientStop { position: 1.0; color: root.cErr }
-                                        }
-                                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    }
+                                Components.HudMeterBar {
+                                    Layout.fillWidth: true
+                                    barHeight: 7
+                                    glowAlpha: 0.25
+                                    value: Math.min((root.m ? root.m.gpuTempC : 0) / 85 * 100, 100)
+                                    fill: root.tempColor(root.m ? root.m.gpuTempC : 0)
+                                    wellColor: root.cOutline
                                 }
                                 Item { Layout.fillHeight: true }
                             }
@@ -1076,19 +996,13 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 7
-                                    Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
-                                    Rectangle {
-                                        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                        width: parent.width * Math.min((root.m ? root.m.gpuPowerW : 0) / 450, 1)
-                                        radius: 2
-                                        gradient: Gradient {
-                                            GradientStop { position: 0.0; color: root.cPrimary }
-                                            GradientStop { position: 1.0; color: root.cWarn }
-                                        }
-                                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    }
+                                Components.HudMeterBar {
+                                    Layout.fillWidth: true
+                                    barHeight: 7
+                                    glowAlpha: 0.25
+                                    value: Math.min((root.m ? root.m.gpuPowerW : 0) / 450 * 100, 100)
+                                    fill: root.cSecondary
+                                    wellColor: root.cOutline
                                 }
                             }
 
@@ -1108,19 +1022,13 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Item {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 7
-                                    Rectangle { anchors.fill: parent; color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7); radius: 2 }
-                                    Rectangle {
-                                        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
-                                        width: parent.width * Math.min((root.m ? root.m.gpuUsagePct : 0), 100) / 100
-                                        radius: 2
-                                        gradient: Gradient {
-                                            GradientStop { position: 0.0; color: root.cAccent2 }
-                                            GradientStop { position: 1.0; color: root.cWarn }
-                                        }
-                                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    }
+                                Components.HudMeterBar {
+                                    Layout.fillWidth: true
+                                    barHeight: 7
+                                    glowAlpha: 0.25
+                                    value: Math.min((root.m ? root.m.gpuUsagePct : 0), 100)
+                                    fill: root.cAccent2
+                                    wellColor: root.cOutline
                                 }
                                 Item { Layout.fillHeight: true }
                             }
@@ -1144,6 +1052,87 @@ Item {
                             }
                         }
                     }
+
+                    // ── ACTIVE THEME — the user-theme SSOT, HUD-swatched ──
+                    Rectangle {
+                        anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
+                        width: parent.unit * 3
+                        color: Config.HudConfig.panel
+                        border.color: root.cBorder; border.width: 1
+                        radius: 0
+                        clip: true
+
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 14
+                            spacing: Config.ControlConfig.space2
+
+                            HudHeader {
+                                title: "ACTIVE THEME"
+                                dotColor: root.cPrimary
+                                chipLabel: (root.themeMeta.source || "preset").toUpperCase()
+                                chipColor: root.cSecondary
+                            }
+
+                            Text {
+                                text: root.themeMeta.name || "—"
+                                color: root.cText
+                                font.family: root.fontM; font.pixelSize: 14; font.bold: true
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
+                            }
+
+                            Item { Layout.fillHeight: true }
+
+                            // live palette — 2×4 swatch grid straight from the SSOT
+                            Grid {
+                                columns: 4
+                                columnSpacing: 6; rowSpacing: 6
+                                Layout.fillWidth: true
+                                Repeater {
+                                    model: [
+                                        { k: "PRI",  c: root.themeColors.primary },
+                                        { k: "SEC",  c: root.themeColors.secondary },
+                                        { k: "ACC",  c: root.themeColors.accent },
+                                        { k: "OK",   c: root.themeColors.success },
+                                        { k: "WARN", c: root.themeColors.warning },
+                                        { k: "ERR",  c: root.themeColors.error },
+                                        { k: "TXT",  c: root.themeColors.text },
+                                        { k: "BG",   c: root.themeColors.background }
+                                    ]
+                                    delegate: Column {
+                                        spacing: 2
+                                        Rectangle {
+                                            width: 44; height: 22
+                                            color: modelData.c
+                                            border.color: root.cOutline; border.width: 1
+                                        }
+                                        Text {
+                                            text: modelData.k
+                                            color: root.cDim; font.family: root.fontM
+                                            font.pixelSize: 7; font.letterSpacing: 1; font.bold: true
+                                        }
+                                    }
+                                }
+                            }
+
+                            Item { Layout.fillHeight: true }
+
+                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                HudChip {
+                                    label: root.themeMeta.matugenEnabled ? "MATUGEN ON" : "MATUGEN OFF"
+                                    chipColor: root.themeMeta.matugenEnabled ? root.cSuccess : root.cDim
+                                }
+                                Item { Layout.fillWidth: true }
+                                HudChip {
+                                    visible: root.themeMeta.oledClamp !== false
+                                    label: "OLED CLAMP"
+                                    chipColor: root.cPrimary
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // ═════════════════════════════════════════════════════════
@@ -1152,13 +1141,11 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: root.softwareStripH
-                    color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+                    color: Config.HudConfig.panel
                     border.color: root.cBorder; border.width: 1
-                    radius: 10
+                    radius: 0
                     clip: true
 
-                    HudTag { anchors { top: parent.top; left: parent.left; margins: 2 } }
-                    HudTag { flip: true; tagColor: root.cPrimary; anchors { bottom: parent.bottom; right: parent.right; margins: 2 } }
 
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 14
