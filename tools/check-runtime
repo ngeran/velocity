@@ -11,7 +11,10 @@
 #                                  # skip the qa suite even when tools exist
 #
 # Pass looks like:
-#   warnings=0 cpu=0.3% rss=180M spawns/min=2 qa=14/14
+#   warnings=0 cpu=0.1% rss=225000kB spawns/min=0 cold=900ms qa=14/14
+#
+# P8.8 budgets (any excess = FAIL): idle CPU ≤0.5% · RSS ≤250MB ·
+# idle spawns ≤2/min · cold start ≤1.5s · warnings 0.
 #
 # No pidstat/bpftrace on this host — CPU comes from /proc/<pid>/stat tick
 # deltas and spawn counting from /proc/<pid>/task/*/children set-diffs
@@ -30,7 +33,23 @@ bad() { echo "check-runtime: FAIL — $*" >&2; fail=1; }
 # ISO stamp (no space): JFLAGS is expanded unquoted, a spaced --since value
 # would word-split and journalctl would silently match nothing.
 BOOT_STAMP=$(date '+%Y-%m-%dT%H:%M:%S')
+COLD_T0=$(date +%s%N)
 systemctl --user restart $UNITS || { bad "systemctl restart failed"; exit 1; }
+# P8.8 cold-start budget: restart call → shell answering IPC. The read-only
+# `plugins list` verb is the readiness probe (no UI side effects); 100 ms
+# poll, 15 s ceiling.
+COLD="timeout"
+N=0
+while [ "$N" -lt 150 ]; do
+    # `qs ipc call` BLOCKS (no fail-fast) while the socket is absent — the
+    # timeout wrapper makes not-ready-yet a fast failure, as the poll needs.
+    if timeout 2 qs -c bar ipc call plugins list >/dev/null 2>&1; then
+        COLD="$(( ($(date +%s%N) - COLD_T0) / 1000000 ))ms"
+        break
+    fi
+    sleep 0.1
+    N=$((N + 1))
+done
 sleep 5
 for u in $UNITS; do
     systemctl --user is-active --quiet "$u" || bad "$u not active after restart"
@@ -84,13 +103,37 @@ if [ -z "${RUNTIME_SKIP_QA:-}" ] && command -v wtype >/dev/null 2>&1 \
         && command -v grim >/dev/null 2>&1; then
     OUT=${QA_OUT:-/tmp/velocity-qa}
     QA_OUT="$OUT" tools/qa/run >"$OUT-runtime.log" 2>&1 || bad "qa suite failed (log: $OUT-runtime.log)"
-    if [ -f "$OUT/results.tsv" ]; then
-        QA="$(awk -F'\t' '$2 == "PASS"' "$OUT/results.tsv" | wc -l)/$(wc -l < "$OUT/results.tsv")"
+    # qa/run writes results into a timestamped run dir (P8.8 fix: the old
+    # summary read $OUT/results.tsv, which never existed → qa=?/?? silently).
+    RESULTS=$(ls -1dt "$OUT"/run-*/results.tsv 2>/dev/null | head -1)
+    if [ -n "$RESULTS" ]; then
+        QA="$(awk -F'\t' '$2 == "PASS"' "$RESULTS" | wc -l)/$(wc -l < "$RESULTS")"
     fi
 fi
 
-# ── 6 · verdict ─────────────────────────────────────────────────────────────
-echo "warnings=$WARNINGS cpu=${CPU}% rss=$RSS spawns/min=$SPAWNS qa=$QA"
+# ── 6 · verdict — P8 budgets enforced (P8.8) ────────────────────────────────
+echo "warnings=$WARNINGS cpu=${CPU}% rss=$RSS spawns/min=$SPAWNS cold=$COLD qa=$QA"
+case "$CPU" in
+    skip) : ;;
+    *)  awk -v c="$CPU" 'BEGIN{exit !(c <= 0.5)}' || bad "cpu=${CPU}% exceeds budget 0.5%" ;;
+esac
+case "$RSS" in
+    skip) : ;;
+    *)  RSS_KB=${RSS%kB}
+        if echo "$RSS_KB" | grep -q '^[0-9]\+$'; then
+            [ "$RSS_KB" -le 256000 ] || bad "rss=$RSS exceeds budget 250MB"
+        else
+            bad "rss unparsable: $RSS"
+        fi ;;
+esac
+case "$SPAWNS" in
+    skip) : ;;
+    *)  [ "$SPAWNS" -le 2 ] || bad "spawns/min=$SPAWNS exceeds budget 2" ;;
+esac
+case "$COLD" in
+    timeout) bad "cold start: shell never answered IPC within 15s" ;;
+    *)  [ "${COLD%ms}" -le 1500 ] || bad "cold start $COLD exceeds budget 1500ms" ;;
+esac
 
 # ── 7 · summary JSON — the settings ABOUT pane's "last summary" (P4.9) ──────
 # This script RESTARTS the bar, so the pane must never run it — it reads the
@@ -99,8 +142,8 @@ echo "warnings=$WARNINGS cpu=${CPU}% rss=$RSS spawns/min=$SPAWNS qa=$QA"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/velocity"
 JSON_OK=false; [ "$fail" -eq 0 ] && JSON_OK=true
 if mkdir -p "$STATE_DIR" 2>/dev/null \
-   && printf '{"ts":"%s","warnings":"%s","cpu":"%s","rss":"%s","spawns":"%s","qa":"%s","ok":%s}\n' \
-        "$(date '+%Y-%m-%dT%H:%M:%S')" "$WARNINGS" "$CPU" "$RSS" "$SPAWNS" "$QA" "$JSON_OK" \
+   && printf '{"ts":"%s","warnings":"%s","cpu":"%s","rss":"%s","spawns":"%s","cold":"%s","qa":"%s","ok":%s}\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" "$WARNINGS" "$CPU" "$RSS" "$SPAWNS" "$COLD" "$QA" "$JSON_OK" \
         > "$STATE_DIR/check-runtime.json.tmp" 2>/dev/null \
    && mv -f "$STATE_DIR/check-runtime.json.tmp" "$STATE_DIR/check-runtime.json" 2>/dev/null; then
     :

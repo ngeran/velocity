@@ -22,8 +22,8 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import "../../components" as Bar
-import "../../config" as Config
-import "../../engine" as Engine
+import bar.config as Config
+import bar.engine as Engine
 
 Item {
     id: sceneRoot

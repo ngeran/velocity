@@ -24,8 +24,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
-import "../config" as Config
-import "../services" as Services
+import bar.config as Config
+import bar.services as Services
 import "../lib/launcher-search.mjs" as Launcher
 
 PanelWindow {

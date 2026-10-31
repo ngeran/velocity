@@ -50,35 +50,31 @@ Item {
     property bool devMode: false
 
     function resolveBar() {
-        resolverProc.running = true
+        resolverProc.run()
     }
 
-    Process {   // unbounded-ok: fire-and-forget side effect — no output consumed
+    BoundedProcess {   // bounded: one-shot unit/PID probe (P8.1)
         id: resolverProc
         command: ["sh", "-c",
             "systemctl --user cat quickshell-bar >/dev/null 2>&1 || { echo DEV-MODE; exit 0; }; " +
             "pid=$(systemctl --user show -p MainPID --value quickshell-bar 2>/dev/null); " +
             "[ -n \"$pid\" ] && [ \"$pid\" != \"0\" ] && readlink \"" + root.runtimeDir + "/by-pid/$pid\" 2>/dev/null || true"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { resolverProc.buffer += data + "\n" } }
-        onStarted: buffer = ""
-        onExited: {
-            var out = resolverProc.buffer.trim()
-            resolverProc.buffer = ""
-            if (out === "DEV-MODE") {
+        onDone: function (out) {
+            var res = out.trim()
+            if (res === "DEV-MODE") {
                 if (!root.devMode) root._log("dev mode — no quickshell-bar unit, watch inert")
                 root.devMode = true
                 root._setAlive(true)   // nothing to fail; keep the banner hidden
                 return
             }
             root.devMode = false
-            if (out.length === 0) {
+            if (res.length === 0) {
                 root._setAlive(false)   // unit dead or in RestartSec wait
                 return
             }
-            if (out !== root.barLockPath) {
-                root.barLockPath = out
-                root._log("bar instance: " + out)
+            if (res !== root.barLockPath) {
+                root.barLockPath = res
+                root._log("bar instance: " + res)
             }
             root._setAlive(true)
         }
@@ -89,7 +85,7 @@ Item {
         if (!alive) {
             root.failedSince = new Date().toISOString()
             root._log("BAR OFFLINE — failure detected")
-            errorProbe.running = true
+            errorProbe.run()
         } else {
             root._log("bar recovered — banner cleared")
         }
@@ -97,16 +93,13 @@ Item {
     }
 
     // One-shot error tail on failure onset (failure path: a fork is fine).
-    Process {   // unbounded-ok: long-lived journal tail — popup/owner-gated, ring-buffered, backoff
+    BoundedProcess {   // bounded: one-shot 3-line journal tail (P8.1; -n 3 self-exits)
         id: errorProbe
         command: ["sh", "-c",
             "journalctl --user -u quickshell-bar -n 3 --no-pager -o cat 2>/dev/null | tail -n 3"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { errorProbe.buffer += data + "\n" } }
-        onStarted: buffer = ""
-        onExited: {
-            root.errorTail = errorProbe.buffer.trim()
-            errorProbe.buffer = ""
+        maxBytes: 8192
+        onDone: function (out) {
+            root.errorTail = out.trim()
         }
     }
 

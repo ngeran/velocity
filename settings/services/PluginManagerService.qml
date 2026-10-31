@@ -49,21 +49,15 @@ Item {
     // enable(B) → A never ran). Policy lives in lib/cmdqueue.mjs (tested):
     // plain FIFO; refreshes coalesce to ≤1 queued (replaced in position).
     property var _queue: CmdQueue.create()
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot CLI op (P8.1; FIFO policy stays in cmdqueue.mjs)
         id: opProc
-        command: []; running: false
-        property var onDone: null
-        property string buffer: ""
-        // SplitParser is per-line — rejoin WITH newlines (codebase trap).
-        stdout: SplitParser { onRead: function(d) { opProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var cb = opProc.onDone
-            var out = opProc.buffer
-            opProc.buffer = ""
-            opProc.onDone = null
+        command: []
+        property var cb: null
+        onDone: function (out) {
+            var f = opProc.cb
+            opProc.cb = null
             root.busy = false
-            if (cb) cb(out)
+            if (f) f(out)
             var nxt = CmdQueue.dequeue(root._queue)
             if (nxt) root._start(nxt.cmd, nxt.cb)
         }
@@ -80,9 +74,9 @@ Item {
     }
     function _start(cmd, cb) {
         root.busy = true
-        opProc.onDone = cb
+        opProc.cb = cb
         opProc.command = cmd
-        opProc.running = true
+        opProc.run()
     }
 
     // ── engine bridge (in-process; HostBridge.engine until attach is null) ──

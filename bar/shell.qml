@@ -20,9 +20,9 @@ import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 import "components" as Components
-import "config" as Config
-import "engine" as Engine
-import "services" as Services
+import bar.config as Config
+import bar.engine as Engine
+import bar.services as Services
 
 ShellRoot {
     id: shellRoot
@@ -188,34 +188,40 @@ ShellRoot {
         shellRoot.activeTray = name
         Engine.PopupCoordinator.request("tray", shellRoot.closeTray)
     }
-    // Swap the open card's body in place (same owner, same popup slot).
-    function switchTray(name) {
-        if (shellRoot.activeTray !== "") shellRoot.activeTray = name
-    }
-    // Control Center on the focused output's bar (keybind / IPC).
+    // Control Center (UX U1): the floating ControlCenterOverlay panel — no
+    // longer a TrayCard body (user call 2026-10-31: the tray popup "sucks").
+    // Keybind / IPC / gear left-click land here; the settings dashboard keeps
+    // the gear's right click only.
+    property bool ccWanted: false
     function toggleControlCenter() {
-        var insts = (styleLoader.item && styleLoader.item.instances) || []
-        var mon = Services.HyprlandService.focusedMonitor
-        var win = null
-        for (var i = 0; i < insts.length; i++)
-            if (insts[i].screen && insts[i].screen.name === mon) { win = insts[i]; break }
-        if (!win && insts.length > 0) win = insts[0]
-        if (win) shellRoot.toggleTray(win, "control", null)
+        if (ccLoader.item) ccLoader.item.toggle()
+        else shellRoot.ccWanted = true       // load; onLoaded completes the open
     }
-
+    function closeControlCenter() {
+        if (ccLoader.item && ccLoader.item.shown) ccLoader.item.close()
+    }
     // P4.7: force-open the Control Center on one of its in-body pages
-    // (controlCenter.page IPC — SUPER+COMMA → "bar"). Unlike the toggle this
-    // never closes an open card; the page name hands over via TrayCard.
+    // (controlCenter.page IPC — SUPER+COMMA → "bar").
     function openControlCenterPage(name) {
+        if (ccLoader.item) { ccLoader.item.openPage(name); return }
+        shellRoot._ccParkedPage = name
+        shellRoot.ccWanted = true
+    }
+    property string _ccParkedPage: ""
+    readonly property bool ccShown: ccLoader.item ? ccLoader.item.shown : false
+
+    // Open one tray card body by name (CC tile drills: network / bluetooth /
+    // volume). The focused output's bar window anchors the card, exactly like
+    // clicking the pill — never toggles a matching open card closed.
+    function openTrayBody(name) {
         var insts = (styleLoader.item && styleLoader.item.instances) || []
         var mon = Services.HyprlandService.focusedMonitor
         var win = null
         for (var i = 0; i < insts.length; i++)
             if (insts[i].screen && insts[i].screen.name === mon) { win = insts[i]; break }
         if (!win && insts.length > 0) win = insts[0]
-        if (!win) { console.warn("[shell] openControlCenterPage: no bar instance"); return }
-        if (!shellRoot.trayOpenOn(win, "control")) shellRoot.toggleTray(win, "control", null)
-        trayCard.openControlPage(name)
+        if (!win) { console.warn("[shell] openTrayBody: no bar instance"); return }
+        if (!shellRoot.trayOpenOn(win, name)) shellRoot.toggleTray(win, name, null)
     }
     function closeTray() {
         if (shellRoot.activeTray === "") return
@@ -290,7 +296,6 @@ ShellRoot {
         anchorItem: shellRoot.trayAnchor
         shellApi: shellRoot
         onCloseRequested: shellRoot.closeTray()
-        onSwitchRequested: function(tray) { shellRoot.switchTray(tray) }
         screen: shellRoot.trayOwner ? shellRoot.trayOwner.screen : null
         embedHost: shellRoot.trayOwner && shellRoot.trayOwner.screen
             ? (Engine.PopupCoordinator.islands[shellRoot.trayOwner.screen.name] || null) : null
@@ -345,6 +350,38 @@ ShellRoot {
         Components.NotificationCenter { }
     }
 
+    // =========================================================================
+    // CONTROL CENTER — floating panel (lazy; gear left-click, SUPER+A/N, IPC)
+    // =========================================================================
+    Loader {
+        id: ccLoader
+        active: shellRoot.ccWanted
+        sourceComponent: ccComponent
+        onLoaded: {
+            item.toggle()   // complete the open that triggered the load
+            if (shellRoot._ccParkedPage !== "") {
+                item.openPage(shellRoot._ccParkedPage)
+                shellRoot._ccParkedPage = ""
+            }
+        }
+    }
+    Component {
+        id: ccComponent
+        Components.ControlCenterOverlay { shellApi: shellRoot }
+    }
+
+    // The CC claims the popup slot while shown — one popup at a time with the
+    // tray card, the notification center and the overlay plugins.
+    Connections {
+        target: ccLoader.item
+        function onShownChanged() {
+            if (ccLoader.item && ccLoader.item.shown)
+                Engine.PopupCoordinator.request("cc", shellRoot.closeControlCenter)
+            else
+                Engine.PopupCoordinator.release("cc")
+        }
+    }
+
     // The notification center claims the popup slot while shown. (target
     // null-safe: no connection until the center has loaded) While it holds
     // the slot the activity queue's arbitration hides any live peek (J0
@@ -364,21 +401,6 @@ ShellRoot {
         }
     }
 
-    // Notification peek delivery (J2): NotificationService owns the peek
-    // POLICY but not the delivery — this file's Engine import is the
-    // PopupCoordinator instance every renderer reads (the service singleton
-    // instantiates under a second URI; its own ../engine resolves to a
-    // coordinator no renderer sees). peekSpec is reassigned per change;
-    // last-state-wins, so coalesced rev bumps resolve correctly.
-    Connections {
-        target: Services.NotificationService
-        function onPeekRevChanged() {
-            var s = Services.NotificationService.peekSpec
-            if (s) Engine.PopupCoordinator.activity(s)
-            else Engine.PopupCoordinator.endActivity(Services.NotificationService.peekKey)
-        }
-    }
-
     // Now-playing delivery (P6.7): MprisService owns the announce POLICY; the
     // dual-instance law routes delivery through this file's coordinator (the
     // service's own ../engine would be a second, unseen instance).
@@ -395,6 +417,11 @@ ShellRoot {
     // OSD — volume / mute feedback card (renders OsdService state)
     // =========================================================================
     Components.Osd { }
+
+// Notification toasts (UX U3): the ryoku-port toast surface. Data comes from
+// NotificationService.popups (U4); the window self-manages its mapped state
+// and follows the focused monitor — no shell plumbing.
+Components.NotificationToasts { }
 
     // OSD IPC hook — lives here (not in the singleton) because IpcHandler
     // doesn't resolve inside qmldir-declared singletons in this Quickshell

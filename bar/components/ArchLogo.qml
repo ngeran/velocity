@@ -5,7 +5,7 @@
 // =============================================================================
 
 import QtQuick
-import "../config" as Config
+import bar.config as Config
 import "../lib/b64.mjs" as B64
 
 Item {

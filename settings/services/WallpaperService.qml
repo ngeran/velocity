@@ -464,24 +464,19 @@ Item {
     readonly property string thumbCacheDir: StandardPaths.writableLocation(StandardPaths.CacheLocation).toString()
                                             .replace("file://", "") + "/quickshell/wallpaper-thumbs"
 
-    Process {   // unbounded-ok: one ffmpeg per uncached file, error-level logs only
+    BoundedProcess {   // bounded: batch thumb worker — self-exits; generous window for many uncached files (P8.1)
         id: thumbWorker
-
-        property string buf: ""
-
-        stdout: SplitParser {
-            onRead: data => { thumbWorker.buf += data + "\n" }
+        timeoutMs: 600000            // per-file ffmpeg ×2 + luma probe; a big uncached gallery is minutes
+        maxBytes: 4194304
+        onDone: function (out) {
+            var s = Wm.parseThumbStats(out)
+            root.thumbMap = s.thumbs
+            root.lumaMap  = s.luma
+            if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(s.thumbs).length,
+                                                             "luma:", Object.keys(s.luma).length)
         }
-
-        onRunningChanged: {
-            if (!running) {
-                var s = Wm.parseThumbStats(thumbWorker.buf)
-                thumbWorker.buf = ""
-                root.thumbMap = s.thumbs
-                root.lumaMap  = s.luma
-                if (Config.DebugConfig.debugService) console.log("[WallpaperService] Thumbnails ready:", Object.keys(s.thumbs).length,
-                                                                 "luma:", Object.keys(s.luma).length)
-            }
+        onLimit: function (reason) {
+            console.warn("[WallpaperService] thumb worker " + reason + " — keeping previous maps")
         }
     }
 
@@ -492,7 +487,6 @@ Item {
     // reads it) rides the same pass, so it costs one extra thumbnail-sized
     // decode per UNCACHED file only.
     function startThumbWorker() {
-        thumbWorker.buf = ""
         thumbWorker.command = ["bash", "-c",
             'c="$1"; d1="$2"; d2="$3"; mkdir -p "$c"; ' +
             'for d in "$d1" "$d2"; do ' +
@@ -520,7 +514,7 @@ Item {
             'fi; ' +
             'done; done',
             "thumb-worker", root.thumbCacheDir, root.wallpaperDir, root.liveDir]
-        thumbWorker.running = true
+        thumbWorker.run()
     }
 
     // =========================================================================
@@ -897,43 +891,31 @@ Item {
     /// the dashboard is open and after every engine command.
     property string lastEngineStatus: "{}"
 
-    property string _statusBuf: ""
-
-    Process {   // unbounded-ok: one-line JSON from a local CLI
+    BoundedProcess {   // bounded: one-shot engine status CLI read (P8.1)
         id: engineStatusProc
 
-        stdout: SplitParser {
-            onRead: data => { root._statusBuf += data + "\n" }
-        }
-
-        onRunningChanged: {
-            if (!running) {
-                var buf = root._statusBuf
-                root._statusBuf = ""
-                // (I8: parse in ../lib/wallpaper.mjs — null on garbage keeps
-                // the previous raw status.)
-                var st = Wm.parseEngineStatus(buf)
-                if (st !== null) {
-                    root.engineRunning   = st.running
-                    root.enginePaused    = st.paused
-                    root.engineInstances = st.instances
-                    root.lastEngineStatus = st.raw
-                } else {
-                    // Daemon down mid-poll or garbage output — treat as off.
-                    root.engineRunning   = false
-                    root.enginePaused    = false
-                    root.engineInstances = 0
-                }
+        onDone: function (out) {
+            // (I8: parse in ../lib/wallpaper.mjs — null on garbage keeps
+            // the previous raw status.)
+            var st = Wm.parseEngineStatus(out)
+            if (st !== null) {
+                root.engineRunning   = st.running
+                root.enginePaused    = st.paused
+                root.engineInstances = st.instances
+                root.lastEngineStatus = st.raw
+            } else {
+                // Daemon down mid-poll or garbage output — treat as off.
+                root.engineRunning   = false
+                root.enginePaused    = false
+                root.engineInstances = 0
             }
         }
     }
 
     function pollEngineStatus() {
         if (!root.engineAvailable) return
-        if (engineStatusProc.running) return
-        root._statusBuf = ""
         engineStatusProc.command = [root.engineBin, "status"]
-        engineStatusProc.running = true
+        engineStatusProc.run()
     }
 
     Timer {

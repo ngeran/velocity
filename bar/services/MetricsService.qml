@@ -196,15 +196,15 @@ Item {
     // =========================================================================
     function refresh() {
         root.loading = true
-        if (!ffProc.running) ffProc.running = true
-        if (!shellProc.running) shellProc.running = true
-        if (!boardProc.running) boardProc.running = true
+        ffProc.run()
+        shellProc.run()
+        boardProc.run()
         if (!root.leased) root.extendLease(5)   // one profile pass wants one live tick
     }
 
     function refreshStatic() {
-        hostnameProc.running = true
-        userProc.running = true
+        hostnameProc.run()
+        userProc.run()
     }
 
     function refreshUptime() { uptimeFile.reload() }   // parse lands in onTextChanged
@@ -222,10 +222,10 @@ Item {
         console.log("[MetricsService] deepcool feed →", root.metricsPath)
         var dir = root.metricsPath.substring(0, root.metricsPath.lastIndexOf("/"))
         root.initProc.command = ["mkdir", "-p", dir]   // argv form — no shell, nothing to quote
-        root.initProc.running = true
+        root.initProc.run()
         root.refreshStatic()
         root.refreshUptime()
-        lcdProbe.running = true
+        lcdProbe.run()
         console.log("[MetricsService] booted: leased=" + root.leased +
                     " lcd=" + root.lcdPresent + " core=" + root.coreVisible)
     }
@@ -233,14 +233,11 @@ Item {
     // =========================================================================
     // STATIC PROFILE PROBES
     // =========================================================================
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot fastfetch profile (P8.1)
         id: ffProc
-        property string buffer: ""
         command: ["fastfetch", "--format", "json", "--logo", "none"]
-        stdout: SplitParser { onRead: function(data) { ffProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var raw = ffProc.buffer.trim()
-            ffProc.buffer = ""
+        onDone: function (out) {
+            var raw = out.trim()
             if (raw) {
                 try {
                     var p = Info.parseFastfetch(raw, Date.now())
@@ -268,32 +265,26 @@ Item {
 
     // login shell — fastfetch mis-reports it (sees the launching wrapper), so
     // read $SHELL directly and basename it in QML.
-    Process {   // unbounded-ok: trivial local check — no hang risk
+    BoundedProcess {   // bounded: one-shot $SHELL read (P8.1)
         id: shellProc
         command: ["sh", "-c", "echo $SHELL"]
-        stdout: SplitParser {
-            onRead: function(data) {
-                var s = data.trim()
-                if (s) {
-                    var slash = s.lastIndexOf("/")
-                    root.shellName = slash >= 0 ? s.substring(slash + 1) : s
-                }
+        onDone: function (out) {
+            var s = out.trim()
+            if (s) {
+                var slash = s.lastIndexOf("/")
+                root.shellName = slash >= 0 ? s.substring(slash + 1) : s
             }
         }
     }
 
     // Motherboard / chipset identity — DMI sysfs (fastfetch's default module set
     // has no Board block here).
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot DMI read (P8.1)
         id: boardProc
-        property string buffer: ""
         command: ["sh", "-c",
             "printf '%s|%s' \"$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)\" \"$(cat /sys/class/dmi/id/board_name 2>/dev/null)\""]
-        stdout: SplitParser { onRead: function(data) { boardProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var raw = boardProc.buffer
-            boardProc.buffer = ""
-            var b = Info.parseBoard(raw)
+        onDone: function (out) {
+            var b = Info.parseBoard(out)
             if (b) {
                 if (b.vendor !== undefined) root.boardVendor = b.vendor
                 if (b.name !== undefined) root.boardName = b.name
@@ -494,64 +485,51 @@ Item {
     // THERMALS — hwmon sysfs (ex-ThermalService probes verbatim)
     // =========================================================================
     // ── CPU package temp: coretemp/k10temp, max sensor ──────────────────────
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
         id: cpuTempProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do n=$(cat \"$d/name\" 2>/dev/null); " +
             "case \"$n\" in coretemp|k10temp) for i in $(seq 1 20); do " +
             "cat \"$d/temp${i}_input\" 2>/dev/null; done;; esac; done | sort -n | tail -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { cpuTempProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && cpuTempProc.buffer.trim().length) {
-                root.cpuTemp = root._parseMilli(cpuTempProc.buffer)
-                cpuTempProc.buffer = ""
-            }
+        onDone: function (out) {
+            if (out.trim().length) root.cpuTemp = root._parseMilli(out)
         }
     }
 
     // ── NVMe temp: max over nvme hwmons ─────────────────────────────────────
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
         id: nvmeProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do [ \"$(cat \"$d/name\" 2>/dev/null)\" = nvme ] " +
             "&& cat \"$d/temp1_input\" 2>/dev/null; done | sort -n | tail -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { nvmeProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && nvmeProc.buffer.trim().length) {
-                root.nvmeTemp = root._parseMilli(nvmeProc.buffer)
-                nvmeProc.buffer = ""
-            }
+        onDone: function (out) {
+            if (out.trim().length) root.nvmeTemp = root._parseMilli(out)
         }
     }
 
     // ── Coolant temp: best-effort label scan (usually unavailable) ──────────
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
         id: coolantProc
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do for i in 1 2 3 4 5 6; do " +
             "l=$(cat \"$d/temp${i}_label\" 2>/dev/null); case \"$l\" in " +
             "*water*|*coolant*|*liquid*|*aio*) cat \"$d/temp${i}_input\" 2>/dev/null;; esac; done; done | sort -n | tail -1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { coolantProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            var raw = (coolantProc.buffer || "").trim()
-            if (!running && raw.length) {
+        onDone: function (out) {
+            var raw = out.trim()
+            if (raw.length) {
                 var v = parseInt(raw, 10)
                 if (!isNaN(v) && v > 0) {
                     root.coolantTemp = +(v / 1000).toFixed(1)
                     root.coolantAvailable = true
                 }
-                coolantProc.buffer = ""
             }
         }
     }
 
     function _refreshTemps() {
-        if (!cpuTempProc.running)  cpuTempProc.running = true
-        if (!nvmeProc.running)     nvmeProc.running = true
-        if (!coolantProc.running)  coolantProc.running = true
+        cpuTempProc.run()
+        nvmeProc.run()
+        coolantProc.run()
     }
 
     // Temps move slowly; 5s is enough and keeps the hwmon scan cheap.
@@ -583,15 +561,13 @@ Item {
     // SplitParser emits per-chunk callbacks WITHOUT the trailing newline —
     // re-join before Storage.parseJson.
     // =========================================================================
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot lsblk survey (P8.1)
         id: diskProc
         command: ["lsblk", "-J", "-b",
             "-o", "NAME,TYPE,SIZE,FSTYPE,FSUSED,FSAVAIL,FSUSE%,MOUNTPOINTS,MODEL,TRAN,ROTA,RM,HOTPLUG"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { diskProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && diskProc.buffer.trim().length) {
-                var json = Storage.parseJson(diskProc.buffer)
+        onDone: function (out) {
+            if (out.trim().length) {
+                var json = Storage.parseJson(out)
                 var rows = json ? Storage.parseFilesystems(json) : []
                 root.disks = rows
                 for (var i = 0; i < rows.length; i++) {
@@ -602,7 +578,6 @@ Item {
                         break
                     }
                 }
-                diskProc.buffer = ""
             }
         }
     }
@@ -613,7 +588,7 @@ Item {
         running: root.leased
         repeat: true
         triggeredOnStart: true
-        onTriggered: { if (!diskProc.running) diskProc.running = true }
+        onTriggered: diskProc.run()
     }
 
     // =========================================================================
@@ -622,18 +597,18 @@ Item {
     // properties directly, it doesn't read the file. GPU fields come from THIS
     // service's prober now (ex-GpuService indirection is gone).
     // =========================================================================
-    Process {   // unbounded-ok: one-shot pgrep that exits itself; 60s cadence
+    BoundedProcess {   // bounded: one-shot pgrep (P8.1)
         id: lcdProbe   // [d]eepcool regex self-match guard: pgrep -f scans full
         command: ["sh", "-c",   // command lines; anything probing THIS file's path
                   "pgrep -f '[d]eepcool' >/dev/null 2>&1"]   // would read as the LCD daemon and light the feed up.
-        onExited: function(code) { root.lcdPresent = (code === 0) }
+        onDone: function (out, err, code) { root.lcdPresent = (code === 0) }
     }
     Timer {
         interval: 60000
         repeat: true
         running: true
         triggeredOnStart: false   // Component.onCompleted probes once at boot
-        onTriggered: if (!lcdProbe.running) lcdProbe.running = true
+        onTriggered: lcdProbe.run()
     }
 
     // metrics.json via FileView's WRITE path (setText) — truncate+write, zero
@@ -643,7 +618,7 @@ Item {
         path: root.metricsPath
         printErrors: false
     }
-    property Process initProc: Process { command: []; running: false }
+    property var initProc: BoundedProcess { command: ["mkdir", "-p"] }   // bounded: one-shot mkdir (P8.1)
 
     function publish() {
         var m = {
@@ -683,31 +658,21 @@ Item {
     property string hostname: "unknown"
     property string uptime: "—"
 
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot hostname read (P8.1)
         id: hostnameProc
         command: ["sh", "-c", "hostnamectl hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || hostname 2>/dev/null"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { hostnameProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && hostnameProc.buffer.length > 0) {
-                root.hostname = hostnameProc.buffer.trim()
-                hostnameProc.buffer = ""
-            }
+        onDone: function (out) {
+            if (out.length > 0) root.hostname = out.trim()
         }
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot whoami (P8.1)
         id: userProc
         command: ["sh", "-c", "whoami"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { userProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && userProc.buffer.length > 0) {
-                var u = userProc.buffer.trim()
-                if (u.length > 0 && root.userName === "")
-                    root.userName = u.charAt(0).toUpperCase() + u.slice(1)
-                userProc.buffer = ""
-            }
+        onDone: function (out) {
+            var u = out.trim()
+            if (u.length > 0 && root.userName === "")
+                root.userName = u.charAt(0).toUpperCase() + u.slice(1)
         }
     }
 

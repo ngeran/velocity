@@ -125,7 +125,7 @@ Item {
     property var _parsedDevs: []
 
     Component.onCompleted: {
-        identityProc.running = true
+        identityProc.run()
         _resyncDeviceWatches()
         console.log("[BluetoothService] native BlueZ: adapter=" +
             (adapter ? adapter.name : "none") + " powered=" + powered +
@@ -203,24 +203,19 @@ Item {
     // -------------------------------------------------------------------------
     // ADAPTER IDENTITY — one-shot (static per boot; no native address/version)
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot identity read (P8.1)
         id: identityProc
         command: ["bluetoothctl", "show"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { identityProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                var b = identityProc.buffer
-                // Controller <addr> (first line) + Alias / Version / Class fields.
-                var mAddr = b.match(/Controller\s+([0-9A-Fa-f:]{17})/)
-                if (mAddr) root.adapterAddress = mAddr[1]
-                root.adapterAlias   = root.matchField(b, "Alias")
-                root.adapterVersion = root.matchField(b, "Version")
-                root.adapterClass   = root.matchField(b, "Class")
-                identityProc.buffer = ""
-                console.log("[BluetoothService] adapter=" + (root.adapterAddress || "none") +
-                            " powered=" + root.powered + " devices=" + root.devices.length)
-            }
+        onDone: function (out) {
+            var b = out
+            // Controller <addr> (first line) + Alias / Version / Class fields.
+            var mAddr = b.match(/Controller\s+([0-9A-Fa-f:]{17})/)
+            if (mAddr) root.adapterAddress = mAddr[1]
+            root.adapterAlias   = root.matchField(b, "Alias")
+            root.adapterVersion = root.matchField(b, "Version")
+            root.adapterClass   = root.matchField(b, "Class")
+            console.log("[BluetoothService] adapter=" + (root.adapterAddress || "none") +
+                        " powered=" + root.powered + " devices=" + root.devices.length)
         }
     }
 
@@ -228,7 +223,9 @@ Item {
     // SCAN — 30s `bluetoothctl --timeout 30 scan on`, consumed incrementally
     // (P4.2: the card's scan toggle auto-stops after 30 s; cancelable)
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    Process {   // unbounded-ok: user-triggered 30s scan stream, self-exits; consumed
+            // incrementally each 1s tick (BoundedProcess buffers whole-output —
+            // wrong shape for a live stream)
         id: scanProc
         command: ["bluetoothctl", "--timeout", "30", "scan", "on"]
         property string buffer: ""
@@ -376,17 +373,13 @@ Item {
     // disconnectDevice above); the queue is for the verbs BlueZ has no
     // property for.
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: queued one-shot verbs (pair/trust/connect/remove) (P8.1)
         id: actionProc
         property string label: ""
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { actionProc.buffer += data + "\n" } }
-        stderr: SplitParser { onRead: function(data) { actionProc.buffer += data + "\n" } }
-        onExited: function(code) {
+        onDone: function (out, err, code) {
             if (code === 0) console.log("[BluetoothService] " + actionProc.label + " ok")
             else console.log("[BluetoothService] " + actionProc.label +
-                             " failed (exit " + code + "): " + actionProc.buffer.trim())
-            actionProc.buffer = ""
+                             " failed (exit " + code + "): " + (out + err).trim())
             root._drainQueue()
         }
     }
@@ -412,8 +405,7 @@ Item {
         var next = root._queue.shift()
         actionProc.label = next.verb + " " + next.mac
         actionProc.command = ["bluetoothctl", next.verb, next.mac]
-        actionProc.buffer = ""
-        actionProc.running = true
+        actionProc.run()
     }
 
     function pair(mac) {

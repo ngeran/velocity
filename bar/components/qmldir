@@ -15,13 +15,15 @@ BluetoothBody 1.0 BluetoothBody.qml
 VolumeBody 1.0 VolumeBody.qml
 PrivacyBody 1.0 PrivacyBody.qml
 NotificationCenter 1.0 NotificationCenter.qml
+ControlCenterOverlay 1.0 ControlCenterOverlay.qml
 FastfetchOverlay 1.0 FastfetchOverlay.qml
 KeybindsOverlay 1.0 KeybindsOverlay.qml
 OverlayShell 1.0 OverlayShell.qml
 LauncherOverlay 1.0 LauncherOverlay.qml
 ClipboardPicker 1.0 ClipboardPicker.qml
 RegionPicker 1.0 RegionPicker.qml
-NotificationCard 1.0 NotificationCard.qml
+NotificationToastCard 1.0 NotificationToastCard.qml
+NotificationToasts 1.0 NotificationToasts.qml
 NotificationButton 1.0 NotificationButton.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
 ZaiAlertBridge 1.0 ZaiAlertBridge.qml

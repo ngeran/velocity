@@ -10,9 +10,9 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
-import "../services" as Services
-import "../engine" as Engine
-import "../config" as Config
+import bar.services as Services
+import bar.engine as Engine
+import bar.config as Config
 
 PanelWindow {
     id: card
@@ -57,34 +57,15 @@ PanelWindow {
         card.closeRequested()
     }
     signal closeRequested()
-    // Swap the open body in place (Control Center drill-down / back).
-    signal switchRequested(string tray)
-    // True while a body was reached from the Control Center (shows ‹ back).
-    property bool fromControl: false
 
     // I8 lazy bodies: each body file instantiates on its first open and then
     // lives for the card's lifetime (sizing reads loader.item, guarded).
+    // (The Control Center left the card in UX U1 — it is
+    // components/ControlCenterOverlay.qml now; these remain for the
+    // network/bluetooth/volume/privacy bodies the pills open.)
     property bool _btEverOpened: false
     property bool _volumeEverOpened: false
     property bool _privacyEverOpened: false
-    property bool _controlEverOpened: false
-
-    // P4.7: deep page entry — the shell's controlCenter.page IPC lands here
-    // AFTER it has forced the card open (activeTray is the shell's state).
-    // The body may still be loading (lazy) — the page name parks until the
-    // loader's onLoaded hands it over.
-    property string _pendingControlPage: ""
-    function openControlPage(name) {
-        _controlEverOpened = true
-        _pendingControlPage = String(name || "")
-        _applyControlPage()
-    }
-    function _applyControlPage() {
-        if (controlLoader.item && _pendingControlPage !== "") {
-            controlLoader.item.page = _pendingControlPage
-            _pendingControlPage = ""
-        }
-    }
 
     // HOVER-OUT DISMISSAL: lives in the Popover primitive (hoverClose +
     // hoverCloseNeedsEntry — the entered-guard idiom this card introduced).
@@ -94,14 +75,6 @@ PanelWindow {
         if (activeTray === "bluetooth") _btEverOpened = true
         if (activeTray === "volume")    _volumeEverOpened = true
         if (activeTray === "privacy")   _privacyEverOpened = true
-        if (activeTray === "control")   _controlEverOpened = true
-        if (activeTray === "" || activeTray === "control") fromControl = false
-        if (activeTray === "control") {
-            Services.BrightnessService.refresh()
-            Services.PowerProfileService.refresh()
-        }
-        // Leaving the CC resets its in-body page — the next open is the grid.
-        if (activeTray !== "control" && controlLoader.item) controlLoader.item.page = "main"
         // Popup-gated polling: detail probes run only while their popup is the
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
@@ -134,7 +107,6 @@ PanelWindow {
         if (lastTray === "bluetooth") return Services.BluetoothService.powered ? "󰂯" : "󰂲"
         if (lastTray === "volume")    return Services.AudioService.muted ? "󰝟" : "󰕾"
         if (lastTray === "privacy")   return "󰍍"
-        if (lastTray === "control")   return "󰒓"
         return ""
     }
     readonly property string headerTitle: {
@@ -142,7 +114,6 @@ PanelWindow {
         if (lastTray === "bluetooth") return "BLUETOOTH"
         if (lastTray === "volume")    return "VOLUME"
         if (lastTray === "privacy")   return "PRIVACY"
-        if (lastTray === "control")   return "CONTROL CENTER"
         return ""
     }
 
@@ -177,8 +148,7 @@ PanelWindow {
         cardWidth: Math.max(300, networkBody.implicitWidth,
                              btLoader.item ? btLoader.item.implicitWidth : 0,
                              volLoader.item ? volLoader.item.implicitWidth : 0,
-                             privacyLoader.item ? privacyLoader.item.implicitWidth : 0,
-                             controlLoader.item ? controlLoader.item.implicitWidth : 0) + 24 + bodyPad
+                             privacyLoader.item ? privacyLoader.item.implicitWidth : 0) + 24 + bodyPad
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget. Lazy bodies contribute 0 until first open; once a
@@ -187,7 +157,6 @@ PanelWindow {
               : card.lastTray === "volume" ? (volLoader.item ? volLoader.item.implicitHeight : 0) + 59 + bodyPad
               : card.lastTray === "bluetooth" ? (btLoader.item ? btLoader.item.implicitHeight : 0) + 59 + bodyPad
               : card.lastTray === "privacy" ? (privacyLoader.item ? privacyLoader.item.implicitHeight : 0) + 59 + bodyPad
-              : card.lastTray === "control" ? (controlLoader.item ? controlLoader.item.implicitHeight : 0) + 59 + bodyPad
               : 220
 
         // Tray geometry is card-internal (per-body sizing) — flow through the
@@ -214,20 +183,6 @@ PanelWindow {
                 anchors.rightMargin: Config.PopupMetrics.px(10)
                 spacing: Config.PopupMetrics.px(8)
 
-                Text {
-                    // back to the Control Center grid
-                    visible: card.fromControl && card.lastTray !== "control"
-                    text: "‹"
-                    font.pixelSize: Config.PopupMetrics.px(16)
-                    color: backArea.containsMouse ? Config.BarConfig.colorAccent : Config.BarConfig.colorTextDim
-                    MouseArea {
-                        id: backArea
-                        anchors.fill: parent; anchors.margins: -6
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: card.switchRequested("control")
-                    }
-                }
                 Text {
                     text: card.headerIcon
                     font.family: Config.BarConfig.fontNerd
@@ -292,7 +247,6 @@ PanelWindow {
             currentIndex: {
                 if (card.lastTray === "bluetooth") return 1
                 if (card.lastTray === "volume")    return 2
-                if (card.lastTray === "control")   return 3
                 return 0
             }
 
@@ -329,20 +283,6 @@ PanelWindow {
                 sourceComponent: VolumeBody {
                     tray: card
                     onSettingsRequested: function(verb) { card.openSettings(verb) }
-                }
-            }
-
-            // ── Control Center ──
-            // (I8: instantiated on the body's first open.)
-            Loader {
-                id: controlLoader
-                active: card._controlEverOpened
-                Layout.fillWidth: true; Layout.margins: Config.PopupMetrics.px(16)
-                onLoaded: card._applyControlPage()   // parked page handover (P4.7)
-                sourceComponent: ControlCenterBody {
-                    shellApi: card.shellApi
-                    onDrill: function(tray) { card.fromControl = true; card.switchRequested(tray) }
-                    onDone: card.closeRequested()
                 }
             }
         }

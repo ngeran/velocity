@@ -12,7 +12,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Io
-import "../config" as Config
+import bar.config as Config
 import "../lib/network-model.mjs" as Model
 import "../lib/network-control-model.mjs" as ConnectModel
 import "../lib/history.mjs" as History
@@ -288,21 +288,18 @@ Item {
         onTriggered: if (!pingProc.running) pingProc.running = true
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot ping (P8.1)
         id: pingProc
+        timeoutMs: 2500              // -W 1 plus connect slack
         command: ["ping", "-c", "1", "-W", "1", "1.1.1.1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { pingProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var m = pingProc.buffer.match(/time=([\d.]+)/)
+        onDone: function (out) {
+            var m = out.match(/time=([\d.]+)/)
             root._wanSamples = root._wanSamples.concat(
                 [{ ok: m !== null, rtt: m !== null ? parseFloat(m[1]) : null }]).slice(-20)
-            pingProc.buffer = ""
             var gw = root.connectionStatus.gateway
             if (gw !== "") {
                 gwPingProc.command = ["ping", "-c", "1", "-W", "1", gw]
-                gwPingProc.running = true
+                gwPingProc.run()
             } else {
                 root.wanLegNote = "gateway unknown"
             }
@@ -310,17 +307,14 @@ Item {
         }
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot gateway ping (P8.1)
         id: gwPingProc
+        timeoutMs: 2500
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { gwPingProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var m = gwPingProc.buffer.match(/time=([\d.]+)/)
+        onDone: function (out) {
+            var m = out.match(/time=([\d.]+)/)
             root._localSamples = root._localSamples.concat(
                 [{ ok: m !== null, rtt: m !== null ? parseFloat(m[1]) : null }]).slice(-20)
-            gwPingProc.buffer = ""
             root._refold()
             root._pairLatest()   // gateway sample completes the tick's pair
         }
@@ -486,16 +480,9 @@ Item {
     // don't expose: route (src + via gateway), device details (HWADDR, SPEED,
     // IP4 address/subnet, DNS), and the wifi radio state.
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot link probe (P8.1)
         id: linkProbe
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { linkProbe.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            root._absorbLinkProbe(linkProbe.buffer)
-            linkProbe.buffer = ""
-        }
+        onDone: function (out) { root._absorbLinkProbe(out) }
     }
 
     function _sampleLink() {
@@ -505,7 +492,7 @@ Item {
             "ip -4 route get 1 2>/dev/null;" +
             "nmcli device show " + iface + " 2>/dev/null;" +
             "nmcli radio wifi 2>/dev/null"]
-        linkProbe.running = true
+        linkProbe.run()
     }
 
     function _absorbLinkProbe(out) {
@@ -535,16 +522,9 @@ Item {
     // -------------------------------------------------------------------------
     property real _lastEnrich: 0
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot wifi-list enrichment probe (P8.1)
         id: enrichProc
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { enrichProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            root._absorbEnrich(enrichProc.buffer)
-            enrichProc.buffer = ""
-        }
+        onDone: function (out) { root._absorbEnrich(out) }
     }
 
     function _sampleEnrich() {
@@ -554,7 +534,7 @@ Item {
         root._lastEnrich = now
         enrichProc.command = ["sh", "-c",
             "nmcli -t -f SSID,BSSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list 2>/dev/null"]
-        enrichProc.running = true
+        enrichProc.run()
     }
 
     // Enrichment cache (ssid → {bssid, chan, band}) — merged into every row
@@ -645,18 +625,9 @@ Item {
     // SCAN — one bounded nmcli rescan to force fresh results NOW, then collect
     // from the native model after the kernel settles.
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess {   // bounded: one-shot nmcli rescan trigger (P8.1)
         id: rescanProc
-        property string buffer: ""
-        command: ["sh", "-c", "nmcli device wifi rescan 2>/dev/null; exit 0"]
-        stdout: SplitParser { onRead: function(data) { rescanProc.buffer += data + "\n" } }
-        stderr: SplitParser { onRead: function(data) { rescanProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                rescanProc.buffer = ""
-                rescanSettleTimer.restart()
-            }
-        }
+        onDone: function (out) { rescanSettleTimer.restart() }
     }
 
     Timer {
@@ -689,7 +660,7 @@ Item {
         if (root.scanning) return   // silent — button already disabled in UI
         root.scanning = true
         console.log("[NetworkService] scanning wifi...")
-        rescanProc.running = true
+        rescanProc.run()
         scanTimeoutTimer.restart()
     }
 
@@ -711,14 +682,10 @@ Item {
 
     property bool _engBusy: false
 
-    Process {   // unbounded-ok: one-shot local probes — section-gated, 15s cadence
+    BoundedProcess {   // bounded: section-gated engineer probe bundle (P8.1)
         id: engProbe
-        command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { engProbe.buffer += d + "\n" } }
-        onRunningChanged: if (!running) {
-            root._absorbEngineer(engProbe.buffer)
-            engProbe.buffer = ""
+        onDone: function (out) {
+            root._absorbEngineer(out)
             root._engBusy = false
         }
     }
@@ -739,7 +706,7 @@ Item {
             "; echo ==RESOLVE; resolvectl status " + iface + " 2>/dev/null" +
             "; echo ==DHCP; nmcli -t -f DHCP4.OPTION device show " + iface + " 2>/dev/null" +
             "; echo ==LISTEN; ss -H -tuln 2>/dev/null"]
-        engProbe.running = true
+        engProbe.run()
     }
 
     Timer {
@@ -776,7 +743,8 @@ Item {
     // CONNECT / DISCONNECT — nmcli (error taxonomy + saved profiles; the PSK
     // travels over stdin, never argv — argv is world-readable in /proc).
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    Process {   // unbounded-ok: PSK travels over stdin (never argv) and
+                // BoundedProcess exposes no stdin — the secret path stays here
         id: connectProc
         property string lastSsid: ""
         property string buffer: ""
@@ -822,15 +790,11 @@ Item {
         console.log("[NetworkService] connecting to " + ssid + "...")
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot nmcli disconnect (P8.1)
         id: disconnectProc
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { disconnectProc.buffer += data + "\n" } }
-        stderr: SplitParser { onRead: function(data) { disconnectProc.buffer += data + "\n" } }
-        onExited: function(code) {
+        onDone: function (out, err, code) {
             if (code === 0) console.log("[NetworkService] disconnected")
-            else console.log("[NetworkService] disconnect failed (exit " + code + "): " + disconnectProc.buffer.trim())
-            disconnectProc.buffer = ""
+            else console.log("[NetworkService] disconnect failed (exit " + code + "): " + (out + err).trim())
             root.refreshStatus()
         }
     }
@@ -842,8 +806,7 @@ Item {
             return
         }
         disconnectProc.command = ["nmcli", "device", "disconnect", iface]
-        disconnectProc.buffer = ""
-        disconnectProc.running = true
+        disconnectProc.run()
     }
 
     // -------------------------------------------------------------------------
@@ -867,13 +830,9 @@ Item {
     property string dnsResult: ""       // inline feedback ("applied · reconnected")
     property real _lastDnsDetect: 0     // epoch s — the probe is 2 forks; rate-limit
 
-    property var _dnsDetectProc: Process {   // unbounded-ok: waived — see service header
+    property var _dnsDetectProc: BoundedProcess {   // bounded: one-shot active-profile detect (P8.1)
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { root._dnsDetectProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var out = root._dnsDetectProc.buffer; root._dnsDetectProc.buffer = ""
+        onDone: function (out) {
             root.dnsBusy = false
             var name = "", lines = out.split("\n")
             for (var i = 0; i < lines.length; i++) {
@@ -886,8 +845,9 @@ Item {
             root.activeConn = name
             if (name === "") { root.dnsMode = "dhcp"; return }
             var rd = _dnsReadProc
-            rd.buffer = ""
-            rd.onDone = function(dnsLine, ign) {
+            rd.onDone = function (dnsOut) {
+                var parts = dnsOut.split("--\n")
+                var dnsLine = (parts[0] || "").trim(), ign = (parts[1] || "").trim()
                 var mode = "custom", servers = dnsLine.split(",").filter(function(s){return s !== ""})
                 if (ign !== "yes" || servers.length === 0) mode = "dhcp"
                 else if (dnsLine.indexOf("1.1.1.1") !== -1) mode = "cloudflare"
@@ -897,22 +857,13 @@ Item {
             rd.command = ["sh", "-c",
                 "nmcli -g ipv4.dns connection show '" + name + "' 2>/dev/null; echo '--'; " +
                 "nmcli -g ipv4.ignore-auto-dns connection show '" + name + "' 2>/dev/null"]
-            rd.running = true
+            rd.run()
         }
     }
 
-    property var _dnsReadProc: Process {   // unbounded-ok: waived — see service header
+    property var _dnsReadProc: BoundedProcess {   // bounded: one-shot profile dns read (P8.1)
         command: []
-        property string buffer: ""
-        property var onDone: null
-        stdout: SplitParser { onRead: function(d) { root._dnsReadProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var out = root._dnsReadProc.buffer; root._dnsReadProc.buffer = ""
-            var parts = out.split("--\n")
-            var cb = root._dnsReadProc.onDone
-            if (cb) cb((parts[0] || "").trim(), (parts[1] || "").trim())
-        }
+        onDone: null   // injected by _dnsDetectProc's completion
     }
 
     function detectDns() {
@@ -924,7 +875,7 @@ Item {
         _dnsDetectProc.buffer = ""
         _dnsDetectProc.command = ["sh", "-c",
             "nmcli -t -f NAME,TYPE,DEVICE connection show --active 2>/dev/null"]
-        _dnsDetectProc.running = true
+        _dnsDetectProc.run()
     }
 
     function applyDns(mode, custom) {
@@ -938,20 +889,16 @@ Item {
         var ign = mode === "dhcp" ? "no" : "yes"
         if (mode === "custom" && dns === "") { dnsBusy = false; dnsResult = "enter servers first"; return }
         dnsResult = "applying…"
-        _dnsApplyProc.buffer = ""
         _dnsApplyProc.command = ["sh", "-c",
             "nmcli connection mod '" + activeConn + "' ipv4.dns '" + dns + "' ipv4.ignore-auto-dns " + ign + " && " +
             "nmcli connection up '" + activeConn + "' >/dev/null 2>&1 && echo APPLIED || echo FAILED"]
-        _dnsApplyProc.running = true
+        _dnsApplyProc.run()
     }
 
-    property var _dnsApplyProc: Process {   // unbounded-ok: waived — see service header
+    property var _dnsApplyProc: BoundedProcess {   // bounded: one-shot nmcli con mod + reconnect (P8.1)
+        timeoutMs: 30000            // `nmcli connection up` reconnects the wifi
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { root._dnsApplyProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var out = root._dnsApplyProc.buffer; root._dnsApplyProc.buffer = ""
+        onDone: function (out) {
             root.dnsBusy = false
             root.dnsResult = out.indexOf("APPLIED") !== -1 ? "applied · reconnected"
                                                            : "apply failed (see journal)"
@@ -1195,17 +1142,13 @@ Item {
             "payload=\"WIFI:T:$sec;S:$ssid;P:$pw;\"; " +
             "qrencode --type ASCII --margin 4 --output - <<< \"$payload\" | " +
             "awk '{r=\"\";for(c=1;c<=length($0);c+=2) r =r (substr($0,c,2) ~ /#/ ? 1 : 0); print r}'"]
-        _qrProc.running = true
+        _qrProc.run()
     }
 
-    property var _qrProc: Process {   // unbounded-ok: waived — see service header
+    property var _qrProc: BoundedProcess {   // bounded: one-shot QR matrix generation (P8.1)
         command: []
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(d) { root._qrProc.buffer += d + "\n" } }
-        onRunningChanged: {
-            if (running) return
-            var raw = root._qrProc.buffer
-            root._qrProc.buffer = ""
+        onDone: function (out) {
+            var raw = out
             root.qrMatrix = []
             root.qrSsid = ""; root.qrSecurity = ""; root.qrPassword = ""
             if (raw.indexOf("No active Wi-Fi") !== -1 || raw.trim() === "") {

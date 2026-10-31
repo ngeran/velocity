@@ -36,9 +36,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import "../config" as Config
-import "../engine" as Engine
-import "../services" as Services
+import bar.config as Config
+import bar.engine as Engine
+import bar.services as Services
 
 ColumnLayout {
     id: root

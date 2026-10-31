@@ -75,6 +75,10 @@ IFS=':' read -r -a prof <<< "${QML2_IMPORT_PATH:-}"
 for p in "${prof[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
 IFS=':' read -r -a extra <<< "${LINT_QML_IMPORTS:-}"
 for p in "${extra[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
+# P8.A: the bar's named modules (bar.config/bar.engine/bar.services) resolve
+# from the repo root — the runtime gets it via QML2_IMPORT_PATH (the unit sets
+# it); the linter derives the same path directly so gates never drift.
+imports+=(-I "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)")
 
 # --- the findings that mean "this file will not load" ------------------------
 fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicat(ed|e) (signal|method) name|Syntax error|Cannot assign to non-existent default property|Type .* is unavailable'

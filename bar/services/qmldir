@@ -1,6 +1,6 @@
 # qmldir for services module
 
-module services
+module bar.services
 BoundedProcess 1.0 BoundedProcess.qml
 singleton HyprlandService 1.0 HyprlandService.qml
 singleton NetworkService 1.0 NetworkService.qml

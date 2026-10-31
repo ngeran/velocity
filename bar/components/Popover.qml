@@ -32,7 +32,7 @@
 
 import QtQuick
 import QtQuick.Layouts
-import "../config" as Config
+import bar.config as Config
 import "../lib/popover-geometry.mjs" as PopGeo
 
 Item {

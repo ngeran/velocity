@@ -20,7 +20,7 @@
 // =============================================================================
 
 import QtQuick
-import "../config" as Config
+import bar.config as Config
 
 Item {
     id: root

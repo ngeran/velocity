@@ -282,18 +282,17 @@ Item {
     // ramp (base08 "red" is dark teal here), not semantically meaningful.
     // `--prefer darkness` picks the darkest dominant color (deterministic,
     // non-interactive). `-m dark` selects the dark scheme.
-    property var matugenRunner: Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    property var matugenRunner: BoundedProcess {   // bounded: one-shot matugen palette run (P8.1)
         id: matugenProc
-        property string buffer: ""
         property string pendingWallpaper: ""
         command: []
-        stdout: SplitParser { onRead: function(data) { matugenProc.buffer += data + "\n" } }
-        onExited: function(code) {
+        timeoutMs: 20000             // dominant-color extract + palette emit; the 60s flag watchdog stays
+        onDone: function (out, err, code) {
             themeService.isRegenerating = false;
             var path = matugenProc.pendingWallpaper;
-            if (code === 0 && matugenProc.buffer.length > 0) {
+            if (code === 0 && out.length > 0) {
                 try {
-                    var parsed = JSON.parse(matugenProc.buffer.trim());
+                    var parsed = JSON.parse(out.trim());
                     var bundle = themeService._matugenSchemeToBundle(parsed);
                     var liveClamp = Config.ThemeConfig.metadata.oledClamp;
                     themeService.clampOLED(bundle, liveClamp);
@@ -318,13 +317,16 @@ Item {
                 console.error("[ThemeService] matugen exited", code);
                 themeService._matugenFallback(path, "matugen failed (exit " + code + ")");
             }
-            matugenProc.buffer = "";
             // Re-arm: run the newest wallpaper requested mid-run, if any.
             if (themeService._pendingMatugenPath !== "") {
                 var next = themeService._pendingMatugenPath
                 themeService._pendingMatugenPath = ""
                 themeService.applyDynamicTheme(next)
             }
+        }
+        onLimit: function (reason) {
+            themeService.isRegenerating = false;
+            themeService._matugenFallback(matugenProc.pendingWallpaper, "matugen " + reason);
         }
     }
 
@@ -366,7 +368,7 @@ Item {
             // COALESCE (latest-wins): a matugen run takes ~1-2 s; clicking
             // through wallpapers faster than that used to DROP the final
             // choice (the old skip). Keep only the newest path and run it
-            // from matugenProc.onExited when the current run lands.
+            // from matugenProc.onDone when the current run lands.
             if (Config.DebugConfig.debugTheme) console.log("[applyDynamicTheme] regenerating — deferring", actualPath)
             themeService._pendingMatugenPath = actualPath
             return;
@@ -379,7 +381,6 @@ Item {
 
         var cleanPath = actualPath.startsWith("file://") ? actualPath.substring(7) : actualPath;
         matugenProc.pendingWallpaper = cleanPath;
-        matugenProc.buffer = "";
         // Dominant-color pre-step (P5.3): matugen 4.x picks the source color
         // from an image with an INTERACTIVE picker ("IO error: not a
         // terminal" headless — the bar has no TTY ever), so we extract the
@@ -422,12 +423,12 @@ Item {
             matugenProc.pendingWallpaper = path
             matugenProc.buffer = ""
             matugenProc.command = ["matugen", "color", "hex", dom, "-m", "dark", "-j", "hex"]
-            matugenProc.running = true
+            matugenProc.run()
         }
     }
 
     // Latest wallpaper requested while a matugen run was in flight (see the
-    // coalesce note above); emptied by matugenProc.onExited's re-arm.
+    // coalesce note above); emptied by matugenProc.onDone's re-arm.
     property string _pendingMatugenPath: ""
 
     // =========================================================================
@@ -435,17 +436,12 @@ Item {
     // unavailable/broken and fallbackToRebuild is on). Copies the wallpaper
     // into the flake tree and rebuilds; Stylix regenerates the seed.
     // =========================================================================
-    property var rebuildRunner: Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    property var rebuildRunner: BoundedProcess {   // bounded: one-shot pkexec wallpaper apply (P8.1)
         id: rebuilder
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { rebuilder.buffer += data + "\n" } }
-        onRunningChanged: function() {
-            if (!running) {
-                console.log("[ThemeService] Rebuild output:", rebuilder.buffer.trim());
-                rebuilder.buffer = "";
-            }
-        }
-        onExited: function(code) {
+        command: []
+        timeoutMs: 1800000           // a real rebuild runs minutes — bounded, not rushed
+        onDone: function (out, err, code) {
+            console.log("[ThemeService] Rebuild output:", out.trim());
             themeService.isRegenerating = false;
             if (code === 0) {
                 themeService.regenFailed = false;
@@ -458,6 +454,11 @@ Item {
                 themeService.regenFailed = true;
             }
         }
+        onLimit: function (reason) {
+            themeService.isRegenerating = false;
+            themeService.regenError = "Rebuild " + reason + " — aborted";
+            themeService.regenFailed = true;
+        }
     }
 
     function applyDynamicThemeViaRebuild(wallpaperPath) {
@@ -466,7 +467,7 @@ Item {
         themeService.isRegenerating = true;
         rebuildTimeout.restart();
         rebuilder.command = ["pkexec", "/run/current-system/sw/bin/qs-apply-wallpaper", cleanPath];
-        rebuilder.running = true;
+        rebuilder.run();
     }
 
     // Safety timeout: clear isRegenerating after 60s if generation hangs.
@@ -489,34 +490,31 @@ Item {
     // STYLIX SEED (cold-boot only) — loaded on startup if colors.json is absent
     // or its source is "stylix". The clobber-guard preserves a user's live choice.
     // =========================================================================
-    property var stylixChecker: Process {   // unbounded-ok: waived — see service header
-        property string buffer: ""
+    BoundedProcess {   // bounded: one-shot colors.json clobber-guard probe (P8.1)
+        id: stylixChecker
         command: []
-        stdout: SplitParser { onRead: function(data) { stylixChecker.buffer += data + "\n" } }
-        onExited: function(code) {
+        onDone: function (out) {
             var shouldLoadSeed = true;
-            if (stylixChecker.buffer.trim() !== "NONE") {
+            if (out.trim() !== "NONE") {
                 try {
-                    var existing = JSON.parse(stylixChecker.buffer.trim());
+                    var existing = JSON.parse(out.trim());
                     if (existing.metadata && existing.metadata.source && existing.metadata.source !== "stylix") {
                         shouldLoadSeed = false;
                         console.log("[ThemeService] Skipping Stylix seed - existing theme:", existing.metadata.name);
                     }
                 } catch (e) { /* File exists but invalid, load seed */ }
             }
-            if (shouldLoadSeed) stylixSeedLoader.running = true;
-            stylixChecker.buffer = "";
+            if (shouldLoadSeed) stylixSeedLoader.run();
         }
     }
 
-    property var stylixSeedLoader: Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
-        property string buffer: ""
+    BoundedProcess {   // bounded: one-shot stylix-palette.json read (P8.1)
+        id: stylixSeedLoader
         command: ["sh", "-c", "cat ~/.config/quickshell/stylix-palette.json 2>/dev/null"]
-        stdout: SplitParser { onRead: function(data) { stylixSeedLoader.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running && stylixSeedLoader.buffer.length > 0) {
+        onDone: function (out) {
+            if (out.length > 0) {
                 try {
-                    var seed = JSON.parse(stylixSeedLoader.buffer.trim());
+                    var seed = JSON.parse(out.trim());
                     if (seed && seed.colors && seed.metadata) {
                         var bundle = themeService.normalizeBundle(seed.colors);
                         var liveClamp = Config.ThemeConfig.metadata.oledClamp;
@@ -538,7 +536,6 @@ Item {
                 } catch (e) {
                     console.error("[ThemeService] Failed to parse Stylix seed:", e);
                 }
-                stylixSeedLoader.buffer = "";
             }
         }
     }
@@ -546,11 +543,11 @@ Item {
     function loadStylixSeed() {
         var colorsPath = themeService.homeDir + "/.cache/theme/colors.json";
         stylixChecker.command = ["sh", "-c", 'test -f "$1" && cat "$1" || echo NONE', "sh", colorsPath];
-        stylixChecker.running = true;
+        stylixChecker.run();
     }
 
     /** Force-load the Stylix seed NOW, bypassing the clobber guard. */
-    function applyStylixSeedNow() { stylixSeedLoader.running = true; }
+    function applyStylixSeedNow() { stylixSeedLoader.run(); }
 
     /**
      * Manual per-token override. Runs through clampOLED so OLED-on + a manual
@@ -581,26 +578,21 @@ Item {
     // =========================================================================
     // CUSTOM SCHEME PERSISTENCE + API
     // =========================================================================
-    property var customThemeLoader: Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot custom-themes.json read (P8.1)
         id: customLoader
-        property string buffer: ""
         command: ["sh", "-c", 'cat "$1" 2>/dev/null', "sh", themeService.customThemesPath]
-        stdout: SplitParser { onRead: function(data) { customLoader.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                try {
-                    var raw = customLoader.buffer.trim()
-                    if (raw.length > 0) {
-                        var arr = JSON.parse(raw)
-                        themeService.customThemes = Array.isArray(arr) ? arr : []
-                    }
-                } catch (e) { /* no/invalid file yet */ }
-                customLoader.buffer = ""
-            }
+        onDone: function (out) {
+            try {
+                var raw = out.trim()
+                if (raw.length > 0) {
+                    var arr = JSON.parse(raw)
+                    themeService.customThemes = Array.isArray(arr) ? arr : []
+                }
+            } catch (e) { /* no/invalid file yet */ }
         }
     }
 
-    function loadCustomThemes() { customLoader.running = true }
+    function loadCustomThemes() { customLoader.run() }
 
     function saveCustomTheme(name) {
         var n = (name || "").trim()

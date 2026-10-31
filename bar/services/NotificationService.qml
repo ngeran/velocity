@@ -28,8 +28,6 @@ import Qt.labs.platform
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
-import "../engine/lib/activity-queue.mjs" as Aq
-import "../config" as Config
 
 Item {
     id: root
@@ -47,9 +45,9 @@ Item {
     // chasing ListModel dataChanged per mutation path.
     property int rev: 0
 
-    // Live-arrival hook. Emitted for EVERY add() — the J2 arrival peek is
-    // driven by this service itself (see _peek); the signal stays public for
-    // any other view that wants the raw arrival event.
+    // Live-arrival hook. Emitted for EVERY add() — the toast surface's data
+    // mirror (_popupPush) is driven by this service itself; the signal stays
+    // public for any other view that wants the raw arrival event.
     signal arrived(var row)
 
     // -------------------------------------------------------------------------
@@ -118,7 +116,10 @@ Item {
     // Persisted to ~/.config/quickshell/dnd.flag across restarts.
     property bool dnd: false
     property bool panelOpen: false   // set by NotificationCenter — suppresses reaping while open
-    onPanelOpenChanged: if (panelOpen) root.now = Date.now()
+    onPanelOpenChanged: {
+        if (panelOpen) root.now = Date.now()
+        if (panelOpen) root._popupDropAll()   // the center shows the rows — toasts retire
+    }
     // True while some row can auto-expire (read, not critical) — gates the sweep.
     property bool _hasExpiring: false
     readonly property string _dndFlag: root.homeDir + "/.config/quickshell/dnd.flag"
@@ -182,22 +183,17 @@ Item {
         onDateChanged: root._applySchedule()
     }
 
-    Process {   // unbounded-ok: one-shot schedule read, exits at EOF
+    BoundedProcess {   // bounded: one-shot schedule read (P8.1)
         id: _scheduleReader
-        command: []
-        running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _scheduleReader.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
+        onDone: function (out) {
             try {
-                var d = JSON.parse(_scheduleReader.buffer)
+                var d = JSON.parse(out)
                 if (d && typeof d === "object") {
                     root.scheduleEnabled = d.enabled === true
                     if (typeof d.start === "string") root.scheduleStart = d.start
                     if (typeof d.end === "string") root.scheduleEnd = d.end
                 }
             } catch (e) {}
-            _scheduleReader.buffer = ""
             root._applySchedule()
         }
     }
@@ -233,16 +229,11 @@ Item {
         KernelEventRecorder._atomicWrite(root.storePath, lines.join("\n") + "\n")
     }
 
-    Process {   // unbounded-ok: one-shot 32-byte read, exits at EOF
+    BoundedProcess {   // bounded: one-shot 32-byte read (P8.1)
         id: _clearedReader
-        command: []
-        running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _clearedReader.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var v = parseFloat(_clearedReader.buffer.trim())
+        onDone: function (out) {
+            var v = parseFloat(out.trim())
             root.clearedAt = (isFinite(v) && v > 0) ? v : 0
-            _clearedReader.buffer = ""
             // The store read ROUTES on clearedAt, so it starts here — not in
             // Component.onCompleted — to keep the two async reads ordered.
             // tail (not head): disk is oldest-first, so the NEWEST lines live
@@ -250,19 +241,14 @@ Item {
             // dropped every notification past the cap. A mid-line cut at the
             // block's head lands as one tolerated corrupt row.
             _storeReader.command = ["sh", "-c", 'tail -c "$1" "$2" 2>/dev/null || true', "sh", String(root.storeMaxBytes), root.storePath]
-            _storeReader.running = true
+            _storeReader.run()
         }
     }
 
-    Process {   // unbounded-ok: one-shot byte-capped store read (tail -c), exits at EOF
+    BoundedProcess {   // bounded: one-shot byte-capped store read (tail -c) (P8.1)
         id: _storeReader
-        command: []
-        running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _storeReader.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var lines = _storeReader.buffer.split("\n")
-            _storeReader.buffer = ""
+        onDone: function (out) {
+            var lines = out.split("\n")
             var restored = 0, corrupt = 0, maxId = 0
             // Disk is OLDEST-FIRST (writer's contract), so a straight walk with
             // insert(0) lands the newest row at index 0 — the model's ordering
@@ -312,13 +298,9 @@ Item {
         }
     }
 
-    Process {   // unbounded-ok: one-shot 32-byte flag read, exits at EOF
+    BoundedProcess {   // bounded: one-shot 32-byte flag read (P8.1)
         id: _dndReader
-        command: []
-        running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { _dndReader.buffer += data + "\n" } }
-        onRunningChanged: if (!running) { root.dnd = (_dndReader.buffer.trim() === "1"); _dndReader.buffer = "" }
+        onDone: function (out) { root.dnd = (out.trim() === "1") }
     }
     function setDnd(on) {
         root.dnd = on
@@ -361,7 +343,7 @@ Item {
                     if (root.history.count > root.historyMax)
                         root.history.remove(root.history.count - 1)
                     root.model.remove(i)
-                    root._peekGone(row.id)
+                    root._popupDrop(row.id)
                     removed++
                 }
             }
@@ -413,64 +395,83 @@ Item {
         root._recount()
         root._persist()
         root.arrived(row)
-        root._peek(row)
+        root._popupPush(row)
         return row
     }
 
-    // ── arrival peek (J2) ───────────────────────────────────────────────
-    // Arrivals surface as THE peek activity (island row on the island style,
-    // floating Osd card elsewhere — never a 2nd window; the old toast
-    // PanelWindow is retired, its policy lives on here):
-    //   panel open → store only · DnD/silent → store only, EXCEPT critical
-    //   · low 4 s / normal 6 s / critical sticky (the queue's hard cap —
-    //   nothing is forever; the burn-in dim handles the rest)
-    //   · newest wins: each arrival re-upserts the single "notif" slot
-    //   · stack ≤ 3: the newest summary shows, "+N" (N ≤ 2) counts further
-    //   unread — the panel holds the rest. unreadCount never counts silent
-    //   rows, so DnD arrivals don't stack-count.
-    //   · a hints.value arrival renders its track but keeps peek rank — the
-    //   ladder's "progress" tier is for long-lived task progress, not cards
-    // DELIVERY: this service owns the POLICY and exposes the payload as
-    // data (peekSpec/peekRev); the shell forwards it into PopupCoordinator.
-    // The service must NOT import ../engine itself: this singleton is
-    // instantiated under a second URI (long-standing dual-instance
-    // phenomenon), and that copy's ../engine resolves to a SECOND
-    // PopupCoordinator no renderer reads — publishes into it vanish.
-    // Click (island row): markRead retracts the peek via _peekGone, then
-    // the notification's default action is invoked.
-    readonly property string peekKey: "notif"
-    property var peekSpec: null            // reassigned payload (or null = retract)
-    property int peekRev: 0                // bump on every peekSpec change
-    property int _peekRowId: 0
-    function _peek(row) {
+    // ── live toasts (UX U3/U4) ──────────────────────────────────────────
+    // Arrivals surface as toast CARDS (components/NotificationToasts.qml —
+    // the ryoku port; replaced the J2 island/Osd "peek" banner). This service
+    // owns the POLICY and exposes the surfaced rows as ONE reassigned array;
+    // the toast surface reconciles its ListModel against it so per-card
+    // add/remove transitions fire. Rows are COPIES (ListModel.get objects go
+    // stale once the model mutates — the surface must survive removals while
+    // its exit animation runs).
+    //   panel open → no toast (the center shows the row live)
+    //   DnD/silent → no toast, EXCEPT critical (peek parity)
+    //   read rows never (re)toast — restore() stays quiet on purpose
+    //   TTL: low 4 s · normal 6 s · critical sticky (-1, no countdown)
+    //   expiry → toastExpired(): drop + mark read (you saw it surface; the
+    //   row then ages into history on the normal tier clock)
+    property var popups: []
+    function _popupPush(row) {
         if (root.panelOpen) return
-        var critical = row.urgency === 2
-        if (!critical && (root.dnd || row.silent)) return
-        var rid = row.id
-        var cid = row.clickId
-        root._peekRowId = rid
-        var more = Math.max(0, Math.min(root.unreadCount - 1, 2))
-        root.peekSpec = {
-            key: root.peekKey,
-            priority: "peek",
-            icon: row.glyph || "󰂚",
-            label: (row.summary || row.appName || "Notification") + (more > 0 ? "  +" + more : ""),
-            accent: critical ? Config.ThemeConfig.colors.error : null,
-            progress: (row.progress !== undefined && row.progress >= 0) ? row.progress : undefined,
-            ttlMs: critical ? Aq.HARD_CAP_MS : ((row.urgency === 0) ? 4000 : 6000),
-            activate: function() {
-                root.markRead(rid)
-                root.invokeAction(cid)
-            }
-        }
-        root.peekRev++
+        if (row.urgency !== 2 && (root.dnd || row.silent)) return
+        if (row.read) return
+        var out = [_popupCopy(row)]
+        for (var i = 0; i < root.popups.length; i++) out.push(root.popups[i])
+        root.popups = out
     }
-    // The peeked row is gone (dismiss / app-side close / reaper) or seen
-    // (read) — retract the peek if it was showing that row.
-    function _peekGone(id) {
-        if (root._peekRowId !== id) return
-        root._peekRowId = 0
-        if (root.peekSpec !== null) { root.peekSpec = null; root.peekRev++ }
+    function _popupDrop(id) {
+        var out = [], hit = false
+        for (var i = 0; i < root.popups.length; i++) {
+            if (root.popups[i].id === id) { hit = true; continue }
+            out.push(root.popups[i])
+        }
+        if (hit) root.popups = out
+    }
+    function _popupDropAll() { if (root.popups.length > 0) root.popups = [] }
+    function _popupCopy(r) {
+        return {
+            id: r.id, clickId: r.clickId || 0,
+            appName: String(r.appName || ""), appIcon: r.appIcon || "",
+            glyph: r.glyph || "",
+            summary: String(r.summary || ""), body: String(r.body || ""),
+            urgency: r.urgency, timestamp: r.timestamp || 0,
+            actions: r.actions || [], image: r.image || "",
+            progress: (r.progress !== undefined) ? r.progress : -1
+        }
+    }
+    function popupTtl(row) {
+        if (!row || row.urgency >= 2) return -1   // critical: sticky, no countdown
+        return row.urgency === 0 ? 4000 : 6000
+    }
+    function _rowById(id) {
+        for (var i = 0; i < root.model.count; i++) {
+            var r = root.model.get(i)
+            if (r.id === id) return r
+        }
+        return null
+    }
+    // The toast's countdown ran out: retire the toast, mark the row seen.
+    function toastExpired(id) { root._popupDrop(id); root.markRead(id) }
+    // Dismiss = intentional deletion, DBus-fair: tell the app it was closed,
+    // then drop the row (the ✕ on a toast; the center uses the same pair).
+    function dismiss(id) {
+        var row = _rowById(id)
+        if (row) root.dismissDbus(row.clickId)
+        root.remove(id)
+    }
+    // Open = seen + the freedesktop default action + retire (the ↗ on a
+    // toast; tracked apps close their own notification as we invoke).
+    function activate(id) {
+        var row = _rowById(id)
+        if (!row) return
+        root.markRead(id)
+        root.invokeAction(row.clickId)
+        root.dismissDbus(row.clickId)
+        root._popupDrop(id)
+        root.remove(id)
     }
 
     // ── native path (J1a/J1b) ───────────────────────────────────────────────
@@ -575,7 +576,7 @@ Item {
                 gone = root.model.get(i).id
                 root.model.remove(i); break
             }
-        if (gone) root._peekGone(gone)
+        if (gone) root._popupDrop(gone)
         root._recount()
         root._persist()   // app-side close must not resurrect on restart
     }
@@ -616,7 +617,7 @@ Item {
                 break
             }
         }
-        root._peekGone(id)   // seen → the peek retracts (its own click included)
+        root._popupDrop(id)   // seen → its toast retires (its own click included)
         root._recount()
         root._persist()
     }
@@ -627,7 +628,7 @@ Item {
             root.model.setProperty(i, "read", true)
             root.model.setProperty(i, "readAt", nowMs)
         }
-        root._peekGone(root._peekRowId)   // everything just became seen → the peek retracts (no-op when none is up)
+        root._popupDropAll()   // everything just became seen → toasts retire
         root._recount()
         root._persist()
     }
@@ -636,7 +637,7 @@ Item {
         for (var i = 0; i < root.model.count; i++) {
             if (root.model.get(i).id === id) { root.model.remove(i); break }
         }
-        root._peekGone(id)
+        root._popupDrop(id)
         root._recount()
         root._persist()
     }
@@ -648,19 +649,17 @@ Item {
     function clearAll() {
         var nowMs = Date.now()
         root.clearedAt = nowMs
-        var peekCleared = false
         for (var i = 0; i < root.model.count; ) {
             var r = root.model.get(i)
             if ((r.timestamp || 0) <= nowMs) {
-                if (r.id === root._peekRowId) peekCleared = true
                 root.clearedModel.append(root._rowCopy(r))  // copy: get() goes stale after remove
                 root.model.remove(i)
             } else i++
         }
-        // A sticky critical peek (ttl = HARD_CAP) must not survive CLEAR ALL —
-        // its row is gone from the model, so the card would park for 10 min.
-        // Future-stamped rows (clock skew) stay and keep their peek.
-        if (peekCleared) root._peekGone(root._peekRowId)
+        // Cleared rows never keep toasting — a sticky critical toast must not
+        // survive CLEAR ALL. Future-stamped rows (clock skew) stay and may
+        // re-toast only on a new arrival.
+        root._popupDropAll()
         root._recount()
         root._persist()
         root._writeCleared()
@@ -714,11 +713,11 @@ Item {
 
     Component.onCompleted: {
         _dndReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._dndFlag]
-        _dndReader.running = true
+        _dndReader.run()
         _scheduleReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root._schedulePath]
-        _scheduleReader.running = true
+        _scheduleReader.run()
         _clearedReader.command = ["sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", root.clearedPath]
-        _clearedReader.running = true   // chains the store read (routing needs clearedAt)
+        _clearedReader.run()   // chains the store read (routing needs clearedAt)
         _busProbe.running = true        // static command — decides the ingest path (J1a)
     }
 }

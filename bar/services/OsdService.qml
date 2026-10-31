@@ -17,7 +17,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../engine" as Engine
+import bar.engine as Engine
 
 Item {
     id: root

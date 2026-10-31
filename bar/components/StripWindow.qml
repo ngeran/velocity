@@ -27,7 +27,7 @@
 
 import QtQuick
 import Quickshell
-import "../config" as Config
+import bar.config as Config
 
 PanelWindow {
     id: strip

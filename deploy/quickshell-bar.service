@@ -15,12 +15,22 @@
 Description=Velocity bar (Quickshell)
 PartOf=graphical-session.target
 After=graphical-session.target
+# P8.6 crash safety: a crash-loop must stop hammering the session — 5 starts
+# inside a minute (RestartSec=3 makes that ~15s of loop) and the unit stays
+# down for triage. BarWatch shows the offline banner;
+# `systemctl --user reset-failed quickshell-bar` re-arms after a fix.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 # env: works wherever quickshell is on the user manager's PATH (Arch:
 # /usr/bin; NixOS: prefer the home-manager module in flake.nix, which writes
 # these units with store paths and a full PATH).
 ExecStart=/usr/bin/env quickshell -c bar
+# P8.A: the bar's qmldir trees are named modules (bar.config/bar.engine/
+# bar.services — one specifier = one singleton instance regardless of the
+# importer's depth); named resolution needs the config root on the import path.
+Environment=QML2_IMPORT_PATH=%h/.config/quickshell
 # Extra read-only plugin dirs (symlinks allowed), searched after
 # ~/.config/velocity/plugins:
 #Environment=VELOCITY_PLUGIN_PATH=/opt/velocity/plugins

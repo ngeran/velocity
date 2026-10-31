@@ -9,5 +9,6 @@ HoverGlyph {
     glyph: "󰗋"
     label: "LOGS"
 
-    signal triggered()
+    // `triggered()` comes from HoverGlyph — redeclaring it here was a
+    // duplicate-signal load failure (velocity.logs died on fresh start).
 }

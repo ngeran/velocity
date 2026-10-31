@@ -50,22 +50,17 @@ Item {
     // current workspace once at launch to seed activeWorkspace. ──────────────
     // =========================================================================
 
-    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess {   // bounded: one-shot IPC seed query (P8.1)
         id: seedProc
         command: ["bash", "-c", "hyprctl activeworkspace -j 2>&1"]
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { seedProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                try {
-                    var obj = JSON.parse(seedProc.buffer)
-                    root.activeWorkspace = obj.id || 1
-                    if (typeof obj.monitor === "string") root.focusedMonitor = obj.monitor
-                    console.log("[HyprlandService] Seeded active workspace:", root.activeWorkspace)
-                } catch(e) {
-                    console.log("[HyprlandService] Seed parse error:", e, "buffer:", seedProc.buffer)
-                }
-                seedProc.buffer = ""
+        onDone: function (out) {
+            try {
+                var obj = JSON.parse(out)
+                root.activeWorkspace = obj.id || 1
+                if (typeof obj.monitor === "string") root.focusedMonitor = obj.monitor
+                console.log("[HyprlandService] Seeded active workspace:", root.activeWorkspace)
+            } catch(e) {
+                console.log("[HyprlandService] Seed parse error:", e, "buffer:", out)
             }
         }
     }
@@ -121,7 +116,7 @@ Item {
     // =========================================================================
 
     // Bare runner: switchTo() builds the hyprctl dispatch command inline.
-    Process { id: switchProc }   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess { id: switchProc }   // bounded: one-shot local IPC dispatch (P8.1)
 
     function switchTo(idx: int) {
         console.log("[HyprlandService] Switching to workspace:", idx)
@@ -129,7 +124,7 @@ Item {
         // Hyprland 0.55+ Lua config dropped `hyprctl dispatch workspace N`
         // (it now evaluates Lua and errors). Use the Lua dispatcher form.
         switchProc.command = ["bash", "-c", 'hyprctl dispatch "hl.dsp.focus({ workspace = $1 })" 2>&1', "bash", String(idx)]
-        switchProc.running = true
+        switchProc.run()
     }
 
     Component.onCompleted: {

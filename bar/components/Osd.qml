@@ -12,9 +12,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import "../services" as Services
-import "../config" as Config
-import "../engine" as Engine
+import bar.services as Services
+import bar.config as Config
+import bar.engine as Engine
 import "../Ui" as Ui
 
 PanelWindow {

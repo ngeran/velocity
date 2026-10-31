@@ -48,7 +48,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.platform                   // StandardPaths (ThemeService idiom)
 import Quickshell.Io
-import "../config" as Config
+import bar.config as Config
 
 Item {
     id: root
@@ -90,9 +90,9 @@ Item {
 
     Component.onCompleted: {
         console.log("[KernelEventRecorder] Service loaded")
-        catProc.running = true                // history into the model
-        unameProc.running = true              // boot event (after kernel known)
-        readlinkProc.running = true           // seed _lastGen baseline
+        catProc.run()                // history into the model
+        unameProc.run()              // boot event (after kernel known)
+        readlinkProc.run()           // seed _lastGen baseline
         followProc.running = true             // live kernel stream
     }
 
@@ -205,14 +205,11 @@ Item {
     // =========================================================================
 
     // history load — file is oldest→newest; model wants newest first
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot history read (P8.1)
         id: catProc
-        property string buffer: ""
         command: ["cat", root.eventsPath]
-        stdout: SplitParser { onRead: function(line) { catProc.buffer += line + "\n" } }
-        onRunningChanged: if (!running) {
-            var lines = catProc.buffer.split("\n")
-            catProc.buffer = ""
+        onDone: function (out) {
+            var lines = out.split("\n")
             for (var i = lines.length - 1; i >= 0; --i) {
                 var l = lines[i].trim()
                 if (!l) continue
@@ -235,27 +232,21 @@ Item {
     }
 
     // kernel version → boot event
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot proc read (P8.1)
         id: unameProc
-        property string buffer: ""
         command: ["uname", "-r"]
-        stdout: SplitParser { onRead: function(line) { unameProc.buffer += line + "\n" } }
-        onRunningChanged: if (!running) {
-            var k = unameProc.buffer.trim()
-            unameProc.buffer = ""
+        onDone: function (out) {
+            var k = out.trim()
             if (k) _emit("info", "boot", "boot complete — kernel " + k)
         }
     }
 
     // active system generation → switch detection (10-min poll)
-    Process {   // unbounded-ok: one-shot local read (sysfs/proc) — no hang or flood risk
+    BoundedProcess {   // bounded: one-shot sysfs read (P8.1)
         id: readlinkProc
-        property string buffer: ""
         command: ["sh", "-c", "readlink /run/current-system | sed 's|.*/||'"]
-        stdout: SplitParser { onRead: function(line) { readlinkProc.buffer += line + "\n" } }
-        onRunningChanged: if (!running) {
-            var gen = readlinkProc.buffer.trim()
-            readlinkProc.buffer = ""
+        onDone: function (out) {
+            var gen = out.trim()
             if (!gen) return
             currentSystem = gen
             if (_lastGen === "") { _lastGen = gen; return }
@@ -270,6 +261,6 @@ Item {
         interval: 600000                       // 10 min
         repeat: true
         running: true
-        onTriggered: readlinkProc.running = true
+        onTriggered: readlinkProc.run()
     }
 }

@@ -2,8 +2,8 @@
 // Scroll adjusts volume even when the card is closed (OSD feedback kept).
 // The hover-pill shell is the shared HoverGlyph base (DU10).
 import QtQuick
-import "../services" as Services
-import "../config" as Config
+import bar.services as Services
+import bar.config as Config
 
 HoverGlyph {
     id: root

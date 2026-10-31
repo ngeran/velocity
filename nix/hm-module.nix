@@ -222,13 +222,19 @@ let
     "/run/current-system/sw/bin"
   ];
 
-  mkVelocityUnit = name: preStarts: exec: {
+  mkVelocityUnit = name: preStarts: exec: extraEnv: {
     Unit = {
       Description = "Velocity ${name}";
       # Stop-propagation ONLY — never bind startup to this target: hosts
       # without a systemd-managed graphical session (this one) never activate
       # it and the unit would never start. Startup = default.target + gate.
       PartOf = [ "graphical-session.target" ];
+      # P8.6 crash safety: a crash-loop must stop hammering the session —
+      # 5 starts inside a minute (RestartSec=3 makes that ~15s of loop) and
+      # the unit stays down for triage. BarWatch shows the offline banner;
+      # `systemctl --user reset-failed quickshell-bar` re-arms after a fix.
+      StartLimitIntervalSec = 60;
+      StartLimitBurst = 5;
     };
     Service = {
       ExecStartPre = preStarts;
@@ -238,20 +244,27 @@ let
       Environment = [
         "PATH=${servicePath}"
         "VELOCITY_PLUGIN_PATH=${pluginPath}"
-      ];
+      ] ++ extraEnv;
     };
     Install.WantedBy = [ "default.target" ];
   };
 
+  # P8.A: the bar's qmldir trees are named modules (bar.config / bar.engine /
+  # bar.services) so one specifier = one singleton instance regardless of the
+  # importer's depth (the import-split law: two specifiers for one directory
+  # = two singleton instances). Named resolution needs the config root on the
+  # engine's import path.
   barUnit = mkVelocityUnit "bar (Quickshell)"
     ([ "${waylandGate}/bin/velocity-wait-wayland" ]
       ++ lib.optionals (cfg.enabledPlugins != [ ])
         [ "${seedPlugins}/bin/velocity-seed-plugins" ])
-    "${cfg.quickshellPackage}/bin/quickshell -c bar";
+    "${cfg.quickshellPackage}/bin/quickshell -c bar"
+    [ "QML2_IMPORT_PATH=%h/.config/quickshell" ];
 
   cliphistUnit = mkVelocityUnit "clipboard history (cliphist)"
     [ "${waylandGate}/bin/velocity-wait-wayland" ]
-    "${lib.getExe' pkgs.wl-clipboard "wl-paste"} --watch ${lib.getExe' pkgs.cliphist "cliphist"} store";
+    "${lib.getExe' pkgs.wl-clipboard "wl-paste"} --watch ${lib.getExe' pkgs.cliphist "cliphist"} store"
+    [ ];
 
   # ── velocity-lock (P3.4) ─────────────────────────────────────────────────────
   # The repo script is the ONE implementation (P1.8: resolves quickshell via

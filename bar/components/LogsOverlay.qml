@@ -36,8 +36,8 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as Controls   // TextField only (pattern from the deleted login prototype)
-import "../config" as Config
-import "../services" as Services
+import bar.config as Config
+import bar.services as Services
 
 PanelWindow {
     id: root

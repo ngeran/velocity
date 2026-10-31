@@ -26,7 +26,6 @@ pragma Singleton
 
 import QtQuick
 import Qt.labs.platform
-import Quickshell.Io
 import "../lib/hyprsettings.mjs" as Hypr
 
 Item {
@@ -79,18 +78,12 @@ Item {
     // Each answer arrives as its own JSON line; a failed getoption (keyword
     // gone in some future Hyprland) prints a non-JSON line and is skipped,
     // leaving that key undefined ("…" in the UI) instead of a fake value.
-    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess {   // bounded: one-shot batched IPC query (P8.1)
         id: readProc
         command: ["hyprctl", "-j", "--batch", Hypr.batchArg(Hypr.CATALOG.map(function(d) { return d.keyword }))]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { readProc.buffer += data + "\n" }
-        }
-        onStarted: buffer = ""
-        onRunningChanged: {
-            if (running) return
+        onDone: function (out) {
             var answers = {}
-            var lines = buffer.split("\n")
+            var lines = out.split("\n")
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i].trim()
                 if (line.length === 0 || line.charAt(0) !== "{") continue
@@ -111,12 +104,11 @@ Item {
             } else {
                 root.lastError = "Hyprland answered nothing — is it running?"
             }
-            buffer = ""
         }
     }
 
     function refresh() {
-        if (!readProc.running) readProc.running = true
+        readProc.run()
     }
 
     Timer {
@@ -180,44 +172,25 @@ Item {
     }
 
     // ── live apply ──────────────────────────────────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC eval (P8.1)
         id: applyProc
         command: []
-        property string buffer: ""
-        // Two pills inside one eval's lifetime would drop the second write —
-        // hold it and send when the process frees up.
-        property var queued: null
-        stdout: SplitParser {
-            onRead: function(data) { applyProc.buffer += data + "\n" }
-        }
-        onStarted: buffer = ""
-        onRunningChanged: {
-            if (running) return
+        onDone: function (out) {
             // hyprctl eval answers "ok" or "error: …" on stdout.
-            if (buffer.indexOf("error") !== -1)
-                root.lastError = "Hyprland refused the change: " + buffer.trim()
+            if (out.indexOf("error") !== -1)
+                root.lastError = "Hyprland refused the change: " + out.trim()
             else
                 root.lastError = ""
-            buffer = ""
-            if (queued) {
-                var next = queued
-                queued = null
-                _send(next)
-            }
         }
     }
 
     function applyLive(pairs) {
-        if (applyProc.running) {
-            applyProc.queued = pairs
-            return
-        }
-        _send(pairs)
+        _send(pairs)   // run() queues (latest-wins) while busy — replaces the old queued slot
     }
 
     function _send(pairs) {
         applyProc.command = ["hyprctl", "eval", Hypr.evalCall(pairs)]
-        applyProc.running = true
+        applyProc.run()
     }
 
     // ── persistence ─────────────────────────────────────────────────────
@@ -251,15 +224,15 @@ Item {
             "printf '%s\\n' " + JSON.stringify(requireLine) + " >> \"$H\"\n"
         ensureProc.pendingReady = onReady
         ensureProc.command = ["sh", "-c", script]
-        ensureProc.running = true
+        ensureProc.run()
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot require-line check/append (P8.1)
         id: ensureProc
         command: []
         property var pendingReady: null
-        onRunningChanged: {
-            if (!running && pendingReady) {
+        onDone: function () {
+            if (pendingReady) {
                 var cb = pendingReady
                 pendingReady = null
                 cb()
@@ -268,24 +241,18 @@ Item {
     }
 
     // ── store load ──────────────────────────────────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot store read (P8.1)
         id: loadProc
         command: []
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { loadProc.buffer += data + "\n" }
-        }
-        onStarted: buffer = ""
-        onRunningChanged: {
-            if (running || buffer.trim().length === 0) return
+        onDone: function (out) {
+            if (out.trim().length === 0) return
             try {
-                var valid = Hypr.validStore(JSON.parse(buffer))
+                var valid = Hypr.validStore(JSON.parse(out))
                 root.overrides = valid.overrides
                 root.originals = valid.originals
             } catch (e) {
                 console.log("[HyprSettingsService] store unreadable, starting clean:", e)
             }
-            buffer = ""
         }
     }
 
@@ -298,7 +265,7 @@ Item {
 
     Component.onCompleted: {
         loadProc.command = ["cat", storePath]
-        loadProc.running = true
+        loadProc.run()
         refresh()
     }
 }

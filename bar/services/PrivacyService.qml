@@ -89,19 +89,13 @@ Item {
     }
 
     // ── pw-dump poll ────────────────────────────────────────────────────
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot pw-dump survey (P8.1)
         id: dumpProc
-        command: ["sh", "-c", "pw-dump 2>/dev/null | head -c 4000000"]
-        property string buffer: ""
-        stdout: SplitParser {
-            onRead: function(data) { dumpProc.buffer += data + "\n" }
-        }
-        onStarted: buffer = ""
-        onRunningChanged: {
-            if (running) return
-            var buf = buffer
-            buffer = ""
-            try { root._ingest(JSON.parse(buf)) }
+        timeoutMs: 8000              // pw-dump on a loaded graph can take seconds
+        maxBytes: 4194304            // the old head -c 4000000 cap, preserved
+        command: ["sh", "-c", "pw-dump 2>/dev/null"]
+        onDone: function (out) {
+            try { root._ingest(JSON.parse(out)) }
             catch (e) { /* a torn or empty dump keeps the previous survey */ }
         }
     }
@@ -148,7 +142,7 @@ Item {
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            if (!dumpProc.running) dumpProc.running = true
+            dumpProc.run()
         }
     }
 }

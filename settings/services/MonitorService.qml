@@ -71,9 +71,9 @@ Item {
 
     // IDENTIFY — flash every monitor's name via a batched hyprctl notify
     // (omarchy-screens pattern, minus its python driver).
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC batch (P8.1)
         id: identifyProc
-        command: []; running: false
+        command: []
     }
 
     function identify() {
@@ -85,7 +85,7 @@ Item {
         }
         if (parts.length === 0) return
         identifyProc.command = ["hyprctl", "--batch", parts.join("; ")]
-        identifyProc.running = true
+        identifyProc.run()
     }
 
     // ── capability (proven on this box: MPG321UX QD-OLED) ──────────────────
@@ -115,34 +115,28 @@ Item {
     // POLL — hyprctl monitors -j (JSON). 10s while the dashboard is open; also
     // refreshed after every applied rule (readback verification).
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC query (P8.1)
         id: monProc
         command: ["hyprctl", "monitors", "-j"]
-        property string buffer: ""
         property bool stale: false   // an apply landed while this poll was in flight
-        stdout: SplitParser { onRead: function(data) { monProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                // Stale-poll guard (hyprmoncfg pattern): a poll that started
-                // BEFORE a rule applied carries pre-apply readback — discarding
-                // it and re-reading beats letting persistState/transiently lie.
-                if (monProc.stale) {
-                    monProc.stale = false
-                    monProc.buffer = ""   // discard wholesale — leftover JSON would concatenate into the next read
-                    root.refresh()
-                    return
-                }
-                var arr = root._parseMonitors(monProc.buffer)
-                monProc.buffer = ""
-                // Topology signature: an identical readback (the common 10s
-                // case) must not churn the model + every binding attached to it.
-                var sig = JSON.stringify(arr)
-                if (sig !== root._monSig) {
-                    root._monSig = sig
-                    root.monitors = arr
-                }
-                root._recomputeDescCollisions(arr)
+        onDone: function (out) {
+            // Stale-poll guard (hyprmoncfg pattern): a poll that started
+            // BEFORE a rule applied carries pre-apply readback — discarding
+            // it and re-reading beats letting persistState/transiently lie.
+            if (stale) {
+                stale = false
+                root.refresh()
+                return
             }
+            var arr = root._parseMonitors(out)
+            // Topology signature: an identical readback (the common 10s
+            // case) must not churn the model + every binding attached to it.
+            var sig = JSON.stringify(arr)
+            if (sig !== root._monSig) {
+                root._monSig = sig
+                root.monitors = arr
+            }
+            root._recomputeDescCollisions(arr)
         }
     }
 
@@ -154,7 +148,7 @@ Item {
         running: Config.SharedState.dashboardVisible
         repeat: true
         triggeredOnStart: true
-        onTriggered: { if (!monProc.running) monProc.running = true }
+        onTriggered: monProc.run()
     }
 
     // Counts down the Keep/Revert window even if the UI misses a tick.
@@ -288,58 +282,42 @@ Item {
     // APPLY — single-flight rule Process with a trailing-write queue (sliders
     // can outpace hyprctl; the last requested rule always lands).
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC eval (P8.1)
         id: ruleProc
-        command: []; running: false
-        property string queued: ""
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { ruleProc.buffer += data + "\n" } }
-        onRunningChanged: {
-            if (!running) {
-                if (ruleProc.buffer.indexOf("ok") === -1)
-                    CommandService.pushLog("[display] rule apply failed: " + ruleProc.buffer, "error")
-                ruleProc.buffer = ""
-                if (ruleProc.queued !== "") {
-                    var next = ruleProc.queued
-                    ruleProc.queued = ""
-                    root._runRule(next)
-                } else {
-                    root.refresh()
-                    root._recomputePersistState()
-                }
-            }
+        command: []
+        onDone: function (out) {
+            if (out.indexOf("ok") === -1)
+                CommandService.pushLog("[display] rule apply failed: " + out, "error")
+            root.refresh()
+            root._recomputePersistState()
         }
     }
 
     function _runRule(rule) {
         ruleProc.command = ["hyprctl", "eval", rule]
-        ruleProc.running = true
+        ruleProc.run()   // queues (latest-wins) while busy — replaces the old queued slot
     }
 
     function applyRule(over) {
         var rule = ruleFor(target, over)
         if (rule === "") return
-        if (ruleProc.running) { ruleProc.queued = rule; return }
         _runRule(rule)
     }
 
     // Global (non-monitor) config, e.g. render.cm_auto_hdr for HDR "Auto".
     // Same eval mechanism; not queued behind ruleProc (independent target).
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC eval (P8.1)
         id: globalProc
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { globalProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            if (globalProc.buffer.indexOf("ok") === -1)
-                CommandService.pushLog("[display] global apply failed: " + globalProc.buffer, "error")
-            globalProc.buffer = ""
+        command: []
+        onDone: function (out) {
+            if (out.indexOf("ok") === -1)
+                CommandService.pushLog("[display] global apply failed: " + out, "error")
         }
     }
 
     function applyGlobalConfig(expr) {
         globalProc.command = ["hyprctl", "eval", expr]
-        globalProc.running = true
+        globalProc.run()
     }
 
     // Risky change (mode/scale): snapshot the CURRENT rule first, apply, then
@@ -364,33 +342,31 @@ Item {
     property int _revertGen: 0
     property int _revertArmGen: -1
 
-    Process {   // unbounded-ok: systemctl stop of a maybe-absent unit — returns in ms
+    BoundedProcess {   // bounded: systemctl stop of a maybe-absent unit (P8.1)
         id: revertStopProc
         command: ["sh", "-c",
             "systemctl --user stop " + root.revertUnit + ".timer " + root.revertUnit + ".service 2>/dev/null || true"]
-        running: false
-        onRunningChanged: if (!running && root._revertArmGen === root._revertGen
-                              && root._revertArmGen >= 0) {
-            root._revertArmGen = -1
-            revertArmProc.running = true
+        onDone: function () {
+            if (root._revertArmGen === root._revertGen
+                    && root._revertArmGen >= 0) {
+                root._revertArmGen = -1
+                revertArmProc.run()
+            }
         }
     }
 
-    Process {   // unbounded-ok: systemd-run transient-unit spawn — returns in ms
+    BoundedProcess {   // bounded: systemd-run transient-unit spawn (P8.1)
         id: revertArmProc
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { revertArmProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var armed = revertArmProc.buffer.indexOf("Running") !== -1
+        command: []
+        onDone: function (out) {
+            var armed = out.indexOf("Running") !== -1
             if (armed && !root.revertPending) {
                 // KEEP/REVERT landed while the spawn was mid-flight: the unit
                 // exists but no window is pending — kill it again.
-                revertStopProc.running = true
+                revertStopProc.run()
             } else if (root.revertPending && !armed) {
                 CommandService.pushLog("[display] external revert timer not armed — in-process fallback active", "warning")
             }
-            revertArmProc.buffer = ""
         }
     }
 
@@ -409,12 +385,12 @@ Item {
         // the stop's completion fires the arm while the gen still matches.
         root._revertGen++
         root._revertArmGen = root._revertGen
-        revertStopProc.running = true
+        revertStopProc.run()
     }
 
     function _cancelExternalRevert() {
         root._revertGen++                  // invalidates any in-flight arm
-        revertStopProc.running = true
+        revertStopProc.run()
     }
 
     function confirmKeep() {
@@ -433,16 +409,16 @@ Item {
     // -------------------------------------------------------------------------
     // DPMS — the hl.dsp.dpms enable/disable verb pair (proven in the former HypridleService, removed P3.9)
     // -------------------------------------------------------------------------
-    Process {   // unbounded-ok: one-shot local IPC query — answers in ms; timeout migration queued
+    BoundedProcess {   // bounded: one-shot local IPC dispatch (P8.1)
         id: dpmsProc
-        command: []; running: false
-        onRunningChanged: if (!running) Qt.callLater(root.refresh)
+        command: []
+        onDone: function () { Qt.callLater(root.refresh) }
     }
 
     function setDpms(on) {
         dpmsProc.command = ["hyprctl", "dispatch",
             "hl.dsp.dpms({ action = \"" + (on ? "enable" : "disable") + "\" })"]
-        dpmsProc.running = true
+        dpmsProc.run()
     }
 
     // -------------------------------------------------------------------------
@@ -604,36 +580,34 @@ Item {
     // -------------------------------------------------------------------------
     property string _preStageText: ""   // file text before the splice, for restore
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: atomic block-splice write (P8.1)
         id: stageProc
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { stageProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var out = stageProc.buffer.trim()
-            stageProc.buffer = ""
-            if (out === "WROTE") root._validateStage()
-            else CommandService.pushLog("[display] stage write failed: " + out, "error")
+        command: []
+        onDone: function (out, err, code) {
+            var res = (out + err).trim()
+            if (res === "WROTE") root._validateStage()
+            else CommandService.pushLog("[display] stage write failed: " + (res || "exit " + code), "error")
         }
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot hyprctl validation query (P8.1)
         id: validateProc
-        command: []; running: false
-        property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { validateProc.buffer += data + "\n" } }
-        onRunningChanged: if (!running) {
-            var out = validateProc.buffer.trim()
-            validateProc.buffer = ""
-            if (out === "ok" || out === "")
+        // P8.1 bug fix while migrating: the command was NEVER set — the
+        // validator ran empty, every stage read as success, and a config
+        // erroring after a stage was never restored.
+        command: ["hyprctl", "configerrors"]
+        onDone: function (out, err, code) {
+            var res = (out + err).trim()
+            if ((res === "ok" || res === "") && code === 0)
                 root._stageDone()
             else
-                root._stageRestore("[display] configerrors after stage — restored: " + out)
+                root._stageRestore("[display] configerrors after stage — restored: " +
+                                   (res || "hyprctl exit " + code))
         }
     }
 
     // Hyprland reloads the file asynchronously; give it a beat before asking.
-    Timer { id: validateDelay; interval: 600; onTriggered: validateProc.running = true }
+    Timer { id: validateDelay; interval: 600; onTriggered: validateProc.run() }
 
     function _validateStage() { validateDelay.restart() }
 
@@ -648,14 +622,14 @@ Item {
         var esc = _preStageText.replace(/\\/g, "\\\\").replace(/'/g, "'\\''")
         restoreProc.command = ["sh", "-c",
             "printf '%s' '" + esc + "' > " + storePath + ".tmp.$$ && mv -f " + storePath + ".tmp.$$ " + storePath]
-        restoreProc.running = true
+        restoreProc.run()
         CommandService.pushLog(why, "error")
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: atomic restore write (P8.1)
         id: restoreProc
-        command: []; running: false
-        onRunningChanged: if (!running) {
+        command: []
+        onDone: function () {
             _preStageText = ""
             storeFile.reload()   // poller settles the inode swap within 2s
         }
@@ -699,7 +673,7 @@ Item {
             // first-touch backup, never overwritten (ln fails when it exists)
             "[ -e \"$F\" ] && ln \"$F\" \"$F.velocity-bak\" 2>/dev/null\n" +
             "printf '%s' '" + esc + "' > \"$F.tmp.$$\" && mv -f \"$F.tmp.$$\" \"$F\" && echo WROTE"]
-        stageProc.running = true
+        stageProc.run()
     }
 
     // -------------------------------------------------------------------------

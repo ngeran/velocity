@@ -18,8 +18,8 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
-import "../config" as Config
-import "../services" as Services
+import bar.config as Config
+import bar.services as Services
 
 PanelWindow {
     id: root
@@ -335,7 +335,21 @@ PanelWindow {
                 }
                 delegate: StaggerIn {
                     index: model.index
-                    NotificationCard {}
+                    // UX U5: the ryoku-port toast card in full mode (compact
+                    // false — full body, no countdown). The row is handed over
+                    // as an object: the card reads n(), not model roles.
+                    NotificationToastCard {
+                        compact: false
+                        notif: ({
+                            id: model.id, clickId: model.clickId,
+                            appName: model.appName, glyph: model.glyph,
+                            summary: model.summary, body: model.body,
+                            urgency: model.urgency, timestamp: model.timestamp,
+                            actions: model.actions !== undefined ? model.actions : [],
+                            image: model.image !== undefined ? model.image : "",
+                            progress: model.progress !== undefined ? model.progress : -1
+                        })
+                    }
                 }
 
                 // empty state

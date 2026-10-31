@@ -11,11 +11,11 @@
 // only (ryoku used a Translate lift to keep childrenRect honest; scale
 // achieves the same visual without touching geometry).
 //
-// Usage:  delegate: StaggerIn { index: model.index;  NotificationCard {} }
+// Usage:  delegate: StaggerIn { index: model.index;  NotificationToastCard {} }
 // =============================================================================
 
 import QtQuick
-import "../config" as Config
+import bar.config as Config
 
 Item {
     id: stag

@@ -53,10 +53,10 @@ Item {
             .replace("file://", "")
     readonly property string eventsPath: homeDir + "/.config/quickshell/events.jsonl"
 
-    Component.onCompleted: catProc.running = true
+    Component.onCompleted: catProc.run()
 
     function _refresh() {
-        catProc.running = true
+        catProc.run()
     }
 
     Timer {
@@ -66,14 +66,12 @@ Item {
         onTriggered: root._refresh()
     }
 
-    Process {   // unbounded-ok: one-shot local command — timeout migration queued
+    BoundedProcess {   // bounded: one-shot events.jsonl read (P8.1)
         id: catProc
-        property string buffer: ""
         command: ["cat", root.eventsPath]
-        stdout: SplitParser { onRead: function(line) { catProc.buffer += line + "\n" } }
-        onRunningChanged: if (!running) {
-            var lines = catProc.buffer.split("\n")
-            catProc.buffer = ""
+        maxBytes: 262144
+        onDone: function (out) {
+            var lines = out.split("\n")
 
             _entries.clear()
             var crit = 0, boots = 0, switches = 0
