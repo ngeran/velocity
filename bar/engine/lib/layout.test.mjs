@@ -71,7 +71,7 @@ ok("migrate: legacy rightLayout + order → schema-2 layout", () => {
     assert.deepEqual(layout.left, ["velocity.logo", "velocity.workspaces"])
     assert.deepEqual(layout.center, ["nikos.clock"])
     assert.equal(layout.right[0], "nikos.timezones")
-    assert.deepEqual(layout.right.slice(-3), ["velocity.network", "velocity.logs", "velocity.notifications"])
+    assert.deepEqual(layout.right.slice(-2), ["velocity.network", "velocity.logs"])
     assert.ok(layout.right.indexOf("velocity.power") === -1)
     assert.deepEqual(disabled.sort(), ["velocity.bluetooth", "velocity.privacy", "velocity.settings", "velocity.volume"])
 })

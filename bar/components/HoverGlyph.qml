@@ -10,9 +10,8 @@
 // builtins/velocity.* wrappers are untouched.
 //
 // DELIBERATELY NOT this base: PrivacyIcon (dots cluster between glyph and
-// label, demand-gated pollers, primary-tinted idle glyph, zero-width idle)
-// and NotificationButton (count badge, pulse ring, right-pinned icon). They
-// share only the color-hover idiom; folding them in would need more hooks
+// label, demand-gated pollers, primary-tinted idle glyph, zero-width idle).
+// It shares only the color-hover idiom; folding it in would need more hooks
 // than the duplication it saves.
 //
 // Motion tokens only (LogsIcon/SettingsIcon used to hardcode 120/150ms — the

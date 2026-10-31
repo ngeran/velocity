@@ -6,7 +6,8 @@
 // bar's ThemeConfig (live/OLED-safe). Notifications come from
 // NotificationService (a ListModel fed by IPC).
 //
-// Open it from the bar: NotificationButton flips `shown`. Outside-click, Esc,
+// Open it from the settings dashboard's bell (HostBridge.ncToggle →
+// shell.toggleNotificationCenter flips `shown`). Outside-click, Esc,
 // or the Clear All button dismiss it.
 //
 // Modernized: bell + title header with an icon-first Clear-All action, a thin

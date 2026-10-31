@@ -8,14 +8,14 @@ function ok(name, fn) { fn(); n++; console.log("  ok " + name) }
 const c = (id, w, wc, p) => (wc === undefined && p === undefined ? { id, w }
     : p === undefined ? { id, w, wc } : { id, w, wc, p })
 
-// The real bar at 26px, logical px: logo+dots left, clock center, 11 right.
+// The real bar at 26px, logical px: logo+dots left, clock center, 10 right.
 function fixture() {
     return {
         pad: 8,
         gap: 8,
         left: [c("velocity.logo", 24, 24, 90), c("velocity.workspaces", 110, 110, 95)],
         center: [c("velocity.clock", 280, 70, 50)],
-        right: [c("velocity.notifications", 30, 30, 90), c("nikos.keyboard", 78),
+        right: [c("nikos.keyboard", 78),
                 c("nikos.example", 84), c("nikos.timezones", 30), c("example.tracer", 30),
                 c("velocity.network", 26), c("velocity.bluetooth", 26), c("velocity.volume", 26),
                 c("velocity.privacy", 26, 26, 60), c("velocity.logs", 26, 26, 30),
@@ -40,14 +40,14 @@ ok("wide window: full stage, dead-center ideal", () => {
     assert.deepEqual(p.compacted, [])
     assert.equal(p.centerX, (3440 - 280) / 2)
     assert.equal(p.widths.left, 24 + 8 + 110)   // 2 cells + 1 gap
-    assert.equal(p.widths.right, 30 + 78 + 84 + 30 + 30 + 26 * 6 + 8 * 10)
+    assert.equal(p.widths.right, 78 + 84 + 30 + 30 + 26 * 6 + 8 * 9)
 })
 
-ok("slack hysteresis: 930 stays compact, 934 returns to full", () => {
-    // full 926 needs width-8; compact 726 needs width
-    assert.equal(planFit(Object.assign({ width: 930, slack: 8 }, fixture())).stage, "compact")
-    assert.equal(planFit(Object.assign({ width: 934, slack: 8 }, fixture())).stage, "full")
-    assert.equal(planFit(Object.assign({ width: 934, slack: 0 }, fixture())).stage, "full")
+ok("slack hysteresis: 884 stays compact, 896 returns to full", () => {
+    // full 888 needs width-8; compact 678 needs width
+    assert.equal(planFit(Object.assign({ width: 884, slack: 8 }, fixture())).stage, "compact")
+    assert.equal(planFit(Object.assign({ width: 896, slack: 8 }, fixture())).stage, "full")
+    assert.equal(planFit(Object.assign({ width: 896, slack: 0 }, fixture())).stage, "full")
 })
 
 ok("compact stage: only wc<w cells shrink, maps report it", () => {
@@ -65,7 +65,7 @@ ok("compact stage: only wc<w cells shrink, maps report it", () => {
 })
 
 ok("hide stage: ascending priority — settings (20) first, workspaces (95) last", () => {
-    const p = planFit(Object.assign({ width: 700 }, fixture()))   // compact 716 > 700
+    const p = planFit(Object.assign({ width: 674 }, fixture()))   // compact 678 > 674
     assert.equal(p.stage, "hide")
     assert.deepEqual(p.hidden, ["velocity.settings"])
     assert.deepEqual(p.compacted, ["velocity.clock"])
@@ -74,8 +74,8 @@ ok("hide stage: ascending priority — settings (20) first, workspaces (95) last
     assert.equal(p.fits, true)
 })
 
-ok("width sweep 700/1093/1366/1920/3440: never overlaps the rails", () => {
-    for (const width of [700, 1093, 1366, 1920, 3440]) {
+ok("width sweep 660/1093/1366/1920/3440: never overlaps the rails", () => {
+    for (const width of [660, 1093, 1366, 1920, 3440]) {
         const p = planFit(Object.assign({ width, slack: 8 }, fixture()))
         const lo = 8 + p.widths.left + 8
         const hi = width - 8 - p.widths.right - 8 - p.widths.center
@@ -88,7 +88,8 @@ ok("width sweep 700/1093/1366/1920/3440: never overlaps the rails", () => {
 })
 
 ok("stage progression across the sweep", () => {
-    assert.equal(planFit(Object.assign({ width: 700 }, fixture())).stage, "hide")
+    assert.equal(planFit(Object.assign({ width: 660 }, fixture())).stage, "hide")
+    assert.equal(planFit(Object.assign({ width: 678 }, fixture())).stage, "compact")
     assert.equal(planFit(Object.assign({ width: 720 }, fixture())).stage, "compact")
     assert.equal(planFit(Object.assign({ width: 800 }, fixture())).stage, "compact")
     assert.equal(planFit(Object.assign({ width: 1000 }, fixture())).stage, "full")

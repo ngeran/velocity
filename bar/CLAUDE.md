@@ -74,7 +74,7 @@ left:   velocity.logo · velocity.workspaces
 center: nikos.clock · velocity.settings
 right:  nikos.keyboard · nikos.power · nikos.timezones
         velocity.network · velocity.bluetooth · velocity.volume · nikos.storage
-        velocity.privacy · velocity.logs · velocity.notifications
+        velocity.privacy · velocity.logs
 ```
 Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <delta>`, or Settings ▸ Plugins.
 

@@ -1,8 +1,8 @@
 // =============================================================================
 // NotificationService.qml — notification store (ListModel) + CRUD + counter
 // =============================================================================
-// Single source of truth for notifications in the bar process. The bar trigger
-// (NotificationButton), the panel (NotificationCenter) and the IPC ingest all
+// Single source of truth for notifications in the bar process. The panel
+// (NotificationCenter), the toasts (NotificationToasts) and the IPC ingest all
 // read/write this one model.
 //
 // INGEST — push a notification from anywhere on the system:

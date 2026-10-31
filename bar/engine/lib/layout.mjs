@@ -10,7 +10,7 @@ export const SECTIONS = MANIFEST_SECTIONS
 // Built-in widgets (bar/builtins/velocity.<key>) and the legacy
 // bar-config.json `rightLayout` keys they replace.
 export const BUILTIN_LEFT = ["velocity.logo", "velocity.workspaces"]
-export const LEGACY_RIGHT_KEYS = ["network", "bluetooth", "volume", "privacy", "logs", "settings", "notifications"]
+export const LEGACY_RIGHT_KEYS = ["network", "bluetooth", "volume", "privacy", "logs", "settings"]
 export const LEGACY_DEFAULT_RIGHT = ["plugins"].concat(LEGACY_RIGHT_KEYS)
 export const BUILTIN_IDS = BUILTIN_LEFT.concat(LEGACY_RIGHT_KEYS.map(k => "velocity." + k))
 

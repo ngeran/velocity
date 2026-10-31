@@ -330,7 +330,8 @@ ShellRoot {
     }
 
     // =========================================================================
-    // NOTIFICATION CENTER — slide-in panel (lazy; toggled by NotificationButton)
+    // NOTIFICATION CENTER — slide-in panel (lazy; toggled from the settings
+    // dashboard's bell via HostBridge.ncToggle)
     // =========================================================================
     Loader {
         id: ncLoader
