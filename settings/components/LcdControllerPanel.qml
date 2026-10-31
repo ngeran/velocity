@@ -336,9 +336,9 @@ Rectangle {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: root.lcd.metricValue(root.lcd.mainTempSource)
                                         color: Config.HudConfig.amber
-                                        font.family: Config.HudConfig.fontData
-                                        font.pixelSize: 30
-                                        font.bold: true
+                                        font.family: Config.HudConfig.fontDoto
+                                        font.weight: Font.Black
+                                        font.pixelSize: 34
                                     }
                                     Text {
                                         Layout.alignment: Qt.AlignHCenter
@@ -359,7 +359,7 @@ Rectangle {
                                 }
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: 6
                                     Repeater {
                                         model: [
                                             { cap: "GPU", src: root.lcd.gpuTempSource },
@@ -391,16 +391,9 @@ Rectangle {
                                     }
                                 }
                             }
-                            // cyan underline glow (mock's bottom accent)
-                            Rectangle {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottom: parent.bottom
-                                anchors.bottomMargin: 8
-                                width: 44
-                                height: 2
-                                radius: 1
-                                color: Config.ThemeConfig.tint(Config.HudConfig.cyan, 0.60)
-                            }
+                            // (the mock's cyan underline glow lived here until
+                            // it collided with the GPU/LOAD/RAM triple — the
+                            // divider above the triple does that job now)
                         }
                     }
 

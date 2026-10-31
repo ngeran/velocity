@@ -52,7 +52,7 @@ Rectangle {
     readonly property bool compact: Config.UIScale.compact
     readonly property var metrics: Services.HostBridge.metrics
 
-    width: compact ? 64 : 232
+    width: compact ? 64 : 200
     // Transparent — the shell's HUD card (pure black) shows beneath; painting
     // this column opaque would square off the window's left corners.
     color: "transparent"

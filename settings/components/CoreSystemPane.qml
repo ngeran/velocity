@@ -162,7 +162,7 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 72
+            Layout.preferredHeight: 64
 
             ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 8; anchors.bottomMargin: 6; spacing: 5
                 RowLayout { Layout.fillWidth: true
@@ -227,8 +227,8 @@ Rectangle {
                     // inside, core temp as the caption ring reads like the
                     // Doto reference: number in the dots' circle.
                     HudDotRing {
-                        Layout.preferredWidth: 172
-                        Layout.preferredHeight: 172
+                        Layout.preferredWidth: 156
+                        Layout.preferredHeight: 156
                         Layout.alignment: Qt.AlignVCenter
                         value: root.m.util
                         valueText: "" + Math.round(root.m.util)
@@ -236,38 +236,40 @@ Rectangle {
                         accent: root.m.util >= 85 ? Config.HudConfig.red : Config.HudConfig.amber
                     }
 
+                    // stat grid hugs the gauge (no fillWidth stretch) so the
+                    // cells read as one instrument cluster with the ring
                     ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        Layout.minimumWidth: 0
+                        Layout.fillHeight: true
                         spacing: 3
                         Item { Layout.fillHeight: true }   // center the grid block
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 10
-                            StatCell { Layout.fillWidth: true; label: "BUS"
+                            spacing: 14
+                            StatCell { label: "BUS"
                                 value: root.m.gpuPcieGenMax > 0 ? "PCIE GEN" + root.m.gpuPcieGenMax : "—" }
-                            StatCell { Layout.fillWidth: true; label: "RATE"
+                            StatCell { label: "RATE"
                                 value: root.m.gpuPcieGenMax > 0 ? Config.HudConfig.gtRate(root.m.gpuPcieGenMax) + " GT/S" : "—"
                                 accent: Config.HudConfig.cyan }
                         }
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 10
-                            StatCell { Layout.fillWidth: true; label: "TGP"
+                            spacing: 14
+                            StatCell { label: "TGP"
                                 value: root.m.powerW > 0 ? root.m.powerW.toFixed(0) + " W" : "IDLE"
                                 accent: root.m.powerW > 0 ? Config.HudConfig.amber : Config.HudConfig.textFaint }
-                            StatCell { Layout.fillWidth: true; label: "LIMIT"
+                            StatCell { label: "LIMIT"
                                 value: root.m.gpuPowerLimitW > 0 ? root.m.gpuPowerLimitW.toFixed(0) + " W" : "—" }
                         }
                         RowLayout {
-                            Layout.fillWidth: true; spacing: 10
-                            StatCell { Layout.fillWidth: true; label: "CORE TEMP"
+                            spacing: 14
+                            StatCell { label: "CORE TEMP"
                                 value: root.m.temp > 0 ? root.m.temp.toFixed(0) + "°C" : "—"
                                 accent: root.m.temp > 0 ? root.tempTier(root.m.temp) : Config.HudConfig.textFaint }
-                            StatCell { Layout.fillWidth: true; label: "FAN"
+                            StatCell { label: "FAN"
                                 value: root.m.fanPct > 0 ? root.m.fanPct.toFixed(0) + "%" : "STOP 0DB"
                                 accent: root.m.fanPct > 0 ? Config.HudConfig.textBody : Config.HudConfig.textFaint }
                         }
                         Item { Layout.fillHeight: true }
                     }
+                    Item { Layout.fillWidth: true }
                     Text {
                         text: root.m.clockMHz > 0 ? Math.round(root.m.clockMHz) + " MHZ" : "— MHZ"
                         color: Config.HudConfig.textDim
@@ -331,24 +333,25 @@ Rectangle {
                     // cluster: CPU load ring + MEM pressure ring, the CPU/MEM
                     // rail stacked to their right.
                     HudDotRing {
-                        Layout.preferredWidth: 124
-                        Layout.preferredHeight: 124
+                        Layout.preferredWidth: 112
+                        Layout.preferredHeight: 112
                         value: root.m.cpuUsage
                         valueText: "" + Math.round(root.m.cpuUsage)
                         caption: root.m.cpuTemp > 0 ? "CPU · " + root.m.cpuTemp.toFixed(0) + "°C" : "CPU"
                         accent: root.loadTier(root.m.cpuUsage)
                     }
                     HudDotRing {
-                        Layout.preferredWidth: 124
-                        Layout.preferredHeight: 124
+                        Layout.preferredWidth: 112
+                        Layout.preferredHeight: 112
                         value: root.m.ramPct
                         valueText: "" + Math.round(root.m.ramPct)
                         caption: "MEM · " + root.m.ramUsedGB.toFixed(1) + "G"
                         accent: Config.HudConfig.cyan
                     }
-                    Item { Layout.fillWidth: true }
+                    // rail hugs the ring pair — one connected instrument row
                     ColumnLayout {
                         Layout.alignment: Qt.AlignVCenter
+                        Layout.leftMargin: 6
                         spacing: 2
                         Text { text: "MAX BOOST " + root.m.cpuMaxGhz.toFixed(2) + " GHZ"
                             color: Config.HudConfig.textDim
@@ -360,6 +363,7 @@ Rectangle {
                             color: Config.HudConfig.textDim
                             font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
                     }
+                    Item { Layout.fillWidth: true }
                 }
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
@@ -536,7 +540,7 @@ Rectangle {
                 Layout.minimumWidth: 0
                 spacing: 3
                 Eyebrow { Layout.leftMargin: 14; Layout.topMargin: 8; text: "STORAGE" }
-                Item { Layout.fillWidth: true; Layout.fillHeight: true
+                Item { Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 14; anchors.rightMargin: 14
@@ -577,12 +581,12 @@ Rectangle {
                 Layout.minimumWidth: 0
                 spacing: 4
                 Eyebrow { Layout.leftMargin: 14; Layout.topMargin: 8; text: "ENGINE" }
-                Item { Layout.fillWidth: true; Layout.fillHeight: true
+                Item { Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 14; anchors.rightMargin: 14
-                        anchors.topMargin: 2; anchors.bottomMargin: 8
-                        spacing: 4
+                        anchors.topMargin: 1; anchors.bottomMargin: 6
+                        spacing: 3
                         Repeater {
                             model: root.engineRows
                             delegate: RowLayout {
