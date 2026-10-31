@@ -128,8 +128,9 @@ Item {
     // The two card rows split the height the window gives the tab (mockup
     // rows are equal). Clamped so a shrunken window scrolls instead of
     // crushing the cards.
-    readonly property int softwareStripH: 150
+    readonly property int softwareStripH: 126
     readonly property real rowH: Math.max(180, (flick.height - softwareStripH - 2 * Config.ControlConfig.space3) / 2)
+
 
     // =========================================================================
     // HUD KIT — card chrome shared by every tile (mockup hud-card language)
@@ -390,18 +391,18 @@ Item {
                 spacing: Config.ControlConfig.space3
 
                 // ═════════════════════════════════════════════════════════
-                // ROW 1 — HARDWARE (5) · WALLPAPER (4) · SESSION (3)
+                // ROW 1 — HARDWARE (8) · WALLPAPER (4)
                 // ═════════════════════════════════════════════════════════
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: root.rowH
-                    readonly property real unit: (width - 2 * Config.ControlConfig.space3) / 12
+                    Layout.preferredHeight: root.rowH - 30
+                    readonly property real unit: (width - 1 * Config.ControlConfig.space3) / 12
 
                     // ── HARDWARE TELEMETRY ────────────────────────────────
                     Rectangle {
                         id: hwCard
                         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                        width: parent.unit * 5
+                        width: parent.unit * 8
                         color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
                         radius: 0
@@ -465,13 +466,13 @@ Item {
                                                 elide: Text.ElideRight
                                                 Layout.fillWidth: true; Layout.minimumWidth: 0
                                             }
-                                            Components.HudMeterBar {
+                                            Components.HudLedBar {
                                                 Layout.fillWidth: true
-                                                barHeight: 3
+                                                Layout.preferredHeight: 7
+                                                segments: 30; segmentGap: 2
                                                 glowAlpha: 0.25
                                                 value: root.m ? root.m.cpuUsage : 0
-                                                fill: root.loadColor(root.m ? root.m.cpuUsage : 0)
-                                                wellColor: root.cOutline
+                                                litColor: root.loadColor(root.m ? root.m.cpuUsage : 0)
                                             }
                                         }
                                     }
@@ -552,7 +553,7 @@ Item {
                                     // the cluster's dot ring (HudDotRing):
                                     // 40 dots, Doto numeral core
                                     Components.HudDotRing {
-                                        width: 128; height: 128
+                                        width: 200; height: 200
                                         Layout.alignment: Qt.AlignHCenter
                                         value: root.m ? root.m.memPct : 0
                                         valueText: String(Math.round(root.m ? root.m.memPct : 0))
@@ -591,102 +592,22 @@ Item {
                         onChangeRequested: root.wallpaperRequested()
                     }
 
-                    // ── SESSION ──────────────────────────────────────────────
-                    Rectangle {
-                        anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
-                        width: parent.unit * 3
-                        color: Config.HudConfig.panel
-                        border.color: root.cBorder; border.width: 1
-                        radius: 0
-                        clip: true
-
-
-                        ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 14
-                            spacing: Config.ControlConfig.space2
-
-                            HudHeader {
-                                title: "SESSION"
-                                dotColor: root.cPrimary
-                                chipLabel: "HYPRLAND"
-                                chipColor: root.cPrimary
-                            }
-
-                            // Hero uptime counter (mockup: unboxed centrepiece)
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                ColumnLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 2
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "SYSTEM UPTIME"
-                                        color: root.cDim
-                                        font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 2; font.bold: true
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: root.m ? root.m.uptimeStr : "—"
-                                        color: root.cText
-                                        font.family: root.fontM; font.pixelSize: 32; font.bold: true
-                                    }
-                                }
-                            }
-
-                            // Age + installation tiles
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Config.ControlConfig.space2
-                                InsetPanel {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 48
-                                    ColumnLayout {
-                                        anchors.centerIn: parent; spacing: 1
-                                        Text { text: "OS AGE"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                        Text { text: ((root.m ? root.m.osAgeDays : 0) || 0) + "d"; color: root.cText; font.family: root.fontM; font.pixelSize: 13; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                    }
-                                }
-                                InsetPanel {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 48
-                                    ColumnLayout {
-                                        anchors.centerIn: parent; spacing: 1
-                                        Text { text: "INSTALLED"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
-                                        Text { text: (root.m && root.m.installDate) || "—"; color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                    }
-                                }
-                            }
-
-                            // Nix generation footer
-                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text { text: "NIX GENERATION"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
-                                Item { Layout.fillWidth: true }
-                                HudChip {
-                                    visible: root.nixGen !== ""
-                                    label: "GEN #" + root.nixGen + " (ACTIVE)"
-                                    chipColor: root.cSecondary
-                                }
-                            }
-                        }
-                    }
                 }
 
                 // ═════════════════════════════════════════════════════════
-                // ROW 2 — STORAGE · NETWORK · HEALTH · ACTIVE THEME (3 each)
+                // ROW 2 — STORAGE / HEALTH (5) · NETWORK (4) · SESSION / THEME (3)
                 // ═════════════════════════════════════════════════════════
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: root.rowH
-                    readonly property real unit: (width - 3 * Config.ControlConfig.space3) / 12
+                    Layout.preferredHeight: root.rowH + 30
+                    readonly property real unit: (width - 2 * Config.ControlConfig.space3) / 12
 
                     // ── STORAGE ──────────────────────────────────────────────
                     Rectangle {
                         id: stCard
-                        anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                        width: parent.unit * 3
+                        anchors { left: parent.left; top: parent.top }
+                        height: (parent.height - Config.ControlConfig.space3) / 2
+                        width: parent.unit * 5
                         color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
                         radius: 0
@@ -694,7 +615,7 @@ Item {
 
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 14
+                            anchors.fill: parent; anchors.margins: 12
                             spacing: Config.ControlConfig.space2
 
                             HudHeader {
@@ -713,16 +634,16 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 readonly property int n: (root.m && root.m.profileDisks) ? root.m.profileDisks.length : 0
-                                readonly property real rowH2: n > 0 ? Math.max(44, (height - (n - 1) * 8) / n) : 0
+                                readonly property real rowH2: n > 0 ? Math.max(26, (height - (n - 1) * 6) / n) : 0
                                 Repeater {
                                     model: root.m ? root.m.profileDisks : []
                                     Item {
                                         width: stBody.width
                                         height: stBody.rowH2
-                                        y: index * (stBody.rowH2 + 8)
+                                        y: index * (stBody.rowH2 + 6)
                                         Column {
                                             anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-                                            spacing: 3
+                                            spacing: 2
                                             RowLayout {
                                                 width: parent.width
                                                 spacing: 6
@@ -742,13 +663,13 @@ Item {
                                                     horizontalAlignment: Text.AlignRight
                                                 }
                                             }
-                                            Components.HudMeterBar {
+                                            Components.HudLedBar {
                                                 width: parent.width
-                                                barHeight: 6
+                                                height: 7
+                                                segments: 44; segmentGap: 2
                                                 glowAlpha: 0.25
                                                 value: Math.min(modelData.pct, 100)
-                                                fill: root.diskColor(modelData.pct)
-                                                wellColor: root.cOutline
+                                                litColor: root.diskColor(modelData.pct)
                                             }
                                             RowLayout {
                                                 width: parent.width
@@ -776,7 +697,7 @@ Item {
                             left: stCard.right; leftMargin: Config.ControlConfig.space3
                             top: parent.top; bottom: parent.bottom
                         }
-                        width: parent.unit * 3
+                        width: parent.unit * 4
                         color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
                         radius: 0
@@ -930,10 +851,10 @@ Item {
                     Rectangle {
                         id: healthCard
                         anchors {
-                            left: netCard.right; leftMargin: Config.ControlConfig.space3
-                            top: parent.top; bottom: parent.bottom
+                            left: parent.left; top: stCard.bottom; topMargin: Config.ControlConfig.space3
+                            bottom: parent.bottom
                         }
-                        width: parent.unit * 3
+                        width: parent.unit * 5
                         color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
                         radius: 0
@@ -955,10 +876,10 @@ Item {
                             }
 
                             // GPU TEMPERATURE
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 4
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    spacing: 2
                                 Item { Layout.fillHeight: true }   // vertical centering within the band
                                 RowLayout {
                                     Layout.fillWidth: true
@@ -970,22 +891,22 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Components.HudMeterBar {
+                                Components.HudLedBar {
                                     Layout.fillWidth: true
-                                    barHeight: 7
+                                    Layout.preferredHeight: 7
+                                    segments: 44; segmentGap: 2
                                     glowAlpha: 0.25
                                     value: Math.min((root.m ? root.m.gpuTempC : 0) / 85 * 100, 100)
-                                    fill: root.tempColor(root.m ? root.m.gpuTempC : 0)
-                                    wellColor: root.cOutline
+                                    litColor: root.tempColor(root.m ? root.m.gpuTempC : 0)
                                 }
                                 Item { Layout.fillHeight: true }
                             }
 
                             // GPU BOARD POWER
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 4
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    spacing: 2
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Text { text: "GPU BOARD POWER"; color: root.cDim; font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1 }
@@ -996,21 +917,21 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Components.HudMeterBar {
+                                Components.HudLedBar {
                                     Layout.fillWidth: true
-                                    barHeight: 7
+                                    Layout.preferredHeight: 7
+                                    segments: 44; segmentGap: 2
                                     glowAlpha: 0.25
                                     value: Math.min((root.m ? root.m.gpuPowerW : 0) / 450 * 100, 100)
-                                    fill: root.cSecondary
-                                    wellColor: root.cOutline
+                                    litColor: root.cSecondary
                                 }
                             }
 
                             // GPU UTILIZATION
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 4
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    spacing: 2
                                 Item { Layout.fillHeight: true }
                                 RowLayout {
                                     Layout.fillWidth: true
@@ -1022,13 +943,13 @@ Item {
                                         font.family: root.fontM; font.pixelSize: 10; font.bold: true
                                     }
                                 }
-                                Components.HudMeterBar {
+                                Components.HudLedBar {
                                     Layout.fillWidth: true
-                                    barHeight: 7
+                                    Layout.preferredHeight: 7
+                                    segments: 44; segmentGap: 2
                                     glowAlpha: 0.25
                                     value: Math.min((root.m ? root.m.gpuUsagePct : 0), 100)
-                                    fill: root.cAccent2
-                                    wellColor: root.cOutline
+                                    litColor: root.cAccent2
                                 }
                                 Item { Layout.fillHeight: true }
                             }
@@ -1053,9 +974,98 @@ Item {
                         }
                     }
 
-                    // ── ACTIVE THEME — the user-theme SSOT, HUD-swatched ──
+                    // ── SESSION — stacked over ACTIVE THEME ───────────────
                     Rectangle {
-                        anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
+                        id: sessCard
+                        anchors { right: parent.right; top: parent.top }
+                        height: (parent.height - Config.ControlConfig.space3) / 2
+                        width: parent.unit * 3
+                        color: Config.HudConfig.panel
+                        border.color: root.cBorder; border.width: 1
+                        radius: 0
+                        clip: true
+
+
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 14
+                            spacing: Config.ControlConfig.space2
+
+                            HudHeader {
+                                title: "SESSION"
+                                dotColor: root.cPrimary
+                                chipLabel: "HYPRLAND"
+                                chipColor: root.cPrimary
+                            }
+
+                            // Hero uptime counter (mockup: unboxed centrepiece)
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "SYSTEM UPTIME"
+                                        color: root.cDim
+                                        font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 2; font.bold: true
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: root.m ? root.m.uptimeStr : "—"
+                                        color: root.cText
+                                        font.family: Config.HudConfig.fontDoto
+                                        font.variableAxes: ({ "ROND": 100, "wght": 600 })
+                                        font.pixelSize: 26
+                                    }
+                                }
+                            }
+
+                            // Age + installation tiles
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Config.ControlConfig.space2
+                                InsetPanel {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44
+                                    ColumnLayout {
+                                        anchors.centerIn: parent; spacing: 1
+                                        Text { text: "OS AGE"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
+                                        Text { text: ((root.m ? root.m.osAgeDays : 0) || 0) + "d"; color: root.cText; font.family: Config.HudConfig.fontDoto; font.pixelSize: 16; font.variableAxes: ({ "ROND": 100, "wght": 700 }); Layout.alignment: Qt.AlignHCenter }
+                                    }
+                                }
+                                InsetPanel {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44
+                                    ColumnLayout {
+                                        anchors.centerIn: parent; spacing: 1
+                                        Text { text: "INSTALLED"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter }
+                                        Text { text: (root.m && root.m.installDate) || "—"; color: root.cText; font.family: Config.HudConfig.fontDoto; font.pixelSize: 14; font.variableAxes: ({ "ROND": 100, "wght": 700 }); Layout.alignment: Qt.AlignHCenter }
+                                    }
+                                }
+                            }
+
+                            // Nix generation footer
+                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: "NIX GENERATION"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
+                                Item { Layout.fillWidth: true }
+                                HudChip {
+                                    visible: root.nixGen !== ""
+                                    label: "GEN #" + root.nixGen + " (ACTIVE)"
+                                    chipColor: root.cSecondary
+                                }
+                            }
+                        }
+                    }
+
+                    // ── ACTIVE THEME — stacked under SESSION ──────────────
+                    Rectangle {
+                        anchors {
+                            right: parent.right; top: sessCard.bottom; topMargin: Config.ControlConfig.space3
+                            bottom: parent.bottom
+                        }
                         width: parent.unit * 3
                         color: Config.HudConfig.panel
                         border.color: root.cBorder; border.width: 1
@@ -1063,8 +1073,8 @@ Item {
                         clip: true
 
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 14
-                            spacing: Config.ControlConfig.space2
+                            anchors.fill: parent; anchors.margins: 12
+                            spacing: 4
 
                             HudHeader {
                                 title: "ACTIVE THEME"
@@ -1102,7 +1112,7 @@ Item {
                                     delegate: Column {
                                         spacing: 2
                                         Rectangle {
-                                            width: 44; height: 22
+                                            width: 44; height: 20
                                             color: modelData.c
                                             border.color: root.cOutline; border.width: 1
                                         }
@@ -1148,7 +1158,7 @@ Item {
 
 
                     ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 14
+                        anchors.fill: parent; anchors.margins: 10
                         spacing: Config.ControlConfig.space2
 
                         HudHeader {
@@ -1168,7 +1178,7 @@ Item {
                                 Layout.fillHeight: true
                                 Layout.minimumWidth: 0
                                 ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 10
+                                    anchors.fill: parent; anchors.margins: 8
                                     spacing: 1
                                     Text { text: "OPERATING SYSTEM"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
                                     Text {
@@ -1188,7 +1198,7 @@ Item {
                                 Layout.fillHeight: true
                                 Layout.minimumWidth: 0
                                 ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 10
+                                    anchors.fill: parent; anchors.margins: 8
                                     spacing: 1
                                     Text { text: "KERNEL"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
                                     Text {
@@ -1204,7 +1214,7 @@ Item {
                                 Layout.fillHeight: true
                                 Layout.minimumWidth: 0
                                 ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 10
+                                    anchors.fill: parent; anchors.margins: 8
                                     spacing: 1
                                     Text { text: "MANAGED PACKAGES"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
                                     Text {
@@ -1222,7 +1232,7 @@ Item {
                                 Layout.fillHeight: true
                                 Layout.minimumWidth: 0
                                 ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 10
+                                    anchors.fill: parent; anchors.margins: 8
                                     spacing: 1
                                     Text { text: "SHELL & COMPOSITOR"; color: root.cDim; font.family: root.fontM; font.pixelSize: 8; font.letterSpacing: 1 }
                                     Text {
