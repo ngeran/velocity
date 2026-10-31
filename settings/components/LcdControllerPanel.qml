@@ -1,9 +1,10 @@
 // =============================================================================
 // LcdControllerPanel.qml — DeepCool Mystique AIO LCD controller (HUD cluster)
 // =============================================================================
-// The SHARED control surface: embedded in the Core telemetry pane AND hosted
-// standalone by CoreLcdPane (MYSTIQUE AIO nav item). All state lives in
-// LcdConfigService (both instances are alive at once — no local copies).
+// The AIO control surface, embedded in the Core telemetry pane (the
+// TELEMETRY + LCD section hosts it directly — there is no standalone page).
+// All state lives in LcdConfigService, so the panel survives tab swaps with
+// its config intact (no local copies).
 //
 // Faithful-to-mock substitutions (fixed HUD palette, honest data):
 //   · CONNECTED 60Hz chip ↔ metrics.lcdPresent (pgrep probe) — OFFLINE dim chip

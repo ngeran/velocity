@@ -51,7 +51,6 @@ Rectangle {
 
     readonly property bool compact: Config.UIScale.compact
     readonly property var metrics: Services.HostBridge.metrics
-    readonly property bool lcdOnline: !!metrics && metrics.lcdPresent
 
     width: compact ? 64 : 232
     // Transparent — the shell's HUD card (pure black) shows beneath; painting
@@ -262,8 +261,6 @@ Rectangle {
 
                         readonly property string subKey: modelData.key
                         readonly property bool subActive: sidebarRoot.coreSection === subKey
-                        // MYSTIQUE AIO row pulses its dot while the daemon feeds
-                        readonly property bool isLcd: subKey === "lcd"
 
                         // connector line (mock's border-l rail)
                         Rectangle {
@@ -293,15 +290,7 @@ Rectangle {
                                 height: subItem.subActive ? 6 : 4
                                 radius: subItem.subActive ? 3 : 2
                                 color: subItem.subActive ? Config.HudConfig.amber
-                                      : (subItem.isLcd && sidebarRoot.lcdOnline) ? Config.HudConfig.cyan
                                       : Config.HudConfig.textFaint
-                                // pulse while the LCD daemon is live
-                                SequentialAnimation on opacity {
-                                    running: subItem.isLcd && sidebarRoot.lcdOnline
-                                    loops: Animation.Infinite
-                                    NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
-                                    NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
-                                }
                             }
 
                             Text {
@@ -318,17 +307,15 @@ Rectangle {
                                 Behavior on color { ColorAnimation { duration: 100 } }
                             }
 
-                            // right tag: ACTIVE / 2.8" TFT · OFFLINE / blank
+                            // right tag: ACTIVE on the open section, blank otherwise
                             Text {
-                                visible: subItem.subActive || (subItem.isLcd && sidebarRoot.lcdOnline)
-                                text: subItem.subActive ? "ACTIVE"
-                                      : subItem.isLcd ? "2.8\" TFT" : ""
+                                visible: subItem.subActive
+                                text: "ACTIVE"
                                 font.family: Config.HudConfig.fontData
                                 font.pixelSize: 7
                                 font.bold: true
                                 font.letterSpacing: 0.8
-                                color: subItem.subActive ? Config.ThemeConfig.tint(Config.HudConfig.amber, 0.25)
-                                      : Config.ThemeConfig.tint(Config.HudConfig.cyan, 0.30)
+                                color: Config.ThemeConfig.tint(Config.HudConfig.amber, 0.25)
                             }
                         }
 

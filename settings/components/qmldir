@@ -24,7 +24,6 @@ DisplayControlView 1.0 DisplayControlView.qml
 WallpaperModule 1.0 WallpaperModule.qml
 CoreEngineTab 1.0 CoreEngineTab.qml
 CoreDashDial 1.0 CoreDashDial.qml
-CoreLcdPane 1.0 CoreLcdPane.qml
 Card 1.0 Card.qml
 CoreEventsPane 1.0 CoreEventsPane.qml
 ControlSeg 1.0 ControlSeg.qml

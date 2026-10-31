@@ -249,6 +249,9 @@ Item {
     }
 
     function openCoreTab(section) {
+        // Legacy deep-link: the old MYSTIQUE AIO section folded into SYSTEM
+        // (the AIO controller is embedded in the telemetry pane now).
+        if (section === "lcd") section = "system"
         var idx = -1
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "core") { idx = i; break }

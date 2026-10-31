@@ -71,10 +71,11 @@ QtObject {
     // Lives here, not in the tab, so the search catalog can list the sections
     // before the O1 lazy tab is ever visited.
     readonly property var coreSections: [
-        // Labels per the HUD cluster mock; KEYS are contract (openCore IPC +
-        // search seeds + CoreEngineTab pane swap depend on them).
+        // KEYS are contract (openCore IPC + search seeds + CoreEngineTab pane
+        // swap depend on them). "lcd" is gone — the Mystique AIO controller
+        // lives inside TELEMETRY + LCD; stale openCore("lcd") deep-links remap
+        // to "system" in the shell.
         { key: "system", label: "TELEMETRY + LCD", icon: "󰇅" },
-        { key: "lcd",    label: "MYSTIQUE AIO",    icon: "󰍹" },
         { key: "events", label: "EVENTS",          icon: "󰈔" }
     ]
 

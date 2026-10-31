@@ -1,8 +1,9 @@
 // =============================================================================
 // CoreEngineTab.qml — "Core Engine" tab (tab 4): shared ControlSectionNav + content swap
 // =============================================================================
-// Consolidated nav (user request): SYSTEM (unified CPU+GPU+MEM+drives) is the
-// default pane; GPU (processes detail), LCD, EVENTS remain separate.
+// Consolidated nav (user request): SYSTEM (CPU+GPU+MEM+LCD+drives — the AIO
+// controller is embedded, not its own section) is the default pane; EVENTS
+// remains separate.
 // Telemetry gating preserved: coreVisible construct/destruct.
 // =============================================================================
 
@@ -25,7 +26,7 @@ Item {
     Component.onDestruction: Services.HostBridge.metrics.coreVisible = false
 
     // Section rail: compact fallback only — in labeled mode the dashboard
-    // sidebar hosts the CORE submenu (TELEMETRY + LCD / MYSTIQUE AIO / EVENTS).
+    // sidebar hosts the CORE submenu (TELEMETRY + LCD / EVENTS).
     ControlSectionNav {
         id: sideNav
         anchors.top: parent.top
@@ -48,12 +49,6 @@ Item {
         Item {
             anchors.fill: parent; visible: root.active === "system"
             CoreSystemPane { anchors.fill: parent; anchors.margins: 12 }
-        }
-
-        // LCD — physical AIO LCD preferences (no scrolling)
-        Item {
-            anchors.fill: parent; visible: root.active === "lcd"
-            CoreLcdPane { anchors.fill: parent; anchors.margins: 12 }
         }
 
         // EVENTS — system event timeline (no scrolling)
