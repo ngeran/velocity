@@ -173,17 +173,23 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 128
 
-            ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 12; anchors.bottomMargin: 10; spacing: 11
+            ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 8; anchors.bottomMargin: 6; spacing: 6
                 RowLayout { Layout.fillWidth: true
                     Eyebrow { text: "CPU LOAD / %" }
                     Item { Layout.fillWidth: true }
-                    Text { text: root.m.cpuUsage.toFixed(1) + " %"
+                    // Doto display numeral (Tokens minDisplayPx), mirroring
+                    // the CPU TEMP quarter's number+unit voice
+                    Text { text: root.m.cpuUsage.toFixed(1)
                         color: root.loadTier(root.m.cpuUsage)
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true }
+                        font.family: Config.HudConfig.fontDoto; font.weight: Font.Black; font.pixelSize: 26 }
+                    Text { text: "%"
+                        color: root.loadTier(root.m.cpuUsage)
+                        font.family: Config.HudConfig.fontData; font.pixelSize: 11; font.bold: true
+                        Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 5 }
                 }
                 HudLedBar {
                     Layout.fillWidth: true
-                    height: 60
+                    height: 56
                     value: root.m.cpuUsage
                     litColor: root.loadTier(root.m.cpuUsage)
                     midpointIndex: 25
@@ -513,7 +519,7 @@ Rectangle {
                     Text {
                         text: root.m.cpuTemp > 0 ? root.m.cpuTemp.toFixed(0) : "—"
                         color: root.m.cpuTemp > 0 ? Config.HudConfig.textHi : Config.HudConfig.textFaint
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 22; font.bold: true
+                        font.family: Config.HudConfig.fontDoto; font.weight: Font.Black; font.pixelSize: 26
                     }
                     Text {
                         text: "°C"

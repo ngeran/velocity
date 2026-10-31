@@ -274,11 +274,36 @@ Rectangle {
                             border.color: Config.ThemeConfig.tint(Config.HudConfig.cyan, 0.18)
                             border.width: 1
                         }
+                        // dot rim — the CPU/GPU gauge language (HudDotRing):
+                        // 40 dots on the bezel, amber-lit while the display
+                        // runs, dim track otherwise
+                        Canvas {
+                            id: rimDots
+                            anchors.fill: parent
+                            property bool lit: root.lcd.lcdEnabled
+                            onLitChanged: requestPaint()
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                var N = 40
+                                for (var i = 0; i < N; i++) {
+                                    var ang = -Math.PI / 2 + 2 * Math.PI * i / N
+                                    ctx.beginPath()
+                                    ctx.arc(width / 2 + 89 * Math.cos(ang),
+                                            height / 2 + 89 * Math.sin(ang), 2.3, 0, 2 * Math.PI)
+                                    ctx.fillStyle = lit ? Config.HudConfig.amber
+                                                        : Config.HudConfig.ledDim
+                                    ctx.fill()
+                                }
+                            }
+                            Component.onCompleted: requestPaint()
+                        }
+
                         // dashed halo — pulses only while the display is live
                         Canvas {
                             id: halo
                             anchors.fill: parent
-                            anchors.margins: 10
+                            anchors.margins: 6     // radius 93 — clears the dot rim at 89
                             visible: root.lcd.lcdEnabled
                             onPaint: {
                                 var ctx = getContext("2d")
@@ -305,8 +330,8 @@ Rectangle {
                         Rectangle {
                             id: screen
                             anchors.centerIn: parent
-                            width: 156
-                            height: 156
+                            width: 164
+                            height: 164
                             radius: width / 2
                             color: "#000000"
                             border.color: Config.HudConfig.borderHi
@@ -314,83 +339,84 @@ Rectangle {
                             rotation: root.lcd.rotation
                             clip: true
 
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 12
+                            // anchored layers, not a ColumnLayout: the main
+                            // readout must sit exactly mid-circle no matter
+                            // how tall the header/footer strips run
+                            Row {
+                                anchors.top: parent.top
+                                anchors.topMargin: 12
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 12
+                                Text {
+                                    text: "DEEPCOOL"
+                                    color: Config.HudConfig.cyan
+                                    font.family: Config.HudConfig.fontData
+                                    font.pixelSize: 8
+                                    font.bold: true
+                                    font.letterSpacing: 1.0
+                                }
+                                Text {
+                                    text: root.lcd.lcdEnabled ? "PUMP 100%" : "OFF"
+                                    color: Config.HudConfig.amber
+                                    font.family: Config.HudConfig.fontData
+                                    font.pixelSize: 8
+                                    font.bold: true
+                                }
+                            }
+                            // the main dial — dead center of the circle
+                            Column {
+                                anchors.centerIn: parent
                                 spacing: 2
-
-                                RowLayout {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    Layout.topMargin: 8
-                                    spacing: 12
-                                    Text {
-                                        text: "DEEPCOOL"
-                                        color: Config.HudConfig.cyan
-                                        font.family: Config.HudConfig.fontData
-                                        font.pixelSize: 8
-                                        font.bold: true
-                                        font.letterSpacing: 1.0
-                                    }
-                                    Text {
-                                        text: root.lcd.lcdEnabled ? "PUMP 100%" : "OFF"
-                                        color: Config.HudConfig.amber
-                                        font.family: Config.HudConfig.fontData
-                                        font.pixelSize: 8
-                                        font.bold: true
-                                    }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: root.lcd.metricValue(root.lcd.mainTempSource)
+                                    color: Config.HudConfig.amber
+                                    font.family: Config.HudConfig.fontDoto
+                                    font.weight: Font.Black
+                                    font.pixelSize: 40
                                 }
-                                Item { Layout.fillHeight: true }
-                                ColumnLayout {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    spacing: 0
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: root.lcd.metricValue(root.lcd.mainTempSource)
-                                        color: Config.HudConfig.amber
-                                        font.family: Config.HudConfig.fontDoto
-                                        font.weight: Font.Black
-                                        font.pixelSize: 34
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "MAIN"
-                                        color: Config.HudConfig.textMid
-                                        font.family: Config.HudConfig.fontData
-                                        font.pixelSize: 7
-                                        font.bold: true
-                                        font.letterSpacing: 1.2
-                                    }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "MAIN"
+                                    color: Config.HudConfig.textMid
+                                    font.family: Config.HudConfig.fontData
+                                    font.pixelSize: 7
+                                    font.bold: true
+                                    font.letterSpacing: 1.2
                                 }
-                                Item { Layout.fillHeight: true }
-                                // bottom triple: gpu · usage · ram slots
+                            }
+                            // bottom triple: gpu · usage · ram slots
+                            Column {
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 12
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 4
                                 Rectangle {
-                                    Layout.preferredWidth: 116
-                                    Layout.alignment: Qt.AlignHCenter
-                                    height: 1
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 116; height: 1
                                     color: Config.HudConfig.borderLo
                                 }
-                                RowLayout {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    spacing: 10
+                                Row {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    spacing: 14
                                     Repeater {
                                         model: [
                                             { cap: "GPU", src: root.lcd.gpuTempSource },
                                             { cap: "LOAD", src: root.lcd.usageSource },
                                             { cap: "RAM", src: root.lcd.ramSource }
                                         ]
-                                        delegate: ColumnLayout {
+                                        delegate: Column {
                                             property var cell: modelData
-                                            Layout.fillWidth: true
                                             spacing: 0
                                             Text {
-                                                Layout.alignment: Qt.AlignHCenter
+                                                anchors.horizontalCenter: parent.horizontalCenter
                                                 text: cell.cap
                                                 color: Config.HudConfig.textFaint
                                                 font.family: Config.HudConfig.fontData
                                                 font.pixelSize: 7
                                             }
                                             Text {
-                                                Layout.alignment: Qt.AlignHCenter
+                                                anchors.horizontalCenter: parent.horizontalCenter
                                                 text: root.lcd.metricValue(cell.src)
                                                 color: cell.cap === "GPU" ? Config.HudConfig.cyan
                                                        : cell.cap === "LOAD" ? Config.HudConfig.amber
@@ -403,9 +429,6 @@ Rectangle {
                                     }
                                 }
                             }
-                            // (the mock's cyan underline glow lived here until
-                            // it collided with the GPU/LOAD/RAM triple — the
-                            // divider above the triple does that job now)
                         }
                     }
 
