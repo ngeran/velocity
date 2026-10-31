@@ -1,5 +1,6 @@
 PowerMenu 1.0 PowerMenu.qml
 PowerTile 1.0 PowerTile.qml
+PowerStrip 1.0 PowerStrip.qml
 SettingsWindowShell 1.0 SettingsWindowShell.qml
 ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml

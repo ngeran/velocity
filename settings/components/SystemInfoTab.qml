@@ -1,22 +1,22 @@
 // =============================================================================
-// SystemInfoTab.qml — tab 0: the SYSTEM INFO telemetry dashboard
+// SystemInfoTab.qml — tab 0: the telemetry dashboard
 // =============================================================================
 // Replaces the bento OverviewTab as the dashboard landing tab (the bar's
 // FastfetchOverlay interior, rehosted as an embedded settings view). Same
 // card family as the overlay: Hardware (CPU/GPU/BOARD + RAM radial), Session,
-// Storage, Network, Health, and the full-width Software & OS strip.
+// Storage, Network, Health, and the full-width Software & OS strip. No title
+// header — the shared Header (clock, identity, power strip) carries the
+// identity; the grid starts flush (user call).
 //
 // Data comes through HostBridge (import-split law — this tree never imports
 // "../bar/…"): bar MetricsService + NetworkService. MetricsService is
-// lease-gated, so the tab renews a 45s lease while visible (Timer) and lets
-// it lapse on hide — polls stop within one lease period of leaving the tab,
-// and the bar overlay's own `active` flag is never fought over.
-//
-// The header carries the POWER strip (lock / suspend / restart / shutdown):
-// small icon buttons, destructive ones arming the PowerMenu-style 5s inline
-// confirm before the same systemctl commands run through BoundedProcess.
-//
-// Glyphs are \uXXXX / \u{...} escapes (transport law — tools/check-glyphs).
+// lease-gated AND profile-lazy (boot runs refreshStatic only), so the tab
+// pulls `refresh()` on every open: the kick is gated on SharedState.
+// dashboardVisible (the WINDOW edge), not on `visible` — the tab is created
+// at first open with visible=true and the bridge already attached, so
+// neither onVisibleChanged nor onMChanged ever fires on the paths that
+// matter (the blank-dashboard incident). A renewal Timer holds a 45s lease
+// while the tab is on screen; polls stop within one lease period of leaving.
 // =============================================================================
 
 import QtQuick
@@ -45,17 +45,22 @@ Item {
     readonly property color cErr:       Config.ThemeConfig.colors.error       // shutdown
     readonly property color cAccent2:   Config.ThemeConfig.colors.accent      // GPU util highlight
     readonly property string fontM:     Config.ControlConfig.fontMono
-    readonly property string fontN:     Config.ControlConfig.fontNerd
 
     function diskColor(pct) { if (pct >= 90) return cErr; if (pct >= 75) return cWarn; return cSecondary }
     function tempColor(c)   { if (!c) return cDim; if (c >= 80) return cErr; if (c >= 60) return cWarn; return cSuccess }
     function fmtNum(n) { return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") }
 
     // =========================================================================
-    // METRICS LEASE — renew while the tab is on screen, lapse when hidden
+    // METRICS KICK — pull the profile on every window-open, lease while shown
     // =========================================================================
-    onVisibleChanged: if (visible) root._kickMetrics()
-    onMChanged:       if (visible) root._kickMetrics()
+    // `visible` alone never fires here (tab created visible with the bridge
+    // attached) — the reliable edges are the WINDOW shown state and the
+    // tab's own re-entry from another tab.
+    readonly property bool shown: Config.SharedState.dashboardVisible
+    Component.onCompleted: if (shown) root._kickMetrics()
+    onShownChanged:    if (shown) root._kickMetrics()
+    onVisibleChanged:  if (visible && shown) root._kickMetrics()
+    onMChanged:        if (shown && visible) root._kickMetrics()
     function _kickMetrics() {
         if (!m) return
         m.extendLease(45)
@@ -64,69 +69,9 @@ Item {
     }
     Timer {
         interval: 20000
-        running: root.visible && root.m !== null
+        running: root.shown && root.visible && root.m !== null
         repeat: true
         onTriggered: if (root.m) root.m.extendLease(45)
-    }
-
-    // =========================================================================
-    // POWER STRIP — same commands + confirm discipline as PowerMenu
-    // =========================================================================
-    property string pendingCmd: ""
-    property string pendingLabel: ""
-    readonly property bool confirming: pendingCmd !== ""
-    Timer { id: confirmExpiry; interval: 5000; onTriggered: root._cancelConfirm() }
-    function requestConfirm(cmd, label) {
-        root.pendingCmd = cmd
-        root.pendingLabel = label
-        confirmExpiry.restart()
-    }
-    function _cancelConfirm() {
-        root.pendingCmd = ""
-        root.pendingLabel = ""
-        confirmExpiry.stop()
-    }
-    function _doConfirm() {
-        var cmd = root.pendingCmd
-        root._cancelConfirm()
-        sysCmd.execute(cmd)
-    }
-    Services.BoundedProcess {
-        id: sysCmd
-        function execute(cmd) {
-            sysCmd.command = ["bash", "-c", cmd]
-            sysCmd.run()
-        }
-    }
-
-    // ── one small icon button (26×26; hover lights the action's accent) ────
-    component PowerIconButton: Rectangle {
-        id: pib
-        property string glyph: ""
-        property color hot: Config.ThemeConfig.colors.secondary
-        signal fired()
-        width: 26; height: 26
-        radius: Config.ControlConfig.radiusSmall
-        color: pibArea.containsMouse ? Config.ThemeConfig.tint(pib.hot, 0.14) : "transparent"
-        border.color: pibArea.containsMouse ? pib.hot : root.cBorder
-        border.width: 1
-        Behavior on border.color { ColorAnimation { duration: 120 } }
-        Behavior on color { ColorAnimation { duration: 120 } }
-        Text {
-            anchors.centerIn: parent
-            text: pib.glyph
-            color: pibArea.containsMouse ? pib.hot : root.cDim
-            font.family: root.fontN
-            font.pixelSize: 13
-            Behavior on color { ColorAnimation { duration: 120 } }
-        }
-        MouseArea {
-            id: pibArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: pib.fired()
-        }
     }
 
     // =========================================================================
@@ -153,159 +98,6 @@ Item {
         anchors.margins: Config.ControlConfig.space4
         spacing: Config.ControlConfig.space3
 
-        // ---- header: title + host + POWER strip ----
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Config.ControlConfig.space2
-
-            Rectangle {
-                width: 8; height: 8; radius: 4
-                color: (root.m && root.m.loading) ? root.cWarn : root.cSecondary
-                Layout.alignment: Qt.AlignVCenter
-                SequentialAnimation on opacity {
-                    running: root.visible; loops: Animation.Infinite
-                    NumberAnimation { from: 0.4; to: 1; duration: 800; easing.type: Easing.InOutSine }
-                    NumberAnimation { from: 1; to: 0.4; duration: 800; easing.type: Easing.InOutSine }
-                }
-            }
-            Text {
-                text: "\u{F0EE0}"
-                color: root.cSecondary
-                font.family: root.fontN
-                font.pixelSize: 16
-                Layout.alignment: Qt.AlignVCenter
-            }
-            Text {
-                text: "SYSTEM INFO"
-                color: root.cText
-                font.family: root.fontM
-                font.pixelSize: 15; font.bold: true; font.letterSpacing: 3
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            Item { Layout.fillWidth: true }
-
-            // HOST identity
-            Text {
-                text: (root.m ? root.m.userName : "") + "@" + (root.m ? root.m.hostName : "—")
-                color: root.cSecondary
-                font.family: root.fontM
-                font.pixelSize: 11; font.bold: true
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            // separator between identity and the power actions
-            Rectangle {
-                width: 1; height: 18; color: root.cBorder
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Config.ControlConfig.space1
-                Layout.rightMargin: Config.ControlConfig.space1
-            }
-
-            // POWER STRIP — lock · suspend · restart · shutdown
-            PowerIconButton {
-                glyph: ""                       // lock — immediate
-                hot: root.cPrimary
-                Layout.alignment: Qt.AlignVCenter
-                onFired: sysCmd.execute("hyprlock")
-            }
-            PowerIconButton {
-                glyph: "☾"                       // suspend — immediate
-                hot: root.cSecondary
-                Layout.alignment: Qt.AlignVCenter
-                onFired: sysCmd.execute("systemctl suspend")
-            }
-            PowerIconButton {
-                glyph: "↺"                       // restart — confirm
-                hot: root.cWarn
-                Layout.alignment: Qt.AlignVCenter
-                onFired: root.requestConfirm("systemctl reboot", "RESTART")
-            }
-            PowerIconButton {
-                glyph: "⏻"                       // shutdown — confirm
-                hot: root.cErr
-                Layout.alignment: Qt.AlignVCenter
-                onFired: root.requestConfirm("systemctl poweroff", "SHUTDOWN")
-            }
-        }
-
-        // ---- confirm strip (armed destructive action; 5s expiry) ----
-        Rectangle {
-            visible: root.confirming
-            opacity: root.confirming ? 1 : 0
-            Layout.fillWidth: true
-            Layout.preferredHeight: 40
-            color: "transparent"
-            border.color: root.cErr; border.width: 1
-            Behavior on opacity { NumberAnimation { duration: 120 } }
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: Config.ControlConfig.space3
-                Text {
-                    text: "CONFIRM " + root.pendingLabel + "?"
-                    color: root.cErr
-                    font.family: root.fontM
-                    font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Text {
-                    text: "· 5s"
-                    color: root.cDim
-                    font.family: root.fontM; font.pixelSize: 9
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Item { Layout.fillWidth: true }
-                Rectangle {
-                    width: 84; height: 24
-                    color: cancelMa.containsMouse ? root.cBorder : "transparent"
-                    border.color: root.cBorder; border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: "CANCEL"
-                        color: root.cText
-                        font.family: root.fontM; font.pixelSize: 9; font.bold: true
-                    }
-                    MouseArea {
-                        id: cancelMa; anchors.fill: parent
-                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: root._cancelConfirm()
-                    }
-                }
-                Rectangle {
-                    width: 92; height: 24
-                    color: confirmMa.containsMouse ? root.cErr : "transparent"
-                    border.color: root.cErr; border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: "CONFIRM"
-                        color: confirmMa.containsMouse ? root.cBg : root.cErr
-                        font.family: root.fontM; font.pixelSize: 9; font.bold: true
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    MouseArea {
-                        id: confirmMa; anchors.fill: parent
-                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: root._doConfirm()
-                    }
-                }
-            }
-        }
-
-        // ---- telemetry strip ----
-        Text {
-            Layout.fillWidth: true
-            text: "REAL-TIME  //  " +
-                  ((root.m && root.m.osName) || "—") + " " + ((root.m && root.m.osVersion) || "") + "  //  " +
-                  ((root.m && root.m.kernelName) || "") + " " + ((root.m && root.m.kernelRelease) || "")
-            color: root.cDim
-            font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
-            elide: Text.ElideRight
-        }
-        Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
 
         // ---- card grid (scrollable on the 480px-floor viewport) ----
         Flickable {

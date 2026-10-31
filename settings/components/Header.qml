@@ -83,10 +83,16 @@ Rectangle {
     }
 
     // ── layout ────────────────────────────────────────────────────────────
-    // One compact cluster on the right: LOGS launcher | identity chip. The
-    // rest of the strip stays empty on purpose — everything informational
-    // lives in the tab content (the dedupe lesson); the eye goes straight
-    // there.
+    // Power actions on the LEFT (the half the strip used to keep empty) and
+    // the compact cluster on the right: LOGS launcher | identity chip. The
+    // informational dedupe rule still holds — the tab content owns the data;
+    // the left half now carries the power actions instead of nothing.
+
+    PowerStrip {
+        anchors.left: parent.left
+        anchors.leftMargin: 24
+        anchors.verticalCenter: parent.verticalCenter
+    }
 
     RowLayout {
         id: identityGroup
