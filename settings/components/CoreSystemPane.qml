@@ -566,24 +566,28 @@ Rectangle {
                 Item {
                     id: coreWell
                     Layout.fillWidth: true; Layout.fillHeight: true
+                    // Per-thread dot columns — each thread is a column of
+                    // small dots that lights from the bottom by its load
+                    // (the CPU·60s reference texture: tiny round dots,
+                    // activity height). Spacing stretches to fill the well;
+                    // the dots themselves stay small.
                     Grid {
                         id: coreGrid
                         anchors.centerIn: parent
-                        columns: 8
-                        columnSpacing: 6; rowSpacing: 6
-                        // square cells scaled to the well — bounded by the
-                        // tighter axis so 2×8 always fits (cell reads the
-                        // well Item, never the Grid, or the binding loops)
-                        property real cell: Math.max(8, Math.min(
-                            (coreWell.width - 7 * columnSpacing) / 8,
-                            (coreWell.height - rowSpacing) / 2))
+                        columns: 16
+                        columnSpacing: Math.max(3, Math.min(14, (coreWell.width - 16 * 6) / 15))
+                        rowSpacing: Math.max(2, (coreWell.height - 8 * 6) / 7)
                         Repeater {
-                            model: 16
+                            model: 128
                             Rectangle {
-                                width: coreGrid.cell; height: coreGrid.cell; radius: 3
-                                readonly property real _load: root.m.perCoreLoad.length > index
-                                                              ? root.m.perCoreLoad[index] : 0
-                                color: _load > 1 ? root.loadTier(_load) : Config.HudConfig.ledDim
+                                readonly property int col: index % 16
+                                readonly property int row: Math.floor(index / 16)
+                                readonly property real _load: root.m.perCoreLoad.length > col
+                                                              ? root.m.perCoreLoad[col] : 0
+                                readonly property int lit: Math.round(_load / 100 * 8)
+                                width: 6; height: 6; radius: 3
+                                color: (7 - row) < lit && _load > 1
+                                       ? root.loadTier(_load) : Config.HudConfig.ledDim
                             }
                         }
                     }
