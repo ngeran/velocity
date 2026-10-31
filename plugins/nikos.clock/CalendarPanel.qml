@@ -37,16 +37,11 @@ RowLayout {
     property bool live: false
 
     // ── clock face (J4) ──────────────────────────────────────────────────────
-    // `clockFace = "dot"` switches the LARGE clocks to Doto (variable
-    // dot-matrix font, ROND 100). The ≥ 26 px rule: the dot grid is illegible
-    // smaller, so the bar pill (12 px) and the ":ss" ticker (13 px) stay in
-    // the bar font — only this 34 px hero (and the lock's 104 px clock,
-    // which mirrors this via LockConfig's direct settings read) qualify.
-    // NOTE the reads go through ctx.settings.VALUES (the bindable access —
-    // SettingsStore header): get() inside a binding is opaque, it would
-    // freeze at whatever the values were at mount.
-    readonly property bool _heroDot: ctx !== null
-        && ctx.settings.values.clockFace === "dot"
+    // The whole panel runs Doto (user call, 2026-10-31): the variable
+    // dot-matrix font, ROND 100 on the hero. Glyph texts (the weather and
+    // hour nerd glyphs, ‹ › nav) stay in the bar font — Doto has no
+    // coverage for them. The lock's clock still follows the `clockFace`
+    // setting via LockConfig's direct read; colonBlink below is unchanged.
     readonly property bool _heroBlink: ctx !== null
         && ctx.settings.values.colonBlink === true
     property bool _colonOn: true
@@ -159,7 +154,7 @@ RowLayout {
                     text: Qt.formatDateTime(calRoot._firstOfMonth, "MMMM").toUpperCase()
                           + "  " + calRoot.viewYear
                     color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                    font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                    font.family: "Doto"
                     font.pixelSize: 12; font.bold: true; font.letterSpacing: 2
                 }
                 Repeater {
@@ -201,7 +196,7 @@ RowLayout {
                             anchors.centerIn: parent
                             text: modelData
                             color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.family: "Doto"
                             font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.5
                         }
                     }
@@ -239,7 +234,7 @@ RowLayout {
                             anchors.centerIn: parent
                             visible: parent.isActualDay
                             text: parent.dayNum
-                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.family: "Doto"
                             font.pixelSize: 11
                             font.bold: parent.isToday
                             color: parent.isToday
@@ -293,9 +288,8 @@ RowLayout {
                     Text {
                         text: String(calRoot._heroHour12).padStart(2, "0")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                        font.family: calRoot._heroDot ? "Doto"
-                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
-                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.family: "Doto"
+                        font.variableAxes: ({ "ROND": 100, "wght": 600 })
                         font.pixelSize: 34; font.weight: Font.DemiBold
                     }
                     Text {
@@ -303,17 +297,15 @@ RowLayout {
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
                         opacity: calRoot._heroBlink ? (calRoot._colonOn ? 1 : 0.12) : 1
                         Behavior on opacity { NumberAnimation { duration: 120 } }
-                        font.family: calRoot._heroDot ? "Doto"
-                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
-                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.family: "Doto"
+                        font.variableAxes: ({ "ROND": 100, "wght": 600 })
                         font.pixelSize: 34; font.weight: Font.DemiBold
                     }
                     Text {
                         text: Qt.formatDateTime(calRoot._shifted, "mm")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                        font.family: calRoot._heroDot ? "Doto"
-                            : (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
-                        font.variableAxes: calRoot._heroDot ? ({ "ROND": 100, "wght": 600 }) : ({})
+                        font.family: "Doto"
+                        font.variableAxes: ({ "ROND": 100, "wght": 600 })
                         font.pixelSize: 34; font.weight: Font.DemiBold
                     }
                 }
@@ -323,13 +315,13 @@ RowLayout {
                     Text {
                         text: Qt.formatDateTime(calRoot._shifted, "AP")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 11; font.bold: true
                     }
                     Text {
                         text: ":" + Qt.formatDateTime(calRoot._shifted, "ss")
                         color: calRoot.ctx ? calRoot.ctx.theme.withAlpha(calRoot.ctx.theme.colors.text, 0.4) : "#555"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 13
                     }
                 }
@@ -342,14 +334,14 @@ RowLayout {
                         anchors.right: parent.right
                         text: Qt.formatDateTime(calRoot._shifted, "dddd")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 14; font.weight: Font.DemiBold
                     }
                     Text {
                         anchors.right: parent.right
                         text: Qt.formatDateTime(calRoot._shifted, "MMMM d")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 10
                     }
                 }
@@ -368,7 +360,7 @@ RowLayout {
                 Layout.fillWidth: true
                 text: "CONTACTING OPEN-METEO …"
                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                font.family: "Doto"
                 font.pixelSize: 10; font.letterSpacing: 1.5
             }
             Text {
@@ -376,7 +368,7 @@ RowLayout {
                 Layout.fillWidth: true
                 text: "WEATHER OFFLINE · RETRIES ON NEXT OPEN"
                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                font.family: "Doto"
                 font.pixelSize: 10; font.letterSpacing: 1.5
             }
 
@@ -406,7 +398,7 @@ RowLayout {
                         Text {
                             text: Clock.WeatherService.weather ? Clock.WeatherService.weather.tempNow + "°" : ""
                             color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                            font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                            font.family: "Doto"
                             font.pixelSize: 30; font.weight: Font.DemiBold
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -414,14 +406,14 @@ RowLayout {
                     Text {
                         text: Clock.WeatherService.weather ? Clock.WeatherService.weather.condition : ""
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 11
                     }
                     Text {
                         text: Clock.WeatherService.placeLabel
                               + (Clock.WeatherService.state === "stale" ? "  ·  STALE" : "")
                         color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                        font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                        font.family: "Doto"
                         font.pixelSize: 9
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -457,13 +449,13 @@ RowLayout {
                             Text {
                                 text: modelData.v
                                 color: calRoot.ctx ? calRoot.ctx.theme.colors.text : "#ddd"
-                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.family: "Doto"
                                 font.pixelSize: 14; font.weight: Font.DemiBold
                             }
                             Text {
                                 text: modelData.l
                                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.family: "Doto"
                                 font.pixelSize: 8; font.letterSpacing: 1
                             }
                         }
@@ -541,7 +533,7 @@ RowLayout {
                     ctx2.arc(pts[0].x, pts[0].y, 2.5, 0, Math.PI * 2)
                     ctx2.fill()
                     ctx2.fillStyle = calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                    ctx2.font = "600 8px " + (calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace")
+                    ctx2.font = "600 8px Doto"
                     ctx2.textAlign = "center"
                     for (var t = 0; t < n; t++) {
                         ctx2.fillText(rows[t].temp + "°", pts[t].x, Math.max(8, pts[t].y - 6))
@@ -584,7 +576,7 @@ RowLayout {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: calRoot._hourLabel(modelData)
                                 color: calRoot.ctx ? calRoot.ctx.theme.colors.textDim : "#666"
-                                font.family: calRoot.ctx ? calRoot.ctx.bar.fontFamily : "monospace"
+                                font.family: "Doto"
                                 font.pixelSize: 8
                             }
                         }
