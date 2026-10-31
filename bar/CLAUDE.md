@@ -72,8 +72,9 @@ Everything on the bar is a plugin — logo, workspaces, tray icons are first-par
 ```
 left:   velocity.logo · velocity.workspaces
 center: nikos.clock · velocity.settings
-right:  nikos.keyboard · nikos.power · nikos.timezones · nikos.storage
-        velocity.network · bluetooth · volume · privacy · logs · notifications
+right:  nikos.keyboard · nikos.power · nikos.timezones
+        velocity.network · velocity.bluetooth · velocity.volume · nikos.storage
+        velocity.privacy · velocity.logs · velocity.notifications
 ```
 Rearrange live: `velocity-plugin place <id> <section> [index]` / `move <id> <delta>`, or Settings ▸ Plugins.
 
@@ -111,7 +112,7 @@ Every directory has a `qmldir` file. Components/services are registered there an
 - **Click**: the STORAGE popup (upstream-Ryoku StoragePanel adaptation) — ROOT fs card (bar + USED/FREE/TOTAL), then one card per physical drive: class glyph + model + capacity, `MEDIA · FS · MOUNT` line, usage bar + USED/FREE/TOTAL (unmounted drives show state only). Pill shows the root used-% on hover, tinted `warning` past `warnThreshold` (default 85) and `error` at 95+. Data: ONE `lsblk -J -b` probe (no df side-channel) through the plugin-internal `StorageService` singleton + headless `ServiceRoot.qml` — refresh at mount, on open (30 s gate), plus a 10-min cold tick; pure parsing in `lib/storage.mjs` (node-tested, synced from `shared/storage.mjs`)
 
 ### Keyboard (US/GR)
-- **Click**: Cycle to the next XKB layout (EN ↔ GR); **right click** opens the layout manager panel (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (`qs -c bar ipc call plugins call nikos.keyboard next ""`; the old `keyboard.next` target is a transitional forwarder in shell.qml).
+- **Click**: Cycle to the next XKB layout (EN ↔ GR); **right click** opens the layout manager panel (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (D3 binds `qs -c bar ipc call keyboard next`; the `keyboard` target in shell.qml forwards to the plugin's declared verbs).
 
 ### Network (W)
 - **Click**: the NETWORK card (`components/NetworkCardBody.qml`) — a GLANCE card since H1 (scan/leave/join are settings-layer jobs; layering report §1.1): signal HERO (band glyph + big % + SSID/status; while disconnected it reads JOIN IN SETTINGS ›), IP/↓/↑ row, SPEED TEST row (the bar's Cloudflare XHR probe: RUN/STOP; each completed run persists to `$XDG_STATE_HOME/velocity/speedtest.json`, also headless via `qs -c bar ipc call network speedtest`), radio toggle pill, SETTINGS › deep link. Network lists, joining (native `connectWithPsk`), diagnostics and hidden networks live in the settings app's Wi-Fi section. The card is keyboard-inert (no text input anywhere in a tray body since H1 — `WlrLayershell.keyboardFocus` stays None). IPC: `plugins call velocity.network toggle ""`.

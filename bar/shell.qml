@@ -578,11 +578,10 @@ Components.NotificationToasts { }
         }
     }
 
-    // TRANSITIONAL — delete once SUPER+SHIFT+SPACE in ~/.omni-nix/configs/
-    // ~/.config/hypr/keybindings.lua (omni-nix ships it) calls the plugin directly:
-    //   qs -c bar ipc call plugins call nikos.keyboard next ""
-    // Until then the old `keyboard.*` targets just forward to the plugin's
-    // declared verbs (manifest.ipc), so the bind keeps working.
+    // The CANONICAL keyboard bind path (D3): SUPER+SHIFT+SPACE renders as
+    //   qs -c bar ipc call keyboard next
+    // and these `keyboard.*` targets forward to the plugin's declared verbs
+    // (manifest.ipc) — the bar-level alias plugins and humans both use.
     IpcHandler {
         id: keyboardIpc
         target: "keyboard"
@@ -660,7 +659,7 @@ Components.NotificationToasts { }
         function close(): void { Engine.PluginRegistry.call("velocity.launcher", "close", "") }
     }
 
-    // Keybinds overlay toggle (for SUPER+K — see ~/.config/hypr/keybindings.lua)
+    // Keybinds overlay toggle (for SUPER+K — see ~/.config/hypr/velocity-binds.lua)
     IpcHandler {
         id: keybindsIpc
         target: "keybinds"
@@ -670,7 +669,7 @@ Components.NotificationToasts { }
         }
     }
 
-    // Z.ai usage overlay toggle (for SUPER+Z — see ~/.config/hypr/keybindings.lua)
+    // Z.ai usage overlay toggle (for SUPER+Z — see ~/.config/hypr/velocity-binds.lua)
     IpcHandler {
         id: zaiUsageIpc
         target: "zaiUsage"
@@ -680,7 +679,7 @@ Components.NotificationToasts { }
         }
     }
 
-    // Logs overlay toggle (for SUPER+T — see ~/.config/hypr/keybindings.lua)
+    // Logs overlay toggle (for SUPER+T — see ~/.config/hypr/velocity-binds.lua)
     IpcHandler {
         id: logsIpc
         target: "logs"

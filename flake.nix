@@ -62,6 +62,7 @@
                     systemd = lib.mkOption { type = lib.types.submodule {
                       options.user = lib.mkOption { type = lib.types.submodule {
                         options.services = lib.mkOption { type = lib.types.attrsOf lib.types.raw; default = { }; };
+                        options.timers = lib.mkOption { type = lib.types.attrsOf lib.types.raw; default = { }; };
                       }; }; };
                     };
                     lib = lib.mkOption { type = lib.types.submodule {
@@ -87,6 +88,7 @@
             {
               manifest = builtins.toJSON {
                 unitNames = builtins.attrNames evaluated.systemd.user.services;
+                timerNames = builtins.attrNames evaluated.systemd.user.timers;
                 generatedFiles = builtins.attrNames evaluated.xdg.configFile;
                 nPackages = builtins.length evaluated.home.packages;
                 bindCount = builtins.length (builtins.fromJSON evaluated.xdg.configFile."velocity/keybinds.json".text).binds;

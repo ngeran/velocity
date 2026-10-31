@@ -1,3 +1,5 @@
+<!-- ARCHIVED 2026-10-31 (P9.5): superseded by the P5 engine integration — single-owner QML + mpvpaper watchdog; live behaviour documented in bar/CLAUDE.md and the rice ledger. -->
+
 # Wallpaper Picker & Shuffler Integration Plan
 
 > **SUPERSEDED (2026-10-26):** this plan describes the awww-only era. The shipped design is the

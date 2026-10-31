@@ -6,7 +6,7 @@ Everything on it is a plugin; the styles (`vector`, `notch`, `ryoku`,
 
 **Real docs live one level up — start here:**
 
-- `../CLAUDE.md` — architecture: host shell → style Scene → `engine/`
+- `./CLAUDE.md` — architecture: host shell → style Scene → `engine/`
   (PluginRegistry, PluginSlot, BarSection), services, three-layer separation,
   deployment modes
 - `../plugins/README.md` + `../bin/velocity-plugin` — writing and managing
