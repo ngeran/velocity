@@ -1,9 +1,10 @@
 // =============================================================================
 // BarSettingsPane.qml — SETTINGS tab's BAR pane (P4.9)
 // =============================================================================
-// Hosts the bar tree's BarSettingsBody — the SAME body the Control Center's
-// BAR page mounts (style / edge / OSD / height / dots / guards / modules +
-// uiScale and motion). One body, two hosts; there is no second settings copy.
+// Hosts the bar tree's BarSettingsBody — the ONE host since the Control
+// Center's removal (it used to mount the same body as its BAR page: style /
+// edge / OSD / height / dots / guards / modules + uiScale and motion). There
+// is no second settings copy.
 //
 // The settings tree must not `import "../bar/…"` (import-split law: a
 // directory under two specifiers yields two singleton instances), so the body
@@ -51,7 +52,7 @@ Item {
         SettingsHeaderCard {
             Layout.fillWidth: true
             eyebrow: "SETTINGS"; title: "Bar"
-            subtitle: "Style, edge, OSD, height, dots, guards, modules, scale — the same body as the Control Center's BAR page"
+            subtitle: "Style, edge, OSD, height, dots, guards, modules, scale"
         }
 
         Card {

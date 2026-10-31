@@ -68,8 +68,6 @@ screenshot.window         manual    # active-window geometry via hyprctl -j
 screenshot.status         manual    # JSON: lastFile/dir
 clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
-controlCenter.toggle     bound     # SUPER+N (velocity-binds.lua, D3)
-controlCenter.page       bound     # (page) SUPER+COMMA → "bar" (D3; P4.8 re-targets to the CC BAR page)
 keybinds.toggle          bound     # SUPER+K
 zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
@@ -95,8 +93,10 @@ search.query                      manual    # scripting/truth probe (dashboard s
 search.open                       manual    # opens the palette pre-filled (deep-link)
 search.list                       manual    # index dump for probes
 search.activateFirst              manual    # probe/scripting: run the top hit for a query
-SettingsWindow.toggle             manual   # gear right-click only (UX U1: SUPER+A
-                                           #  went to controlCenter; no settings bind)
+SettingsWindow.toggle             bound    # gear (both buttons), SUPER+A/N — the
+                                           #  settings dashboard is the one settings
+                                           #  surface since the CC's removal
+SettingsWindow.openBarSettings    bound    # SUPER+COMMA (was controlCenter.page bar)
 SettingsWindow.show               manual    # CLI window verbs (qs misparses bare 'show'
 SettingsWindow.hide               manual    #  — see settings-ipc quirks; both work)
 SettingsWindow.activeTab          manual   # read-only probe: visible tab key (dashboard-start proof)

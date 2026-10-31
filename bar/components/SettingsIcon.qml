@@ -1,9 +1,10 @@
 // =============================================================================
 // SettingsIcon.qml — bar trigger for the settings dashboard (gear glyph)
 // =============================================================================
-// Mounted by the velocity.settings built-in (bar/builtins).
-// With controlCenter set (the built-in sets it): left click asks the host for
-// the Control Center card, right click opens the dashboard directly.
+// Mounted by the velocity.settings built-in (bar/builtins). BOTH buttons open
+// the dashboard now (UX U1 removal: the Control Center panel is gone — one
+// settings surface). Kept as separate signals so a future secondary action
+// doesn't have to re-thread HoverGlyph.
 //
 // P2.1: the dashboard is hosted IN this process — activate() just emits
 // settingsRequested(); the built-in routes it through ctx.host (the bar
@@ -23,18 +24,12 @@ HoverGlyph {
     label: "SETTINGS"
     rightClickEnabled: true
 
-    // Rail parity (LogsIcon/NotificationButton carry it)
-    property bool controlCenter: false
-    signal controlRequested()
     signal settingsRequested()
 
     function activate() {
         root.settingsRequested()
     }
 
-    onTriggered: {
-        if (root.controlCenter) root.controlRequested()
-        else root.activate()
-    }
+    onTriggered: root.activate()
     onRightTriggered: root.activate()
 }

@@ -86,16 +86,16 @@
       ]
     },
     {
-      "id": "popup-controlcenter-cycle",
-      "name": "Control Center opens one layer surface and closes it clean",
-      "covers": "PopupCoordinator claim/release; Popover window map/unmap; journal silence. Layer asserts use .alive (bar-MainPID-owned surfaces) — zombie layers from past restarts are reaped asynchronously and must not fail deltas",
+      "id": "popup-dashboard-cycle",
+      "name": "Settings dashboard opens one layer surface and closes it clean",
+      "covers": "Hosted dashboard overlay map/unmap; journal silence. Layer asserts use .alive (bar-MainPID-owned surfaces) — zombie layers from past restarts are reaped asynchronously and must not fail deltas",
       "steps": [
         "layers before",
-        "ipc bar controlCenter toggle",
+        "ipc bar SettingsWindow toggle",
         "sleep 1.2",
         "shot open",
         "layers open",
-        "ipc bar controlCenter toggle",
+        "ipc bar SettingsWindow toggle",
         "sleep 1.2",
         "layers closed"
       ],
@@ -105,7 +105,7 @@
         "test \"$(cat $QA_EV/08-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
       ],
       "teardown": [
-        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call controlCenter toggle >/dev/null 2>&1; sleep 0.8; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
+        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call SettingsWindow toggle >/dev/null 2>&1; sleep 0.8; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
       ]
     },
     {

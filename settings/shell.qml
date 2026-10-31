@@ -187,9 +187,9 @@ ShellRoot {
             dashboard.openControlTab("plugins")
         }
 
-        // Generic "open the settings app" verb (Control Center's SETTINGS ›,
-        // the bar gear). Starts at the dashboard like every generic open —
-        // the SETTINGS tab itself stays reachable from the sidebar.
+        // Generic "open the settings app" verb (the bar gear, SUPER+A/N).
+        // Starts at the dashboard like every generic open — the SETTINGS tab
+        // itself stays reachable from the sidebar.
         function openSettings() {
             dashboard.openDashboardTab()
             root.shown = true

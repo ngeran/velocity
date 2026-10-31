@@ -188,27 +188,16 @@ ShellRoot {
         shellRoot.activeTray = name
         Engine.PopupCoordinator.request("tray", shellRoot.closeTray)
     }
-    // Control Center (UX U1): the floating ControlCenterOverlay panel — no
-    // longer a TrayCard body (user call 2026-10-31: the tray popup "sucks").
-    // Keybind / IPC / gear left-click land here; the settings dashboard keeps
-    // the gear's right click only.
-    property bool ccWanted: false
-    function toggleControlCenter() {
-        if (ccLoader.item) ccLoader.item.toggle()
-        else shellRoot.ccWanted = true       // load; onLoaded completes the open
-    }
-    function closeControlCenter() {
-        if (ccLoader.item && ccLoader.item.shown) ccLoader.item.close()
-    }
-    // P4.7: force-open the Control Center on one of its in-body pages
-    // (controlCenter.page IPC — SUPER+COMMA → "bar").
-    function openControlCenterPage(name) {
-        if (ccLoader.item) { ccLoader.item.openPage(name); return }
-        shellRoot._ccParkedPage = name
-        shellRoot.ccWanted = true
-    }
-    property string _ccParkedPage: ""
-    readonly property bool ccShown: ccLoader.item ? ccLoader.item.shown : false
+    // UX U1 removal (user call: one settings surface, not two): the Control
+    // Center floating panel is gone — the gear, SUPER+A/N and the old
+    // controlCenter IPC all land on the hosted settings dashboard. Its
+    // unique leftovers were evaluated and dropped, not ported: this host has
+    // no power-profiles-daemon and no backlight/DDC device (the CC's tiles
+    // for both never lit here either), and record keeps its island REC card
+    // + `record` IPC. The gear's rail glow mirrors the hosted window's flag.
+    readonly property bool settingsShown: settingsHostLoader.active
+                                          && settingsHostLoader.item !== null
+                                          && settingsHostLoader.item.shown === true
 
     // Open one tray card body by name (CC tile drills: network / bluetooth /
     // volume). The focused output's bar window anchors the card, exactly like
@@ -352,38 +341,6 @@ ShellRoot {
     Component {
         id: ncComponent
         Components.NotificationCenter { }
-    }
-
-    // =========================================================================
-    // CONTROL CENTER — floating panel (lazy; gear left-click, SUPER+A/N, IPC)
-    // =========================================================================
-    Loader {
-        id: ccLoader
-        active: shellRoot.ccWanted
-        sourceComponent: ccComponent
-        onLoaded: {
-            item.toggle()   // complete the open that triggered the load
-            if (shellRoot._ccParkedPage !== "") {
-                item.openPage(shellRoot._ccParkedPage)
-                shellRoot._ccParkedPage = ""
-            }
-        }
-    }
-    Component {
-        id: ccComponent
-        Components.ControlCenterOverlay { shellApi: shellRoot }
-    }
-
-    // The CC claims the popup slot while shown — one popup at a time with the
-    // tray card, the notification center and the overlay plugins.
-    Connections {
-        target: ccLoader.item
-        function onShownChanged() {
-            if (ccLoader.item && ccLoader.item.shown)
-                Engine.PopupCoordinator.request("cc", shellRoot.closeControlCenter)
-            else
-                Engine.PopupCoordinator.release("cc")
-        }
     }
 
     // The notification center claims the popup slot while shown. (target
@@ -636,20 +593,6 @@ Components.NotificationToasts { }
         function status(): string { return Engine.PluginRegistry.call("velocity.shot", "status", "") }
     }
 
-    IpcHandler {
-        target: "controlCenter"
-        function toggle() { shellRoot.toggleControlCenter() }
-        // P3.8 page <name>: deep page entry from the keybinds table
-        // (SUPER+COMMA → "bar"). P4.8: "bar" is the Control Center's own
-        // in-body BAR page (BarSettingsBody) — the bar-settings overlay is
-        // deleted.
-        function page(name: string) {
-            if (name === "bar") { shellRoot.openControlCenterPage("bar"); return "ok" }
-            console.warn("[shell] controlCenter.page: unknown page:", name)
-            return ""
-        }
-    }
-
     // Launcher (P3.8): thin forwarder to the velocity.launcher overlay
     // plugin — `qs -c bar ipc call launcher toggle|open|close`. SUPER+SPACE
     // (D3) replaces the old rofi exec bind.
@@ -721,6 +664,9 @@ Components.NotificationToasts { }
         function openControlAudio() { return shellRoot.settingsCall("openControlAudio") }
         function openControlDisplay() { return shellRoot.settingsCall("openControlDisplay") }
         function openControlPlugins() { return shellRoot.settingsCall("openControlPlugins") }
+        // Was controlCenter.page bar (SUPER+COMMA) — the CC's in-body BAR page.
+        // Now the settings app's SETTINGS ▸ BAR pane (same BarSettingsBody).
+        function openBarSettings() { return shellRoot.settingsCall("openSettingsSection", "bar") }
         function openSettings() { return shellRoot.settingsCall("openSettings") }
         function openThemeTab() { return shellRoot.settingsCall("openThemeTab") }
         function openWallpapers() { return shellRoot.settingsCall("openWallpapers") }

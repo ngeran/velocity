@@ -12,8 +12,8 @@
 //   DESKTOP    — Hyprland blur/shadows/gaps/borders/opacity (HyprSettingsService)
 //   + RESET TO DEFAULTS (resetToDefaults) and the "✓ APPLIED" toast (justSaved)
 // (The BAR pane hosts the bar tree's BarSettingsBody since P4.9 — the same
-// body the Control Center's BAR page mounts, file://-loaded across the
-// import split (BarSettingsPane). NOTIFICATIONS / KEYBINDS / ABOUT panes
+// body that used to sit in the Control Center's BAR page, file://-loaded
+// across the import split (BarSettingsPane) — its one host now. NOTIFICATIONS / KEYBINDS / ABOUT panes
 // joined in P4.9 too. The IDLE & LOCK pane was
 // removed in P3.9 — hypridle is omni-nix-owned (D9), its config is a read-only
 // HM symlink and the runtime template writer was already inert.)

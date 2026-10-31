@@ -1,7 +1,7 @@
 // velocity.settings — built-in bar widget, a thin wrapper over components/SettingsIcon.qml.
-// Left click: the Control Center floating panel (UX U1 — was the tray card
-// "control" body); right click: the hosted settings dashboard (P2.1 — same
-// process, via ctx.host). The dashboard has no keybind; SUPER+A is the CC.
+// Both buttons open the hosted settings dashboard (P2.1 — same process, via
+// ctx.host). UX U1 removal: the Control Center panel is gone and its unique
+// controls were dropped, not ported. SUPER+A/N open the dashboard too.
 import QtQuick
 import "../../components" as Components
 
@@ -10,8 +10,6 @@ Components.SettingsIcon {
     property var ctx: null
     readonly property var host: ctx ? ctx.host : null
 
-    controlCenter: !!host
-    isActive: !!host && host.ccShown === true
-    onControlRequested: if (host) host.toggleControlCenter()
+    isActive: !!host && host.settingsShown === true
     onSettingsRequested: if (host) host.settingsToggle()
 }

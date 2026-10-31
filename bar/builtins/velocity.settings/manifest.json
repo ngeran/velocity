@@ -4,7 +4,7 @@
   "id": "velocity.settings",
   "name": "Settings",
   "version": "1.0.0",
-  "description": "Built-in: gear — left click opens the Control Center, right click the settings app.",
+  "description": "Built-in: gear — opens the settings dashboard (both buttons; the Control Center popup was removed as redundant).",
   "author": "velocity",
   "license": "MIT",
   "kinds": [

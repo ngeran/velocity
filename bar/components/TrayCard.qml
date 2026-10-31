@@ -60,9 +60,8 @@ PanelWindow {
 
     // I8 lazy bodies: each body file instantiates on its first open and then
     // lives for the card's lifetime (sizing reads loader.item, guarded).
-    // (The Control Center left the card in UX U1 — it is
-    // components/ControlCenterOverlay.qml now; these remain for the
-    // network/bluetooth/volume/privacy bodies the pills open.)
+    // (The Control Center left the card in UX U1 and is now deleted too;
+    // these remain for the network/bluetooth/volume/privacy bodies.)
     property bool _btEverOpened: false
     property bool _volumeEverOpened: false
     property bool _privacyEverOpened: false

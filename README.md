@@ -1,8 +1,8 @@
 # Velocity
 
-A QD-OLED-first Quickshell bar, control center, settings app and plugin engine for
+A QD-OLED-first Quickshell bar, settings app and plugin engine for
 Hyprland on NixOS. One process renders everything: the bar strip (4 swappable styles),
-the Control Center, the notifications center, the OSD, and the full settings app
+the notifications center, the OSD, and the full settings app
 (loaded lazily into the same process). The lock screen is the one deliberate second
 process — crash isolation and a auditable PAM path.
 
@@ -81,8 +81,8 @@ Generated from the D3 attrset (`tools/keybinds-default.json` → `nix/hm-module.
 |---|---|
 | `SUPER+SPACE` | App launcher |
 | `SUPER+SHIFT+V` | Clipboard history |
-| `SUPER+N` | Control Center |
-| `SUPER+COMMA` | Control Center › BAR |
+| `SUPER+N` | Settings dashboard |
+| `SUPER+COMMA` | Settings › BAR |
 | `SUPER+SHIFT+R` | Screen recorder |
 | `SUPER+SHIFT+W` | Wallpaper cycle |
 | `SUPER+SHIFT+N` | Do not disturb |
@@ -95,7 +95,7 @@ Generated from the D3 attrset (`tools/keybinds-default.json` → `nix/hm-module.
 |---|---|
 | `SUPER+SHIFT+T` | Network / Bluetooth center |
 | `SUPER+K` | This cheat sheet |
-| `SUPER+A` | Control Center |
+| `SUPER+A` | Settings dashboard |
 | `SUPER+T` | System logs |
 | `SUPER+Z` | Z.ai usage |
 | `SUPER+P` | Power menu |

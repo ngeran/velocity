@@ -226,7 +226,7 @@ Item {
                 if (win.client === null) return ""
                 if (_trayMine) {
                     var t = sceneRoot.host.activeTray
-                    if (t === "control" || t === "network" || t === "bluetooth" || t === "volume") return t
+                    if (t === "network" || t === "bluetooth" || t === "volume") return t
                     return ""
                 }
                 return Engine.PopupCoordinator.current === calendarPlugin ? "calendar" : ""
@@ -258,6 +258,8 @@ Item {
                 if (key === "calendar") {
                     var w = win._ownInstance(win.calendarPlugin)
                     if (w && typeof w.open === "function") w.open()
+                } else if (key === "control") {
+                    sceneRoot.host.settingsToggle()   // dock gear → the settings dashboard (CC removed)
                 } else {
                     sceneRoot.host.toggleTray(win, key, null)
                 }
@@ -610,7 +612,7 @@ Item {
                         if (sceneRoot.host.trayOwner === win && sceneRoot.host.activeTray !== "")
                             sceneRoot.host.closeTray()
                         else if (win.client === null)
-                            sceneRoot.host.toggleTray(win, "control", null)
+                            sceneRoot.host.settingsToggle()   // was tray body "control" (CC removed)
                     }
                 }
 
