@@ -76,7 +76,7 @@ Rectangle {
         property var options: []
         readonly property string liveVal: root.lcd.metricValue(current)
         Layout.fillWidth: true
-        Layout.preferredHeight: 24
+        Layout.preferredHeight: 22
         radius: 3
         color: Config.HudConfig.wellDeep
         border.color: Config.HudConfig.borderHi
@@ -116,8 +116,8 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: root.embedded ? 12 : 16
-        spacing: 10
+        anchors.margins: root.embedded ? 10 : 14
+        spacing: 8
 
         // ── header ──────────────────────────────────────────────────────
         RowLayout {
@@ -256,8 +256,8 @@ Rectangle {
                         id: deviceWrap
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 4
-                        width: 176
-                        height: 176
+                        width: 200
+                        height: 200
 
                         Rectangle {
                             anchors.fill: parent
@@ -305,8 +305,8 @@ Rectangle {
                         Rectangle {
                             id: screen
                             anchors.centerIn: parent
-                            width: 130
-                            height: 130
+                            width: 156
+                            height: 156
                             radius: width / 2
                             color: "#000000"
                             border.color: Config.HudConfig.borderHi
@@ -316,14 +316,14 @@ Rectangle {
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
+                                anchors.margins: 12
                                 spacing: 2
 
-                                Item {
-                                    Layout.fillWidth: true
-                                    height: 12
+                                RowLayout {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.topMargin: 8
+                                    spacing: 12
                                     Text {
-                                        anchors.left: parent.left
                                         text: "DEEPCOOL"
                                         color: Config.HudConfig.cyan
                                         font.family: Config.HudConfig.fontData
@@ -332,7 +332,6 @@ Rectangle {
                                         font.letterSpacing: 1.0
                                     }
                                     Text {
-                                        anchors.right: parent.right
                                         text: root.lcd.lcdEnabled ? "PUMP 100%" : "OFF"
                                         color: Config.HudConfig.amber
                                         font.family: Config.HudConfig.fontData
@@ -365,13 +364,14 @@ Rectangle {
                                 Item { Layout.fillHeight: true }
                                 // bottom triple: gpu · usage · ram slots
                                 Rectangle {
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 116
+                                    Layout.alignment: Qt.AlignHCenter
                                     height: 1
                                     color: Config.HudConfig.borderLo
                                 }
                                 RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
+                                    Layout.alignment: Qt.AlignHCenter
+                                    spacing: 10
                                     Repeater {
                                         model: [
                                             { cap: "GPU", src: root.lcd.gpuTempSource },
@@ -433,7 +433,7 @@ Rectangle {
                 // LCD DISPLAY MODE
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: modeCol.implicitHeight + 20
+                    implicitHeight: modeCol.implicitHeight + 16
                     radius: Config.HudConfig.radiusSm
                     color: Config.HudConfig.wellDeep
                     border.color: Config.HudConfig.borderHi
@@ -487,7 +487,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    implicitHeight: slotCol.implicitHeight + 20
+                    implicitHeight: slotCol.implicitHeight + 16
                     radius: Config.HudConfig.radiusSm
                     color: Config.HudConfig.wellDeep
                     border.color: Config.HudConfig.borderHi
@@ -568,14 +568,14 @@ Rectangle {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 52
+                        implicitHeight: 46
                         radius: Config.HudConfig.radiusSm
                         color: Config.HudConfig.wellDeep
                         border.color: Config.HudConfig.borderHi
                         border.width: 1
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 8
+                            anchors.margins: 6
                             spacing: 5
                             Text {
                                 text: "SCREEN ROTATION"
@@ -603,14 +603,14 @@ Rectangle {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 52
+                        implicitHeight: 46
                         radius: Config.HudConfig.radiusSm
                         color: Config.HudConfig.wellDeep
                         border.color: Config.HudConfig.borderHi
                         border.width: 1
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 8
+                            anchors.margins: 6
                             spacing: 5
                             RowLayout {
                                 Layout.fillWidth: true

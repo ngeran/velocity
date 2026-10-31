@@ -136,7 +136,7 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 30
+            Layout.preferredHeight: 28
 
             Text { anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter
                 text: "SYSTEM / TELEMETRY"
@@ -164,13 +164,16 @@ Rectangle {
         HDivider { }
 
         // ═════════════════════════════════════════════════════════════════
-        // [B] LOAD BAND — 50-segment LED matrix, midpoint tick, axis
+        // [B] LOAD BAND — 50-segment LED matrix, midpoint tick, axis.
+        // Deliberately tall (128): the chunky segment strip is the card's
+        // visual anchor, and the height comes out of the hero row ([C] is
+        // fillHeight), which reads better dense.
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            Layout.preferredHeight: 128
 
-            ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 8; anchors.bottomMargin: 6; spacing: 5
+            ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 12; anchors.bottomMargin: 10; spacing: 11
                 RowLayout { Layout.fillWidth: true
                     Eyebrow { text: "CPU LOAD / %" }
                     Item { Layout.fillWidth: true }
@@ -180,7 +183,7 @@ Rectangle {
                 }
                 HudLedBar {
                     Layout.fillWidth: true
-                    height: 18
+                    height: 60
                     value: root.m.cpuUsage
                     litColor: root.loadTier(root.m.cpuUsage)
                     midpointIndex: 25
@@ -197,11 +200,16 @@ Rectangle {
         HDivider { }
 
         // ═════════════════════════════════════════════════════════════════
-        // [C] HERO ROW — GPU cluster | MEM & CPU cluster
+        // [C] HERO ROW — GPU cluster | MEM & CPU cluster.
+        // Pinned (not fillHeight): as a fillHeight sibling of the [E]
+        // quarters it split the slack evenly and the quarters starved.
+        // Fixed at the clusters' natural height; [E] takes the rest.
         // ═════════════════════════════════════════════════════════════════
         RowLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.preferredHeight: 296
+            Layout.maximumHeight: 296   // hard clamp: the pane's distributor
+                                        // still handed this row 333
             spacing: 0
 
             // ── GPU cluster ──────────────────────────────────────────────
@@ -212,7 +220,7 @@ Rectangle {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 8
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 6
                     spacing: 6
                     HudChip {
                         text: root.m.gpuName !== "" ? root.m.gpuName.toUpperCase() : "NO GPU DETECTED"
@@ -290,7 +298,7 @@ Rectangle {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.leftMargin: 14; Layout.rightMargin: 14
-                    spacing: 3
+                    spacing: 2
                     SubEngine { label: "SM · CUDA";  value: root.m.gpuSmPct }
                     SubEngine { label: "ENC · AV1";  value: root.m.gpuEncPct }
                     SubEngine { label: "DEC · NVDEC"; value: root.m.gpuDecPct }
@@ -298,7 +306,7 @@ Rectangle {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 8
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 6
                     spacing: 3
                     RowLayout {
                         Layout.fillWidth: true
@@ -325,7 +333,7 @@ Rectangle {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 8
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 6
                     spacing: 6
                     HudChip { text: root.m.cpuModel !== "" ? root.m.cpuModel.toUpperCase() : "CPU" }
                     HudChip {
@@ -451,7 +459,7 @@ Rectangle {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 8
+                    Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.bottomMargin: 6
                     spacing: 8
                     Eyebrow { text: "SWAP" }
                     HudMeterBar {
@@ -473,8 +481,8 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 368   // the panel's internal minimum (~385
-                                          // unshrunk — see the 176px device below)
+            Layout.preferredHeight: 348   // sized to the panel's content minimum
+                                          // (bigger values just starve [E])
             LcdControllerPanel {
                 anchors.fill: parent
                 embedded: true
@@ -484,10 +492,14 @@ Rectangle {
 
         // ═════════════════════════════════════════════════════════════════
         // [E] PRECISION QUARTERS — CPU TEMP · PER-CORE · STORAGE · ENGINE
+        // preferredHeight stated alongside fillHeight: the pane's
+        // distributor otherwise assigns this row only its implicit height
+        // while [C] absorbs the surplus.
         // ═════════════════════════════════════════════════════════════════
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.preferredHeight: 130
             spacing: 0
 
             // ── CPU TEMP: 14-seg 0–110°C scale, 90° marker ───────────────
@@ -512,8 +524,9 @@ Rectangle {
                 }
                 Item { Layout.fillWidth: true; Layout.fillHeight: true
                     ColumnLayout {
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.bottom: parent.bottom
                         anchors.left: parent.left; anchors.right: parent.right
+                        anchors.bottomMargin: 6
                         anchors.leftMargin: 14; anchors.rightMargin: 14
                         spacing: 3
                         HudLedBar {
@@ -679,7 +692,7 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 22
+            Layout.preferredHeight: 20
             Text { anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter
                 text: "LOCAL TELEMETRY / 1S SAMPLE"
                 color: Config.HudConfig.textFaint

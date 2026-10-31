@@ -48,13 +48,13 @@ Item {
         // SYSTEM — consolidated CPU + GPU + memory + drives (no scrolling)
         Item {
             anchors.fill: parent; visible: root.active === "system"
-            CoreSystemPane { anchors.fill: parent; anchors.margins: 12 }
+            CoreSystemPane { anchors.fill: parent; anchors.margins: 8 }
         }
 
         // EVENTS — system event timeline (no scrolling)
         Item {
             anchors.fill: parent; visible: root.active === "events"
-            CoreEventsPane { anchors.fill: parent; anchors.margins: 12 }
+            CoreEventsPane { anchors.fill: parent; anchors.margins: 8 }
         }
     }
 }
