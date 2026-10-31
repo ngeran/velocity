@@ -33,9 +33,10 @@ Item {
     function toggle() { calPanel.toggle() }
     function open()   { calPanel.open() }
     function close()  { calPanel.close() }
-    // refresh: the settings dashboard's WeatherCard nudges a fetch past the
-    // 15-min gate (the card reads this plugin's cache as its data source).
-    // Still idle-zero: nothing here fetches on a timer.
+    // refresh: scriptable nudge past the 15-min gate (plugin `call` verbs /
+    // tests). The old settings-dashboard WeatherCard caller went with the
+    // bento OverviewTab (replaced by SystemInfoTab). Still idle-zero:
+    // nothing here fetches on a timer.
     function refresh() { Clock.WeatherService.refresh() }
 
     width: anchorRow.implicitWidth + 24

@@ -33,7 +33,7 @@ Rectangle {
     signal searchRequested()
 
     readonly property var tabModel: [
-        { key: "dashboard",  label: "DASHBOARD",   icon: "⊞" },   // index 0
+        { key: "dashboard",  label: "SYS INFO",    icon: "⊞" },   // index 0
         { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
         { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
         { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3

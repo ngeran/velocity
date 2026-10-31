@@ -4,11 +4,12 @@
 // =============================================================================
 //
 // TAB ORDER (index-significant):
-//   0 Dashboard | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Logs | 6 Settings
+//   0 System Info | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Logs | 6 Settings
 //
 // PURPOSE:
-//   Main container for all tabs. Delegates tab-0 (Dashboard) to
-//   OverviewTab (bento grid layout), other tabs to their
+//   Main container for all tabs. Delegates tab-0 (System Info — the
+//   telemetry dashboard + power strip that replaced the bento OverviewTab)
+//   to SystemInfoTab, other tabs to their
 //   respective modules (ThemeModule, WallpaperModule, ControlTab, Settings).
 //
 // =============================================================================
@@ -112,7 +113,7 @@ Item {
         // Tab-level entry points. Dashboard/themes/wallpapers had NO search
         // presence before (their rows never self-registered) — with the lazy
         // tabs they are the only way a query lands on them at all.
-        S.register({ key: "tab:dashboard",  title: "Dashboard Overview", tab: "dashboard",  section: "", keywords: "home bento", item: null })
+        S.register({ key: "tab:dashboard",  title: "System Info",       tab: "dashboard",  section: "", keywords: "system info hardware telemetry host uptime power", item: null })
         S.register({ key: "tab:themes",     title: "Theme Switcher",    tab: "themes",     section: "", keywords: "theme color palette", item: null })
         S.register({ key: "tab:wallpapers", title: "Wallpapers",        tab: "wallpapers", section: "", keywords: "wallpaper library cycling", item: null })
         S.register({ key: "tab:control",    title: "Control",           tab: "control",    section: "", keywords: "control console", item: null })
@@ -208,10 +209,10 @@ Item {
     // PUBLIC FUNCTIONS
     // =========================================================================
 
-    // Land on the dashboard tab (index 0). Generic opens (toggle/show/
-    // openSettings) call this so the app ALWAYS starts at the dashboard —
-    // the window no longer reopens on the tab you left. Deep links
-    // (openControlTab/openCoreTab/…) keep their targeting.
+    // Land on the dashboard tab (index 0 — the System Info view). Generic
+    // opens (toggle/show/openSettings) call this so the app ALWAYS starts at
+    // the dashboard — the window no longer reopens on the tab you left.
+    // Deep links (openControlTab/openCoreTab/…) keep their targeting.
     function openDashboardTab() {
         for (var i = 0; i < navBar.tabModel.length; i++) {
             if (navBar.tabModel[i].key === "dashboard") { root.currentTab = i; break }
@@ -344,7 +345,8 @@ Item {
         }
 
         // =====================================================================
-        // TAB 0: DASHBOARD OVERVIEW
+        // TAB 0: SYSTEM INFO (telemetry dashboard + power strip; replaced the
+        // bento OverviewTab — deleted with its 7 cards, see git history)
         // =====================================================================
         // O1 lazy-tab pattern (all six eager tabs below follow it): each tab
         // lives in a Loader that turns on at its first visit (sticky — see
@@ -374,11 +376,8 @@ Item {
                 }
             }
 
-            sourceComponent: Components.OverviewTab {
+            sourceComponent: Components.SystemInfoTab {
                 anchors.fill: parent
-
-                // Dashboard → tab deep-links (Theme Switcher CHANGE, footer CONFIG)
-                onRequestTab: function(index) { root.currentTab = index }
             }
         }
 
