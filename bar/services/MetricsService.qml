@@ -131,6 +131,15 @@ Item {
     property real diskTotalTB: 0
     property real diskPct: 0
     property var disks: []          // [{device,fstype,mount,usedGB,totalGB,pct}] all real data filesystems
+    // ── memory allocation pools (parseMeminfo, same 1s read) ────────────────
+    property real memActiveAnonGiB: 0    // Active(anon) — applications
+    property real memPageCacheGiB: 0     // Cached + Buffers
+    property real memSlabGiB: 0          // Slab (kernel allocations)
+    // ── zram (mm_stat: orig_data compr_data mem_used …) ────────────────────
+    property real zramUsedGB: 0          // orig_data — uncompressed payload
+    property real zramRatio: 0           // orig/compr compression ratio
+    // ── CPU governor (5s cadence — changes are rare) ────────────────────────
+    property string cpuGovernor: ""
 
     // ── 2-min rolling history for the Core charts ({time,value}, oldest first)
     property var cpuHistory: []
@@ -159,6 +168,19 @@ Item {
     property int gpuMemTotalMiB: 0
     property real gpuFanPct: 0
     property real gpuClockMHz: 0
+    // PCIe link + board power cap (HUD cluster). gen CURRENT downshifts at
+    // idle (power management) — badges show gen MAX, the capability.
+    property int gpuPcieGenCurrent: 0
+    property int gpuPcieGenMax: 0
+    property int gpuPcieWidth: 0
+    property real gpuPowerLimitW: 0
+    // Sub-engine utilization (nvidia-smi dmon -s u, Core tab only): SM/CUDA,
+    // memory controller, encoders (AV1/NVENC), decoders (NVDEC), optical flow.
+    property int gpuSmPct: 0
+    property int gpuMemCtrlPct: 0
+    property int gpuEncPct: 0
+    property int gpuDecPct: 0
+    property int gpuOfaPct: 0
 
     // Aliases the settings views bind (unchanged names).
     readonly property string name: gpuName          // static — fastfetch profile
@@ -330,6 +352,12 @@ Item {
                onTextChanged: root.parseMeminfo(text()) }
     FileView { id: uptimeFile;  path: "/proc/uptime";  watchChanges: false
                onTextChanged: root.parseUptime(text()) }
+    FileView { id: zramFile;    path: "/sys/block/zram0/mm_stat"; watchChanges: false
+               printErrors: false
+               onTextChanged: root.parseZram(text()) }
+    FileView { id: govFile;     path: "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"; watchChanges: false
+               printErrors: false
+               onTextChanged: { var g = String(text()).trim(); if (g) root.cpuGovernor = g } }
 
     // ── CPU aggregate + per-core (ex-SystemMetricsService.parseStat) ────────
     function parseStat(raw) {
@@ -407,6 +435,10 @@ Item {
             root.ramPct = +(used / total * 100).toFixed(1)
             root.memUsedGiB = +(used / 1048576).toFixed(2)
             root.memPct = root.ramPct
+            // Allocation pools for the HUD cluster's MEMORY POOLS well.
+            root.memActiveAnonGiB = +((info["Active(anon)"] || 0) / 1048576).toFixed(2)
+            root.memPageCacheGiB = +(((info["Cached"] || 0) + (info["Buffers"] || 0)) / 1048576).toFixed(2)
+            root.memSlabGiB = +((info["Slab"] || 0) / 1048576).toFixed(2)
             if (root.telemetryWanted)
                 root.memoryHistory = History.appendHistory(root.memoryHistory, Date.now(), root.ramPct,
                                                             root.historyWindowMs, root.historyMaxSamples)
@@ -416,6 +448,16 @@ Item {
         root.swapTotalGB = +(st / 1048576).toFixed(2)
         root.swapUsedGB = +((st - sf) / 1048576).toFixed(2)
         root.swapPct = st > 0 ? +((st - sf) / st * 100).toFixed(1) : 0
+    }
+
+    // ── zram compression (mm_stat columns: orig_data compr_data mem_used …) ─
+    function parseZram(raw) {
+        var f = String(raw).trim().split(/\s+/)
+        if (f.length < 2) { root.zramUsedGB = 0; root.zramRatio = 0; return }
+        var orig = parseFloat(f[0]), compr = parseFloat(f[1])
+        if (isNaN(orig) || orig <= 0) { root.zramUsedGB = 0; root.zramRatio = 0; return }
+        root.zramUsedGB = +(orig / 1048576).toFixed(2)   //KiB → GiB; payload size pre-compression
+        root.zramRatio = compr > 0 ? +(orig / compr).toFixed(1) : 0
     }
 
     // ── Uptime (overlay string + Core pane string from the same read) ───────
@@ -446,7 +488,7 @@ Item {
     Process {   // unbounded-ok: the leased `nvidia-smi -l 2` long-runner —
         id: gpuLoop   // lifecycle bound to root.leased (onLeasedChanged stops it)
         command: ["nvidia-smi",
-                  "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed,clocks.gr",
+                  "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,fan.speed,clocks.gr,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,power.limit",
                   "--format=csv,noheader,nounits", "-l", "2"]
         running: false
         stdout: SplitParser {
@@ -460,6 +502,10 @@ Item {
                 if (p.powerW !== undefined) root.gpuPowerW = p.powerW
                 if (p.fanPct !== undefined) root.gpuFanPct = p.fanPct
                 if (p.clockMHz !== undefined) root.gpuClockMHz = p.clockMHz
+                if (p.pcieGenCur !== undefined) root.gpuPcieGenCurrent = p.pcieGenCur
+                if (p.pcieGenMax !== undefined) root.gpuPcieGenMax = p.pcieGenMax
+                if (p.pcieWidth !== undefined) root.gpuPcieWidth = p.pcieWidth
+                if (p.powerLimitW !== undefined) root.gpuPowerLimitW = p.powerLimitW
                 if (p.seen) {
                     root._gpuSeen = true
                     if (root.telemetryWanted)
@@ -469,6 +515,27 @@ Item {
             }
         }
     }
+
+    // Sub-engine utilization — a SECOND long-runner, only while the Core tab
+    // is open (the LCD feed doesn't need it; keep the DGPU polling light).
+    // dmon emits a `#` header then 1 Hz rows: gpu sm mem enc dec jpg ofa.
+    Process {   // unbounded-ok: Core-tab `nvidia-smi dmon` long-runner —
+        id: dmonLoop   // lifecycle bound to root.coreVisible (binding flip → SIGTERM)
+        command: ["nvidia-smi", "dmon", "-s", "u", "-d", "1"]
+        running: false
+        stdout: SplitParser {
+            onRead: function(data) {
+                var p = Info.parseDmon(data)
+                if (!p) return
+                if (p.sm !== undefined) root.gpuSmPct = p.sm
+                if (p.mem !== undefined) root.gpuMemCtrlPct = p.mem
+                if (p.enc !== undefined) root.gpuEncPct = p.enc
+                if (p.dec !== undefined) root.gpuDecPct = p.dec
+                if (p.ofa !== undefined) root.gpuOfaPct = p.ofa
+            }
+        }
+    }
+    onCoreVisibleChanged: dmonLoop.running = root.coreVisible
     // Lease edges start/stop the long-runner (binding flip → SIGTERM).
     onLeasedChanged: gpuLoop.running = root.leased
 
@@ -534,6 +601,7 @@ Item {
         cpuTempProc.run()
         nvmeProc.run()
         coolantProc.run()
+        govFile.reload()   // governor rides the 5s cadence — changes are rare
     }
 
     // Temps move slowly; 5s is enough and keeps the hwmon scan cheap.
@@ -705,6 +773,7 @@ Item {
             cpuinfoFile.reload()
             memFile.reload()
             uptimeFile.reload()
+            zramFile.reload()
             if (root.lcdPresent) root.publish()
             root._tickN++
             if (root._tickN % 2 === 0 && !gpuAppsProc.running) gpuAppsProc.run()

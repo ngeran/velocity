@@ -203,6 +203,9 @@ export function parseLiveMetrics(text, prevBusy, prevTotal) {
 
 // One nvidia-smi --query-gpu CSV row (may be "[N/A]" per driver) → patch of
 // only the fields that parsed; `seen` marks a real GPU answer. Null on empty.
+// Columns 7-10 (PCIe gen current/max, link width, power limit) are the HUD
+// cluster's addition — older drivers without them simply leave the patch
+// keys unset (the [N/A] guard).
 export function parseNvidiaSmi(s) {
     s = (s || "").trim()
     if (!s) return null
@@ -218,7 +221,38 @@ export function parseNvidiaSmi(s) {
     if (!isNaN(p)) patch.powerW = Math.round(p * 100) / 100
     if (!isNaN(fan)) patch.fanPct = fan
     if (!isNaN(clk)) patch.clockMHz = clk
+    if (f.length > 10) {
+        var gc = parseInt(f[7], 10), gm = parseInt(f[8], 10)
+        var gw = parseInt(f[9], 10), pl = parseFloat(f[10])
+        if (!isNaN(gc)) patch.pcieGenCur = gc
+        if (!isNaN(gm)) patch.pcieGenMax = gm
+        if (!isNaN(gw)) patch.pcieWidth = gw
+        if (!isNaN(pl)) patch.powerLimitW = Math.round(pl)
+    }
     patch.seen = !isNaN(t) || !isNaN(mt)
+    return patch
+}
+
+// One `nvidia-smi dmon -s u` row → {sm,mem,enc,dec,ofa}. Header lines start
+// with `#`; absent engines (pre-Turing has no ofa) report `-`/N/A → skipped,
+// so the last good value persists (matches dmon's own display semantics).
+export function parseDmon(s) {
+    s = (s || "").trim()
+    if (!s || s.charAt(0) === "#") return null
+    var f = s.trim().split(/\s+/)
+    // dmon columns: gpu sm mem enc dec jpg ofa (idx 0..6)
+    if (f.length < 5 || f[0] !== "0") return null   // single-GPU box: gpu 0 only
+    var patch = {}
+    var sm = parseInt(f[1], 10), mem = parseInt(f[2], 10)
+    var enc = parseInt(f[3], 10), dec = parseInt(f[4], 10)
+    if (!isNaN(sm)) patch.sm = sm
+    if (!isNaN(mem)) patch.mem = mem
+    if (!isNaN(enc)) patch.enc = enc
+    if (!isNaN(dec)) patch.dec = dec
+    if (f.length > 6) {
+        var ofa = parseInt(f[6], 10)
+        if (!isNaN(ofa)) patch.ofa = ofa
+    }
     return patch
 }
 
