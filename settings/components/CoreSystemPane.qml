@@ -36,6 +36,16 @@ Rectangle {
     function tempTier(t) { return t >= 90 ? Config.HudConfig.red : t >= 75 ? Config.HudConfig.amber : Config.HudConfig.cyan }
     function diskTier(p) { return p >= 85 ? Config.HudConfig.red : Config.HudConfig.amber }
     function driveLabel(mount) { return mount === "/" ? "SYSTEM" : (mount.split("/").pop() || mount) }
+    // Hoisted to a property (not an inline-literal model): Repeater delegates
+    // over literal arrays have hit the singleton-not-ready init trap before.
+    readonly property var engineRows: [
+        { k: "COOLANT", v: m.coolantAvailable ? m.coolantTemp.toFixed(0) + "°C" : "—",
+          c: m.coolantAvailable ? tempTier(m.coolantTemp) : Config.HudConfig.textFaint },
+        { k: "NVME", v: m.nvmeTemp > 0 ? m.nvmeTemp.toFixed(0) + "°C" : "—",
+          c: m.nvmeTemp > 0 ? tempTier(m.nvmeTemp) : Config.HudConfig.textFaint },
+        { k: "GPU CLK", v: m.clockMHz > 0 ? (m.clockMHz / 1000).toFixed(2) + " GHZ" : "—",
+          c: Config.HudConfig.cyan }
+    ]
 
     // ── [F] "UPDATED Ns AGO" — resets whenever live telemetry ticks ────────
     readonly property string _sig: m.cpuUsage.toFixed(3)
@@ -152,7 +162,7 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 78
+            Layout.preferredHeight: 72
 
             ColumnLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 8; anchors.bottomMargin: 6; spacing: 5
                 RowLayout { Layout.fillWidth: true
@@ -446,7 +456,8 @@ Rectangle {
         // ═════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 252
+            Layout.preferredHeight: 368   // the panel's internal minimum (~385
+                                          // unshrunk — see the 176px device below)
             LcdControllerPanel {
                 anchors.fill: parent
                 embedded: true

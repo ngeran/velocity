@@ -43,8 +43,8 @@ Item {
     // to lay out without scrolling on the 2560×1440 OLED (60%/78% caps put it
     // exactly there; bottom edge ≈ barHeight + 1080 < 1440 ✓). Floors keep it
     // usable on tiny screens.
-    readonly property real cardWidth:  Math.max(880, Math.min(1360, availableWidth  * 0.60))
-    readonly property real cardHeight: Math.max(560, Math.min(1080, availableHeight * 0.78))
+    readonly property real cardWidth:  Math.max(880, Math.min(1280, availableWidth  * 0.55))
+    readonly property real cardHeight: Math.max(560, Math.min(1000, availableHeight * 0.70))
 
     // Shibumi UI-scale — feed the singleton our live logical width (a binding,
     // so output changes propagate). Singletons can't use the Screen attached

@@ -44,10 +44,10 @@ ShellRoot {
     readonly property real availableWidth: panelWindow.width || 1920
     readonly property real availableHeight: panelWindow.height || 1080
 
-    // Mirror of SettingsHostWindow's HUD sizing (this standalone root only runs
+    // Mirror of SettingsHostWindow's HUD sizing — 1280×1000 target (this standalone root only runs
     // in legacy deployments; the bar hosts the real window).
-    readonly property real cardWidth:  Math.max(880, Math.min(1360, availableWidth  * 0.60))
-    readonly property real cardHeight: Math.max(560, Math.min(1080, availableHeight * 0.78))
+    readonly property real cardWidth:  Math.max(880, Math.min(1280, availableWidth  * 0.55))
+    readonly property real cardHeight: Math.max(560, Math.min(1000, availableHeight * 0.70))
 
     // =========================================================================
     // HIDE TIMER — defer visible=false until slide-up completes

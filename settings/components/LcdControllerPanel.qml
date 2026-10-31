@@ -243,8 +243,8 @@ Rectangle {
                         id: deviceWrap
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 4
-                        width: 196
-                        height: 196
+                        width: 176
+                        height: 176
 
                         Rectangle {
                             anchors.fill: parent
@@ -292,8 +292,8 @@ Rectangle {
                         Rectangle {
                             id: screen
                             anchors.centerIn: parent
-                            width: 148
-                            height: 148
+                            width: 130
+                            height: 130
                             radius: width / 2
                             color: "#000000"
                             border.color: Config.HudConfig.borderHi
@@ -303,7 +303,7 @@ Rectangle {
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 12
+                                anchors.margins: 10
                                 spacing: 2
 
                                 Item {
@@ -336,7 +336,7 @@ Rectangle {
                                         text: root.lcd.metricValue(root.lcd.mainTempSource)
                                         color: Config.HudConfig.amber
                                         font.family: Config.HudConfig.fontData
-                                        font.pixelSize: 34
+                                        font.pixelSize: 30
                                         font.bold: true
                                     }
                                     Text {
@@ -486,7 +486,14 @@ Rectangle {
                     border.width: 1
                     ColumnLayout {
                         id: slotCol
-                        anchors.fill: parent
+                        // top/left/right (NOT fill): the well is the pane's
+                        // fillHeight stretch — anchoring all four sides made
+                        // the layout redistribute its extra height across the
+                        // rows (they spread ~100px apart in the standalone
+                        // pane). Packed at the top, slack stays at the bottom.
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
                         anchors.margins: 10
                         spacing: 5
                         RowLayout {

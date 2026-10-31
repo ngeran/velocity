@@ -255,7 +255,15 @@ Item {
         }
         if (idx >= 0) root.currentTab = idx
         root.coreActiveSection = section || "system"
-        root.coreDeepLink = true
+        // Already sitting on the Core tab? No visible transition will fire to
+        // consume the deep-link flag — set the pane directly instead of arming
+        // it (an armed link would otherwise misfire on the NEXT entry).
+        if (root.currentTabKey === "core" && coreLoader.item) {
+            coreLoader.item.active = root.coreActiveSection
+            root.coreDeepLink = false
+        } else {
+            root.coreDeepLink = true
+        }
     }
 
     function openSettingsTab() {
