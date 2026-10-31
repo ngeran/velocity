@@ -103,7 +103,7 @@ QtObject {
     // TYPOGRAPHY - Modern Font Stack
     // =========================================================================
 
-    readonly property string fontFamily: "Inter, JetBrains Mono, monospace"
+    readonly property string fontFamily: "Space Grotesk"
     readonly property int fontSizeDisplay: 32
     readonly property int fontSizeHeadline: 24
     readonly property int fontSizeTitle: 18

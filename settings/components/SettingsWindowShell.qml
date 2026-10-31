@@ -67,6 +67,22 @@ Item {
     // consumes them on its next entry, so a plain Core click lands on SYSTEM.
     property string coreActiveSection: "system"
     property bool coreDeepLink: false
+    // Live mirror of the open Core pane's section — feeds the sidebar's CORE
+    // submenu (active row). Written BY the tab (onActiveChanged below) and by
+    // openCoreSection(); never write coreDeepLink from the submenu path.
+    property string coreSectionLive: "system"
+
+    // Sidebar CORE submenu → pane. When the tab is already open, set the pane
+    // DIRECTLY — arming coreDeepLink here would misfire on the tab's NEXT
+    // entry (the flag is consumed on the visible transition only).
+    function openCoreSection(key) {
+        if (root.currentTabKey === "core") {
+            if (coreLoader.item) coreLoader.item.active = key
+            root.coreActiveSection = key
+        } else {
+            root.openCoreTab(key)
+        }
+    }
 
     Component.onCompleted: {
         Services.SearchIndex.activated.connect(root._navigate)
@@ -117,7 +133,7 @@ Item {
         S.register({ key: "tab:themes",     title: "Theme Switcher",    tab: "themes",     section: "", keywords: "theme color palette", item: null })
         S.register({ key: "tab:wallpapers", title: "Wallpapers",        tab: "wallpapers", section: "", keywords: "wallpaper library cycling", item: null })
         S.register({ key: "tab:control",    title: "Control",           tab: "control",    section: "", keywords: "control console", item: null })
-        S.register({ key: "tab:core",       title: "Core",              tab: "core",       section: "", keywords: "core engine telemetry oled", item: null })
+        S.register({ key: "tab:core",       title: "Core",              tab: "core",       section: "", keywords: "core engine telemetry oled mystique aio lcd tft deepcool", item: null })
         S.register({ key: "tab:settings",   title: "Settings",          tab: "settings",   section: "", keywords: "preferences options", item: null })
         // Section-level entries (was: registered inside the tab bodies).
         var secs = Config.ControlConfig.sections
@@ -129,7 +145,7 @@ Item {
         for (i = 0; i < core.length; i++)
             S.register({ key: "core:" + core[i].key,
                 title: core[i].label, tab: "core",
-                section: core[i].key, keywords: "core telemetry", item: null })
+                section: core[i].key, keywords: "core telemetry lcd deepcool mystique", item: null })
         S.register({ key: "logs-tab", title: "System Logs", tab: "logs", section: "" })
     }
 
@@ -284,19 +300,14 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Config.ThemeConfig.colors.background
-        // Rounded window shell — a fixed 12 (the design system's top radius
-        // step), deliberately NOT the widget cornerRadius setting (default 0,
-        // "OLED-sharp" applies to in-card widgets, not the window chrome).
-        // The header + sidebar paint transparent so the rounding reads at all
-        // four corners; clip stays off (Rectangle clip is rectangular and
-        // would square the corners right back off).
+        // HUD chrome: pure-black obsidian panel, fixed (theme-independent —
+        // see HudConfig). Header + sidebar paint transparent so the rounding
+        // reads at all four corners; clip stays off (Rectangle clip is
+        // rectangular and would square the corners right back off).
+        color: Config.HudConfig.panel
         radius: 12
-        // Border: on dark themes the card is background-on-backdrop (the dim
-        // layer is the SAME color at 0.6) — without an edge the top rounding
-        // reads as "cut off under the bar". Every inner card has a border;
-        // the shell card gets one too.
-        border.color: Config.ThemeConfig.colors.border
+        // Without an edge the top rounding reads as "cut off under the bar".
+        border.color: Config.HudConfig.borderHi
         border.width: 1
         // No-op MouseArea: stops clicks on empty card areas from falling through
         // to the shell.qml dim backdrop (which would close the window).
@@ -320,6 +331,8 @@ Item {
             root.currentTab = index
         }
         onSearchRequested: searchPalette.openPalette()
+        coreSection: root.coreSectionLive
+        onCoreSectionSelected: function(key) { root.openCoreSection(key) }
     }
 
     // =========================================================================
@@ -333,7 +346,9 @@ Item {
             left: navBar.right
             right: parent.right
         }
-        height: 44
+        height: 48
+        contextKey: root.currentTabKey
+        live: root.currentTabKey === "core" || root.currentTabKey === "dashboard"
         onLogsActivated: root.openLogsTab()
     }
 
@@ -566,6 +581,7 @@ Item {
         // fade still plays (B11 pattern, same as the tabs above).
 
         Loader {
+            id: coreLoader
             anchors.fill: parent
             active: root.visitedTabs[4] && Config.SharedState.dashboardVisible
 
@@ -595,6 +611,12 @@ Item {
                         } else {
                             coreTab.active = "system"
                         }
+                    }
+                    // Mirror the pane into the sidebar's CORE submenu (and
+                    // keep coreActiveSection coherent for the next entry).
+                    onActiveChanged: {
+                        root.coreSectionLive = coreTab.active
+                        root.coreActiveSection = coreTab.active
                     }
                 }
             }
@@ -646,7 +668,7 @@ Item {
 
         z: 40
         anchors.top: parent.top
-        anchors.topMargin: 84   // just under the 72px shared header
+        anchors.topMargin: 56   // just under the 48px shared header
         anchors.horizontalCenter: parent.horizontalCenter
         width: 440
         height: open ? 47 + Math.min(results.length, 8) * 34 : 0

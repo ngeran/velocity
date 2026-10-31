@@ -71,9 +71,11 @@ QtObject {
     // Lives here, not in the tab, so the search catalog can list the sections
     // before the O1 lazy tab is ever visited.
     readonly property var coreSections: [
-        { key: "system", label: "SYSTEM",    icon: "󰇅" },
-        { key: "lcd",    label: "LCD",       icon: "󰍹" },
-        { key: "events", label: "EVENTS",    icon: "󰈔" }
+        // Labels per the HUD cluster mock; KEYS are contract (openCore IPC +
+        // search seeds + CoreEngineTab pane swap depend on them).
+        { key: "system", label: "TELEMETRY + LCD", icon: "󰇅" },
+        { key: "lcd",    label: "MYSTIQUE AIO",    icon: "󰍹" },
+        { key: "events", label: "EVENTS",          icon: "󰈔" }
     ]
 
     // --- Console log colors by kind (theme-aware) ---

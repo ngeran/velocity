@@ -3,7 +3,7 @@
 // =============================================================================
 // Lives in the shared Header's empty left half, opposite the identity chip
 // (user request: the power actions belong on the dashboard header, not buried
-// in the System Info body). 26px icon buttons that fit the 44px strip.
+// in the System Info body). 28px icon buttons that fit the 48px HUD strip.
 //
 // Commands + confirm discipline are the PowerMenu's: destructive actions
 // (restart/shutdown) arm a 5s pending state — the icons swap in place for a
@@ -22,18 +22,19 @@ Item {
     id: root
 
     implicitWidth: strip.implicitWidth
-    implicitHeight: 26
+    implicitHeight: 28
 
     // ── palette ─────────────────────────────────────────────────────────────
-    readonly property color cText:      Config.ThemeConfig.colors.text
-    readonly property color cDim:       Config.ThemeConfig.colors.textDim
-    readonly property color cBorder:    Config.ThemeConfig.colors.border
-    readonly property color cBg:        Config.ThemeConfig.colors.background
-    readonly property color cSecondary: Config.ThemeConfig.colors.secondary
-    readonly property color cPrimary:   Config.ThemeConfig.colors.primary
-    readonly property color cWarn:      Config.ThemeConfig.colors.warning
-    readonly property color cErr:       Config.ThemeConfig.colors.error
-    readonly property string fontM:     Config.ControlConfig.fontMono
+    // HUD chrome palette (theme-independent — HudConfig is the SSOT here).
+    readonly property color cText:      Config.HudConfig.textBody
+    readonly property color cDim:       Config.HudConfig.textMid
+    readonly property color cBorder:    Config.HudConfig.borderHi
+    readonly property color cBg:        Config.HudConfig.panel
+    readonly property color cSecondary: Config.HudConfig.cyan
+    readonly property color cPrimary:   Config.HudConfig.amber
+    readonly property color cWarn:      Config.HudConfig.amber
+    readonly property color cErr:       Config.HudConfig.red
+    readonly property string fontM:     Config.HudConfig.fontData
     readonly property string fontN:     Config.ControlConfig.fontNerd
 
     // ── two-step confirm (PowerMenu pattern: no modal, 5s expiry) ───────────
@@ -75,8 +76,8 @@ Item {
         property string glyph: ""
         property color hot: root.cSecondary
         signal fired()
-        width: 26; height: 26
-        radius: Config.ControlConfig.radiusSmall
+        width: 28; height: 28
+        radius: Config.HudConfig.radiusSm
         color: pibArea.containsMouse ? Config.ThemeConfig.tint(pib.hot, 0.14) : "transparent"
         border.color: pibArea.containsMouse ? pib.hot : root.cBorder
         border.width: 1
@@ -134,7 +135,7 @@ Item {
         Rectangle {
             visible: root.confirming
             Layout.preferredWidth: confLbl.implicitWidth + 20
-            Layout.preferredHeight: 26
+            Layout.preferredHeight: 28
             color: confArea.containsMouse ? root.cErr : "transparent"
             border.color: root.cErr; border.width: 1
             Behavior on color { ColorAnimation { duration: 120 } }
@@ -157,7 +158,7 @@ Item {
         }
         Rectangle {
             visible: root.confirming
-            width: 26; height: 26
+            width: 28; height: 28
             color: cancelArea.containsMouse ? Config.ThemeConfig.tint(root.cDim, 0.14) : "transparent"
             border.color: root.cBorder; border.width: 1
             Behavior on color { ColorAnimation { duration: 120 } }

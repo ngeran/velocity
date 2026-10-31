@@ -24,37 +24,18 @@ Item {
     Component.onCompleted: Services.HostBridge.metrics.coreVisible = true
     Component.onDestruction: Services.HostBridge.metrics.coreVisible = false
 
+    // Section rail: compact fallback only — in labeled mode the dashboard
+    // sidebar hosts the CORE submenu (TELEMETRY + LCD / MYSTIQUE AIO / EVENTS).
     ControlSectionNav {
         id: sideNav
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        width: Config.UIScale.compact ? 56 : Config.ControlConfig.sidenavWidth
+        width: Config.UIScale.compact ? 56 : 0
+        visible: Config.UIScale.compact
         items: Config.ControlConfig.coreSections
         activeSection: root.active
         onSectionSelected: function(key) { root.active = key }
-
-        // Footer slot: session info
-        Rectangle {
-            visible: !Config.UIScale.compact
-            width: parent.width - Config.ControlConfig.space2
-            height: 58
-            radius: Config.ControlConfig.radiusPill
-            color: "transparent"
-            border.color: Config.ThemeConfig.colors.outlineVariant
-            border.width: 1
-            Column {
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: 3
-                Text { text: "SESSION"; color: Config.ThemeConfig.colors.textDim
-                    font.family: Config.ControlConfig.fontSans; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.0 }
-                Text { text: Services.HostBridge.metrics.userName.toUpperCase(); color: Config.ThemeConfig.colors.text
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width - 8 }
-                Text { text: Services.HostBridge.metrics.hostname.toUpperCase(); color: Config.ThemeConfig.colors.textDim
-                    font.family: Config.ControlConfig.fontMono; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width - 8 }
-            }
-        }
     }
 
     // ── content: one pane per section ────────────────────────────────────
