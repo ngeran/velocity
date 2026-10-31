@@ -180,7 +180,12 @@ let
       # `_` (not `i`): writeShellApplication runs shellcheck, which only
       # exempts `_` from its unused-variable check (SC2034).
       for _ in $(seq 1 120); do
-        [ -n "$WAYLAND_DISPLAY" ] && [ -S "$rt/$WAYLAND_DISPLAY" ] && exit 0
+        # ''${VAR:-}: nounset-safe — writeShellApplication runs set -u, and a
+        # bare $WAYLAND_DISPLAY aborts with "unbound variable" when the unit
+        # starts at default.target before environment.lua's env import
+        # (2026-10-31: bar + cliphist each logged a failed start every boot;
+        # the bar only came up 2s later via the client-request restart).
+        [ -n "''${WAYLAND_DISPLAY:-}" ] && [ -S "$rt/''${WAYLAND_DISPLAY:-}" ] && exit 0
         sleep 0.5
       done
       echo "velocity-wait-wayland: timed out (WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-unset}, no socket in $rt)" >&2
