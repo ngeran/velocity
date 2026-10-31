@@ -176,6 +176,21 @@ Item {
         onTriggered: root._sampleCounters()
     }
 
+    // Dashboard lease = the System-Info tab is showing; its LOCAL IP / GEO /
+    // gateway rows read connectionStatus.ip, which only the LINK probe fills
+    // (the popup's fetch-on-open never runs for the dashboard). Sample on
+    // open and on a slow tick while held — same probe the popup uses, at
+    // dashboard cadence (user call: LOCAL IP showed "—" forever).
+    onDashboardLeaseChanged: if (root.dashboardLease && root.isConnected) root._sampleLink()
+    Timer {
+        id: dashLinkTimer
+        interval: 30000
+        running: root.dashboardLease && root.isConnected
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: if (root.isConnected) root._sampleLink()
+    }
+
     // 2s while the popup is open — rates want a short window to feel live.
     Timer {
         id: statsTimer

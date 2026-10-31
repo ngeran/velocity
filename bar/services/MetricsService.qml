@@ -199,6 +199,10 @@ Item {
         ffProc.run()
         shellProc.run()
         boardProc.run()
+        // GEO: once per session, piggybacking the dashboard's profile pass —
+        // geoProc had no caller since the bento dashboard (its WeatherCard was
+        // the old trigger) went away, so geoCity/geoCountry stayed "" forever.
+        if (!root.geoDone) geoProc.run()
         if (!root.leased) root.extendLease(5)   // one profile pass wants one live tick
     }
 
