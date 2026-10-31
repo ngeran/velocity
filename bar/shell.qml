@@ -321,7 +321,11 @@ ShellRoot {
             configWriter: Config.BarConfigWriter,
             // P5.6: socket2 re-emitter — settings-side wallpaper auto-pause
             // reads fullscreen>> lines through HostBridge (ONE socket consumer).
-            hypr: Services.HyprlandService
+            hypr: Services.HyprlandService,
+            // QoL hook: the dashboard command-strip bell opens THIS shell's
+            // notification center. Function reference is safe detached — the
+            // body ids ncLoader/shellRoot explicitly.
+            ncToggle: shellRoot.toggleNotificationCenter
         })
     }
 

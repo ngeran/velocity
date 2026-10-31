@@ -334,6 +334,54 @@ Item {
                     color: root.cText; font.family: root.fontM; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1
                     anchors.verticalCenter: parent.verticalCenter
                 }
+                Rectangle { width: 1; height: 14; color: root.cBorder; anchors.verticalCenter: parent.verticalCenter }
+                Rectangle {
+                    // Bell (mockup header): opens the bar's notification
+                    // center through the HostBridge ncToggle hook. Drawn as a
+                    // Canvas — plain JetBrains Mono has no bell glyph.
+                    id: bellBtn
+                    width: 24; height: 24; radius: 6
+                    visible: Services.HostBridge.ncToggle !== null
+                    color: bellMa.containsMouse
+                           ? Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.15)
+                           : Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.5)
+                    border.color: bellMa.containsMouse ? Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.6) : root.cOutline
+                    border.width: 1
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
+                    Canvas {
+                        anchors.centerIn: parent
+                        width: 12; height: 13
+                        property color strokeColor: bellMa.containsMouse ? root.cPrimary : root.cDim
+                        onStrokeColorChanged: requestPaint()
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.strokeStyle = strokeColor.toString()
+                            ctx.lineWidth = 1.4
+                            ctx.lineJoin = "round"
+                            ctx.lineCap = "round"
+                            ctx.beginPath()
+                            ctx.moveTo(2, 9)
+                            ctx.lineTo(2, 7.5)
+                            ctx.arc(6, 7.5, 4, Math.PI, 0)
+                            ctx.lineTo(10, 9)
+                            ctx.lineTo(11, 10.5)
+                            ctx.lineTo(1, 10.5)
+                            ctx.closePath()
+                            ctx.stroke()
+                            ctx.beginPath()
+                            ctx.arc(6, 12, 1.1, 0, Math.PI)
+                            ctx.stroke()
+                        }
+                    }
+                    MouseArea {
+                        id: bellMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (Services.HostBridge.ncToggle) Services.HostBridge.ncToggle()
+                    }
+                }
             }
         }
 
@@ -631,8 +679,8 @@ Item {
                                 chipColor: root.cPrimary
                             }
 
-                            // Hero uptime counter
-                            InsetPanel {
+                            // Hero uptime counter (mockup: unboxed centrepiece)
+                            Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 ColumnLayout {
@@ -848,7 +896,7 @@ Item {
                                                 // string (only filled while the network
                                                 // popup probes).
                                                 text: (root.net && (root.net.connectionStatus.ip || root.net.ipAddress)) || "—"
-                                                color: root.cSecondary; font.family: root.fontM; font.pixelSize: 11; font.bold: true
+                                                color: root.cSecondary; font.family: root.fontM; font.pixelSize: 13; font.bold: true
                                             }
                                         }
                                         Item { Layout.fillWidth: true }

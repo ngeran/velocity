@@ -37,6 +37,10 @@ QtObject {
     readonly property var notifications: bar ? bar.notifications : null
     readonly property var hypr: bar ? bar.hypr : null
 
+    // Dashboard QoL: the command-strip bell toggles the bar's notification
+    // center overlay. Null until attach; guard before calling.
+    readonly property var ncToggle: bar ? bar.ncToggle : null
+
     function attach(services) {
         if (services && services !== bridge.bar)
             bridge.bar = services

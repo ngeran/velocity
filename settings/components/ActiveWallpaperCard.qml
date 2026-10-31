@@ -83,15 +83,35 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
             Rectangle {
-                // Live service property — CYCLE shows while the live-library
-                // wallpaper rotator is enabled.
-                visible: Services.WallpaperService.cyclingEnabled
-                border.color: root.cSuccess; border.width: 1
-                height: 14; width: cycLbl.implicitWidth + 10
+                // CYCLE (mockup: a real button, not a badge) — advances to a
+                // random wallpaper now: the same one-liner the service's
+                // auto-cycle tick and its wallpaper-service IPC cycleNow use.
+                // SharedState.wallpaperPath follows, so preview + name update
+                // through their bindings the moment it lands.
+                id: cycBtn
+                height: 16; width: cycLbl.implicitWidth + 12; radius: 3
+                color: cycMa.containsMouse
+                       ? Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.28)
+                       : Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.12)
+                border.color: Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b,
+                                      cycMa.containsMouse ? 0.8 : 0.4)
+                border.width: 1
+                Behavior on border.color { ColorAnimation { duration: 120 } }
                 Text {
                     id: cycLbl; anchors.centerIn: parent; text: "CYCLE"
-                    color: root.cSuccess
+                    color: root.cPrimary
                     font.family: root.fontM; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1
+                }
+                MouseArea {
+                    id: cycMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        var svc = Services.WallpaperService
+                        var next = svc.selectRandomWallpaper()
+                        if (next) svc.applyWallpaper(next)
+                    }
                 }
             }
         }
