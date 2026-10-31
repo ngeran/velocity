@@ -17,6 +17,10 @@ Rectangle {
     signal picked()
 
     height: 16
+    // Layout parents size children from implicitWidth — width alone reads as
+    // 0 to a RowLayout and collapses the chip (overlap seen 2026-10-31).
+    implicitWidth: chipText.implicitWidth + 12
+    implicitHeight: 16
     width: chipText.implicitWidth + 12
     radius: 3
     color: filled ? accent

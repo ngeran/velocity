@@ -182,15 +182,22 @@ Rectangle {
                 }
                 RowLayout {
                     spacing: 0
+                    // fixed-width: PanelSeg defaults to fillWidth (right for
+                    // the mode/rotation rows), which stretched this unit pair
+                    // across a quarter of the header
                     PanelSeg {
                         text: "°C"; segAccent: Config.HudConfig.amber
                         sel: root.lcd.unit === "C"
                         onPicked: root.lcd.setUnit("C")
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 64
                     }
                     PanelSeg {
                         text: "°F"; segAccent: Config.HudConfig.amber
                         sel: root.lcd.unit === "F"
                         onPicked: root.lcd.setUnit("F")
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 64
                     }
                 }
             }
@@ -202,10 +209,15 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 12
 
-            // LEFT — circular live preview
+            // LEFT — circular live preview. fillWidth, NOT a parent.width
+            // percentage: reading parent.width from inside a Layout child as
+            // its preferred width fed the layout's own input back into it
+            // ("recursive rearrange" abort at creation) and left sibling
+            // layouts half-polished. Controls column is pinned instead; this
+            // side flexes (≈5:7 split at the embedded card width).
             Rectangle {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: parent.width * 5.0 / 12.0
                 radius: Config.HudConfig.radiusSm
                 color: Config.HudConfig.wellDeep
                 border.color: Config.HudConfig.borderHi
@@ -410,9 +422,11 @@ Rectangle {
                 }
             }
 
-            // RIGHT — control stack
+            // RIGHT — control stack (pinned width; see preview note)
             ColumnLayout {
-                Layout.fillWidth: true
+                Layout.preferredWidth: 560
+                Layout.minimumWidth: 560
+                Layout.maximumWidth: 560
                 Layout.fillHeight: true
                 spacing: 8
 

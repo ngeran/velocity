@@ -38,13 +38,13 @@ Rectangle {
     function driveLabel(mount) { return mount === "/" ? "SYSTEM" : (mount.split("/").pop() || mount) }
     // Hoisted to a property (not an inline-literal model): Repeater delegates
     // over literal arrays have hit the singleton-not-ready init trap before.
+    // (GPU CLK lived here until the CLOCK StatCell in the GPU grid took the
+    // same reading — the quarter was one row short of fitting its pill.)
     readonly property var engineRows: [
         { k: "COOLANT", v: m.coolantAvailable ? m.coolantTemp.toFixed(0) + "°C" : "—",
           c: m.coolantAvailable ? tempTier(m.coolantTemp) : Config.HudConfig.textFaint },
         { k: "NVME", v: m.nvmeTemp > 0 ? m.nvmeTemp.toFixed(0) + "°C" : "—",
-          c: m.nvmeTemp > 0 ? tempTier(m.nvmeTemp) : Config.HudConfig.textFaint },
-        { k: "GPU CLK", v: m.clockMHz > 0 ? (m.clockMHz / 1000).toFixed(2) + " GHZ" : "—",
-          c: Config.HudConfig.cyan }
+          c: m.nvmeTemp > 0 ? tempTier(m.nvmeTemp) : Config.HudConfig.textFaint }
     ]
 
     // ── [F] "UPDATED Ns AGO" — resets whenever live telemetry ticks ────────
@@ -69,13 +69,16 @@ Rectangle {
     component HDivider: Rectangle { color: Config.HudConfig.borderHi; height: 1; Layout.fillWidth: true }
     component VDivider: Rectangle { color: Config.HudConfig.borderHi; width: 1; Layout.fillHeight: true }
 
-    // mini stat cell (label over value) for the dial-side engine grid
+    // mini stat cell (label over value) for the dial-side engine grid.
+    // Fixed width so a row of cells forms true columns — ragged,
+    // content-sized cells made the BUS/RATE grid read as scatter.
     component StatCell: ColumnLayout {
         id: sc
         property string label: ""
         property string value: "—"
         property color accent: Config.HudConfig.textBody
-        spacing: 1
+        Layout.preferredWidth: 88
+        spacing: 2
         Text { text: sc.label
             color: Config.HudConfig.textFaint
             font.family: Config.HudConfig.fontUi; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.2 }
@@ -94,7 +97,10 @@ Rectangle {
         Text { text: se.label; Layout.preferredWidth: 66
             color: Config.HudConfig.textDim
             font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.0 }
-        HudMeterBar { Layout.fillWidth: true; Layout.maximumWidth: 200
+        // no maximumWidth: the bar runs to the row's right margin so the
+        // %/IDLE column shares VRAM's right edge (the capped 200px bar left
+        // the sub-engine block ending mid-card, misaligned with VRAM below)
+        HudMeterBar { Layout.fillWidth: true
             value: se.value; fill: Config.HudConfig.cyan; barHeight: 4 }
         Text { text: se.value > 0 ? Math.round(se.value) + "%" : "IDLE"
             Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight
@@ -226,10 +232,12 @@ Rectangle {
                     // Dot-matrix ring gauge (Doto numeral core) — GPU util
                     // inside, core temp as the caption ring reads like the
                     // Doto reference: number in the dots' circle.
+                    // Top-aligned so both halves' gauges start on the same
+                    // line (the MEM rings sit at the top of their row too).
                     HudDotRing {
                         Layout.preferredWidth: 156
                         Layout.preferredHeight: 156
-                        Layout.alignment: Qt.AlignVCenter
+                        Layout.alignment: Qt.AlignTop
                         value: root.m.util
                         valueText: "" + Math.round(root.m.util)
                         caption: root.m.temp > 0 ? "GPU · " + root.m.temp.toFixed(0) + "°C" : "GPU"
@@ -237,13 +245,16 @@ Rectangle {
                     }
 
                     // stat grid hugs the gauge (no fillWidth stretch) so the
-                    // cells read as one instrument cluster with the ring
+                    // cells read as one instrument cluster with the ring.
+                    // Fixed-width StatCells + shared row spacing keep the two
+                    // columns vertically aligned; the graphics clock lives
+                    // here as a 4th row instead of floating at the card edge.
                     ColumnLayout {
-                        Layout.fillHeight: true
-                        spacing: 3
-                        Item { Layout.fillHeight: true }   // center the grid block
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 2
+                        spacing: 8
                         RowLayout {
-                            spacing: 14
+                            spacing: 18
                             StatCell { label: "BUS"
                                 value: root.m.gpuPcieGenMax > 0 ? "PCIE GEN" + root.m.gpuPcieGenMax : "—" }
                             StatCell { label: "RATE"
@@ -251,7 +262,7 @@ Rectangle {
                                 accent: Config.HudConfig.cyan }
                         }
                         RowLayout {
-                            spacing: 14
+                            spacing: 18
                             StatCell { label: "TGP"
                                 value: root.m.powerW > 0 ? root.m.powerW.toFixed(0) + " W" : "IDLE"
                                 accent: root.m.powerW > 0 ? Config.HudConfig.amber : Config.HudConfig.textFaint }
@@ -259,7 +270,7 @@ Rectangle {
                                 value: root.m.gpuPowerLimitW > 0 ? root.m.gpuPowerLimitW.toFixed(0) + " W" : "—" }
                         }
                         RowLayout {
-                            spacing: 14
+                            spacing: 18
                             StatCell { label: "CORE TEMP"
                                 value: root.m.temp > 0 ? root.m.temp.toFixed(0) + "°C" : "—"
                                 accent: root.m.temp > 0 ? root.tempTier(root.m.temp) : Config.HudConfig.textFaint }
@@ -267,15 +278,14 @@ Rectangle {
                                 value: root.m.fanPct > 0 ? root.m.fanPct.toFixed(0) + "%" : "STOP 0DB"
                                 accent: root.m.fanPct > 0 ? Config.HudConfig.textBody : Config.HudConfig.textFaint }
                         }
-                        Item { Layout.fillHeight: true }
+                        RowLayout {
+                            spacing: 18
+                            StatCell { label: "CLOCK"
+                                value: root.m.clockMHz > 0 ? Math.round(root.m.clockMHz) + " MHZ" : "—"
+                                accent: Config.HudConfig.textDim }
+                        }
                     }
                     Item { Layout.fillWidth: true }
-                    Text {
-                        text: root.m.clockMHz > 0 ? Math.round(root.m.clockMHz) + " MHZ" : "— MHZ"
-                        color: Config.HudConfig.textDim
-                        font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true
-                        Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 7
-                    }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -348,20 +358,40 @@ Rectangle {
                         caption: "MEM · " + root.m.ramUsedGB.toFixed(1) + "G"
                         accent: Config.HudConfig.cyan
                     }
-                    // rail hugs the ring pair — one connected instrument row
+                    // rail hugs the ring pair — one connected instrument row.
+                    // Label column + value column (fixed label width) so the
+                    // three values align vertically instead of run-on lines.
                     ColumnLayout {
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.leftMargin: 6
-                        spacing: 2
-                        Text { text: "MAX BOOST " + root.m.cpuMaxGhz.toFixed(2) + " GHZ"
-                            color: Config.HudConfig.textDim
-                            font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
-                        Text { text: "THREADS " + root.m.cpuThreads
-                            color: Config.HudConfig.textDim
-                            font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
-                        Text { text: "GOVERNOR " + (root.m.cpuGovernor !== "" ? root.m.cpuGovernor.toUpperCase() : "—")
-                            color: Config.HudConfig.textDim
-                            font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
+                        Layout.leftMargin: 10
+                        spacing: 5
+                        RowLayout {
+                            spacing: 6
+                            Text { text: "MAX BOOST"; Layout.preferredWidth: 54
+                                color: Config.HudConfig.textFaint
+                                font.family: Config.HudConfig.fontUi; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.2 }
+                            Text { text: root.m.cpuMaxGhz.toFixed(2) + " GHZ"
+                                color: Config.HudConfig.textDim
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
+                        }
+                        RowLayout {
+                            spacing: 6
+                            Text { text: "THREADS"; Layout.preferredWidth: 54
+                                color: Config.HudConfig.textFaint
+                                font.family: Config.HudConfig.fontUi; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.2 }
+                            Text { text: "" + root.m.cpuThreads
+                                color: Config.HudConfig.textDim
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
+                        }
+                        RowLayout {
+                            spacing: 6
+                            Text { text: "GOVERNOR"; Layout.preferredWidth: 54
+                                color: Config.HudConfig.textFaint
+                                font.family: Config.HudConfig.fontUi; font.pixelSize: 7; font.bold: true; font.letterSpacing: 1.2 }
+                            Text { text: root.m.cpuGovernor !== "" ? root.m.cpuGovernor.toUpperCase() : "—"
+                                color: Config.HudConfig.textDim
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true }
+                        }
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -581,11 +611,15 @@ Rectangle {
                 Layout.minimumWidth: 0
                 spacing: 4
                 Eyebrow { Layout.leftMargin: 14; Layout.topMargin: 8; text: "ENGINE" }
+                // Sensor rows pin to the top, process readout pins to the
+                // bottom — anchored, not one flow: when the quarter runs
+                // short of height (the LCD band's real minimum exceeds its
+                // preferred and eats [E]'s slack) the clip cuts the ROWS,
+                // never mid-way through the pill well.
                 Item { Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14; anchors.rightMargin: 14
-                        anchors.topMargin: 1; anchors.bottomMargin: 6
+                        anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                        anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 1
                         spacing: 3
                         Repeater {
                             model: root.engineRows
@@ -601,37 +635,39 @@ Rectangle {
                                     font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true }
                             }
                         }
-                        Item { Layout.fillHeight: true }
-                        Rectangle {
-                            visible: root.m.processes.length > 0
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 22
-                            radius: 3
-                            color: Config.HudConfig.well
-                            border.color: Config.HudConfig.borderHi; border.width: 1
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8; anchors.rightMargin: 8
-                                spacing: 6
-                                Text { text: "01"
-                                    color: Config.HudConfig.amber
-                                    font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.bold: true }
-                                Text { text: root.m.processes.length > 0 ? root.m.processes[0].name : ""
-                                    Layout.fillWidth: true; Layout.minimumWidth: 0
-                                    color: Config.HudConfig.textBody
-                                    font.family: Config.HudConfig.fontData; font.pixelSize: 8
-                                    elide: Text.ElideRight }
-                                Text { text: root.m.processes.length > 0 ? root.m.processes[0].memMiB.toFixed(0) + " MIB" : ""
-                                    color: Config.HudConfig.cyan
-                                    font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.bold: true }
-                            }
+                    }
+                    Rectangle {
+                        visible: root.m.processes.length > 0
+                        anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                        anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.bottomMargin: 6
+                        height: 22
+                        radius: 3
+                        color: Config.HudConfig.well
+                        border.color: Config.HudConfig.borderHi; border.width: 1
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8; anchors.rightMargin: 8
+                            spacing: 6
+                            Text { text: "01"
+                                color: Config.HudConfig.amber
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.bold: true }
+                            Text { text: root.m.processes.length > 0 ? root.m.processes[0].name : ""
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
+                                color: Config.HudConfig.textBody
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 8
+                                elide: Text.ElideRight }
+                            Text { text: root.m.processes.length > 0 ? root.m.processes[0].memMiB.toFixed(0) + " MIB" : ""
+                                color: Config.HudConfig.cyan
+                                font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.bold: true }
                         }
-                        Text {
-                            visible: root.m.processes.length === 0
-                            text: "NO ACTIVE GPU PROCESSES"
-                            color: Config.HudConfig.textFaint
-                            font.family: Config.HudConfig.fontData; font.pixelSize: 8
-                        }
+                    }
+                    Text {
+                        visible: root.m.processes.length === 0
+                        anchors.bottom: parent.bottom; anchors.left: parent.left
+                        anchors.leftMargin: 14; anchors.bottomMargin: 8
+                        text: "NO ACTIVE GPU PROCESSES"
+                        color: Config.HudConfig.textFaint
+                        font.family: Config.HudConfig.fontData; font.pixelSize: 8
                     }
                 }
             }
