@@ -39,13 +39,12 @@ Item {
     readonly property real availableWidth: panelWindow.width || 1920
     readonly property real availableHeight: panelWindow.height || 1080
 
-    // Base design size (1100×1000) — matches the mission-control mockup's
-    // ~1.1:1 card (user call: the 640-tall card left the dashboard tiles
-    // squat). On smaller screens each dimension is capped to a fraction of
-    // the panel so the card never swamps the display; floors keep it usable
-    // on tiny screens.
-    readonly property real cardWidth:  Math.max(720, Math.min(1100, availableWidth  * 0.60))
-    readonly property real cardHeight: Math.max(480, Math.min(1000, availableHeight * 0.78))
+    // Base design size — the HUD instrument-cluster rebuild needs 1360×1080
+    // to lay out without scrolling on the 2560×1440 OLED (60%/78% caps put it
+    // exactly there; bottom edge ≈ barHeight + 1080 < 1440 ✓). Floors keep it
+    // usable on tiny screens.
+    readonly property real cardWidth:  Math.max(880, Math.min(1360, availableWidth  * 0.60))
+    readonly property real cardHeight: Math.max(560, Math.min(1080, availableHeight * 0.78))
 
     // Shibumi UI-scale — feed the singleton our live logical width (a binding,
     // so output changes propagate). Singletons can't use the Screen attached

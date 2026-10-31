@@ -28,17 +28,10 @@ ShellRoot {
 
     property bool shown: false
 
-    // Eagerly instantiate the Core Engine publisher. QML singletons are lazy —
-    // nothing references SystemMetricsService until the Core tab is opened, but the
-    // deepcool-py LCD feed (~/.cache/deepcool/metrics.json) must publish
-    // continuously for the process lifetime. Accessing it here (in onCompleted,
-    // which always runs, unlike an unread binding) creates it; a singleton then
-    // lives for the engine's lifetime and pulls in GpuService + ThermalService.
+    // (P2.3 one-process merge: the deepcool-py LCD feed moved to the bar's
+    // MetricsService.publish() — the old SystemMetricsService pin that used to
+    // live here died with it and only logged errors at boot.)
     Component.onCompleted: {
-        // Reading a property (not a bare reference, which the JS engine treats
-        // as dead code) forces the lazy singleton to instantiate so its 1s
-        // publish Timer runs for the process lifetime.
-        Services.SystemMetricsService.metricsPath
         // Shibumi UI-scale — feed the singleton our live logical width (a
         // binding, so output changes propagate). Singletons can't use the
         // Screen attached property (not part of a scene), so the window
@@ -51,12 +44,10 @@ ShellRoot {
     readonly property real availableWidth: panelWindow.width || 1920
     readonly property real availableHeight: panelWindow.height || 1080
 
-    // Base design size (1100×640) — the perfect size on the 4K OLED. On smaller
-    // screens each dimension is capped to a fraction of the panel so the card
-    // never swamps the display (a fixed 640px height covered ~all of a 768p
-    // laptop); floors keep it usable on tiny screens. Caps preserve the 4K look.
-    readonly property real cardWidth:  Math.max(720, Math.min(1100, availableWidth  * 0.60))
-    readonly property real cardHeight: Math.max(480, Math.min(640,  availableHeight * 0.75))
+    // Mirror of SettingsHostWindow's HUD sizing (this standalone root only runs
+    // in legacy deployments; the bar hosts the real window).
+    readonly property real cardWidth:  Math.max(880, Math.min(1360, availableWidth  * 0.60))
+    readonly property real cardHeight: Math.max(560, Math.min(1080, availableHeight * 0.78))
 
     // =========================================================================
     // HIDE TIMER — defer visible=false until slide-up completes
