@@ -253,7 +253,9 @@ PanelWindow {
                 Components.PowerTile {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     accent: root.cPrimary; iconText: ""; labelText: "LOCK"
-                    onActivated: { systemCmd.execute("hyprlock"); root.showing = false }
+                    // Same locker as hypridle's lock_cmd + SUPER+L (velocity-lock).
+                    // hyprlock here launched the OLD lock UI on manual locks.
+                    onActivated: { systemCmd.execute("velocity-lock"); root.showing = false }
                 }
             }
         }

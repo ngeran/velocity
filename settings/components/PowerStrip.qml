@@ -110,7 +110,10 @@ Item {
             visible: !root.confirming
             glyph: ""                       // lock — immediate
             hot: root.cPrimary
-            onFired: sysCmd.execute("hyprlock")
+            // Same locker as hypridle's lock_cmd + SUPER+L (velocity-lock —
+            // the lock/ config root, PAM-guarded with its own re-entry guard).
+            // hyprlock here launched the OLD lock UI on manual locks.
+            onFired: sysCmd.execute("velocity-lock")
         }
         PowerIconButton {
             visible: !root.confirming
