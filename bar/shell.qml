@@ -222,7 +222,8 @@ ShellRoot {
     readonly property bool ncShown: ncLoader.item ? ncLoader.item.shown : false
 
     // Height of the tallest live style window (island chrome is 32 while
-    // barHeight stays 26) — what top-right banners must clear. Toast eats this.
+    // barHeight stays 26) — what top-right banners must clear. Toast eats
+    // this; so does the notification center's docking edge.
     readonly property int topClearance: {
         var h = Config.BarConfig.barHeight
         var insts = (styleLoader.item && styleLoader.item.instances) || []
@@ -341,7 +342,7 @@ ShellRoot {
     }
     Component {
         id: ncComponent
-        Components.NotificationCenter { }
+        Components.NotificationCenter { barClearance: shellRoot.topClearance }
     }
 
     // The notification center claims the popup slot while shown. (target
@@ -382,8 +383,9 @@ ShellRoot {
 
 // Notification toasts (UX U3): the ryoku-port toast surface. Data comes from
 // NotificationService.popups (U4); the window self-manages its mapped state
-// and follows the focused monitor — no shell plumbing.
-Components.NotificationToasts { }
+// and follows the focused monitor — the one shell wire is the bar clearance
+// (topClearance), so the stack lands UNDER the strip, never across it.
+Components.NotificationToasts { barClearance: shellRoot.topClearance }
 
     // OSD IPC hook — lives here (not in the singleton) because IpcHandler
     // doesn't resolve inside qmldir-declared singletons in this Quickshell
@@ -513,6 +515,10 @@ Components.NotificationToasts { }
         // Keybind form (SUPER+SHIFT+N): typed IPC params are required, so the
         // toggle variant is its own no-arg verb.
         function dndToggle() { Services.NotificationService.setDnd(!Services.NotificationService.dnd) }
+        // Open/close the notification center — the keybind-able entry point
+        // (the dashboard bell forwards through HostBridge.ncToggle to the
+        // same toggleNotificationCenter()).
+        function center() { shellRoot.toggleNotificationCenter(); return "ok" }
         function readAll() { Services.NotificationService.markAllRead() }
         function list(): string {
             var rows = []

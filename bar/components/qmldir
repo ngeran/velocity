@@ -19,7 +19,7 @@ OverlayShell 1.0 OverlayShell.qml
 LauncherOverlay 1.0 LauncherOverlay.qml
 ClipboardPicker 1.0 ClipboardPicker.qml
 RegionPicker 1.0 RegionPicker.qml
-NotificationToastCard 1.0 NotificationToastCard.qml
+NotificationRow 1.0 NotificationRow.qml
 NotificationToasts 1.0 NotificationToasts.qml
 ZaiUsageOverlay 1.0 ZaiUsageOverlay.qml
 ZaiAlertBridge 1.0 ZaiAlertBridge.qml

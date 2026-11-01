@@ -58,7 +58,10 @@ Item {
     property ListModel history: ListModel {}
     readonly property int historyMax: 50
 
-    function clearHistory() { root.history.clear() }
+    function clearHistory() {
+        root.history.clear()
+        root.rev++   // grouped views re-group (history folds into the day list)
+    }
 
     // -------------------------------------------------------------------------
     // SOFT CLEAR — clear-as-timestamp. `clear` HIDES rows (everything with
@@ -97,6 +100,63 @@ Item {
         if (n.indexOf("network") !== -1 || n.indexOf("wifi") !== -1) return "󰖩"
         if (n.indexOf("battery") !== -1 || n.indexOf("power") !== -1) return "󰁹"
         return "󰂚"
+    }
+
+    // ── real app icons (omarchy-notification-center look) ───────────────────
+    // appName → desktop-entry icon name, cached as a plain JS map and rebuilt
+    // lazily (a declarative read of `.values` mid-init throws and the broken
+    // binding stays broken — the launcher's lesson). Covers rows that arrive
+    // WITHOUT an icon hint: IPC ingest, and every row restored from the store
+    // (restored rows used to lose their icon forever).
+    property var _iconMap: null
+    function desktopIconFor(appName) {
+        if (root._iconMap === null) root._rebuildIconMap()
+        var n = String(appName || "").toLowerCase()
+        if (n === "") return ""
+        return root._iconMap[n] || ""
+    }
+    function _rebuildIconMap() {
+        var m = {}
+        try {
+            var src = DesktopEntries.applications ? DesktopEntries.applications.values : []
+            for (var i = 0; i < src.length; i++) {
+                var e = src[i]
+                if (!e || e.noDisplay) continue
+                var icon = String(e.icon || "")
+                if (icon === "") continue
+                if (e.id) m[String(e.id).toLowerCase()] = icon
+                if (e.name) m[String(e.name).toLowerCase()] = icon
+            }
+        } catch (ex) { console.warn("[NotificationService] icon map rebuild failed:", ex) }
+        root._iconMap = m
+    }
+    Connections {
+        target: DesktopEntries.applications
+        function onValuesChanged() { root._iconMap = null }
+    }
+    Connections {
+        target: DesktopEntries
+        function onApplicationsChanged() { root._iconMap = null }
+    }
+
+    // Full resolution chain for a row's avatar: an absolute path becomes a
+    // file URL (component-wise encoded — spaces survive), a bare name goes
+    // through the theme with check=true (a miss returns "" — never Qt's
+    // broken-image placeholder), and an empty hint falls back to the desktop
+    // entry. Returns "" when nothing resolves; the row draws glyph/initial.
+    function iconUrlFor(appIcon, appName) {
+        var raw = String(appIcon || "")
+        if (raw === "") raw = root.desktopIconFor(appName)
+        if (raw === "") return ""
+        if (raw.indexOf("file://") === 0 || raw.indexOf("image://") === 0) return raw
+        if (raw.charAt(0) === "/") {
+            var parts = raw.split("/")
+            for (var i = 1; i < parts.length; i++)
+                parts[i] = encodeURIComponent(parts[i])
+            return "file://" + parts.join("/")
+        }
+        var url = Quickshell.iconPath(raw, true)
+        return url ? "" + url : ""
     }
 
     // "now" ticks every 30s so cards can render relative timestamps ("5m ago")
@@ -214,7 +274,8 @@ Item {
 
     function _storeLine(r) {
         return JSON.stringify({
-            id: r.id, appName: r.appName, summary: r.summary, body: r.body,
+            id: r.id, appName: r.appName, appIcon: r.appIcon || "",
+            summary: r.summary, body: r.body,
             urgency: r.urgency, timestamp: r.timestamp,
             read: r.read, readAt: r.readAt || 0, silent: r.silent || false
         })
@@ -271,8 +332,9 @@ Item {
                 }
                 var row = {
                     id: Math.floor(d.id), clickId: 0,
-                    appName: String(d.appName || "Notification"), appIcon: "",
-                    glyph: root.appGlyph(d.appName, ""),
+                    appName: String(d.appName || "Notification"),
+                    appIcon: String(d.appIcon || ""),
+                    glyph: root.appGlyph(d.appName, String(d.appIcon || "")),
                     summary: String(d.summary || ""), body: String(d.body || ""),
                     urgency: Math.min(2, Math.max(0, Math.floor(d.urgency === undefined ? 1 : d.urgency))),
                     timestamp: d.timestamp,
@@ -418,6 +480,7 @@ Item {
         if (root.panelOpen) return
         if (row.urgency !== 2 && (root.dnd || row.silent)) return
         if (row.read) return
+        root.now = Date.now()   // the toast's "now"/"1m ago" reads off this clock
         var out = [_popupCopy(row)]
         for (var i = 0; i < root.popups.length; i++) out.push(root.popups[i])
         root.popups = out

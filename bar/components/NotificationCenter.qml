@@ -1,23 +1,27 @@
 // =============================================================================
 // NotificationCenter.qml — slide-in notification panel (right edge)
 // =============================================================================
-// A full-screen, click-to-dismiss overlay (like the settings dashboard) with a
-// pure-black panel sliding in from the right edge. Theme tokens come from the
-// bar's ThemeConfig (live/OLED-safe). Notifications come from
-// NotificationService (a ListModel fed by IPC).
+// A full-screen, click-to-dismiss overlay with a pure-black panel sliding in
+// from the right edge. The LIST is the omarchy-notification-center shape
+// (jankeesvw, MIT): one soft card per notification (NotificationRow) under the
+// DAY it arrived on — TODAY / YESTERDAY / weekday / date — not grouped by app.
+// Expired rows (the in-memory history) fold into the same day list as dimmed,
+// non-interactive cards, so the panel reads as one continuous record.
 //
 // Open it from the settings dashboard's bell (HostBridge.ncToggle →
 // shell.toggleNotificationCenter flips `shown`). Outside-click, Esc,
-// or the Clear All button dismiss it.
+// or × / right-click on a card dismiss it.
 //
-// Modernized: bell + title header with an icon-first Clear-All action, a thin
-// accent hairline at the panel's top edge while unread items exist, a cleaner
-// empty state, and a footer summary line ("3 unread").
+// Clicking a card opens the notification's default action when the arrival
+// still has one (live native rows); restored/IPC rows are acknowledged read
+// and kept. The soft clear + RESTORE semantics are unchanged (clear-as-
+// timestamp — nothing is destroyed by a click).
 // =============================================================================
 
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "../config" as Config
 import "../services" as Services
@@ -42,9 +46,17 @@ PanelWindow {
     // defer visible=false until the slide-out finishes (so it can animate)
     onShownChanged: {
         Services.NotificationService.panelOpen = root.shown   // suppress auto-dismiss while open
-        if (root.shown) Services.NotificationService.markAllRead()   // viewing clears the badge; tier clock starts
+        if (root.shown) {
+            // Mark against the moment BEFORE the open: the dots must survive
+            // the markAllRead() that follows, or no row would ever show one.
+            root.readMark = Date.now()
+            Services.NotificationService.markAllRead()   // viewing clears the badge; tier clock starts
+        }
         if (!shown) hideTimer.restart()
     }
+    // Read-mark for the unread dots: rows that arrived after this moment.
+    property real readMark: 0
+
     Timer {
         id: hideTimer
         interval: 330   // matches the slide duration (320ms) + a small buffer
@@ -65,63 +77,84 @@ PanelWindow {
     readonly property real hair: Config.PopupMetrics.hairline(panel)
     readonly property int unreadCount: Services.NotificationService.unreadCount
 
-    // ── grouped-by-app view (P4.6) ───────────────────────────────────────────
+    // Vertical room for the bar strip (shell.topClearance, injected by
+    // shell.qml): the panel spans BETWEEN the bar edges, never across them —
+    // the backdrop stays full-screen (the scrim + click-outside zone), but the
+    // card itself docks under the bar instead of covering its tray side.
+    property int barClearance: 0
+
+    // The heading a notification is filed under — days, not apps. What you
+    // remember about a notification you are hunting for is WHICH DAY it was;
+    // within the week the weekday is the better handle ("Tuesday" is how you
+    // remember it, "17 August" is how you would have to work it out).
+    function dayOf(timestamp) {
+        var when = new Date(timestamp)
+        var today = new Date()
+        var midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+        if (timestamp >= midnight) return "Today"
+        if (timestamp >= midnight - 86400000) return "Yesterday"
+        if (timestamp >= midnight - 6 * 86400000) return Qt.formatDateTime(when, "dddd")
+        if (when.getFullYear() === today.getFullYear()) return Qt.formatDateTime(when, "d MMMM")
+        return Qt.formatDateTime(when, "d MMMM yyyy")
+    }
+
+    // ── day-grouped view ─────────────────────────────────────────────────────
     // The canonical ListModel stays arrival-ordered (the service's ordering
-    // invariant) — grouping is a VIEW: a view-local ListModel holding the
-    // same rows with each app's rows made CONTIGUOUS (newest group first,
-    // newest row first within the group), fed to the ListView with
-    // section.property: "appName" so each app renders one header. A ListModel
-    // (not a JS array) because delegates read `model.<role>` — a JS-array
-    // ListView exposes only modelData, which would blank every card field.
-    // Frozen-slice law: the model refills only when membership or a read-mark
+    // invariant) — grouping is a VIEW: a view-local ListModel holding the same
+    // rows snapshotted with a `day` role, fed to the ListView with
+    // section.property: "day". History (expired rows) appends after, dimmed
+    // and dead. A ListModel (not a JS array) because delegates read
+    // `model.<role>`. Frozen-slice law: the model refills only when membership
     // changes (keyed diff); rows are snapshotted plain (ListModel.get()
     // results go stale once their model is mutated).
     property ListModel groupsModel: ListModel {}
     property string _flatKey: ""
 
     function _regroup() {
-        const m = Services.NotificationService.model
+        const svc = Services.NotificationService
+        const m = svc.model
         let key = ""
-        const groups = []   // [[rows]] in first-seen (= newest) app order
-        const at = {}       // app name → index in groups
+        const rows = []
         for (let i = 0; i < m.count; i++) {
             const r = m.get(i)
             key += r.id + ":" + (r.read ? 1 : 0) + ";"
-            let g = at[r.appName]
-            if (g === undefined) {
-                g = groups.length
-                at[r.appName] = g
-                groups.push([])
+            const snap = {
+                id: r.id, clickId: r.clickId || 0,
+                appName: String(r.appName || ""), appIcon: r.appIcon || "",
+                glyph: r.glyph || "", summary: String(r.summary || ""), body: String(r.body || ""),
+                urgency: r.urgency, timestamp: r.timestamp || 0, read: r.read === true,
+                day: root.dayOf(r.timestamp || 0),
+                dead: false
             }
             // Native extras are copied ONLY when the source row carries them:
             // the card's guards test `!== undefined`, and ListModel turns an
             // always-present array role into a nested-list accessor (no
             // .filter) — the plain-IPC rows must keep having NO actions role,
             // exactly as in the canonical model.
-            const snap = {
-                id: r.id, clickId: r.clickId || 0,
-                appName: String(r.appName || ""), appIcon: r.appIcon || "",
-                glyph: r.glyph || "", summary: String(r.summary || ""), body: String(r.body || ""),
-                urgency: r.urgency, timestamp: r.timestamp || 0, read: r.read === true
-            }
             if (r.actions !== undefined) snap.actions = r.actions
             if (r.image !== undefined && r.image !== "") snap.image = r.image
             if (r.progress !== undefined && r.progress >= 0) snap.progress = r.progress
-            groups[g].push(snap)
+            rows.push(snap)
+        }
+        // Expired rows: archived, not void — but as memory, not as mail.
+        const h = svc.history
+        for (let j = 0; j < h.count; j++) {
+            const e = h.get(j)
+            key += "h" + (e.ts || 0) + ":" + (e.summary || "") + ";"
+            rows.push({
+                id: 0, clickId: 0,
+                appName: String(e.appName || ""), appIcon: "", glyph: "",
+                summary: String(e.summary || ""), body: "",
+                urgency: e.urgency !== undefined ? e.urgency : 1,
+                timestamp: e.ts || 0, read: true,
+                day: root.dayOf(e.ts || 0),
+                dead: true
+            })
         }
         if (key === root._flatKey) return
         root._flatKey = key
         groupsModel.clear()
-        for (let k = 0; k < groups.length; k++)
-            for (let j = 0; j < groups[k].length; j++) groupsModel.append(groups[k][j])
-    }
-
-    // Rows currently under one app (the section header's live count).
-    function sectionCount(name) {
-        let n = 0
-        for (let i = 0; i < groupsModel.count; i++)
-            if (groupsModel.get(i).appName === name) n++
-        return n
+        for (let k = 0; k < rows.length; k++) groupsModel.append(rows[k])
     }
 
     Component.onCompleted: root._regroup()
@@ -148,6 +181,10 @@ PanelWindow {
         anchors.bottom: parent.bottom
         anchors.right: parent.right      // pinned right, 5px in — same edge gap as the tray popups
         anchors.rightMargin: Config.PopupMetrics.px(5)
+        // Dock between the bar edges: under the top bar, or short of the
+        // bottom one (barClearance is the strip height — 0 in the free edge).
+        anchors.topMargin: Config.BarConfig.barAtBottom ? 0 : root.barClearance
+        anchors.bottomMargin: Config.BarConfig.barAtBottom ? root.barClearance : 0
         width: root.panelWidth
         color: Config.ThemeConfig.colors.background          // pure black (OLED-safe)
         border.color: Config.ThemeConfig.colors.border       // subtle structure
@@ -178,106 +215,81 @@ PanelWindow {
 
         Keys.onEscapePressed: root.close()
 
-        // unread accent dot rule — top edge reads "there's something new"
-        // (P6.2: dotted accent instead of a solid 2 px bar — the signal stays
-        // transient-only, and the ~30 % dot fill is far kinder to the panel)
-        DotRule {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: Config.PopupMetrics.px(2)
-            dotSize: Config.PopupMetrics.px(2)
-            dotColor: Config.BarConfig.colorAccent
-            visible: root.unreadCount > 0
-        }
-
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // ----- header -----
+            // ----- header: NOTIFICATIONS · dnd · Clear (omarchy-quiet) -----
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Config.PopupMetrics.px(52)
+                Layout.preferredHeight: Config.PopupMetrics.px(48)
 
-                RowLayout {
+                Text {
+                    id: title
                     anchors.left: parent.left; anchors.leftMargin: Config.PopupMetrics.px(16)
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: Config.PopupMetrics.px(8)
+                    text: "NOTIFICATIONS"
+                    color: Config.ThemeConfig.colors.textDim
+                    font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
+                    font.letterSpacing: 1.2
+                    font.capitalization: Font.AllUppercase
+                    font.family: Config.BarConfig.fontFamily
+                    opacity: 0.7
+                }
 
-                    Text {
-                        text: "󰂚"
-                        font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: Config.PopupMetrics.px(14)
-                        color: Config.BarConfig.colorAccent
-                    }
-                    Text {
-                        text: "Notifications"
-                        color: Config.ThemeConfig.colors.text
-                        font.pixelSize: Config.PopupMetrics.px(14)
-                        font.bold: true
-                        font.family: Config.BarConfig.fontFamily
-                    }
+                Row {
+                    anchors.right: parent.right; anchors.rightMargin: Config.PopupMetrics.px(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.PopupMetrics.px(10)
 
-                    // Do-Not-Disturb toggle (same-process; persisted by NotificationService)
-                    Rectangle {
-                        Layout.preferredWidth: Config.PopupMetrics.px(48)
-                        Layout.preferredHeight: Config.PopupMetrics.px(20)
-                        radius: Config.PopupMetrics.px(10)
-                        color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : "transparent"
-                        border.color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent : Config.ThemeConfig.colors.border
-                        border.width: root.hair
+                    // Do-Not-Disturb: a bell, crossed out while silenced — the
+                    // same switch as the schedule-aware service toggle.
+                    Item {
+                        width: dndBell.implicitWidth
+                        height: dndBell.implicitHeight
+                        anchors.verticalCenter: parent.verticalCenter
                         Text {
+                            id: dndBell
                             anchors.centerIn: parent
-                            text: "DND"
-                            color: Services.NotificationService.dnd ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.textDim
-                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                            font.family: Config.BarConfig.fontFamily
+                            // Surrogate pairs, not raw astral literals — the
+                            // source survives editors that mangle PUA glyphs.
+                            // U+F009A bell · U+F009B bell-off.
+                            text: Services.NotificationService.dnd ? "󰂛" : "󰂚"
+                            font.family: Config.BarConfig.fontNerd
+                            font.pixelSize: Config.PopupMetrics.px(13)
+                            color: Services.NotificationService.dnd ? Config.BarConfig.colorAccent
+                                                                    : Config.ThemeConfig.colors.textDim
+                            Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
                         }
                         MouseArea {
                             anchors.fill: parent
+                            anchors.margins: -Config.PopupMetrics.px(4)
                             cursorShape: Qt.PointingHandCursor
                             onClicked: Services.NotificationService.setDnd(!Services.NotificationService.dnd)
                         }
                     }
-                }
 
-                // Clear All — icon-first action button
-                RowLayout {
-                    anchors.right: parent.right; anchors.rightMargin: Config.PopupMetrics.px(14)
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Config.PopupMetrics.px(5)
-                    opacity: Services.NotificationService.model.count === 0 ? 0.35 : 1.0
-
+                    // A word rather than a glyph: this one empties the panel.
                     Text {
-                        text: "󰎟"
-                        font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: Config.PopupMetrics.px(11)
-                        color: clearMa.containsMouse
-                               ? Config.ThemeConfig.colors.error
-                               : Config.ThemeConfig.colors.textDim
-                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
-                    }
-                    Text {
-                        id: clearLabel
-                        text: "Clear all"
-                        color: clearMa.containsMouse
-                               ? Config.ThemeConfig.colors.error
-                               : Config.ThemeConfig.colors.textDim
+                        text: "Clear"
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: clearMa.containsMouse ? Config.ThemeConfig.colors.error
+                                                     : Config.ThemeConfig.colors.textDim
                         font.pixelSize: Config.PopupMetrics.px(10)
                         font.bold: true
                         font.family: Config.BarConfig.fontFamily
+                        opacity: Services.NotificationService.model.count === 0 ? 0.35 : 1.0
                         Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
-                    }
 
-                    MouseArea {
-                        id: clearMa
-                        anchors.fill: parent
-                        anchors.margins: -6
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        enabled: Services.NotificationService.model.count > 0
-                        onClicked: Services.NotificationService.clearAll()
+                        MouseArea {
+                            id: clearMa
+                            anchors.fill: parent
+                            anchors.margins: -Config.PopupMetrics.px(5)
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: Services.NotificationService.model.count > 0
+                            onClicked: Services.NotificationService.clearAll()
+                        }
                     }
                 }
 
@@ -289,7 +301,7 @@ PanelWindow {
                 }
             }
 
-            // ----- list (grouped by app — one header per app, P4.6) -----
+            // ----- list: one card per notification, under the day it arrived on -----
             ListView {
                 id: list
                 Layout.fillWidth: true
@@ -298,163 +310,89 @@ PanelWindow {
                 clip: true
                 spacing: Config.PopupMetrics.px(8)
                 model: root.groupsModel
-                section.property: "appName"
+                section.property: "day"
                 section.criteria: ViewSection.FullString
                 section.delegate: Item {
-                    id: secHead
+                    id: daySection
                     required property string section
                     width: list.width
-                    height: secRow.implicitHeight + Config.PopupMetrics.px(4)
-                    Row {
-                        id: secRow
+                    height: dayLabel.implicitHeight + Config.PopupMetrics.px(10)
+                    Text {
+                        id: dayLabel
+                        anchors.left: parent.left
+                        anchors.leftMargin: Config.PopupMetrics.px(2)
                         anchors.bottom: parent.bottom
-                        spacing: Config.PopupMetrics.px(6)
-                        Text {
-                            text: Services.NotificationService.appGlyph(secHead.section, "")
-                            font.family: Config.BarConfig.fontNerd
-                            font.pixelSize: Config.PopupMetrics.px(10)
-                            color: Config.BarConfig.colorTextDim
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Text {
-                            text: secHead.section
-                            color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                            font.letterSpacing: 1.2
-                            font.capitalization: Font.AllUppercase
-                            font.family: Config.BarConfig.fontFamily
-                            opacity: 0.7
-                        }
-                        Text {
-                            text: "· " + root.sectionCount(secHead.section)
-                            color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                            font.family: Config.BarConfig.fontFamily
-                            opacity: 0.45
-                        }
+                        anchors.bottomMargin: Config.PopupMetrics.px(4)
+                        text: daySection.section.toUpperCase()
+                        color: Config.ThemeConfig.colors.textDim
+                        font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
+                        font.letterSpacing: 1.2
+                        font.capitalization: Font.AllUppercase
+                        font.family: Config.BarConfig.fontFamily
+                        opacity: 0.7
                     }
                 }
                 delegate: StaggerIn {
                     index: model.index
-                    // UX U5: the ryoku-port toast card in full mode (compact
-                    // false — full body, no countdown). The row is handed over
-                    // as an object: the card reads n(), not model roles.
-                    NotificationToastCard {
-                        compact: false
+                    // Explicit width off the list: StaggerIn's own
+                    // `width: implicitWidth` reads the row's implicitWidth,
+                    // which is 0 by design (the row sizes by height only) —
+                    // without this the whole delegate chain sits at 0 and the
+                    // rows render as icon+app-name slivers.
+                    width: list.width
+                    NotificationRow {
+                        width: parent.width
+                        x: 0
                         notif: ({
                             id: model.id, clickId: model.clickId,
-                            appName: model.appName, glyph: model.glyph,
+                            appName: model.appName, appIcon: model.appIcon, glyph: model.glyph,
                             summary: model.summary, body: model.body,
                             urgency: model.urgency, timestamp: model.timestamp,
                             actions: model.actions !== undefined ? model.actions : [],
                             image: model.image !== undefined ? model.image : "",
                             progress: model.progress !== undefined ? model.progress : -1
                         })
+                        toast: false
+                        dead: model.dead
+                        unread: !model.dead && model.timestamp > root.readMark
+
+                        onClicked: {
+                            if (model.dead) return
+                            // A live arrival still has its action (open the
+                            // page, focus the app); a restored row's action
+                            // died with the session — acknowledge it instead.
+                            if (model.clickId > 0)
+                                Services.NotificationService.activate(model.id)
+                            else
+                                Services.NotificationService.markRead(model.id)
+                        }
+                        onRemoveRequested: if (!model.dead)
+                            Services.NotificationService.dismiss(model.id)
                     }
                 }
-
-                // empty state
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    visible: Services.NotificationService.model.count === 0
-                    spacing: Config.PopupMetrics.px(6)
-
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "󰂛"
-                        font.family: Config.BarConfig.fontNerd
-                        font.pixelSize: Config.PopupMetrics.px(30)
-                        color: Config.ThemeConfig.colors.textDim
-                        opacity: 0.45
-                    }
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "All caught up"
-                        color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: Config.PopupMetrics.px(12)
-                        font.bold: true
-                        font.family: Config.BarConfig.fontFamily
-                        opacity: 0.7
-                    }
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: Services.NotificationService.clearedCount > 0
-                              ? Services.NotificationService.clearedCount + " cleared — restore below"
-                              : "No new notifications"
-                        color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: Config.PopupMetrics.px(10)
-                        font.family: Config.BarConfig.fontFamily
-                        opacity: 0.45
-                    }
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
                 }
             }
 
-            // ----- history: rows archived on expiry (in-memory, capped) -----
-            ColumnLayout {
+            // ----- empty state -----
+            Text {
                 Layout.fillWidth: true
-                Layout.margins: Config.PopupMetrics.px(12)
-                spacing: Config.PopupMetrics.px(6)
-                visible: Services.NotificationService.history.count > 0
-
-                DotRule {
-                    Layout.fillWidth: true
-                    dotColor: Config.ThemeConfig.colors.outlineVariant
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                    Text {
-                        text: "RECENTLY EXPIRED · " + Services.NotificationService.history.count
-                        color: Config.ThemeConfig.colors.textDim
-                        font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                        font.letterSpacing: 1.2
-                        font.family: Config.BarConfig.fontFamily
-                        opacity: 0.7
-                        Layout.fillWidth: true
-                    }
-                    Text {
-                        text: "CLEAR"
-                        color: histClearMa.containsMouse ? Config.ThemeConfig.colors.error
-                                                         : Config.ThemeConfig.colors.textDim
-                        font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                        font.family: Config.BarConfig.fontFamily
-                        opacity: 0.7
-                        Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
-                        MouseArea {
-                            id: histClearMa
-                            anchors.fill: parent; anchors.margins: -6
-                            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: Services.NotificationService.clearHistory()
-                        }
-                    }
-                }
-
-                Repeater {
-                    model: Services.NotificationService.history
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Config.PopupMetrics.px(8)
-                        Text {
-                            text: model.appName
-                            color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
-                            font.capitalization: Font.AllUppercase
-                            font.family: Config.BarConfig.fontFamily
-                            opacity: 0.6
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: model.summary
-                            color: Config.ThemeConfig.colors.textDim
-                            font.pixelSize: Config.PopupMetrics.px(10)
-                            font.family: Config.BarConfig.fontFamily
-                            elide: Text.ElideRight
-                            opacity: 0.55
-                        }
-                    }
-                }
+                Layout.topMargin: Config.PopupMetrics.px(22)
+                Layout.bottomMargin: Config.PopupMetrics.px(22)
+                visible: root.groupsModel.count === 0
+                horizontalAlignment: Text.AlignHCenter
+                text: Services.NotificationService.clearedCount > 0
+                      ? Services.NotificationService.clearedCount + " cleared — restore below"
+                      : "Nothing has come in yet"
+                wrapMode: Text.WordWrap
+                color: Config.ThemeConfig.colors.textDim
+                font.pixelSize: Config.PopupMetrics.px(10)
+                font.family: Config.BarConfig.fontFamily
+                opacity: 0.55
             }
 
-            // ----- footer summary + soft-clear restore -----
+            // ----- footer: counts + soft-clear restore -----
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Config.PopupMetrics.px(32)

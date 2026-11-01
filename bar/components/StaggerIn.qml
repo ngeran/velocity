@@ -11,7 +11,7 @@
 // only (ryoku used a Translate lift to keep childrenRect honest; scale
 // achieves the same visual without touching geometry).
 //
-// Usage:  delegate: StaggerIn { index: model.index;  NotificationToastCard {} }
+// Usage:  delegate: StaggerIn { index: model.index;  NotificationRow {} }
 // =============================================================================
 
 import QtQuick

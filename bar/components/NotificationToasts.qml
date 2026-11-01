@@ -41,6 +41,14 @@ PanelWindow {
     readonly property var popups: Services.NotificationService.popups
     property bool mapped: false
 
+    // Vertical room the stack must leave for the bar strip (shell.topClearance:
+    // barHeight, or the island chrome when the style is taller). Injected by
+    // shell.qml — this file has no shell plumbing. When the bar lives on the
+    // bottom edge the top is free and toasts float at the bare inset; the
+    // exclusion is Ignore, so the compositor would otherwise happily overlap
+    // the bar (proven: first toast mapped at y=16 under the 26px strip).
+    property int barClearance: 0
+
     visible: win.mapped
     color: "transparent"
     aboveWindows: true
@@ -50,7 +58,9 @@ PanelWindow {
     WlrLayershell.namespace: "velocity-toasts"
 
     anchors { top: true; right: true }
-    margins.top: win.inset
+    // Land UNDER the bar, never on it: bar height + the same corner float the
+    // stack keeps off the right edge.
+    margins.top: Config.BarConfig.barAtBottom ? win.inset : win.barClearance + win.inset
     margins.right: win.inset
 
     implicitWidth: Config.PopupMetrics.px(400)
@@ -205,12 +215,22 @@ PanelWindow {
             height: toastCard.implicitHeight
             transformOrigin: Item.TopRight
 
-            NotificationToastCard {
+            // The omarchy-port card (shared with the notification center —
+            // "finding the toast you missed, still sitting where it landed").
+            NotificationRow {
                 id: toastCard
                 width: popupDelegate.width
                 notif: popupDelegate.entry
-                compact: true
+                toast: true
                 lifespanMs: popupDelegate.lifespanMs
+
+                onClicked: Services.NotificationService.activate(entry.id)
+                onRemoveRequested: Services.NotificationService.dismiss(entry.id)
+                onActionRequested: function (act) {
+                    Services.NotificationService.markRead(entry.id)
+                    Services.NotificationService.invokeActionKey(entry.clickId || 0, act.id)
+                    Services.NotificationService._popupDrop(entry.id)
+                }
             }
         }
     }
