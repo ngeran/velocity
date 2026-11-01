@@ -28,7 +28,12 @@
 // plus always-visible EDIT / ✕ corner actions, in a scrolling lazy GridView.
 // Hovering ANY card fades the live palette to that theme (ThemeService.
 // previewTheme → ThemeConfig.previewColors cross-fade); leaving reverts;
-// clicking commits through the real apply path.
+// clicking commits through the real apply path. The commit CANCELS the
+// armed preview (cancelPreview — the card is still hovered after its own
+// click, so exit must not restore the replaced palette). EDIT freezes the
+// auditions entirely until the next card click / RESET: the manual editor
+// binds the live palette, and a preview mid-edit would shift its hex
+// values under the cursor.
 // =============================================================================
 
 import QtQuick
@@ -232,8 +237,16 @@ Item {
                         delegate: Components.ThemePresetCard {
                             themeName: modelData
                             isActive: root.currentTheme === modelData
-                            onClicked: Services.ThemeService.applyPreset(modelData, root.oledClampEnabled)
-                            onPreviewEntered: Services.ThemeService.previewTheme(
+                            // Clicking COMMITS the theme and lifts the EDIT
+                            // freeze — auditions resume from the new palette.
+                            onClicked: {
+                                Services.ThemeService.applyPreset(modelData, root.oledClampEnabled)
+                                manualEditor.editing = false
+                            }
+                            // EDIT freeze: hover previews fade the LIVE palette
+                            // the editor's swatches/hex fields bind to — they
+                            // must not churn values under the cursor mid-edit.
+                            onPreviewEntered: if (!manualEditor.editing) Services.ThemeService.previewTheme(
                                                   Config.ThemePresets.getPalette(modelData))
                             onPreviewExited: Services.ThemeService.endPreview()
                         }
@@ -278,13 +291,24 @@ Item {
                         paletteOverride: modelData.colors
                         isActive: root.currentTheme === modelData.name
                         showActions: true
-                        onClicked: Services.ThemeService.applyCustomTheme(modelData.name)
-                        onPreviewEntered: Services.ThemeService.previewTheme(modelData.colors)
+                        // Clicking COMMITS the theme and lifts the EDIT freeze.
+                        onClicked: {
+                            Services.ThemeService.applyCustomTheme(modelData.name)
+                            manualEditor.editing = false
+                        }
+                        // EDIT freeze (see the curated grid): no hover previews
+                        // while an EDIT session is armed.
+                        onPreviewEntered: if (!manualEditor.editing) Services.ThemeService.previewTheme(modelData.colors)
                         onPreviewExited: Services.ThemeService.endPreview()
                         // EDIT — apply live + pre-fill the save field
-                        // so the next SAVE updates in place.
+                        // so the next SAVE updates in place. Arms the freeze:
+                        // the editor binds the live palette, so hover previews
+                        // of OTHER cards would shift the hex values mid-edit —
+                        // and a stray SAVE would overwrite this scheme with
+                        // them. Any card click / RESET lifts the freeze.
                         onEditClicked: {
                             Services.ThemeService.applyCustomTheme(modelData.name)
+                            manualEditor.editing = true
                             manualEditor.prefillSchemeName(modelData.name)
                         }
                         onDeleteClicked: Services.ThemeService.deleteCustomTheme(modelData.name)

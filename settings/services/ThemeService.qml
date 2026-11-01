@@ -206,6 +206,7 @@ Item {
             }, true);
             themeService._writeColorsJson(bundle, Config.ThemeConfig.metadata);
             themeService.syncToExternalApps(bundle);
+            themeService.cancelPreview();
         } else {
             if (Config.DebugConfig.debugTheme) console.warn("[setOledClamp] Unknown source:", currentSource, "- falling back to OLED Pure Black")
             themeService.applyPreset("OLED Pure Black", clamp);
@@ -219,7 +220,9 @@ Item {
     // WOULD BE APPLIED (normalize + live OLED clamp); endPreview() fades back
     // to the committed palette. Clicking a card runs the real apply path —
     // which lands on the already-previewed bundle without a second fade
-    // (_setColors' palettesEqual guard).
+    // (_setColors' palettesEqual guard) — and CANCELS the preview (see
+    // cancelPreview: the card is still hovered after its click, so the exit
+    // must not "restore" the replaced palette back over the applied one).
     // =========================================================================
     property bool previewActive: false
     property var _committedColors: null
@@ -233,6 +236,20 @@ Item {
         var bundle = themeService.normalizeBundle(palette)
         themeService.clampOLED(bundle, themeService.isOledClampActive)
         Config.ThemeConfig.previewColors(bundle)
+    }
+
+    // Disarm the hover preview WITHOUT touching colors. Every real apply
+    // (preset / custom / manual / matugen / stylix) runs through here: the
+    // snapshot _committedColors captured at hover-enter points at the palette
+    // the apply just REPLACED, and the card stays hovered after its own click
+    // — endPreview() on mouse-leave would then fade the applied theme back
+    // out (metadata kept the new name, colors showed the old theme).
+    // Reads-mutate-writes (applyManualOverride, saveCustomTheme, export,
+    // openPicker) go the OTHER way: endPreview() FIRST, so they read the
+    // committed palette and never a hovered or mid-fade blend.
+    function cancelPreview() {
+        themeService.previewActive = false
+        themeService._committedColors = null
     }
 
     function endPreview() {
@@ -270,6 +287,7 @@ Item {
         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
         themeService._writeColorsJson(bundle, meta);
         themeService.syncToExternalApps(bundle);
+        themeService.cancelPreview();
 
         themeService.isRegenerating = false;
     }
@@ -306,6 +324,7 @@ Item {
                     Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
                     themeService._writeColorsJson(bundle, meta);
                     themeService.syncToExternalApps(bundle);
+                    themeService.cancelPreview();
                     themeService.regenFailed = false;
                     themeService.regenError = "";
                     console.log("[ThemeService] matugen palette applied for", path);
@@ -529,6 +548,7 @@ Item {
                         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta });
                         themeService._writeColorsJson(bundle, meta);
                         themeService.syncToExternalApps(bundle);
+                        themeService.cancelPreview();
                         console.log("[ThemeService] Stylix seed loaded:", seed.metadata.name, "(oledClamp preserved:", liveClamp + ")");
                     } else {
                         console.warn("[ThemeService] Stylix seed invalid or missing colors");
@@ -555,6 +575,13 @@ Item {
      */
     function applyManualOverride(tokenKey, hexValue) {
         if (!/^#[0-9A-Fa-f]{6}$/.test(hexValue)) return;
+
+        // Read-modify-write over the LIVE palette: restore the committed
+        // theme first so a hover preview (or the 210ms fade it leaves
+        // running) is never the base the token lands on — otherwise one
+        // hex commit while hovering a card would push that card's WHOLE
+        // palette to colors.json + every external app.
+        themeService.endPreview();
 
         Config.ThemeConfig.updateColorToken(tokenKey, hexValue);
 
@@ -597,6 +624,10 @@ Item {
     function saveCustomTheme(name) {
         var n = (name || "").trim()
         if (n.length === 0) return
+        // The saved bundle is read from the LIVE palette — never save a
+        // hovered theme or a mid-fade blend under this name (save dedupes
+        // by name, so that would silently OVERWRITE the real scheme).
+        themeService.endPreview()
         var entry = { name: n, colors: {} }
         var c = Config.ThemeConfig.colors
         for (var k in c) {
@@ -634,6 +665,7 @@ Item {
         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true)
         themeService._writeColorsJson(bundle, meta)
         themeService.syncToExternalApps(bundle)
+        themeService.cancelPreview()
     }
 
     function _writeCustomThemes() {
@@ -656,6 +688,10 @@ Item {
 
     function exportThemePayload(fmt) {
         var name = Config.ThemeConfig.metadata.name || "velocity theme"
+        // Export serializes what you SEE must be what SHIPS — restore the
+        // committed palette first (WYSIWYG: post-clamp live, never a hover
+        // preview or its fade blend).
+        themeService.endPreview()
         var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors)
         return fmt === "base16" ? ThemePort.exportBase16Yaml(name, bundle)
                                 : ThemePort.exportJson(name, bundle)

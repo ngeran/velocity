@@ -25,6 +25,13 @@ Item {
     // -------------------------------------------------------------------------
     // STATE
     // -------------------------------------------------------------------------
+    // EDIT-session flag (set by ThemeModule's EDIT corner action, cleared by
+    // clicking any theme card / RESET). While on, ThemeModule suppresses the
+    // card hover previews: every swatch + hex field below binds to the LIVE
+    // Config.ThemeConfig.colors, and a preview would fade ANOTHER theme's
+    // values under the cursor mid-edit — with the save field prefilled, one
+    // stray SAVE would overwrite the scheme being edited.
+    property bool   editing:      false
     property string selectedToken: ""   // token the picker is editing
     property bool   pickerOpen:   false
     property real   pickerHue:    0.0
@@ -119,6 +126,10 @@ Item {
     // -------------------------------------------------------------------------
     function openPicker(key) {
         root.selectedToken = key
+        // Seed from the COMMITTED palette — a hover preview armed at this
+        // instant (or its 210ms fade) must not hand the picker another
+        // theme's color as the starting point (APPLY would commit it).
+        Services.ThemeService.endPreview()
         var hsv = root.hexToHsv(Config.ThemeConfig.colors[key] || "#000000")
         root.pickerHue = hsv.h
         root.pickerSat = hsv.s
@@ -457,7 +468,10 @@ Item {
                     id: resetSchemeArea
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
+                    onClicked: {
+                        Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
+                        root.editing = false   // back to the default scheme — leave EDIT mode
+                    }
                 }
             }
         }
