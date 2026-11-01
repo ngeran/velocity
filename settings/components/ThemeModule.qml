@@ -26,14 +26,15 @@
 // palettes (user-saved, UNLIMITED since P5.4) live DIRECTLY UNDER the
 // curated grid as the SAME cards (ThemePresetCard with a paletteOverride)
 // plus always-visible EDIT / ✕ corner actions, in a scrolling lazy GridView.
-// Hovering ANY card fades the live palette to that theme (ThemeService.
-// previewTheme → ThemeConfig.previewColors cross-fade); leaving reverts;
-// clicking commits through the real apply path. The commit CANCELS the
-// armed preview (cancelPreview — the card is still hovered after its own
-// click, so exit must not restore the replaced palette). EDIT freezes the
-// auditions entirely until the next card click / RESET: the manual editor
-// binds the live palette, and a preview mid-edit would shift its hex
-// values under the cursor.
+// Hovering a card fades the live palette to that theme (ThemeService.
+// previewTheme → ThemeConfig.previewColors cross-fade) — OPT-IN via the
+// header HOVER PREVIEW switch (default OFF: the fade rewrote the live
+// palette the manual editor binds to, churning its values mid-edit).
+// When enabled: leaving reverts; clicking commits through the real apply
+// path and CANCELS the armed preview (cancelPreview — the card is still
+// hovered after its own click, so exit must not restore the replaced
+// palette). EDIT freezes the auditions entirely until the next card
+// click / RESET.
 // =============================================================================
 
 import QtQuick
@@ -63,6 +64,13 @@ Item {
     // one owner: SettingsConfigService.matugenOnWallpaperChange, the same key
     // the Wallpapers page's AUTO-THEME pill flips.
     property bool followWallpaper: Services.SettingsConfigService.matugenOnWallpaperChange
+
+    // Card HOVER PREVIEW — OFF by default (SettingsConfigService owns the
+    // key). The preview faded the LIVE palette (ThemeConfig.colors) the
+    // manual editor binds to, so any card the mouse crossed rewrote the
+    // editor's values mid-edit. Auditioning is now opt-in via this switch;
+    // turning it OFF mid-preview ends the armed fade immediately.
+    property bool hoverPreviewEnabled: Services.SettingsConfigService.themeHoverPreview
 
     readonly property var extendedThemes: Config.ThemePresets.paletteNames
 
@@ -163,6 +171,26 @@ Item {
                     }
                 }
 
+                // ── HOVER PREVIEW — opt-in (default OFF): fades the shell to
+                //    the hovered card's palette. Mutates the live palette the
+                //    editor binds to, so it stays off unless asked for.
+                RowLayout {
+                    spacing: 6
+                    Text {
+                        text: "HOVER PREVIEW"
+                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: root.hoverPreviewEnabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                    }
+                    ToggleSwitch {
+                        checked: root.hoverPreviewEnabled
+                        onToggled: {
+                            Services.SettingsConfigService.setThemeHoverPreview(checked)
+                            if (!checked) Services.ThemeService.endPreview()
+                        }
+                    }
+                }
+
                 // ── Divider ──
                 Rectangle { Layout.fillHeight: true; Layout.preferredWidth: 1; color: Config.ThemeConfig.colors.outlineVariant }
 
@@ -243,11 +271,12 @@ Item {
                                 Services.ThemeService.applyPreset(modelData, root.oledClampEnabled)
                                 manualEditor.editing = false
                             }
-                            // EDIT freeze: hover previews fade the LIVE palette
-                            // the editor's swatches/hex fields bind to — they
-                            // must not churn values under the cursor mid-edit.
-                            onPreviewEntered: if (!manualEditor.editing) Services.ThemeService.previewTheme(
-                                                  Config.ThemePresets.getPalette(modelData))
+                            // HOVER PREVIEW is opt-in (header switch) + frozen
+                            // during an EDIT session: previews fade the LIVE
+                            // palette the editor's swatches/hex fields bind to.
+                            onPreviewEntered: if (root.hoverPreviewEnabled && !manualEditor.editing)
+                                                  Services.ThemeService.previewTheme(
+                                                      Config.ThemePresets.getPalette(modelData))
                             onPreviewExited: Services.ThemeService.endPreview()
                         }
                     }
@@ -296,9 +325,10 @@ Item {
                             Services.ThemeService.applyCustomTheme(modelData.name)
                             manualEditor.editing = false
                         }
-                        // EDIT freeze (see the curated grid): no hover previews
-                        // while an EDIT session is armed.
-                        onPreviewEntered: if (!manualEditor.editing) Services.ThemeService.previewTheme(modelData.colors)
+                        // HOVER PREVIEW opt-in + EDIT freeze (see the curated
+                        // grid): no previews while an EDIT session is armed.
+                        onPreviewEntered: if (root.hoverPreviewEnabled && !manualEditor.editing)
+                                              Services.ThemeService.previewTheme(modelData.colors)
                         onPreviewExited: Services.ThemeService.endPreview()
                         // EDIT — apply live + pre-fill the save field
                         // so the next SAVE updates in place. Arms the freeze:

@@ -62,6 +62,14 @@ Item {
     // apply) lives in the Theme tab manual editor — the FROM WALLPAPER button.
     property bool matugenOnWallpaperChange: false
 
+    // Theme page card HOVER PREVIEW (2026-11-01) — hovering a theme card fades
+    // the whole shell to that card's palette. OFF by default: the fade rewrote
+    // the LIVE palette the manual editor's swatches/hex fields bind to, so an
+    // edit session watched its own values churn under the cursor (and a stray
+    // SAVE persisted the hovered/mid-fade colors over the scheme being edited).
+    // Opt-in auditioning only.
+    property bool themeHoverPreview: false
+
     // Pulses true briefly after every saveSettings() — drives the Settings-tab "✓ APPLIED" toast.
     property bool justSaved: false
     Timer { id: _justSavedReset; interval: 1200; onTriggered: root.justSaved = false }
@@ -115,13 +123,19 @@ Item {
         root.saveSettings()
     }
 
+    function setThemeHoverPreview(on) {
+        root.themeHoverPreview = on
+        root.saveSettings()
+    }
+
     function saveSettings() {
         // Bar keys live only in bar-config.json (saveBarConfig).
         var config = {
             schemaVersion: 2,
             animationSpeed: root.animationSpeed,
             cornerRadius: root.cornerRadius,
-            matugenOnWallpaperChange: root.matugenOnWallpaperChange
+            matugenOnWallpaperChange: root.matugenOnWallpaperChange,
+            themeHoverPreview: root.themeHoverPreview
         }
 
         var json = JSON.stringify(config, null, 2)
@@ -153,6 +167,7 @@ Item {
         root.islandBurnGuard = true
         root.stripBurnGuard = true
         root.matugenOnWallpaperChange = false
+        root.themeHoverPreview = false
         root.saveSettings()   // persists + pushes appearance tokens + pulses the toast
         root.saveBarConfig()  // the bar keys above live in bar-config.json (P2.5)
     }
@@ -180,6 +195,8 @@ Item {
         } else if (data.rebuildOnWallpaperChange !== undefined) {
             root.matugenOnWallpaperChange = data.rebuildOnWallpaperChange
         }
+        if (typeof data.themeHoverPreview === "boolean")
+            root.themeHoverPreview = data.themeHoverPreview
     }
 
     function applyBarConfig(data) {
