@@ -23,7 +23,6 @@ SinkListView 1.0 SinkListView.qml
 SourceListView 1.0 SourceListView.qml
 DisplayControlView 1.0 DisplayControlView.qml
 WallpaperModule 1.0 WallpaperModule.qml
-CoreEngineTab 1.0 CoreEngineTab.qml
 Card 1.0 Card.qml
 CoreEventsPane 1.0 CoreEventsPane.qml
 ControlSeg 1.0 ControlSeg.qml

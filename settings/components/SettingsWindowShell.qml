@@ -4,7 +4,10 @@
 // =============================================================================
 //
 // TAB ORDER (index-significant):
-//   0 System Info | 1 Themes | 2 Wallpapers | 3 Control | 4 Core | 5 Logs | 6 Settings
+//   0 System Info | 1 Themes | 2 Wallpapers | 3 Control | 4 Logs | 5 Settings
+//   (The former CORE tab was dissolved: SYSTEM → the dashboard's TELEMETRY +
+//   LCD section, EVENTS → the Logs tab's EVENTS view. openCore deep links
+//   remap in openCoreTab below — the IPC contract is unchanged.)
 //
 // PURPOSE:
 //   Main container for all tabs. Delegates tab-0 (System Info — the
@@ -43,7 +46,7 @@ Item {
     // drafts, scroll, selection — survives). Tab 0 is the landing tab, so it
     // starts visited. Deep links land here too: every open path assigns
     // currentTab, and the handler below marks it.
-    property var visitedTabs: [true, false, false, false, false, false, false]
+    property var visitedTabs: [true, false, false, false, false, false]
     onCurrentTabChanged: {
         if (currentTab < 0 || currentTab >= visitedTabs.length) return
         if (visitedTabs[currentTab]) return
@@ -62,27 +65,6 @@ Item {
     // puts it on the instance the services actually read.
     property bool windowShown: false
     onWindowShownChanged: Config.SharedState.dashboardVisible = windowShown
-
-    // Core-tab deep-link: IPC openCore(section) sets these; the Core wrapper
-    // consumes them on its next entry, so a plain Core click lands on SYSTEM.
-    property string coreActiveSection: "system"
-    property bool coreDeepLink: false
-    // Live mirror of the open Core pane's section — feeds the sidebar's CORE
-    // submenu (active row). Written BY the tab (onActiveChanged below) and by
-    // openCoreSection(); never write coreDeepLink from the submenu path.
-    property string coreSectionLive: "system"
-
-    // Sidebar CORE submenu → pane. When the tab is already open, set the pane
-    // DIRECTLY — arming coreDeepLink here would misfire on the tab's NEXT
-    // entry (the flag is consumed on the visible transition only).
-    function openCoreSection(key) {
-        if (root.currentTabKey === "core") {
-            if (coreLoader.item) coreLoader.item.active = key
-            root.coreActiveSection = key
-        } else {
-            root.openCoreTab(key)
-        }
-    }
 
     Component.onCompleted: {
         Services.SearchIndex.activated.connect(root._navigate)
@@ -118,7 +100,7 @@ Item {
 
     // Seed the keyed catalog entries once, here — NOT in the tab components.
     // With O1's lazy tabs a fresh open has no tab instances, so entries that
-    // used to register from ControlTab/CoreEngineTab/LogsTab bodies
+    // used to register from ControlTab/LogsTab bodies
     // would be missing until each tab's first visit; the palette (and the
     // `search` IPC probes, which assert a minimum index size) need the whole
     // catalog up front. Keyed register() dedupe keeps this idempotent against
@@ -133,7 +115,6 @@ Item {
         S.register({ key: "tab:themes",     title: "Theme Switcher",    tab: "themes",     section: "", keywords: "theme color palette", item: null })
         S.register({ key: "tab:wallpapers", title: "Wallpapers",        tab: "wallpapers", section: "", keywords: "wallpaper library cycling", item: null })
         S.register({ key: "tab:control",    title: "Control",           tab: "control",    section: "", keywords: "control console", item: null })
-        S.register({ key: "tab:core",       title: "Core",              tab: "core",       section: "", keywords: "core engine telemetry oled mystique aio lcd tft deepcool", item: null })
         S.register({ key: "tab:settings",   title: "Settings",          tab: "settings",   section: "", keywords: "preferences options", item: null })
         // Section-level entries (was: registered inside the tab bodies).
         var secs = Config.ControlConfig.sections
@@ -141,11 +122,15 @@ Item {
             S.register({ key: "control:" + secs[i].key,
                 title: secs[i].label, tab: "control",
                 section: secs[i].key, keywords: "control section", item: null })
-        var core = Config.ControlConfig.coreSections
-        for (i = 0; i < core.length; i++)
-            S.register({ key: "core:" + core[i].key,
-                title: core[i].label, tab: "core",
-                section: core[i].key, keywords: "core telemetry lcd deepcool mystique", item: null })
+        // Former CORE sections, dissolved: the telemetry cluster + LCD
+        // controller are a dashboard section (openCoreTab scrolls to it), the
+        // kernel event timeline is a Logs view (openCoreTab/"events" sets it).
+        S.register({ key: "dashboard:cluster", title: "Telemetry + LCD", tab: "dashboard",
+            section: "cluster",
+            keywords: "core engine telemetry lcd deepcool mystique aio tft cluster gpu cpu sensors instrument", item: null })
+        S.register({ key: "logs:events", title: "Kernel Events", tab: "logs",
+            section: "events",
+            keywords: "kernel xid nvrm boot switch events oops timeline", item: null })
         S.register({ key: "logs-tab", title: "System Logs", tab: "logs", section: "" })
     }
 
@@ -193,16 +178,20 @@ Item {
             }
         } else if (tab === "control") {
             root.openControlTab(entry.section || "network")
-        } else if (tab === "core") {
-            root.openCoreTab(entry.section || "system")
         } else if (tab === "logs") {
             root.openLogsTab()
+            // "events" = the kernel-event view (former CORE › EVENTS).
+            if (entry.section === "events" && logsLoader.item)
+                logsLoader.item.mode = "events"
         } else if (tab === "themes") {
             root.openThemeTab()
         } else if (tab === "wallpapers") {
             root.openWallpapersTab()
         } else if (tab === "dashboard") {
             root.openDashboardTab()
+            // "cluster" = the TELEMETRY + LCD section (former CORE › SYSTEM).
+            if (entry.section === "cluster" && dashboardLoader.item)
+                dashboardLoader.item.scrollToCluster()
         }
         if (entry.item) {
             flashTimer.target = entry.item
@@ -248,32 +237,23 @@ Item {
         if (controlLoader.item) controlLoader.item.activeSection = section
     }
 
+    // Former CORE deep link — remap shim. The CORE tab itself is gone, but
+    // the openCore IPC contract (bar/shell.qml → SettingsHostWindow → here)
+    // is unchanged; its sections land on their new homes:
+    //   "events"            → the Logs tab, EVENTS view
+    //   "system"|"lcd"|""   → the dashboard, scrolled to the TELEMETRY + LCD
+    //                         section ("lcd": the legacy MYSTIQUE AIO remap —
+    //                         the AIO controller lives in the cluster pane)
     function openCoreTab(section) {
-        // Legacy deep-link: the old MYSTIQUE AIO section folded into SYSTEM
-        // (the AIO controller is embedded in the telemetry pane now).
+        if (section === "events") {
+            root.openLogsTab()
+            if (logsLoader.item) logsLoader.item.mode = "events"
+            return
+        }
         if (section === "lcd") section = "system"
-        var idx = -1
-        for (var i = 0; i < navBar.tabModel.length; i++) {
-            if (navBar.tabModel[i].key === "core") { idx = i; break }
-        }
-        // Capture this BEFORE the assignment — currentTabKey is tested below,
-        // and after `currentTab = idx` it would always read "core".
-        var wasOnCore = root.currentTabKey === "core"
-        if (idx >= 0) root.currentTab = idx
-        root.coreActiveSection = section || "system"
-        // Genuinely already sitting on the Core tab? No visible transition
-        // will fire to consume the deep-link flag — set the pane directly
-        // instead of arming it (an armed link would misfire on the NEXT
-        // entry). When arriving from another tab, ARM the link: the tab's
-        // onVisibleChanged resets the pane to SYSTEM on every entry and
-        // would clobber a direct set (the "TELEMETRY + LCD is always
-        // highlighted" bug).
-        if (wasOnCore && coreLoader.item) {
-            coreLoader.item.active = root.coreActiveSection
-            root.coreDeepLink = false
-        } else {
-            root.coreDeepLink = true
-        }
+        root.openDashboardTab()
+        if (dashboardLoader.item && dashboardLoader.item.scrollToCluster)
+            dashboardLoader.item.scrollToCluster()
     }
 
     function openSettingsTab() {
@@ -349,8 +329,6 @@ Item {
             root.currentTab = index
         }
         onSearchRequested: searchPalette.openPalette()
-        coreSection: root.coreSectionLive
-        onCoreSectionSelected: function(key) { root.openCoreSection(key) }
     }
 
     // =========================================================================
@@ -366,7 +344,7 @@ Item {
         }
         height: 48
         contextKey: root.currentTabKey
-        live: root.currentTabKey === "core" || root.currentTabKey === "dashboard"
+        live: root.currentTabKey === "dashboard"
         onLogsActivated: root.openLogsTab()
     }
 
@@ -394,6 +372,7 @@ Item {
         // (the old `visible: currentTab === N` cut the exit animation dead).
 
         Loader {
+            id: dashboardLoader
             anchors.fill: parent
             active: root.visitedTabs[0]
 
@@ -518,18 +497,20 @@ Item {
         }
 
         // =====================================================================
-        // TAB 5: LOGS (in-app journal — LogService gates the stream on
-        // visibility + window-shown, so an idle tab costs nothing)
+        // TAB 4: LOGS (in-app journal + kernel-event view — LogService gates
+        // the stream on visibility + window-shown, so an idle tab costs
+        // nothing; the EVENTS view additionally suspends the journal stream)
         // =====================================================================
 
         Loader {
+            id: logsLoader
             anchors.fill: parent
             anchors.margins: 24
-            active: root.visitedTabs[5]
+            active: root.visitedTabs[4]
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 5 ? 1.0 : 0.0
-            x: root.currentTab === 5 ? 0 : (root.currentTab < 5 ? 20 : -20)
+            opacity: root.currentTab === 4 ? 1.0 : 0.0
+            x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -551,19 +532,19 @@ Item {
         }
 
         // =====================================================================
-        // TAB 6: SETTINGS (rail + fixed panes — SettingsModule; same
-        // architecture as Control/Core. Extracted from the former inline
+        // TAB 5: SETTINGS (rail + fixed panes — SettingsModule; same
+        // architecture as Control. Extracted from the former inline
         // scrolling block. Settings are managed by SettingsConfigService and persisted on every change.)
         // =====================================================================
 
         Loader {
             id: settingsLoader
             anchors.fill: parent
-            active: root.visitedTabs[6]
+            active: root.visitedTabs[5]
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 6 ? 1.0 : 0.0
-            x: root.currentTab === 6 ? 0 : 20
+            opacity: root.currentTab === 5 ? 1.0 : 0.0
+            x: root.currentTab === 5 ? 0 : 20
 
             Behavior on opacity {
                 NumberAnimation {
@@ -586,59 +567,11 @@ Item {
             }
         }
 
-        // =====================================================================
-        // TAB 4: CORE ENGINE (OLED telemetry dashboard + LCD control)
-        // =====================================================================
-        // Lazy-loaded on BOTH gates: first visit (O1, like every tab) AND
-        // window visibility — the Core tab binds to always-on telemetry
-        // (CoreEngine 1s, ThermalService, GpuService) through dozens of Text
-        // bindings that would re-evaluate every second even while the panel
-        // is closed. Gating on SharedState.dashboardVisible destroys the
-        // whole subtree when the panel is hidden, eliminating that
-        // steady-state churn. While open the tab persists, so the opacity
-        // fade still plays (B11 pattern, same as the tabs above).
-
-        Loader {
-            id: coreLoader
-            anchors.fill: parent
-            active: root.visitedTabs[4] && Config.SharedState.dashboardVisible
-
-            visible: opacity > 0.01
-            opacity: root.currentTab === 4 ? 1.0 : 0.0
-            x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
-
-            Behavior on opacity {
-                NumberAnimation { duration: Config.MotionConfig.animDurationNormal; easing.type: Easing.OutCubic }
-            }
-            Behavior on x {
-                NumberAnimation { duration: Config.MotionConfig.animDurationNormal; easing.type: Easing.OutCubic }
-            }
-
-            sourceComponent: Component {
-                Components.CoreEngineTab {
-                    id: coreTab
-                    anchors.fill: parent
-                    // Entering Core always lands on SYSTEM. An IPC openCore()
-                    // deep-link overrides that entry exactly once (fires on the
-                    // visible transition, so it also works at creation time).
-                    onVisibleChanged: {
-                        if (!visible) return
-                        if (root.coreDeepLink) {
-                            coreTab.active = root.coreActiveSection
-                            root.coreDeepLink = false
-                        } else {
-                            coreTab.active = "system"
-                        }
-                    }
-                    // Mirror the pane into the sidebar's CORE submenu (and
-                    // keep coreActiveSection coherent for the next entry).
-                    onActiveChanged: {
-                        root.coreSectionLive = coreTab.active
-                        root.coreActiveSection = coreTab.active
-                    }
-                }
-            }
-        }
+        // (The former TAB 4 CORE ENGINE lived here — dissolved: its SYSTEM
+        // pane is the dashboard's TELEMETRY + LCD section, its EVENTS pane is
+        // the Logs tab's EVENTS view. openCore deep links remap in
+        // openCoreTab; the telemetry visibility grant moved with the pane
+        // into SystemInfoTab.)
     }
 
     // =========================================================================

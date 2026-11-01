@@ -9,7 +9,7 @@
 //
 //   entry = { title, tab, section, keywords, item }
 //     title     row label ("LOCK AFTER")
-//     tab       nav key: "settings" | "control" | "core"
+//     tab       nav key: "settings" | "control" | "logs" | "dashboard" | …
 //     section   sub-nav key within that tab ("" = tab-level)
 //     keywords  extra match terms (hyprctl key paths, synonyms)
 //     item      the row Item (highlight target; null for section-level rows)

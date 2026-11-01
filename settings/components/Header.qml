@@ -37,7 +37,6 @@ Rectangle {
 
     function contextLeft(key) {
         var m = { "dashboard": "SYSTEM",
-                  "core": "SYSTEM / TELEMETRY",
                   "themes": "APPEARANCE",
                   "wallpapers": "APPEARANCE",
                   "control": "CONTROL",
@@ -46,8 +45,7 @@ Rectangle {
         return m[key] || ""
     }
     function contextRight(key) {
-        var m = { "dashboard": "TELEMETRY",
-                  "core": "DIGITAL INSTRUMENT CLUSTER",
+        var m = { "dashboard": "TELEMETRY / CLUSTER",
                   "themes": "THEME ENGINE",
                   "wallpapers": "WALLPAPERS",
                   "control": "CONSOLE",

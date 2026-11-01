@@ -4,22 +4,19 @@
 // TWO modes (mock: 256px labeled sidebar; compact fallback is the legacy
 // 64px icon rail, unchanged):
 //
-//   labeled  (≥ 1440 logical): logo block · labeled nav items · CORE renders
-//            a nested submenu (TELEMETRY + LCD / MYSTIQUE AIO / EVENTS —
-//            Config.ControlConfig.coreSections, keys are contract) · search
-//            chip · SESSION card.
-//   compact: today's icon rail verbatim — submenu hidden, CORE click lands on
-//            "system" (CoreEngineTab's compact rail handles section switching).
+//   labeled  (≥ 1440 logical): logo block · labeled nav items · search chip ·
+//            SESSION card.
+//   compact: today's icon rail verbatim.
 //
 // TAB MODEL IS CONTRACT: tabModel keys/order/indices drive the index-signficant
-// Loaders in SettingsWindowShell — never reorder here.
+// Loaders in SettingsWindowShell — never reorder here. (The former CORE tab
+// was dissolved into SYS INFO + LOGS; `openCore` deep links remap in
+// SettingsWindowShell.openCoreTab.)
 //
 // PUBLIC API:
 //   property int currentIndex
 //   signal tabSelected(int index)
 //   signal searchRequested()
-//   property string coreSection        // live mirror of the Core pane
-//   signal coreSectionSelected(string key)
 // =============================================================================
 
 import QtQuick
@@ -36,17 +33,14 @@ Rectangle {
     property int currentIndex: 0
     signal tabSelected(int index)
     signal searchRequested()
-    property string coreSection: "system"
-    signal coreSectionSelected(string key)
 
     readonly property var tabModel: [
         { key: "dashboard",  label: "SYS INFO",    icon: "⊞" },   // index 0
         { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
         { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
         { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3
-        { key: "core",       label: "CORE",        icon: "▦" },   // index 4  (plain Unicode — renders under Inter; was a Nerd Font PUA glyph that showed as a box)
-        { key: "logs",       label: "LOGS",        icon: "≡" },   // index 5  (in-app journal tab)
-        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 6
+        { key: "logs",       label: "LOGS",        icon: "≡" },   // index 4  (in-app journal tab)
+        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 5
     ]
 
     readonly property bool compact: Config.UIScale.compact
@@ -67,7 +61,7 @@ Rectangle {
     }
 
     // =========================================================================
-    // LAYOUT — logo block → nav (+ CORE submenu) → spacer → search → session
+    // LAYOUT — logo block → nav → spacer → search → session
     // =========================================================================
     ColumnLayout {
         anchors.fill: parent
@@ -138,7 +132,7 @@ Rectangle {
                                        : Config.HudConfig.borderHi
         }
 
-        // --- NAV ITEMS + CORE submenu ----------------------------------------
+        // --- NAV ITEMS --------------------------------------------------------
         Repeater {
             model: sidebarRoot.tabModel
 
@@ -149,7 +143,6 @@ Rectangle {
 
                 readonly property int  tabIndex: index
                 readonly property bool isActive: sidebarRoot.currentIndex === tabIndex
-                readonly property bool isCore: modelData.key === "core"
 
                 // ---- the item itself ----
                 Item {
@@ -196,7 +189,7 @@ Rectangle {
                         }
                     }
 
-                    // labeled: icon · label · (CORE: glow dot)
+                    // labeled: icon · label
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 14
@@ -225,18 +218,6 @@ Rectangle {
                                   : Config.HudConfig.textMid
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
-                        // CORE group marker: amber glow dot when the tab is open
-                        Rectangle {
-                            visible: navItem.isCore && navItem.isActive
-                            width: 6; height: 6; radius: 3
-                            color: Config.HudConfig.amber
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 12; height: 12; radius: 6
-                                color: Config.ThemeConfig.tint(Config.HudConfig.amber, 0.25)
-                                z: -1
-                            }
-                        }
                     }
 
                     MouseArea {
@@ -248,91 +229,6 @@ Rectangle {
                     }
                 }
 
-                // ---- CORE submenu (labeled only) ----
-                Repeater {
-                    model: (!sidebarRoot.compact && navItem.isCore)
-                           ? Config.ControlConfig.coreSections : []
-
-                    delegate: Item {
-                        id: subItem
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.preferredHeight: 28
-
-                        readonly property string subKey: modelData.key
-                        // ACTIVE only when the CORE tab is open AND this is
-                        // its live section — coreSection defaults to "system",
-                        // so an unguarded comparison lit TELEMETRY + LCD from
-                        // every other tab.
-                        readonly property bool subActive: navItem.isActive
-                                                          && sidebarRoot.coreSection === subKey
-
-                        // connector line (mock's border-l rail)
-                        Rectangle {
-                            anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                            anchors.leftMargin: -16
-                            width: 1
-                            color: Config.HudConfig.borderHi
-                        }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.margins: 1
-                            radius: 3
-                            color: subItem.subActive
-                                   ? Config.ThemeConfig.tint(Config.HudConfig.amber, 0.12) : "transparent"
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 8
-                            spacing: 8
-
-                            Rectangle {
-                                width: subItem.subActive ? 6 : 4
-                                height: subItem.subActive ? 6 : 4
-                                radius: subItem.subActive ? 3 : 2
-                                color: subItem.subActive ? Config.HudConfig.amber
-                                      : Config.HudConfig.textFaint
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.label
-                                font.family: Config.HudConfig.fontData
-                                font.pixelSize: 9
-                                font.bold: subItem.subActive
-                                font.letterSpacing: 1.0
-                                color: subItem.subActive ? Config.HudConfig.amber
-                                      : subHover.containsMouse ? Config.HudConfig.textBody
-                                      : Config.HudConfig.textMid
-                                elide: Text.ElideRight
-                                Behavior on color { ColorAnimation { duration: 100 } }
-                            }
-
-                            // right tag: ACTIVE on the open section, blank otherwise
-                            Text {
-                                visible: subItem.subActive
-                                text: "ACTIVE"
-                                font.family: Config.HudConfig.fontData
-                                font.pixelSize: 7
-                                font.bold: true
-                                font.letterSpacing: 0.8
-                                color: Config.ThemeConfig.tint(Config.HudConfig.amber, 0.25)
-                            }
-                        }
-
-                        MouseArea {
-                            id: subHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: sidebarRoot.coreSectionSelected(subItem.subKey)
-                        }
-                    }
-                }
             }
         }
 

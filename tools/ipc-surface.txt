@@ -75,8 +75,8 @@ network.speedtest        manual    # P2.2: one process — NetworkCardBody calls
                                    # NetworkService.runSpeedTest() directly; the IPC verb
                                    # stays for headless runs. Result persists to
                                    # $XDG_STATE_HOME/velocity/speedtest.json
-metrics.lease            manual    # P2.3: one process — settings Core tab + dashboard
-                                   # Pulse call MetricsService.extendLease() directly;
+metrics.lease            manual    # P2.3: one process — settings dashboard (SYS INFO
+                                   # tab) calls MetricsService.extendLease() directly;
                                    # the verb stays for scripting (gates the live poll)
 
 
@@ -108,7 +108,11 @@ SettingsWindow.openControlPlugins manual    # deep-link to the Plugins page (the
                                             # nikos.example pill that used to call it
                                             # was removed in the R6 cleanup; CLI/scripting
                                             # remains the caller)
-SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path
+SettingsWindow.openCore           manual    # 'openCore system' is the documented CLI path.
+                                            # CORE tab dissolved 2026-11-01 — the verb
+                                            # remaps: system|lcd → dashboard scrolled to
+                                            # the TELEMETRY + LCD section, events → LOGS
+                                            # tab EVENTS view (contract unchanged)
 SettingsWindow.openSettings       manual    # Control Center footer (in-process via shellApi since P2.1)
 SettingsWindow.openThemeTab       manual    # Control Center THEME tile (in-process via shellApi)
 SettingsWindow.openWallpapers     manual    # deep-link to the Wallpapers tab (scripting/QA)

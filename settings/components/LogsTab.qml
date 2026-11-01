@@ -14,6 +14,12 @@
 // footer clock (the dedupe doctrine — the bar owns time). The journalctl child
 // runs while either view holds its tag; hiding the window or leaving the tab
 // releases ours (LogService's active gating).
+//
+// EVENTS VIEW (2026-11-01, CORE tab dissolved): a JOURNAL | EVENTS toggle in
+// the header swaps the interior — JOURNAL is the live tail, EVENTS is the
+// former CORE › EVENTS pane (CoreEventsPane over KernelEventReader, gated by
+// the window itself). The journal stream SUSPENDS while EVENTS is shown
+// (streamWanted's mode term) — one "what happened" surface at a time.
 // =============================================================================
 
 import QtQuick
@@ -29,9 +35,14 @@ Item {
     property string sevFilter: "all"        // all | error | warn | info
     property string searchText: ""
     property int matchCount: 0
+    // "journal" (live tail) | "events" (kernel timeline — former CORE ›
+    // EVENTS). Written by the header toggle, the search index ("logs:events")
+    // and the openCore "events" deep link.
+    property string mode: "journal"
 
-    // ---- stream gating: tab visible AND window shown ----
+    // ---- stream gating: tab visible AND window shown AND on the journal view ----
     readonly property bool streamWanted: visible && Config.SharedState.dashboardVisible
+                                         && mode === "journal"
     onStreamWantedChanged: streamWanted ? Services.HostBridge.log.open("tab")
                                         : Services.HostBridge.log.close("tab")
     Component.onCompleted: {
@@ -86,7 +97,22 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
             }
             Item { Layout.fillWidth: true }
+            // view toggle — JOURNAL | EVENTS (EVENTS = the former CORE ›
+            // EVENTS pane, dissolved in 2026-11-01)
+            ControlSeg {
+                text: "JOURNAL"
+                active: root.mode === "journal"
+                onChosen: root.mode = "journal"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            ControlSeg {
+                text: "EVENTS"
+                active: root.mode === "events"
+                onChosen: root.mode = "events"
+                Layout.alignment: Qt.AlignVCenter
+            }
             Text {
+                visible: root.mode === "journal"
                 text: "JOURNAL · " + (Services.HostBridge.log.hostName || "—")
                 color: Config.ThemeConfig.colors.textDim
                 font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
@@ -94,9 +120,10 @@ Item {
             }
         }
 
-        // ---- sub-header strip ----
+        // ---- sub-header strip (journal view) ----
         Text {
             Layout.fillWidth: true
+            visible: root.mode === "journal"
             text: "LIVE TAIL  //  journalctl -f -o json  //  CAP " + Services.HostBridge.log.maxEntries +
                   "  //  SYS + USER + KERNEL"
             color: Config.ThemeConfig.colors.textDim
@@ -108,6 +135,7 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
+            visible: root.mode === "journal"
 
             component SevChip: Rectangle {
                 id: chip
@@ -181,10 +209,11 @@ Item {
             ActionChip { label: "󰀍 CLEAR";   onActivated: Services.HostBridge.log.clear() }
         }
 
-        // ---- search field + matched count ----
+        // ---- search field + matched count (journal view) ----
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
+            visible: root.mode === "journal"
 
             Rectangle {
                 width: 280; height: 26
@@ -215,12 +244,13 @@ Item {
                 font.family: root.fontM; font.pixelSize: 9; font.letterSpacing: 1
             }
         }
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.border }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.border; visible: root.mode === "journal" }
 
-        // ---- log list ----
+        // ---- log list (journal view) ----
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: root.mode === "journal"
 
             ListView {
                 id: list
@@ -319,11 +349,22 @@ Item {
             }
         }
 
-        // ---- footer status ----
+        // ---- EVENTS view (former CORE › EVENTS — CoreEventsPane) ----
+        // Instantiated with the tab (KernelEventReader is a window-gated
+        // singleton; zero extra plumbing) and shown only in events mode.
+        Loader {
+            visible: root.mode === "events"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            sourceComponent: CoreEventsPane { anchors.fill: parent }
+        }
+
+        // ---- footer status (journal view) ----
         RowLayout {
             Layout.fillWidth: true
             spacing: 12
             opacity: 0.7
+            visible: root.mode === "journal"
             Text {
                 text: Services.HostBridge.log.unreadable ? "STREAM ERROR"
                      : Services.HostBridge.log.following  ? "LIVE" : "PAUSED"

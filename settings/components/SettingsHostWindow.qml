@@ -192,8 +192,9 @@ Item {
         dashboard.openWallpapersTab()
     }
 
-    // Deep-link to the Core tab (defaults to Processors; section keys:
-    // processors | gpu | memoryenv | lcd | events)
+    // Former CORE-tab deep link — the tab is dissolved; openCoreTab remaps
+    // (system|lcd → dashboard TELEMETRY + LCD section, events → LOGS EVENTS
+    // view). Signature unchanged: the IPC contract holds.
     function openCore(section: string) {
         hostRoot.shown = true
         panelWindow.visible = true
