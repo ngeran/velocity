@@ -429,7 +429,17 @@ Item {
     // Zero-fork watchers on every enabled plugin's entry files + manifest
     // (system plugins are read-only — not watched). Edits are debounced; a
     // manifest edit rescans instead (kinds/entries/settings may have changed).
-    readonly property var _watchList: {
+    // T7.3: identity-stable watch list, rebuilt IMPERATIVELY on plugins[]
+    // change (every writer reassigns the whole array). A memoized binding
+    // that wrote its own cache property inside the evaluation trips QML's
+    // binding-loop detector — hence the function. The joined-path signature
+    // decides whether the previous array instance can be reused as-is: a
+    // fresh equal array would tear down + remount every watcher (the
+    // array-identity trap).
+    property var _watchCache: []
+    property string _watchSig: ""
+    readonly property var _watchList: root._watchCache
+    function _rebuildWatchList() {
         var out = []
         for (var i = 0; i < root.plugins.length; i++) {
             var p = root.plugins[i]
@@ -437,8 +447,17 @@ Item {
             out.push({ id: p.id, path: p.dir + "manifest.json", manifest: true })
             for (var k in p.entryPoints) out.push({ id: p.id, path: p.dir + p.entryPoints[k], manifest: false })
         }
-        return out
+        var sig = out.map(function (w) { return w.path }).join("\n")
+        if (sig !== root._watchSig) {
+            root._watchSig = sig
+            root._watchCache = out
+        }
     }
+    onPluginsChanged: root._rebuildWatchList()
+    // Boot: the boot rescan assigns plugins → onPluginsChanged does the
+    // first rebuild; a Component.onCompleted here would be a duplicate
+    // handler (the file already has one) = "Property value set multiple
+    // times" = whole-config load failure.
     property var _dirtyIds: ({})
     property bool _dirtyManifest: false
 
@@ -450,9 +469,10 @@ Item {
             path: modelData.path
             watchChanges: true
             printErrors: false
+            // T7.3: no reload() here — nothing reads watcher.text(), and a
+            // rename-save replaces the inode in a way watchChanges never
+            // sees on this host (proven), so there is nothing to re-arm.
             onFileChanged: {
-                // Re-arm: editors that save by rename replace the inode.
-                watcher.reload()
                 if (modelData.manifest) root._dirtyManifest = true
                 else { var d = Object.assign({}, root._dirtyIds); d[modelData.id] = true; root._dirtyIds = d }
                 reloadDebounce.restart()

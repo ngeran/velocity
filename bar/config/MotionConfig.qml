@@ -116,16 +116,20 @@ Item {
         path: root.configPath
         watchChanges: true
         printErrors: false
-        onFileChanged: root.ingestMotionText(motionFile.text())
+        // T7.2: onTextChanged is the ONE ingest trigger — preload, reload()
+        // and the watch-driven reload all funnel through it. The old
+        // onFileChanged handler re-read text() (stale-read hazard) and the
+        // explicit post-reload ingests double-parsed every refresh;
+        // ingestMotionText dedupes on _lastRaw regardless.
+        onFileChanged: motionFile.reload()
         onTextChanged: root.ingestMotionText(text())
-        Component.onCompleted: root.ingestMotionText(motionFile.text())
     }
 
     // Writers nudge this after their atomic write (bar: config.reload IPC;
-    // settings: SettingsConfigService on save); dedupes through _lastRaw.
+    // settings: SettingsConfigService on save); the reload fires
+    // onTextChanged, which ingests.
     function reloadFromDisk() {
         motionFile.reload()
-        root.ingestMotionText(motionFile.text())
     }
 
     // Backstop for writers that don't nudge. Zero forks. 60s idle cadence —
@@ -135,9 +139,6 @@ Item {
         interval: 60000
         running: true
         repeat: true
-        onTriggered: {
-            motionFile.reload()
-            root.ingestMotionText(motionFile.text())
-        }
+        onTriggered: motionFile.reload()
     }
 }

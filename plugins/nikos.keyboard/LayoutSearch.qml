@@ -190,10 +190,15 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: width > 0
                     SequentialAnimation on opacity {
-                        running: caret.visible
+                        // T7.1: activeFocus can outlive closePopup, so
+                        // caret.visible alone doesn't prove the picker is up —
+                        // gate on open too, and park opacity at 1 when the
+                        // tween stops (a stopped Infinite loop leaves it mid-fade).
+                        running: caret.visible && root.open
                         loops: Animation.Infinite
                         NumberAnimation { to: 0; duration: 500 }
                         NumberAnimation { to: 1; duration: 500 }
+                        onStopped: caret.opacity = 1
                     }
                 }
             }

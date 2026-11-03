@@ -115,7 +115,16 @@ Item {
         onDone: function(out) {
             root.loading = false
             var trimmed = (out || "").trim()
-            if (trimmed.length === 0) return          // curl timeout / network blip → silent skip
+            if (trimmed.length === 0) {
+                // T7.4: curl timeout / network blip — loading is cleared
+                // above; surface a SOFT error instead of silently looking
+                // alive on stale data (the next good poll clears it).
+                if (root.keyConfigured) {
+                    root.hasError = true
+                    root.errorMessage = "No response from Z.ai"
+                }
+                return
+            }
             try {
                 root._handleJson(JSON.parse(trimmed))
             } catch (e) {

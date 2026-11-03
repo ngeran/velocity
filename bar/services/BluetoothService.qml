@@ -229,7 +229,14 @@ Item {
         id: scanProc
         command: ["bluetoothctl", "--timeout", "30", "scan", "on"]
         property string buffer: ""
-        stdout: SplitParser { onRead: function(data) { scanProc.buffer += data + "\n" } }
+        // T7.4: 256 KiB cap, drop oldest — a beacon-dense scan can outpace
+        // the 1s consuming tick; unbounded growth would pin memory to exit.
+        readonly property int bufferCap: 262144
+        stdout: SplitParser { onRead: function(data) {
+            scanProc.buffer += data + "\n"
+            if (scanProc.buffer.length > scanProc.bufferCap)
+                scanProc.buffer = scanProc.buffer.slice(-scanProc.bufferCap)
+        } }
         onExited: function(code) {
             // Final parse of whatever arrived since the last tick (catches
             // the last RSSI updates), then the ONE paired/info refresh so
