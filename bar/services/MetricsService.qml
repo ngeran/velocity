@@ -9,7 +9,8 @@
 //   STATIC PROFILE   fastfetch --format json   (CPU/GPU/OS/kernel/packages/disks)
 //                    + DMI board identity + $SHELL       (refreshed on open)
 //   LIVE METRICS     /proc via FileView (stat/cpuinfo/meminfo/uptime — ZERO
-//                    forks per tick) + lsblk disks (30s) + hwmon temps (5s)
+//                    forks per tick) + hwmon temps (5s FileView ticks, paths
+//                    resolved once per lease) + lsblk disks (30s, panel-gated)
 //   GPU              ONE long-running `nvidia-smi … -l 2` while leased (the
 //                    spawn-per-tick prober is gone) + a bounded per-process
 //                    query every other tick
@@ -602,76 +603,95 @@ Item {
     }
 
     // =========================================================================
-    // THERMALS — hwmon sysfs (ex-ThermalService probes verbatim)
+    // THERMALS — hwmon sysfs via FileView (T5.1: ZERO forks per tick)
     // =========================================================================
-    // ── CPU package temp: coretemp/k10temp, max sensor ──────────────────────
-    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
-        id: cpuTempProc
+    // The hwmon layout is resolved ONCE per lease by ONE bounded sh; each
+    // resolved sysfs file gets a FileView (Variants over _tempPaths) that the
+    // 5s tick reload()s in place — the old three shell probes forked 36/min
+    // while leased. Values = max per key across paths; an empty or vanished
+    // read keeps the last good value (old onDone skip semantics). Bounded
+    // process timeouts make the old 15s hung-read reaper redundant.
+    property var _tempPaths: []          // [{key: "cpu"|"nvme"|"coolant", path}]
+    property var _tempReads: ({})        // path → last good reading, milli-°C
+    property bool _tempScanned: false    // survey ran for the current lease
+
+    BoundedProcess {   // bounded: one-shot hwmon path survey (T5.1)
+        id: hwmonScan
         command: ["sh", "-c",
             "for d in /sys/class/hwmon/hwmon*; do n=$(cat \"$d/name\" 2>/dev/null); " +
-            "case \"$n\" in coretemp|k10temp) for i in $(seq 1 20); do " +
-            "cat \"$d/temp${i}_input\" 2>/dev/null; done;; esac; done | sort -n | tail -1"]
+            "case \"$n\" in coretemp|k10temp) for i in $(seq 1 20); do p=\"$d/temp${i}_input\"; " +
+            "[ -r \"$p\" ] && echo \"cpu $p\"; done;; " +
+            "nvme) [ -r \"$d/temp1_input\" ] && echo \"nvme $d/temp1_input\";; esac; " +
+            "for i in 1 2 3 4 5 6; do l=$(cat \"$d/temp${i}_label\" 2>/dev/null); " +
+            "case \"$l\" in *water*|*coolant*|*liquid*|*aio*) " +
+            "echo \"coolant $d/temp${i}_input\";; esac; done; done"]
         onDone: function (out) {
-            if (out.trim().length) root.cpuTemp = root._parseMilli(out)
-        }
-    }
-
-    // ── NVMe temp: max over nvme hwmons ─────────────────────────────────────
-    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
-        id: nvmeProc
-        command: ["sh", "-c",
-            "for d in /sys/class/hwmon/hwmon*; do [ \"$(cat \"$d/name\" 2>/dev/null)\" = nvme ] " +
-            "&& cat \"$d/temp1_input\" 2>/dev/null; done | sort -n | tail -1"]
-        onDone: function (out) {
-            if (out.trim().length) root.nvmeTemp = root._parseMilli(out)
-        }
-    }
-
-    // ── Coolant temp: best-effort label scan (usually unavailable) ──────────
-    BoundedProcess {   // bounded: one-shot hwmon read (P8.1)
-        id: coolantProc
-        command: ["sh", "-c",
-            "for d in /sys/class/hwmon/hwmon*; do for i in 1 2 3 4 5 6; do " +
-            "l=$(cat \"$d/temp${i}_label\" 2>/dev/null); case \"$l\" in " +
-            "*water*|*coolant*|*liquid*|*aio*) cat \"$d/temp${i}_input\" 2>/dev/null;; esac; done; done | sort -n | tail -1"]
-        onDone: function (out) {
-            var raw = out.trim()
-            if (raw.length) {
-                var v = parseInt(raw, 10)
-                if (!isNaN(v) && v > 0) {
-                    root.coolantTemp = +(v / 1000).toFixed(1)
-                    root.coolantAvailable = true
-                }
+            var lines = String(out).trim().split("\n")
+            var found = []
+            for (var i = 0; i < lines.length; i++) {
+                var parts = lines[i].trim().split(" ")
+                if (parts.length === 2 && parts[0].length && parts[1].length)
+                    found.push({ key: parts[0], path: parts[1] })
             }
+            root._tempReads = {}        // fresh survey — hwmon numbers renumber
+            root._tempPaths = found     // notifies → Variants remounts the views
+            root._tempScanned = true
+            root._refreshTemps()        // first values now, not one tick late
+        }
+    }
+
+    // One FileView per resolved path; the 5s tick below reloads them all.
+    Variants {
+        id: tempViews
+        model: root._tempPaths
+
+        FileView {
+            property var modelData      // set by Variants from the survey entry
+            path: modelData.path
+            watchChanges: false
+            printErrors: false
+            onTextChanged: root._ingestTemp(modelData.key, path, text())
+        }
+    }
+
+    function _ingestTemp(key, path, raw) {
+        var v = parseInt(String(raw).trim(), 10)
+        if (isNaN(v) || v <= 0) return   // vanished mid-lease → keep last good
+        root._tempReads[path] = v
+        var cpu = -1, nvme = -1, coolant = -1
+        for (var i = 0; i < root._tempPaths.length; i++) {
+            var r = root._tempReads[root._tempPaths[i].path]
+            if (r === undefined) continue
+            if (root._tempPaths[i].key === "cpu" && r > cpu) cpu = r
+            else if (root._tempPaths[i].key === "nvme" && r > nvme) nvme = r
+            else if (root._tempPaths[i].key === "coolant" && r > coolant) coolant = r
+        }
+        if (cpu > 0)     root.cpuTemp = root._parseMilli(String(cpu))
+        if (nvme > 0)    root.nvmeTemp = root._parseMilli(String(nvme))
+        if (coolant > 0) {
+            root.coolantTemp = +(coolant / 1000).toFixed(1)
+            root.coolantAvailable = true
         }
     }
 
     function _refreshTemps() {
-        cpuTempProc.run()
-        nvmeProc.run()
-        coolantProc.run()
+        var vs = tempViews.instances
+        for (var i = 0; i < vs.length; i++) vs[i].reload()
         govFile.reload()   // governor rides the 5s cadence — changes are rare
     }
 
-    // Temps move slowly; 5s is enough and keeps the hwmon scan cheap.
+    // Temps move slowly; 5s is enough. A lease start surveys first (the
+    // triggeredOnStart tick resolves before any reload); the lease fall
+    // resets the scan so the next rise re-resolves (hwmon numbers renumber).
     Timer {
         interval: 5000
         running: root.leased
         repeat: true
         triggeredOnStart: true
-        onTriggered: root._refreshTemps()
-    }
-
-    // Hung-process reaper — a stuck hwmon read would silently stop the feed
-    // forever (guards skip while a Process reports running).
-    Timer {
-        interval: 15000
-        repeat: true
-        running: root.leased
+        onRunningChanged: if (!running) root._tempScanned = false
         onTriggered: {
-            if (cpuTempProc.running)  cpuTempProc.running = false
-            if (nvmeProc.running)     nvmeProc.running = false
-            if (coolantProc.running)  coolantProc.running = false
+            if (!root._tempScanned) { if (!hwmonScan.running) hwmonScan.run() }
+            else root._refreshTemps()
         }
     }
 
@@ -703,10 +723,13 @@ Item {
         }
     }
 
-    // Disk capacity changes slowly — 30s, not every tick.
+    // Disk capacity changes slowly — 30s, and only while a disk consumer
+    // exists: the SYS INFO tab's cluster grant (coreVisible) or the deepcool
+    // LCD (an always-on feed consumer of the disk fields). Idle leases
+    // (overlay / metrics-lease IPC) stop forking into a panel nobody sees.
     Timer {
         interval: 30000
-        running: root.leased
+        running: root.coreVisible || root.lcdPresent
         repeat: true
         triggeredOnStart: true
         onTriggered: diskProc.run()
