@@ -36,6 +36,14 @@ Environment=QML2_IMPORT_PATH=%h/.config/quickshell
 #Environment=VELOCITY_PLUGIN_PATH=/opt/velocity/plugins
 Restart=on-failure
 RestartSec=3
+# T6.1 resource caps (mirror of the hm-module bar unit): MemoryHigh throttles
+# reclaim well before the hard cap; MemoryMax=2G fires only on a genuine leak,
+# and the OOM kill self-heals through Restart=on-failure. CPUWeight/Nice
+# deprioritize the bar under contention so it can't starve the session.
+MemoryHigh=1536M
+MemoryMax=2G
+CPUWeight=50
+Nice=5
 
 [Install]
 WantedBy=graphical-session.target

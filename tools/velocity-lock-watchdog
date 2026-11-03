@@ -5,8 +5,9 @@
 # ext-session-lock has no client-independent unlock: a lock process that
 # wedges WITHOUT a working password UI (or without exiting on unlock) keeps
 # the session locked forever — until 2026-10-30 the only escape was a reboot.
-# This runs as a 20 s systemd timer and repairs the three wedge classes,
-# keyed to the lock's own heartbeat file (lock/shell.qml, written every 5 s):
+# This runs as a 30 s systemd timer and repairs the three wedge classes,
+# keyed to the lock's own heartbeat file (lock/shell.qml, written every 5 s
+# through FileView atomicWrites — tmp+rename, never a partial read):
 #
 #   $XDG_RUNTIME_DIR/velocity-lock-state = {"locked":B,"screens":N,"ts":S}
 #

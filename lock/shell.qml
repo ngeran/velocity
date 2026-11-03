@@ -39,19 +39,25 @@ ShellRoot {
     // Preview writes nothing — a QA overlay is never a lock holder.
     function _beat() {
         if (root.preview) return       // preview writes nothing — never a holder
-        _heartbeat.command = [
-            "sh", "-c", 'printf \'%s\' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"',
-            "sh",
-            (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/velocity-lock-state",
-            JSON.stringify({
-                locked: lock.locked,
-                screens: Quickshell.screens.length,
-                ts: Math.floor(Date.now() / 1000)
-            })
-        ]
-        _heartbeat.running = true
+        // T6.2: the beat is a plain FileView write — atomicWrites (default
+        // true) lands it as tmp+rename in the state file's own directory, so
+        // the watchdog's jq reader only ever sees a whole file (host-probed:
+        // 0 parse failures under a 50 Hz jq hammer across 50 beats). The
+        // printf|mv fork this replaced cost 12 shells/min while locked; a
+        // failed write degrades to a stale heartbeat = the watchdog's
+        // designed repair path, same failure direction as a dead fork.
+        _heartbeat.setText(JSON.stringify({
+            locked: lock.locked,
+            screens: Quickshell.screens.length,
+            ts: Math.floor(Date.now() / 1000)
+        }))
     }
-    property Process _heartbeat: Process { command: [] }
+    property FileView _heartbeat: FileView {
+        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/velocity-lock-state"
+        preload: false                  // write-only — the watchdog owns reads
+        watchChanges: false             // our own writes never need reloading
+        printErrors: false              // absent at boot is normal
+    }
     Timer {
         interval: 5000
         repeat: true

@@ -227,7 +227,9 @@ let
     "/run/current-system/sw/bin"
   ];
 
-  mkVelocityUnit = name: preStarts: exec: extraEnv: {
+  # extraService: attrset merged into Service — unit resource caps (T6.1)
+  # ride here instead of growing the positional list forever.
+  mkVelocityUnit = name: preStarts: exec: extraEnv: extraService: {
     Unit = {
       Description = "Velocity ${name}";
       # Stop-propagation ONLY — never bind startup to this target: hosts
@@ -250,7 +252,7 @@ let
         "PATH=${servicePath}"
         "VELOCITY_PLUGIN_PATH=${pluginPath}"
       ] ++ extraEnv;
-    };
+    } // extraService;
     Install.WantedBy = [ "default.target" ];
   };
 
@@ -264,12 +266,32 @@ let
       ++ lib.optionals (cfg.enabledPlugins != [ ])
         [ "${seedPlugins}/bin/velocity-seed-plugins" ])
     "${cfg.quickshellPackage}/bin/quickshell -c bar"
-    [ "QML2_IMPORT_PATH=%h/.config/quickshell" ];
+    [ "QML2_IMPORT_PATH=%h/.config/quickshell" ]
+    # T6.1 resource caps: the bar is the session's biggest memory consumer
+    # (measured 200–600MB RSS). MemoryHigh throttles reclaim long before the
+    # hard cap; MemoryMax=2G only fires on a genuine leak — and an OOM kill
+    # is self-healing (Restart=on-failure brings the bar straight back,
+    # BarWatch banners the gap). CPUWeight=50 + Nice=5 deprioritize the bar
+    # under CPU contention so it can't starve the session.
+    {
+      MemoryHigh = "1536M";
+      MemoryMax = "2G";
+      CPUWeight = 50;
+      Nice = 5;
+    };
 
   cliphistUnit = mkVelocityUnit "clipboard history (cliphist)"
     [ "${waylandGate}/bin/velocity-wait-wayland" ]
     "${lib.getExe' pkgs.wl-clipboard "wl-paste"} --watch ${lib.getExe' pkgs.cliphist "cliphist"} store"
-    [ ];
+    [ ]
+    # T6.1: cliphist store is background bookkeeping — idle I/O class, lowest
+    # nice, 256M hard cap (an unbounded clipboard db is the realistic failure;
+    # an OOM kill self-heals through Restart=on-failure).
+    {
+      Nice = 10;
+      IOSchedulingClass = "idle";
+      MemoryMax = "256M";
+    };
 
   # ── velocity-lock (P3.4) ─────────────────────────────────────────────────────
   # The repo script is the ONE implementation (P1.8: resolves quickshell via
@@ -278,6 +300,11 @@ let
   # guard — hypridle's unit PATH is a closed set, so the wrapper must carry
   # every command the script calls. The PAM service comes from
   # velocity.nixosModules.default (omni-nix imports it for the desktop host).
+  # T6.1: the lock deliberately gets NO resource caps — it isn't even
+  # unit-managed (hypridle spawns it from PATH), so there is no
+  # Restart=on-failure to self-heal an OOM kill; capping it would only add a
+  # deterministic kill vector on the one path where a dead process = unlocked
+  # session. Never cap the lock.
   velocityLock = pkgs.writeShellApplication {
     name = "velocity-lock";
     runtimeInputs = [ cfg.quickshellPackage pkgs.procps ];
@@ -288,7 +315,7 @@ let
   # Repairs a wedged lock instead of leaving the user to reboot: heartbeat
   # staleness (hung loop), locked=false zombie (hung quit), and the DPMS
   # surfaceless race — see the script header for the decision table. Timer
-  # every 20 s; exits 0 instantly whenever no real lock is held. jq/procps/
+  # every 30 s; exits 0 instantly whenever no real lock is held. jq/procps/
   # systemd come from runtimeInputs (writeShellApplication PATH); velocity-lock
   # itself resolves through the unit PATH (servicePath carries the per-user
   # profile) with the script's own profile fallback as belt-and-braces.
@@ -304,6 +331,10 @@ let
       Type = "oneshot";
       ExecStart = "${lockWatchdog}/bin/velocity-lock-watchdog";
       Environment = [ "PATH=${servicePath}" ];
+      # T6.2: the script's worst internal wait is ~3 s (stop_holder's 6×0.5 s
+      # + jq/hyprctl) — 15 s bounds a hung watchdog run instead of the 90 s
+      # default holding the oneshot open.
+      TimeoutStartSec = 15;
     };
   };
 
@@ -311,8 +342,10 @@ let
     Unit.Description = "Periodic velocity-lock wedge repair";
     Timer = {
       OnBootSec = "90s";
-      OnUnitActiveSec = "20s";
-      AccuracySec = "5s";
+      # T6.2: 30 s cadence (± 10 s accuracy) — still well inside the script's
+      # 45 s staleness threshold repair budget for a hung lock heartbeat.
+      OnUnitActiveSec = "30s";
+      AccuracySec = "10s";
     };
     Install.WantedBy = [ "timers.target" ];
   };
