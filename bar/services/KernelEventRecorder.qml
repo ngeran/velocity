@@ -23,11 +23,16 @@
 //   BOOT      one event at service start (info, with `uname -r`).
 //
 //   STORAGE   <repo>/events.jsonl — rewritten whole (≤ maxEvents short
-//             lines) via ThemeService's _atomicWrite recipe (tmp.$$ + mv;
-//             cat-polling readers never see a half-written file) through a
-//             dynamically-created one-shot Process. Loaded back into the
-//             model at startup so the panel shows history instantly.
-//             Initial seed: tools/backfill-events.sh.
+//             lines), COALESCED (T3.1): _emit only sets `_dirty` and arms a
+//             1500 ms one-shot, so a burst of N events ⇒ ONE write. The
+//             write goes through eventsFile (FileView) — atomicWrites
+//             defaults to true (tmp file + rename in the same dir, C++
+//             side), so cat-polling readers never see a half file and the
+//             burst costs ZERO processes. Loaded back into the model at
+//             startup so the panel shows history instantly. Initial seed:
+//             tools/backfill-events.sh. NotificationService persists its
+//             own store through `_atomicWrite` below — the ONE declared
+//             BoundedProcess tmp+mv writer, latest-wins queued.
 //
 //   MODEL     ListModel `events`, NEWEST FIRST, capped at maxEvents (500);
 //             `_lines` mirrors it oldest-first for the rewrite.
@@ -35,8 +40,10 @@
 //   ALWAYS-ON Deliberately NOT popup-gated (unlike LogService): the value
 //             IS the history. Idle cost: one journalctl -f -k child + a
 //             10-min readlink — negligible. A watchdog (LogService pattern)
-//             heals a dead stream: missing the crash line is the one failure
-//             this service exists to prevent.
+//             heals a dead stream through an escalating respawn ladder
+//             (250 ms → 1 s → 5 s → 30 s cap, reset on the first live line,
+//             T2.2): missing the crash line is the one failure this service
+//             exists to prevent.
 //
 //   STARTUP   Construction is forced by a member dereference in shell.qml
 //             (QML singletons build lazily; nothing else references this
@@ -77,6 +84,7 @@ Item {
                                               // write CLOBBERS the file with a
                                               // single line. Lost a full
                                               // backfill to exactly this once.
+    property bool _dirty: false               // unpersisted events pending (T3.1)
 
     // StandardPaths returns a QUrl ("file:///home/nikos") in this runtime —
     // coerce to string and strip the scheme (ThemeService's homeDir idiom).
@@ -87,6 +95,16 @@ Item {
 
     property string _lastGen: ""
     property bool _manualStop: false          // intended stream stops (LogService idiom)
+    property int _failCount: 0
+
+    // Escalating respawn ladder (T2.2; local copy of LogService's small
+    // helper — no cross-tree import): fail #1 retries after 250 ms, then
+    // 1 s, 5 s, capped at 30 s, floored at 60 ms (a not-yet-reaped Process
+    // won't reliably take a new `running`). _ingest resets it on any live
+    // line — a delivered line proves the pipe, match or not.
+    function _restartDelay() {
+        return Math.max(60, [250, 1000, 5000, 30000][Math.min(_failCount - 1, 3)])
+    }
 
     Component.onCompleted: {
         console.log("[KernelEventRecorder] Service loaded")
@@ -97,28 +115,66 @@ Item {
     }
 
     // =========================================================================
-    // PERSISTENCE  (ThemeService's _runSh/_atomicWrite recipe, verbatim)
+    // PERSISTENCE — two write paths (T3.1):
+    //   events.jsonl → eventsFile (FileView), coalesced 1500 ms, zero forks;
+    //                atomicWrites defaults true (tmp + rename in-dir).
+    //   _atomicWrite → ONE declared BoundedProcess running `printf > tmp.$$
+    //                && mv` — NotificationService's store persists through
+    //                it; latest-wins: a call while a write is in flight
+    //                replaces the queued payload, and onDone flushes it.
     // =========================================================================
-    function _runSh(script, label) {
-        var p = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        p.command = ["sh", "-c", script]
-        p.onExited.connect(function(code) {
+    BoundedProcess {   // bounded: one-shot atomic tmp+mv writer (P8.1)
+        id: storeWriter
+        timeoutMs: 4000
+        maxBytes: 65536
+        onDone: function(out, err, code) {
             if (code !== 0)
-                console.error("[KernelEventRecorder] " + (label || "shell") +
-                              " failed (exit " + code + ")")
-            p.destroy()
-        })
-        p.running = true
-        return p
+                console.error("[KernelEventRecorder] atomic write failed (exit " +
+                              code + "): " + root._writePath)
+            if (root._writePending) root._atomicWrite(root._writePath, root._writeData)
+        }
     }
+    property bool _writePending: false
+    property string _writePath: ""            // in flight or queued
+    property string _writeData: ""            // queued payload (latest-wins)
 
     function _atomicWrite(path, content) {
-        var dir = path.substring(0, path.lastIndexOf("/"))
+        if (storeWriter.running) {
+            root._writePending = true
+            root._writePath = path
+            root._writeData = content
+            return
+        }
+        root._writePending = false
+        root._writePath = path
         var safe = String(content).replace(/'/g, "'\\''")
-        _runSh(
+        storeWriter.command = ["sh", "-c",
             "printf '%s' '" + safe + "' > " + path + ".tmp.$$ && mv -f " +
-            path + ".tmp.$$ " + path,
-            "write " + path)
+            path + ".tmp.$$ " + path]
+        storeWriter.run()
+    }
+
+    FileView {   // events.jsonl writer — atomicWrites defaults true (tmp+rename)
+        id: eventsFile
+        path: root.eventsPath
+        preload: false                        // write-only here; catProc owns reads
+        printErrors: false
+    }
+
+    // 1500 ms write coalescer (T3.1): a burst of N events ⇒ ONE whole-file
+    // rewrite through eventsFile.
+    Timer {
+        id: persistTimer
+        interval: 1500
+        running: false
+        repeat: false
+        onTriggered: root._flush()
+    }
+
+    function _flush() {
+        if (!root._dirty || !root._ready) return
+        root._dirty = false
+        eventsFile.setText(_lines.join("\n") + "\n")
     }
 
     function _jsonLine(ts, sev, type, data) {
@@ -142,7 +198,8 @@ Item {
         else if (sev === "warn") countWarn++
         else countInfo++
         if (type === "gpu-xid") lastXid = data.slice(0, 40)
-        if (_ready) _atomicWrite(eventsPath, _lines.join("\n") + "\n")
+        root._dirty = true                    // coalesced persist (T3.1)
+        if (_ready) persistTimer.restart()
         console.log("[KernelEventRecorder] " + sev + " " + type + ": " + data)
     }
 
@@ -150,6 +207,7 @@ Item {
     // INGEST (live kernel stream)
     // =========================================================================
     function _ingest(line) {
+        if (root._failCount > 0) root._failCount = 0   // live line — ladder resets
         // Cheap substring gate before JSON.parse: every emit rule fires only
         // on NVRM / EXT4-fs / I-O error text, so a line containing none of it
         // can be skipped unparsed (kernel logs are quiet at idle, but a burst
@@ -172,16 +230,24 @@ Item {
             _emit("crit", "fs-error", msg.slice(0, 160))
     }
 
-    Process {   // unbounded-ok: long-lived journal tail — popup/owner-gated, ring-buffered, backoff
+    Process {   // unbounded-ok: long-lived kernel journal tail — ALWAYS-ON (the
+                // value IS the history), one child, ladder-healed (T2.2)
         id: followProc
         command: ["sh", "-c", "journalctl -f -k -o json --no-pager 2>/dev/null"]
         stdout: SplitParser { onRead: function(line) { root._ingest(line) } }
-        // journalctl can die (journald restart, disk pressure) — auto-heal.
-        onExited: if (!root._manualStop) followRestartTimer.restart()
+        // journalctl can die (journald restart, disk pressure) — auto-heal
+        // through the ladder; only an intended stop skips it.
+        onExited: {
+            if (root._manualStop) return
+            root._failCount++
+            followRestartTimer.interval = root._restartDelay()
+            followRestartTimer.restart()
+        }
     }
 
-    // 60ms gap so a stop → start actually respawns the child (re-setting
-    // `running` immediately on a not-yet-reaped Process is unreliable).
+    // ≥60ms gap so a stop → start actually respawns the child (re-setting
+    // `running` immediately on a not-yet-reaped Process is unreliable); the
+    // ladder stretches it on repeated deaths.
     Timer {
         id: followRestartTimer
         interval: 60
@@ -192,11 +258,14 @@ Item {
     }
 
     // Watchdog (LogService pattern) — 5s tick; heals a death onExited missed.
+    // Skips while a restart is already pending: restart() would reset the
+    // countdown every 5 s and the 30 s rung would never fire.
     Timer {
         interval: 5000
         repeat: true
         running: true
-        onTriggered: if (!followProc.running && !root._manualStop)
+        onTriggered: if (!followProc.running && !followRestartTimer.running
+                             && !root._manualStop)
                          followRestartTimer.restart()
     }
 
@@ -224,9 +293,10 @@ Item {
                 } catch (e) { /* skip malformed line */ }
             }
             // History is in — open the write gate and flush once so any
-            // event that fired during the load (boot) is persisted too.
+            // event that fired during the load (boot) is persisted too
+            // (they set _dirty; the coalescer stays unarmed while !_ready).
             _ready = true
-            _atomicWrite(eventsPath, _lines.join("\n") + "\n")
+            root._flush()
             console.log("[KernelEventRecorder] loaded " + _entries.count + " events")
         }
     }

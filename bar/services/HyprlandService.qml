@@ -80,6 +80,10 @@ Item {
         running: true
         stdout: SplitParser {
             onRead: function(line) {
+                if (root._wsFailCount > 0 || wsWatchdog.interval !== 5000) {
+                    root._wsFailCount = 0          // live line — reset the ladder
+                    wsWatchdog.interval = 5000
+                }
                 var ev = "" + line
                 root.socketEvent(ev)   // subscribers first, then our own parse
                 var id = 0
@@ -103,12 +107,26 @@ Item {
         }
     }
 
-    // Watchdog: if the socket2 stream ever drops, reconnect + re-seed.
+    // Watchdog: if the socket2 stream ever drops, reconnect + re-seed (T1.3).
+    // Escalating rearm — 5 s → 15 → 60 cap — so a dead socket stops forking
+    // nc every 5 s forever; the ladder resets on the first live socket line,
+    // and the seeder is never double-spawned mid-flight.
+    property int _wsFailCount: 0
+    function _wsDelay() { return [5000, 15000, 60000][Math.min(_wsFailCount, 2)] }
     Timer {
+        id: wsWatchdog
         interval: 5000
         running: true
-        repeat: true
-        onTriggered: { if (!wsWatcher.running) { wsWatcher.running = true; seedProc.running = true } }
+        repeat: false
+        onTriggered: {
+            if (!wsWatcher.running && !seedProc.running) {
+                root._wsFailCount++
+                wsWatcher.running = true
+                seedProc.running = true
+            }
+            interval = root._wsDelay()
+            restart()
+        }
     }
 
     // =========================================================================

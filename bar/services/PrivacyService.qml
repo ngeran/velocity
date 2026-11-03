@@ -1,23 +1,26 @@
 // =============================================================================
 // PrivacyService.qml — what is watching or listening right now
 // =============================================================================
-// Mic / camera / screen-share detection from the PipeWire link graph, polled
-// through `pw-dump` (bounded read, 3s cadence, DEMAND-GATED — see the gate
-// note below; zero forks while no consumer is mounted). Classification lives in
-// bar/lib/privacy.mjs (unit-tested): an ACTIVE capture stream fed by a source
-// decides the bucket —
+// Mic / camera / screen-share detection from the PipeWire link graph,
+// EVENT-DRIVEN (T1.1): a long-lived `pw-mon` watcher (one process for the
+// service's lifetime) marks the graph dirty on every event line; a 250 ms
+// debounce collapses a burst into ONE bounded `pw-dump` survey. Classification
+// lives in bar/lib/privacy.mjs (unit-tested): an ACTIVE capture stream fed by
+// a source decides the bucket —
 //   capture ← mic-like source            → mic
 //   capture ← monitor/virtual source     → screen (system audio)
 //   video capture ← camera-ish source    → camera
 //   video capture ← anything else        → screen (portal screencast)
 // Playback streams are nobody's business and never count.
 //
-// WHY PW-DUMP AND NOT THE NATIVE REGISTRY — verified 2026-09-29 on
-// quickshell 0.3.1: Pipewire.nodes/linkGroups populate at connect but never
-// live-update (a stream node started AFTER launch never appears; link group
-// states stay -1/Unlinked while capture is running). AudioService only works
-// around this because sinks persist. The pill needs the transient truth, so
-// it polls the source of truth.
+// WHY NOT THE NATIVE REGISTRY — verified 2026-09-29 on quickshell 0.3.1:
+// Pipewire.nodes/linkGroups populate at connect but never live-update (a
+// stream node started AFTER launch never appears; link group states stay
+// -1/Unlinked while capture is running). AudioService only works around this
+// because sinks persist. The pill needs the transient truth.
+// WHY NOT A FIXED pw-dump POLL — the old 3 s cadence forked 20×/min while the
+// graph sat still; now the survey only runs when something actually changed
+// (zero forks at idle, and sub-second reaction when it isn't).
 // =============================================================================
 
 pragma Singleton
@@ -37,19 +40,31 @@ Item {
     function appsFor(kind) { return active[kind] || [] }
 
     // ── DEMAND GATE — zero forks while nobody is listening ─────────────
-    // The pollers (pw-dump 3s, inhibitors 15s) only run while a consumer
-    // exists: the velocity.privacy pill sets iconDemanded while MOUNTED
-    // (not while visible — an idle pill must still catch the first stream
-    // or it could never light up), the tray privacy body sets bodyDemanded
-    // while open. Plugin disabled + body closed → this service idles.
-    property bool iconDemanded: false
+    // The watcher + surveyors only run while a consumer exists: the
+    // velocity.privacy pill increments iconDemandCount while MOUNTED (not
+    // while visible — an idle pill must still catch the first stream or it
+    // could never light up; refcounted so several mounts can share one
+    // demand), the tray privacy body sets bodyDemanded while open. Plugin
+    // disabled + body closed → this service idles.
+    property int iconDemandCount: 0
     property bool bodyDemanded: false
-    readonly property bool demanded: iconDemanded || bodyDemanded
+    readonly property bool demanded: iconDemandCount > 0 || bodyDemanded
+    onDemandedChanged: {
+        pwRespawn.stop()
+        if (demanded) {
+            _pwFailCount = 0
+            pwWatch.running = true
+        } else {
+            pwWatch.running = false
+        }
+    }
 
     // ── sleep inhibitors — who is keeping the machine awake ─────────────
-    // Same pill, second detector: systemd-inhibit, filtered to sleep. Runs
-    // on a slow cadence (15s — inhibitors change rarely) through the
-    // bounded contract like every other shell-out here.
+    // Same pill, second detector: systemd-inhibit, filtered to sleep. The
+    // pill RENDERS inhibitors (hasInhibitors feeds its visibility), so this
+    // keeps polling while demanded — on a slow 60 s cadence (inhibitors
+    // change rarely) through the bounded contract like every other shell-out
+    // here.
     property var inhibitors: []     // [{ who, why }]
     readonly property bool hasInhibitors: inhibitors.length > 0
 
@@ -81,14 +96,84 @@ Item {
     }
 
     Timer {
-        interval: 15000
+        interval: 60000
         running: root.demanded
         repeat: true
         triggeredOnStart: true
         onTriggered: inhProc.run()
     }
 
-    // ── pw-dump poll ────────────────────────────────────────────────────
+    // ── graph watcher + debounced survey ────────────────────────────────
+    // Every pw-mon line marks the survey dirty and resets the respawn
+    // ladder (a line means the pipe is alive). The 250 ms debounce turns a
+    // burst of events into a single pw-dump.
+    property int _pwFailCount: 0
+    property string _pwPending: ""      // pw-mon marker awaiting its type line
+    function _pwDelay() { return [250, 1000, 5000, 30000][Math.min(_pwFailCount - 1, 3)] }
+    function _graphDirty() {
+        _pwFailCount = 0
+        dumpDebounce.restart()
+    }
+
+    Process {   // unbounded-ok: long-lived pw-mon graph watcher (T1.1); stdout
+                // is consumed line-by-line and discarded — nothing buffers
+        id: pwWatch
+        command: ["pw-mon", "-N"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                // pw-mon block shape (verified live): a marker line first
+                // (added:/removed:/changed:), then "id:", then — EXCEPT for
+                // removed: — a "type: PipeWire:Interface:<T>" header. Only
+                // Node/Link/Port events mark the survey dirty: every pw-dump
+                // we run registers itself as a graph CLIENT, so reacting to
+                // Client churn would survey in an endless loop (observed:
+                // dump → "added: Client" → dump, 50% core). A removed: block
+                // never finds its type line, so it stays inert until the next
+                // marker — removals are picked up via the follow-up Port/Node
+                // churn they cause.
+                var s = "" + line
+                var t = s.trim()
+                if (t === "added:" || t === "removed:" || t === "changed:") {
+                    root._pwPending = t
+                    return
+                }
+                if (root._pwPending === ""
+                        || s.indexOf("type: PipeWire:Interface:") < 0) return
+                root._pwPending = ""
+                // Anchor the cut at indexOf — lines are tab-indented, so a
+                // bare substring(prefix.length) lands one char early.
+                var at = s.indexOf("type: PipeWire:Interface:")
+                var kind = s.substring(at + "type: PipeWire:Interface:".length)
+                                .split(" ")[0]
+                if (kind === "Node" || kind === "Link" || kind === "Port")
+                    root._graphDirty()
+            }
+        }
+        onExited: {
+            if (!root.demanded) return   // intentional stop, not a failure
+            _pwFailCount++
+            console.warn("[PrivacyService] pw-mon exited — retrying in",
+                         root._pwDelay(), "ms (fail", _pwFailCount + ")")
+            pwRespawn.interval = root._pwDelay()
+            pwRespawn.restart()
+        }
+    }
+
+    Timer {
+        id: pwRespawn
+        running: false
+        repeat: false
+        onTriggered: if (root.demanded) pwWatch.running = true
+    }
+
+    Timer {
+        id: dumpDebounce
+        interval: 250
+        running: false
+        repeat: false
+        onTriggered: dumpProc.run()
+    }
+
     BoundedProcess {   // bounded: one-shot pw-dump survey (P8.1)
         id: dumpProc
         timeoutMs: 8000              // pw-dump on a loaded graph can take seconds
@@ -136,13 +221,7 @@ Item {
             root.active = next
     }
 
-    Timer {
-        interval: 3000
-        running: root.demanded
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            dumpProc.run()
-        }
-    }
+    // Belt-and-braces for exotic hot-reload orders (body open while this
+    // singleton is swapped): make sure the watcher reflects current demand.
+    Component.onCompleted: pwWatch.running = root.demanded
 }

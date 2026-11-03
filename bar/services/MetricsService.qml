@@ -105,8 +105,10 @@ Item {
         var e = Lease.acquire(seconds, Date.now())
         if (e > root._leaseUntil) root._leaseUntil = e
     }
-    // deepcool LCD daemon presence (pgrep, 60s) — an always-on feed consumer.
+    // deepcool LCD daemon presence (pgrep: boot + lease rise + a 10-min cold
+    // tick that retires after 3 misses — T1.2) — an always-on feed consumer.
     property bool lcdPresent: false
+    property int _lcdMisses: 0   // consecutive cold-tick probes without the daemon
     // Dashboard Core tab session (Loader Completed/Destruction sets it).
     property bool coreVisible: false
     // The 1s engine exists for exactly two file-feed consumers: the deepcool
@@ -252,6 +254,11 @@ Item {
         root.refreshStatic()
         root.refreshUptime()
         lcdProbe.run()
+        // A lease (or the Core tab) can already be held at construction —
+        // onLeasedChanged/onCoreVisibleChanged never fired, so start the
+        // long-runners here (T2.3).
+        gpuLoop.running = root.leased
+        dmonLoop.running = root.coreVisible
         console.log("[MetricsService] booted: leased=" + root.leased +
                     " lcd=" + root.lcdPresent + " core=" + root.coreVisible)
     }
@@ -484,7 +491,20 @@ Item {
     // GPU — ONE long-running `nvidia-smi -l 2` while leased (P2.3: the
     // spawn-per-tick prober is gone; the lease binding stops the process).
     // Fields can be [N/A] on some drivers → NaN → 0.
+    //
+    // T2.3 SELF-HEAL: a died nvidia-smi is respawned by liveTimer (1 s tick)
+    // through the T2.1 ladder — 250 ms → 1 s → 5 s → 30 s between attempts
+    // (the tick quantizes them). 4 consecutive deaths ⇒ driver missing:
+    // stop trying, log ONCE, stay quiet until the next lease / Core-tab
+    // edge resets the ladder. Any live line resets it sooner.
     // =========================================================================
+    property int _gpuFail: 0
+    property real _gpuNextTry: 0        // epoch ms of the next permitted respawn
+    property int _dmonFail: 0
+    property real _dmonNextTry: 0
+    function _gpuDelay()  { return [250, 1000, 5000, 30000][Math.min(_gpuFail - 1, 3)] }
+    function _dmonDelay() { return [250, 1000, 5000, 30000][Math.min(_dmonFail - 1, 3)] }
+
     Process {   // unbounded-ok: the leased `nvidia-smi -l 2` long-runner —
         id: gpuLoop   // lifecycle bound to root.leased (onLeasedChanged stops it)
         command: ["nvidia-smi",
@@ -493,6 +513,7 @@ Item {
         running: false
         stdout: SplitParser {
             onRead: function(data) {
+                if (root._gpuFail > 0) { root._gpuFail = 0; root._gpuNextTry = 0 }  // live line — ladder resets
                 var p = Info.parseNvidiaSmi(data)
                 if (!p) return
                 if (p.tempC !== undefined) root.gpuTempC = p.tempC
@@ -514,6 +535,13 @@ Item {
                 }
             }
         }
+        onExited: {
+            if (!root.leased) return   // intentional stop (lease edge), not a death
+            root._gpuFail++
+            root._gpuNextTry = Date.now() + root._gpuDelay()
+            if (root._gpuFail === 4)
+                console.warn("[MetricsService] nvidia-smi -l 2 died 4× — driver missing? pausing respawns until the next lease edge")
+        }
     }
 
     // Sub-engine utilization — a SECOND long-runner, only while the Core tab
@@ -525,6 +553,7 @@ Item {
         running: false
         stdout: SplitParser {
             onRead: function(data) {
+                if (root._dmonFail > 0) { root._dmonFail = 0; root._dmonNextTry = 0 }  // live line — ladder resets
                 var p = Info.parseDmon(data)
                 if (!p) return
                 if (p.sm !== undefined) root.gpuSmPct = p.sm
@@ -534,10 +563,30 @@ Item {
                 if (p.ofa !== undefined) root.gpuOfaPct = p.ofa
             }
         }
+        onExited: {
+            if (!root.coreVisible) return   // intentional stop (tab closed)
+            root._dmonFail++
+            root._dmonNextTry = Date.now() + root._dmonDelay()
+            if (root._dmonFail === 4)
+                console.warn("[MetricsService] nvidia-smi dmon died 4× — pausing respawns until the Core tab reopens")
+        }
     }
-    onCoreVisibleChanged: dmonLoop.running = root.coreVisible
+    onCoreVisibleChanged: {
+        if (root.coreVisible) {   // fresh edge = fresh ladder (T2.3)
+            root._dmonFail = 0
+            root._dmonNextTry = 0
+        }
+        dmonLoop.running = root.coreVisible
+    }
     // Lease edges start/stop the long-runner (binding flip → SIGTERM).
-    onLeasedChanged: gpuLoop.running = root.leased
+    onLeasedChanged: {
+        gpuLoop.running = root.leased
+        if (leased) {
+            lcdProbe.run()   // daemon may have appeared since boot (T1.2)
+            root._gpuFail = 0     // fresh lease = fresh ladder (T2.3)
+            root._gpuNextTry = 0
+        }
+    }
 
     // Per-process GPU consumers (nvtop-equivalent) — bounded one-shot every
     // other tick; no rows is a valid answer (nothing using the GPU).
@@ -675,21 +724,35 @@ Item {
                   "pgrep -f '[d]eepcool' >/dev/null 2>&1"]   // would read as the LCD daemon and light the feed up.
         onDone: function (out, err, code) { root.lcdPresent = (code === 0) }
     }
+    // Cold re-probe (T1.2): the daemon may appear after boot. 10-min cadence
+    // ONLY while undiscovered, retired for good after 3 misses (a lease rise
+    // re-probes on demand — no always-on forks).
     Timer {
-        interval: 60000
+        id: lcdColdTimer
+        interval: 600000
         repeat: true
-        running: true
+        running: !root.lcdPresent && root._lcdMisses < 3
         triggeredOnStart: false   // Component.onCompleted probes once at boot
-        onTriggered: lcdProbe.run()
+        onTriggered: {
+            if (root.lcdPresent) return
+            root._lcdMisses++
+            lcdProbe.run()
+        }
+    }
+    onLcdPresentChanged: {
+        root._lcdMisses = 0
     }
 
-    // metrics.json via FileView's WRITE path (setText) — truncate+write, zero
-    // forks. The parent dir is ensured once at startup by initProc.
+    // metrics.json via FileView's WRITE path (setText) — atomicWrites defaults
+    // to true (temp file + rename), zero forks. The parent dir is ensured
+    // once at startup by initProc. T3.3: publish() skips the write when no
+    // reading changed.
     FileView {
         id: metricsFile
         path: root.metricsPath
         printErrors: false
     }
+    property string _lastPublished: ""        // last payload, ts-less (T3.3)
     property var initProc: BoundedProcess { command: ["mkdir", "-p"] }   // bounded: one-shot mkdir (P8.1)
 
     function publish() {
@@ -718,6 +781,15 @@ Item {
             swap_total_gb: root.swapTotalGB,
             swap_pct: root.swapPct
         }
+        // T3.3: write only when a READING changed — the embedded ts makes
+        // every serialization unique, so compare the ts-less form; the
+        // written file keeps the fresh ts (the LCD daemon reads it as
+        // last-update). Cadence stays 1 Hz per the task (2 s unverified).
+        m.ts = 0
+        var s = JSON.stringify(m)
+        if (s === root._lastPublished) return
+        root._lastPublished = s
+        m.ts = Math.floor(Date.now() / 1000)
         metricsFile.setText(JSON.stringify(m))
     }
 
@@ -769,6 +841,15 @@ Item {
                 root._leaseUntil = 0
                 return
             }
+            // GPU long-runner self-heal (T2.3): respawn a died nvidia-smi on
+            // this tick, gated by the ladder — driver missing ⇒ 4 strikes,
+            // then quiet until the next lease / Core-tab edge.
+            if (root.leased && !gpuLoop.running
+                    && root._gpuFail < 4 && Date.now() >= root._gpuNextTry)
+                gpuLoop.running = true
+            if (root.coreVisible && !dmonLoop.running
+                    && root._dmonFail < 4 && Date.now() >= root._dmonNextTry)
+                dmonLoop.running = true
             statFile.reload()
             cpuinfoFile.reload()
             memFile.reload()

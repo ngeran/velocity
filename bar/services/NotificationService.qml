@@ -208,12 +208,8 @@ Item {
         root.scheduleEnabled = enabled === true
         root.scheduleStart = start
         root.scheduleEnd = end
-        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh",
-                     JSON.stringify({ enabled: root.scheduleEnabled, start: start, end: end }),
-                     root._schedulePath]
-        w.onExited.connect(function() { w.destroy() })
-        w.running = true
+        root._queueFlagWrite(JSON.stringify({ enabled: root.scheduleEnabled, start: start, end: end }),
+                             root._schedulePath)
         root._applySchedule()
     }
 
@@ -281,13 +277,61 @@ Item {
         })
     }
 
+    // ── PERSISTENCE (T3.2) ──────────────────────────────────────────────
+    // _persist is the coalesced entry (T3.1 pattern): it only arms a 1500 ms
+    // one-shot; the flush does ONE whole-store rewrite through
+    // KernelEventRecorder._atomicWrite (already latest-wins queued). A burst
+    // of N mutations ⇒ 1 rewrite. A hard crash within the 1.5 s window can
+    // lose the last rows — same tradeoff T3.1 took for events.jsonl.
+    property bool _storeDirty: false
+    Timer {
+        id: persistTimer
+        interval: 1500
+        running: false
+        repeat: false
+        onTriggered: root._persistNow()
+    }
     function _persist() {
+        root._storeDirty = true
+        persistTimer.restart()
+    }
+    function _persistNow() {
+        if (!root._storeDirty) return
+        root._storeDirty = false
         var lines = []
         for (var i = root.model.count - 1; i >= 0 && lines.length < root.storeMax; i--)
             lines.push(root._storeLine(root.model.get(i)))         // oldest first on disk
         for (var j = root.clearedModel.count - 1; j >= 0 && lines.length < root.storeMax; j--)
             lines.push(root._storeLine(root.clearedModel.get(j)))  // visible rows win the cap
         KernelEventRecorder._atomicWrite(root.storePath, lines.join("\n") + "\n")
+    }
+
+    // ── one-shot flag writer (T3.2) — replaces the three dynamic
+    // per-call Process{} wrappers (schedule / dnd / cleared) and
+    // their destroy-on-exit plumbing. ONE declared BoundedProcess drains a
+    // FIFO of argv arrays: same-file writes keep order, cross-file writes
+    // can't clobber each other, and a burst costs one child, not N.
+    BoundedProcess {   // bounded: one-shot flag writer (P8.1)
+        id: flagWriter
+        timeoutMs: 4000
+        maxBytes: 4096
+        onDone: function(out, err, code) {
+            if (code !== 0)
+                console.error("[NotificationService] flag write failed (exit " + code + ")")
+            if (root._flagQueue.length > 0) {
+                var next = root._flagQueue.shift()
+                flagWriter.command = next
+                flagWriter.run()
+            }
+        }
+    }
+    property var _flagQueue: []              // pending argv arrays (FIFO)
+
+    function _queueFlagWrite(value, path) {
+        var argv = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh", String(value), path]
+        if (flagWriter.running) { root._flagQueue.push(argv); return }
+        flagWriter.command = argv
+        flagWriter.run()
     }
 
     BoundedProcess {   // bounded: one-shot 32-byte read (P8.1)
@@ -353,7 +397,7 @@ Item {
             if (corrupt > 0) {
                 console.warn("[NotificationService] store: " + corrupt +
                              " corrupt line(s) dropped — rewriting a clean store")
-                root._persist()   // heal now, not on the next unrelated write
+                root._persist()   // clean rewrite on the next coalesced flush
             }
             console.log("[NotificationService] restored " + root.model.count + " notifications" +
                         (root.clearedModel.count > 0 ? " (" + root.clearedModel.count + " cleared)" : ""))
@@ -366,10 +410,7 @@ Item {
     }
     function setDnd(on) {
         root.dnd = on
-        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh", on ? "1" : "0", root._dndFlag]
-        w.onExited.connect(function() { w.destroy() })  // free the one-shot wrapper (was leaked per toggle)
-        w.running = true
+        root._queueFlagWrite(on ? "1" : "0", root._dndFlag)
     }
 
     // Auto-dismiss with urgency-tiered lifetimes (Omarchy pattern). READ rows
@@ -763,10 +804,7 @@ Item {
     }
 
     function _writeCleared() {
-        var w = Qt.createQmlObject('import Quickshell.Io; Process {}', root)
-        w.command = ["sh", "-c", 'printf "%s" "$1" > "$2"', "sh", String(root.clearedAt), root.clearedPath]
-        w.onExited.connect(function() { w.destroy() })
-        w.running = true
+        root._queueFlagWrite(String(root.clearedAt), root.clearedPath)
     }
 
     // (IPC INGEST moved to shell.qml — P2: an IpcHandler inside a qmldir

@@ -15,9 +15,10 @@ Item {
     signal trayRequested()
 
     // Demand-gate PrivacyService's pollers: mounted (not visible) — an idle
-    // pill must keep polling or it could never catch the first stream.
-    Component.onCompleted: Services.PrivacyService.iconDemanded = true
-    Component.onDestruction: Services.PrivacyService.iconDemanded = false
+    // pill must keep the watcher running or it could never catch the first
+    // stream. Refcounted (T1.1): several mounts may share one demand.
+    Component.onCompleted: Services.PrivacyService.iconDemandCount++
+    Component.onDestruction: Services.PrivacyService.iconDemandCount--
 
     visible: active
     implicitWidth: active ? iconRow.implicitWidth : 0
