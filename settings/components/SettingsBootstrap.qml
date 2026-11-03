@@ -157,4 +157,11 @@ Item {
     function pluginRefresh(): string {
         return JSON.stringify(Services.PluginManagerService.plugins)
     }
+
+    // ── BAR FAILURE BANNER (moved from SettingsHostWindow, T4.5) ────────────
+    // The banner must be able to appear while the dashboard host window is
+    // UNLOADED (the bar's 120 s idle unload) — so it lives on the
+    // always-loaded bootstrap. Also strictly better than before: it exists
+    // from bar boot, not from the first settings open.
+    BarFailureBanner { }
 }

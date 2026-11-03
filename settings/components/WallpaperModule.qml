@@ -611,7 +611,10 @@ Item {
                             source: root.thumbFor(modelData)
                             fillMode: Image.PreserveAspectCrop
                             sourceSize: Qt.size(220, 140)
-                            asynchronous: true; cache: true
+                            // cache: false (T4.2) — the engine cache purges
+                            // whole galleries on rescan; don't keep N decoded
+                            // cells alive in the QML image cache on top.
+                            asynchronous: true; cache: false
                             opacity: thumbMa.containsMouse ? 1.0 : 0.85
                             Behavior on opacity { NumberAnimation { duration: 150 } }
                         }

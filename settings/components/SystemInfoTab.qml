@@ -150,7 +150,7 @@ Item {
                 color: parent.parent.chipColor
                 anchors.verticalCenter: parent.verticalCenter
                 SequentialAnimation on opacity {
-                    running: root.visible; loops: Animation.Infinite
+                    running: root.shown && root.visible; loops: Animation.Infinite
                     NumberAnimation { from: 1; to: 0.3; duration: 900; easing.type: Easing.InOutSine }
                     NumberAnimation { from: 0.3; to: 1; duration: 900; easing.type: Easing.InOutSine }
                 }
@@ -185,7 +185,7 @@ Item {
                 SequentialAnimation on opacity {
                     // NOTE: from inside the animation, parent.parent is the
                     // RowLayout (not this header) — reference the id instead.
-                    running: hdr.pulse && root.visible; loops: Animation.Infinite
+                    running: root.shown && hdr.pulse && root.visible; loops: Animation.Infinite
                     NumberAnimation { from: 1; to: 0.3; duration: 900; easing.type: Easing.InOutSine }
                     NumberAnimation { from: 0.3; to: 1; duration: 900; easing.type: Easing.InOutSine }
                 }
@@ -1311,7 +1311,7 @@ Item {
                     width: 6; height: 6; radius: 3; color: root.cSuccess
                     anchors.verticalCenter: parent.verticalCenter
                     SequentialAnimation on opacity {
-                        running: root.visible; loops: Animation.Infinite
+                        running: root.shown && root.visible; loops: Animation.Infinite
                         NumberAnimation { from: 1; to: 0.25; duration: 1100 }
                         NumberAnimation { from: 0.25; to: 1; duration: 1100 }
                     }

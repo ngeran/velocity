@@ -10,10 +10,12 @@
 // touches are the same instances the views see (import-split law; "services"
 // from a settings/-root file would be a SECOND instance).
 //
-// Root is an invisible Item so the PanelWindow, the power menu and the bar
-// failure banner (each their own window) all live in one Loader-loadable tree.
-// The loader never deactivates once active — closing the dashboard only sets
-// panelWindow.visible = false (same lifecycle as the notification center).
+// Root is an invisible Item so the PanelWindow and the power menu (each its
+// own window) live in one Loader-loadable tree. Closing only hides the
+// window; the BAR unloads this whole tree after 120 s idle (T4.5) and
+// re-loads it on the next open (shell.qml's settingsCall queues the first
+// call into onLoaded). The bar-failure banner moved to SettingsBootstrap so
+// it can appear while this tree is unloaded.
 // =============================================================================
 
 import Quickshell
@@ -99,11 +101,10 @@ Item {
         }
     }
 
-    // =========================================================================
-    // BAR FAILURE BANNER — "the bar is down and here's why" (BarWatch feeds
-    // it; auto-shows on bar death, auto-hides on recovery).
-    // =========================================================================
-    BarFailureBanner { }
+    // (The BAR FAILURE BANNER lived here until T4.5 — it moved to the
+    // always-loaded SettingsBootstrap so it can appear while this tree is
+    // idle-unloaded; a failure banner inside an unmounted tree is no
+    // banner at all.)
 
     // =========================================================================
     // PUBLIC API — the bar's IpcHandler targets forward here (same function
@@ -199,6 +200,16 @@ Item {
         hostRoot.shown = true
         panelWindow.visible = true
         dashboard.openCoreTab(section || "system")
+    }
+
+    // BAR pane deep link (Settings ▸ SETTINGS ▸ BAR; the SUPER+COMMA path).
+    // openSettingsSection lives on the dashboard shell, not this root —
+    // without this forwarder the bar's openBarSettings verb TypeError'd
+    // (pre-existing since the P2.1 host split; surfaced by the T4.5 drill).
+    function openSettingsSection(section) {
+        hostRoot.shown = true
+        panelWindow.visible = true
+        dashboard.openSettingsSection(section || "bar")
     }
 
     // Power menu overlay toggle (forwarded from the bar's powerMenu IPC target)

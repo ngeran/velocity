@@ -386,7 +386,15 @@ Item {
                 if (Config.DebugConfig.debugService) console.log("[WallpaperService] Live library empty:", root.liveDir)
             } else {
                 console.log("[WallpaperService] Found", root.liveList.length, "live wallpaper(s)")
-                startThumbWorker()
+                // T4.1: same missing-work gate as the still scan — without it
+                // every live scan re-ran the luma pass over a fully cached
+                // library. Luma counts as missing too: the sidecar may not
+                // exist yet (pre-sidecar thumbs, or a yavg that failed last
+                // pass) and this is the retry path.
+                var missing = false
+                for (var i = 0; i < lines.length; i++)
+                    if (!root.thumbMap[lines[i]] || !root.lumaMap[lines[i]]) { missing = true; break }
+                if (missing) startThumbWorker()
             }
 
             // Boot restore for engine content (video survives reboots only
@@ -453,9 +461,11 @@ Item {
     // THUMBNAILS — cached previews for BOTH libraries (P5.8)
     // ---------------------------------------------------------------------------
     // Qt can't decode video (or animated webp) into an Image, so live entries
-    // always needed a cached poster frame: ~/.cache/quickshell/wallpaper-thumbs/
+    // always needed a cached poster frame: CacheLocation already ends in
+    // /quickshell, so the real dir is ~/.cache/quickshell/quickshell/wallpaper-thumbs/
     // P5.8 extends the pass to stills — the gallery and ActiveWallpaperCard
-    // then serve 640px thumbs instead of decoding full 4K files. The same
+    // then serve 440px thumbs instead of decoding full 4K files (T4.2: the
+// widest consumer — the dashboard card — renders ≈400px, the grid 102px). The same
     // frame feeds matugen when an animated wallpaper is applied.
     // One worker process per scan; cache keys include mtime+size like the
     // engine's transcode cache, so edits invalidate naturally.
@@ -466,7 +476,8 @@ Item {
 
     BoundedProcess {   // bounded: batch thumb worker — self-exits; generous window for many uncached files (P8.1)
         id: thumbWorker
-        timeoutMs: 600000            // per-file ffmpeg ×2 + luma probe; a big uncached gallery is minutes
+        timeoutMs: 600000            // ffmpeg ×2 per UNCACHED thumb; a big uncached gallery is
+                                     // minutes — a cached one just cats .luma sidecars
         maxBytes: 4194304
         onDone: function (out) {
             var s = Wm.parseThumbStats(out)
@@ -483,9 +494,10 @@ Item {
     // BOTH libraries (P5.8): stills used to have no thumbs, so the gallery
     // and the ActiveWallpaperCard decoded full-size files. One pass covers
     // the union of the two scans' extensions; the mean-luma extraction
-    // (signalstats YAVG of the 640px thumbnail — P5.7's dark-only filter
-    // reads it) rides the same pass, so it costs one extra thumbnail-sized
-    // decode per UNCACHED file only.
+    // (signalstats YAVG of the thumbnail — P5.7's dark-only filter
+    // reads it) rides the same pass and is cached beside the thumb in a
+    // .luma sidecar (T4.1), so a fully cached library re-scans for stats
+    // only — zero ffmpeg per pass.
     function startThumbWorker() {
         thumbWorker.command = ["bash", "-c",
             'c="$1"; d1="$2"; d2="$3"; mkdir -p "$c"; ' +
@@ -497,19 +509,32 @@ Item {
             '-o -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mkv" -o -iname "*.mov" \\) -print0 | ' +
             'while IFS= read -r -d "" f; do ' +
             'key=$(printf "%s" "$f$(stat -c %Y:%s "$f")" | sha1sum | cut -c1-12); ' +
-            'out="$c/$(basename "${f%.*}")-$key.png"; ' +
+            // -w440 in the name (T4.2): the key bump keeps old 640px thumbs
+            // from being served (they stay on disk; sweeping them is
+            // deferred — nothing reads them once the maps point here).
+            'out="$c/$(basename "${f%.*}")-$key-w440.png"; ' +
             // Stage order matters: `-ss 1` first (video poster = frame at 1s,
             // not the black intro), no-seek second (stills/static webp — a
             // single-frame input seeks PAST its only frame and exits rc=0
             // with NO output, which is why the stages are separated by
             // existence checks, never `||`: a "successful" no-output run
             // would short-circuit the chain and every still would vanish).
-            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -ss 1 -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null; fi; ' +
-            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -i "$f" -frames:v 1 -vf scale=640:-2 "$out" 2>/dev/null; fi; ' +
+            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -ss 1 -i "$f" -frames:v 1 -vf scale=440:-2 "$out" 2>/dev/null; fi; ' +
+            'if [ ! -s "$out" ]; then ffmpeg -nostdin -loglevel error -y -i "$f" -frames:v 1 -vf scale=440:-2 "$out" 2>/dev/null; fi; ' +
             '[ -s "$out" ] || rm -f "$out"; ' +
+            // Luma rides a sidecar (<thumb>.luma, T4.1): computed ONCE per
+            // thumb generation, then just `cat` on every later scan — the
+            // old per-scan signalstats decode ran even for fully cached
+            // libraries. tmp+mv keeps a torn write from poisoning the
+            // number; an EMPTY yavg writes no sidecar, so it retries next
+            // scan (parseThumbStats drops empty fields the same way).
             'if [ -s "$out" ]; then ' +
-            'yavg=$(ffmpeg -nostdin -i "$out" -vf signalstats,metadata=print -f null - 2>&1 | ' +
+            'lum="$out.luma"; ' +
+            'if [ -s "$lum" ]; then yavg=$(cat "$lum"); ' +
+            'else yavg=$(ffmpeg -nostdin -i "$out" -vf signalstats,metadata=print -f null - 2>&1 | ' +
             'sed -n "s/.*YAVG=\\([0-9.]*\\).*/\\1/p" | head -1); ' +
+            '[ -n "$yavg" ] && printf "%s" "$yavg" > "$lum.tmp.$$" && mv -f "$lum.tmp.$$" "$lum"; ' +
+            'fi; ' +
             'printf "%s\\t%s\\t%s\\n" "$f" "$out" "$yavg"; ' +
             'fi; ' +
             'done; done',
@@ -518,15 +543,17 @@ Item {
     }
 
     // =========================================================================
-    // PERIODIC LIST REFRESH
+    // LIST RESCAN — on dashboard open (T4.1: the 60 s poll is gone)
     // =========================================================================
+    // The libraries only need to be fresh when someone is LOOKING at them,
+    // and the pane's Reload button / refreshList() already cover mid-session
+    // dir changes. Rising edge of dashboardVisible = one rescan per open;
+    // unchanged libraries cost no ffmpeg (both scans gate on missing work).
 
-    Timer {
-        id: refreshTimer
-        interval: 60000
-        running: Config.SharedState.dashboardVisible  // only when the dashboard is open
-        repeat: true
-        onTriggered: {
+    Connections {
+        target: Config.SharedState
+        function onDashboardVisibleChanged() {
+            if (!Config.SharedState.dashboardVisible) return
             if (root.wallpaperDir.length > 0) startScan()
             startLiveScan()
         }
@@ -570,8 +597,8 @@ Item {
     /// once it lands (animated → still handoff: reveal the still beneath).
     property bool pendingClear: false
 
-    /// Set after the first boot restore / initial pick, so the 60 s refresh
-    /// scans don't re-apply the same wallpaper forever.
+    /// Set after the first boot restore / initial pick, so later rescan
+    /// passes (dashboard open, refreshList) don't re-apply the same wallpaper.
     property bool bootRestored: false
 
     /// Legacy awww apply (stills, and gif/apng/webp fallback without engine).

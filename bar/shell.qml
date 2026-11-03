@@ -108,11 +108,12 @@ ShellRoot {
     // SETTINGS HOST (P2.1) — the dashboard runs in THIS process. Two file://
     // loaders into the settings tree (cross-root loads are legal; URI imports
     // are not — the import-split law). The bootstrap loads at boot (singleton
-    // pins + DisplayIpc/NetworkIpc + the bar-config write verbs); the window
-    // loads on first use and then stays mounted (close only hides it, like
-    // ncLoader). IPC target names are unchanged — handlers below forward.
+    // pins + DisplayIpc/NetworkIpc + the bar-config write verbs + the
+    // bar-failure banner); the window loads on first use, hides on close, and
+    // UNLOADS after 120 s idle (T4.5) — reopening re-loads transparently
+    // (settingsCall queues the first call into onLoaded). IPC target names
+    // are unchanged — handlers below forward.
     // =========================================================================
-    property bool settingsWanted: false
     property var _pendingSettingsCall: null
 
     readonly property string _settingsBootstrapUrl:
@@ -124,9 +125,23 @@ ShellRoot {
     // call flushes in the loader's onLoaded). Returns the function's value.
     // Two optional args — setBurnGuard(scope, val) needs both.
     function settingsCall(fn, arg1, arg2) {
-        if (!settingsHostLoader.active) {
-            settingsHostLoader.active = true
+        // Queue while the host tree is absent OR still loading — a call that
+        // lands in the item-null window would otherwise TypeError and be lost
+        // (T4.5 drill: the close toggle landed mid-load, the OPEN's replayed
+        // pending toggle re-showed the dashboard, and the idle sampler then
+        // correctly never counted it as idle).
+        if (!settingsHostLoader.active || settingsHostLoader.item === null) {
+            // toggle arriving over a queued toggle = user closed what they
+            // just opened — cancel instead of replaying (toggle()'s own
+            // double-fire guard can't act across the load boundary).
+            if (fn === "toggle" && _pendingSettingsCall && _pendingSettingsCall.fn === "toggle") {
+                _pendingSettingsCall = null
+                return "ok"
+            }
             _pendingSettingsCall = { fn: fn, arg1: arg1, arg2: arg2 }
+            settingsHostLoader.active = true   // pending FIRST — a sync file://
+                                               // load runs onLoaded inline, and
+                                               // it must see the queued call
             return "ok"
         }
         return _settingsInvoke(settingsHostLoader.item, fn, arg1, arg2)
@@ -321,12 +336,42 @@ ShellRoot {
 
     Loader {
         id: settingsHostLoader
-        active: shellRoot.settingsWanted
+        active: false   // T4.5: imperative only — settingsCall()/activeTab() load on demand
         source: shellRoot._settingsHostUrl
         onLoaded: {
             var p = shellRoot._pendingSettingsCall
             shellRoot._pendingSettingsCall = null
             if (p) shellRoot._settingsInvoke(item, p.fn, p.arg1, p.arg2)
+        }
+    }
+
+    // T4.5 — IDLE UNLOAD: ~120 s of mounted-but-hidden drops the host window
+    // so idle RSS returns to bar-only. The shown-state is SAMPLED, not bound:
+    // shell-side bindings provably never see `loader.item.shown` change on
+    // this file://-loaded item (open/close flips verified deaf in the T4.5
+    // drill), while imperative reads are always current. 8 ticks × 15 s ≈
+    // 120 s of idle; any tick that finds the dashboard shown resets the
+    // count — so an open dashboard never unloads, and a cold load that
+    // never shows (bare `activeTab` probe) is reclaimed too. Reopening just
+    // works: settingsCall() re-activates and queues into onLoaded. Leases
+    // the tree held (metrics extendLease ≤45 s) lapse well before this
+    // fires; LogsTab closes its journal stream in Component.onDestruction.
+    // The bar-failure banner lives on SettingsBootstrap so it survives this
+    // unload.
+    property int _settingsIdleTicks: 0
+    Timer {
+        id: settingsUnloadTimer
+        interval: 15000
+        repeat: true
+        running: settingsHostLoader.active    // loader's own notify — reliable
+        onTriggered: {
+            var it = settingsHostLoader.item
+            if (it && it.shown === true) { shellRoot._settingsIdleTicks = 0; return }
+            shellRoot._settingsIdleTicks++
+            if (shellRoot._settingsIdleTicks < 8) return
+            shellRoot._settingsIdleTicks = 0
+            settingsHostLoader.active = false
+            console.log("[shell] settings host idle-unloaded")
         }
     }
 

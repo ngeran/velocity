@@ -78,7 +78,9 @@ Item {
                      : Config.ThemeConfig.colors.warning
                 Layout.alignment: Qt.AlignVCenter
                 SequentialAnimation on opacity {
-                    running: root.visible; loops: Animation.Infinite
+                    // T4.3: dashboard-gated (streamWanted idiom) — the pulse
+                    // ran on behind the hidden window.
+                    running: root.visible && Config.SharedState.dashboardVisible; loops: Animation.Infinite
                     NumberAnimation { from: 0.4; to: 1; duration: 800; easing.type: Easing.InOutSine }
                     NumberAnimation { from: 1; to: 0.4; duration: 800; easing.type: Easing.InOutSine }
                 }

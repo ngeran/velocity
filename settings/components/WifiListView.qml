@@ -446,7 +446,9 @@ Item {
     // The bar writes the result tmp+mv and FileView doesn't fire on rename —
     // re-read on show plus a slow tick while visible (CoreEngine /proc idiom).
     Timer {
-        interval: 10000; repeat: true; running: viewRoot.visible
+        // T4.3: dashboard-gated too (CoreSystemPane idiom) — the slow tick
+        // ran on behind the hidden window.
+        interval: 10000; repeat: true; running: Config.SharedState.dashboardVisible && viewRoot.visible
         onTriggered: view.svc.refreshLastTest()
     }
 

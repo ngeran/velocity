@@ -51,7 +51,9 @@ Rectangle {
     readonly property string _sig: m.cpuUsage.toFixed(3)
     property int _agoSec: 0
     on_SigChanged: _agoSec = 0
-    Timer { interval: 1000; repeat: true; running: root.visible; onTriggered: root._agoSec++ }
+    // T4.3: dashboard-gated too (SystemInfoTab's shown&&visible idiom) — the
+    // age counter kept ticking behind the hidden window.
+    Timer { interval: 1000; repeat: true; running: Config.SharedState.dashboardVisible && root.visible; onTriggered: root._agoSec++ }
 
     onVisibleChanged: if (visible) m.refreshUptime()
 

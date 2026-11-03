@@ -41,13 +41,25 @@ Item {
             ? String(model[root.currentTab].key) : ""
     }
 
-    // O1 lazy tabs: every tab's Loader turns on at its FIRST visit and stays
-    // on for the session (switching back must be instant, and module state —
-    // drafts, scroll, selection — survives). Tab 0 is the landing tab, so it
-    // starts visited. Deep links land here too: every open path assigns
-    // currentTab, and the handler below marks it.
+    // O1 lazy tabs (as split by T4.5): LIGHT tabs turn on at their FIRST
+    // visit and stay sticky for the session (instant switch-back; drafts,
+    // scroll, selection survive). HEAVY tabs (sysinfo/wallpaper/logs) load
+    // on first visit too but UNLOAD when another tab is chosen — after the
+    // opacity fade: the _tabFadeGrace window keeps the leaving tab alive
+    // through its exit animation (deactivating immediately cut the fade
+    // dead — the B11 lesson at the loader block). Tab 0 is the landing tab,
+    // so it starts visited. Deep links land here too: every open path
+    // assigns currentTab, and the handler below marks it.
     property var visitedTabs: [true, false, false, false, false, false]
+    property bool _tabFadeGrace: false
+    Timer {
+        id: tabFadeGraceTimer
+        interval: Config.MotionConfig.animDurationNormal + 80
+        onTriggered: root._tabFadeGrace = false
+    }
     onCurrentTabChanged: {
+        root._tabFadeGrace = true
+        tabFadeGraceTimer.restart()
         if (currentTab < 0 || currentTab >= visitedTabs.length) return
         if (visitedTabs[currentTab]) return
         var v = visitedTabs.slice()
@@ -374,7 +386,7 @@ Item {
         Loader {
             id: dashboardLoader
             anchors.fill: parent
-            active: root.visitedTabs[0]
+            active: root.visitedTabs[0] && (root.currentTab === 0 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
 
             visible: opacity > 0.01
             opacity: root.currentTab === 0 ? 1.0 : 0.0
@@ -438,7 +450,7 @@ Item {
 
         Loader {
             anchors.fill: parent
-            active: root.visitedTabs[2]
+            active: root.visitedTabs[2] && (root.currentTab === 2 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
 
             visible: opacity > 0.01
             opacity: root.currentTab === 2 ? 1.0 : 0.0
@@ -506,7 +518,7 @@ Item {
             id: logsLoader
             anchors.fill: parent
             anchors.margins: 24
-            active: root.visitedTabs[4]
+            active: root.visitedTabs[4] && (root.currentTab === 4 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
 
             visible: opacity > 0.01
             opacity: root.currentTab === 4 ? 1.0 : 0.0
