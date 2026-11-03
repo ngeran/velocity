@@ -10,8 +10,13 @@ process — crash isolation and a auditable PAM path.
   bright strokes, pixel-shift orbit on always-on chrome, overlays fade to black within
   1.5 s of idle (see [Burn-in doctrine](#burn-in-doctrine)).
 - **Event-driven** — native Quickshell modules first (Networking, Bluetooth, Pipewire,
-  UPower, Notifications, SystemTray), long-lived streams where a module doesn't exist;
-  every `Process` is bounded (timeout + output cap). 0 spawns/min idle, 0.0 % idle CPU.
+  UPower, Notifications, SystemTray); where none exists, event streams and fork-free
+  `FileView` polls (the privacy pill rides a PipeWire event stream, hwmon temps are
+  sysfs `FileView` reads). Every `Process` is bounded (timeout + output cap), one-shots
+  go through `BoundedProcess`, long-lived streams restart on an escalating ladder
+  (250 ms → 30 s), and the systemd units are resource-capped (bar: 1536M soft / 2G hard
+  memory, CPUWeight 50, Nice 5) so a leak self-heals through `Restart=on-failure`.
+  0 spawns/min idle, 0.0 % idle CPU; the settings host unloads after 120 s idle.
 - **Single source of truth** — one service per domain, every surface (bar card, Control
   Center tile, settings pane) is a view of that owner.
 - **Plugin engine** — sandboxed-by-layout plugins with a manifest, a qs.Ui kit, live
