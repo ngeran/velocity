@@ -1,5 +1,5 @@
 // =============================================================================
-// SystemInfoTab.qml — tab 0: the telemetry dashboard
+// SystemInfoTab.qml — tab 0: the system dashboard
 // =============================================================================
 // Replaces the bento OverviewTab as the dashboard landing tab (the bar's
 // old FastfetchOverlay interior, rehosted as an embedded settings view;
@@ -34,11 +34,12 @@
 // matter (the blank-dashboard incident). A renewal Timer holds a 45s lease
 // while the tab is on screen; polls stop within one lease period of leaving.
 //
-// DISSOLVED-IN (2026-11-01): the former CORE › SYSTEM pane (CoreSystemPane —
-// the instrument cluster + the DeepCool LCD controller) lives at the bottom
-// of the scroll as the TELEMETRY + LCD section, and owns the coreVisible
-// telemetry grant CoreEngineTab used to hold. scrollToCluster() serves the
-// openCore system/lcd deep links; "events" remaps to the Logs tab.
+// SPLIT-OUT (2026-11-03): the TELEMETRY + LCD section (CoreSystemPane + the
+// DeepCool LCD controller, dissolved-in 2026-11-01) is its own heavy tab
+// again — TelemetryTab, sidebar index 1 — and took the coreVisible telemetry
+// grant with it. openCore system/lcd deep links land there; "events" still
+// remaps to the Logs tab. This tab keeps its own 45s metrics lease for the
+// dashboard cards.
 // =============================================================================
 
 import QtQuick
@@ -239,21 +240,6 @@ Item {
         running: root.shown && root.visible && root.m !== null
         repeat: true
         onTriggered: if (root.m) root.m.extendLease(45)
-    }
-
-    // ── TELEMETRY + LCD section scroll (openCore deep links + search) ───────
-    // Deferred a tick: the deep link can land before the layout pass has
-    // placed the section (cold open), and contentY needs its final y.
-    function scrollToCluster() {
-        clusterScrollNudge.restart()
-    }
-    Timer {
-        id: clusterScrollNudge
-        interval: 60
-        onTriggered: {
-            var maxY = Math.max(0, flick.contentHeight - flick.height)
-            flick.contentY = Math.min(clusterSection.y, maxY)
-        }
     }
 
     // =========================================================================
@@ -1258,45 +1244,6 @@ Item {
                     }
                 }
 
-                // ═════════════════════════════════════════════════════════
-                // TELEMETRY + LCD — the former CORE › SYSTEM pane, dissolved
-                // into the dashboard (openCore system|lcd deep links scroll
-                // here). Hosted on a fixed ~960px band matching the pane's
-                // natural composition (header 28 + load 128 + hero 296 + LCD
-                // 348 + precision fill): the viewport scrolls, the card rows
-                // above keep their rowH-derived sizes (floor law untouched).
-                // ═════════════════════════════════════════════════════════
-                ColumnLayout {
-                    id: clusterSection
-                    Layout.fillWidth: true
-                    spacing: Config.ControlConfig.space2
-
-                    HudHeader {
-                        title: "TELEMETRY + LCD"
-                        dotColor: root.cSecondary
-                        chipLabel: "INSTRUMENT CLUSTER"
-                        chipColor: root.cSecondary
-                    }
-
-                    // The grant is the load-bearing part: coreVisible is the
-                    // ONLY switch for MetricsService's dmonLoop (nvidia-smi
-                    // dmon), history rings and per-core rows — the 45s lease
-                    // the dashboard keeps does NOT flip it. Grant moved 1:1
-                    // from the deleted CoreEngineTab; the loader gates on the
-                    // window edge exactly like the old tab loader did, so
-                    // dmon runs only while the panel is open. Gating on the
-                    // metrics identity too makes the grant self-heal a bridge
-                    // re-attach (new object → reload → re-grant).
-                    Loader {
-                        id: clusterLoader
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 960
-                        active: root.shown && root.m !== null
-                        sourceComponent: Components.CoreSystemPane { anchors.fill: parent }
-                        onLoaded: if (root.m) root.m.coreVisible = true
-                        onActiveChanged: if (!active && root.m) root.m.coreVisible = false
-                    }
-                }
             }
         }
 

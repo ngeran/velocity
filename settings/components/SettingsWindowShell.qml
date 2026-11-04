@@ -43,14 +43,14 @@ Item {
 
     // O1 lazy tabs (as split by T4.5): LIGHT tabs turn on at their FIRST
     // visit and stay sticky for the session (instant switch-back; drafts,
-    // scroll, selection survive). HEAVY tabs (sysinfo/wallpaper/logs) load
-    // on first visit too but UNLOAD when another tab is chosen — after the
-    // opacity fade: the _tabFadeGrace window keeps the leaving tab alive
-    // through its exit animation (deactivating immediately cut the fade
-    // dead — the B11 lesson at the loader block). Tab 0 is the landing tab,
-    // so it starts visited. Deep links land here too: every open path
+    // scroll, selection survive). HEAVY tabs (sysinfo/telemetry/wallpaper/
+    // logs) load on first visit too but UNLOAD when another tab is chosen —
+    // after the opacity fade: the _tabFadeGrace window keeps the leaving tab
+    // alive through its exit animation (deactivating immediately cut the
+    // fade dead — the B11 lesson at the loader block). Tab 0 is the landing
+    // tab, so it starts visited. Deep links land here too: every open path
     // assigns currentTab, and the handler below marks it.
-    property var visitedTabs: [true, false, false, false, false, false]
+    property var visitedTabs: [true, false, false, false, false, false, false]
     property bool _tabFadeGrace: false
     Timer {
         id: tabFadeGraceTimer
@@ -134,11 +134,11 @@ Item {
             S.register({ key: "control:" + secs[i].key,
                 title: secs[i].label, tab: "control",
                 section: secs[i].key, keywords: "control section", item: null })
-        // Former CORE sections, dissolved: the telemetry cluster + LCD
-        // controller are a dashboard section (openCoreTab scrolls to it), the
+        // Former CORE sections: the telemetry cluster + LCD controller are
+        // the TELEMETRY tab (2026-11-03 split — openCoreTab lands on it), the
         // kernel event timeline is a Logs view (openCoreTab/"events" sets it).
-        S.register({ key: "dashboard:cluster", title: "Telemetry + LCD", tab: "dashboard",
-            section: "cluster",
+        S.register({ key: "telemetry:cluster", title: "Telemetry + LCD", tab: "telemetry",
+            section: "",
             keywords: "core engine telemetry lcd deepcool mystique aio tft cluster gpu cpu sensors instrument", item: null })
         S.register({ key: "logs:events", title: "Kernel Events", tab: "logs",
             section: "events",
@@ -201,9 +201,8 @@ Item {
             root.openWallpapersTab()
         } else if (tab === "dashboard") {
             root.openDashboardTab()
-            // "cluster" = the TELEMETRY + LCD section (former CORE › SYSTEM).
-            if (entry.section === "cluster" && dashboardLoader.item)
-                dashboardLoader.item.scrollToCluster()
+        } else if (tab === "telemetry") {
+            root.openTelemetryTab()
         }
         if (entry.item) {
             flashTimer.target = entry.item
@@ -236,6 +235,15 @@ Item {
         }
     }
 
+    // Land on the TELEMETRY tab (index 1 — the instrument cluster + LCD
+    // controller; the openCore system/lcd deep-link home since the
+    // 2026-11-03 split). Key lookup, same idiom as the other open*Tab fns.
+    function openTelemetryTab() {
+        for (var i = 0; i < navBar.tabModel.length; i++) {
+            if (navBar.tabModel[i].key === "telemetry") { root.currentTab = i; break }
+        }
+    }
+
     // Open the Control tab and switch to a specific sub-section
     function openControlTab(section) {
         // Find Control by KEY, not hardcoded index — survives future reorders.
@@ -253,19 +261,17 @@ Item {
     // the openCore IPC contract (bar/shell.qml → SettingsHostWindow → here)
     // is unchanged; its sections land on their new homes:
     //   "events"            → the Logs tab, EVENTS view
-    //   "system"|"lcd"|""   → the dashboard, scrolled to the TELEMETRY + LCD
-    //                         section ("lcd": the legacy MYSTIQUE AIO remap —
-    //                         the AIO controller lives in the cluster pane)
+    //   "system"|"lcd"|""   → the TELEMETRY tab (the cluster was the
+    //                         dashboard's bottom section until the 2026-11-03
+    //                         split; "lcd" remains the legacy MYSTIQUE AIO
+    //                         remap — the AIO controller lives in the cluster)
     function openCoreTab(section) {
         if (section === "events") {
             root.openLogsTab()
             if (logsLoader.item) logsLoader.item.mode = "events"
             return
         }
-        if (section === "lcd") section = "system"
-        root.openDashboardTab()
-        if (dashboardLoader.item && dashboardLoader.item.scrollToCluster)
-            dashboardLoader.item.scrollToCluster()
+        root.openTelemetryTab()
     }
 
     function openSettingsTab() {
@@ -413,17 +419,52 @@ Item {
         }
 
         // =====================================================================
-        // TAB 1: THEME SELECTION
+        // TAB 1: TELEMETRY + LCD (split out of the dashboard scroll on
+        // 2026-11-03 — CoreSystemPane + the DeepCool LCD controller; owns the
+        // coreVisible telemetry grant and its own 45s metrics lease while
+        // shown, so leaving the tab stops the dmon stream)
+        // =====================================================================
+
+        Loader {
+            id: telemetryLoader
+            anchors.fill: parent
+            active: root.visitedTabs[1] && (root.currentTab === 1 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
+
+            visible: opacity > 0.01
+            opacity: root.currentTab === 1 ? 1.0 : 0.0
+            x: root.currentTab === 1 ? 0 : (root.currentTab < 1 ? 20 : -20)
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Config.MotionConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Config.MotionConfig.animDurationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            sourceComponent: Components.TelemetryTab {
+                anchors.fill: parent
+            }
+        }
+
+        // =====================================================================
+        // TAB 2: THEME SELECTION
         // =====================================================================
 
         Loader {
             anchors.fill: parent
             anchors.margins: 24
-            active: root.visitedTabs[1]
+            active: root.visitedTabs[2]
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 1 ? 1.0 : 0.0
-            x: root.currentTab === 1 ? 0 : (root.currentTab < 1 ? 20 : -20)
+            opacity: root.currentTab === 2 ? 1.0 : 0.0
+            x: root.currentTab === 2 ? 0 : (root.currentTab < 2 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -445,16 +486,16 @@ Item {
         }
 
         // =====================================================================
-        // TAB 2: WALLPAPER MANAGEMENT
+        // TAB 3: WALLPAPER MANAGEMENT
         // =====================================================================
 
         Loader {
             anchors.fill: parent
-            active: root.visitedTabs[2] && (root.currentTab === 2 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
+            active: root.visitedTabs[3] && (root.currentTab === 3 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 2 ? 1.0 : 0.0
-            x: root.currentTab === 2 ? 0 : (root.currentTab < 2 ? 20 : -20)
+            opacity: root.currentTab === 3 ? 1.0 : 0.0
+            x: root.currentTab === 3 ? 0 : (root.currentTab < 3 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -476,17 +517,17 @@ Item {
         }
 
         // =====================================================================
-        // TAB 3: CONTROL MODULE
+        // TAB 4: CONTROL MODULE
         // =====================================================================
 
         Loader {
             id: controlLoader
             anchors.fill: parent
-            active: root.visitedTabs[3]
+            active: root.visitedTabs[4]
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 3 ? 1.0 : 0.0
-            x: root.currentTab === 3 ? 0 : (root.currentTab < 3 ? 20 : -20)
+            opacity: root.currentTab === 4 ? 1.0 : 0.0
+            x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -509,7 +550,7 @@ Item {
         }
 
         // =====================================================================
-        // TAB 4: LOGS (in-app journal + kernel-event view — LogService gates
+        // TAB 5: LOGS (in-app journal + kernel-event view — LogService gates
         // the stream on visibility + window-shown, so an idle tab costs
         // nothing; the EVENTS view additionally suspends the journal stream)
         // =====================================================================
@@ -518,11 +559,11 @@ Item {
             id: logsLoader
             anchors.fill: parent
             anchors.margins: 24
-            active: root.visitedTabs[4] && (root.currentTab === 4 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
+            active: root.visitedTabs[5] && (root.currentTab === 5 || root._tabFadeGrace)   // heavy: unload post-fade (T4.5)
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 4 ? 1.0 : 0.0
-            x: root.currentTab === 4 ? 0 : (root.currentTab < 4 ? 20 : -20)
+            opacity: root.currentTab === 5 ? 1.0 : 0.0
+            x: root.currentTab === 5 ? 0 : (root.currentTab < 5 ? 20 : -20)
 
             Behavior on opacity {
                 NumberAnimation {
@@ -544,7 +585,7 @@ Item {
         }
 
         // =====================================================================
-        // TAB 5: SETTINGS (rail + fixed panes — SettingsModule; same
+        // TAB 6: SETTINGS (rail + fixed panes — SettingsModule; same
         // architecture as Control. Extracted from the former inline
         // scrolling block. Settings are managed by SettingsConfigService and persisted on every change.)
         // =====================================================================
@@ -552,11 +593,11 @@ Item {
         Loader {
             id: settingsLoader
             anchors.fill: parent
-            active: root.visitedTabs[5]
+            active: root.visitedTabs[6]
 
             visible: opacity > 0.01
-            opacity: root.currentTab === 5 ? 1.0 : 0.0
-            x: root.currentTab === 5 ? 0 : 20
+            opacity: root.currentTab === 6 ? 1.0 : 0.0
+            x: root.currentTab === 6 ? 0 : 20
 
             Behavior on opacity {
                 NumberAnimation {
@@ -579,11 +620,10 @@ Item {
             }
         }
 
-        // (The former TAB 4 CORE ENGINE lived here — dissolved: its SYSTEM
-        // pane is the dashboard's TELEMETRY + LCD section, its EVENTS pane is
-        // the Logs tab's EVENTS view. openCore deep links remap in
-        // openCoreTab; the telemetry visibility grant moved with the pane
-        // into SystemInfoTab.)
+        // (The former CORE ENGINE tab lived here — dissolved 2026-11-01; its
+        // SYSTEM pane became the TELEMETRY tab above on 2026-11-03, its
+        // EVENTS pane is the Logs tab's EVENTS view. openCore deep links remap
+        // in openCoreTab; the telemetry grant lives in TelemetryTab.)
     }
 
     // =========================================================================

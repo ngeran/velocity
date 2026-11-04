@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "nikos.artcraft",
+  "name": "ArtCraft",
+  "version": "0.1.0",
+  "description": "PhotoCraft / VectorCraft / PdfCraft update indicator: boot check, version table, per-app upgrades with live progress.",
+  "author": "nikos",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "ServiceRoot.qml"
+  },
+  "bar": {
+    "defaultSection": "right",
+    "collapsePriority": 35
+  },
+  "commands": [
+    "artcraft-check",
+    "artcraft-upgrade",
+    "systemd-run"
+  ],
+  "ipc": [
+    "toggle",
+    "open",
+    "close",
+    "check",
+    "update",
+    "updateAll"
+  ],
+  "settings": {
+    "hideWhenCurrent": {
+      "type": "bool",
+      "default": false,
+      "label": "Hide the icon when everything is current"
+    },
+    "checkOnBoot": {
+      "type": "bool",
+      "default": true,
+      "label": "Check for updates when the bar starts"
+    },
+    "checkIntervalHours": {
+      "type": "number",
+      "default": 6,
+      "min": 1,
+      "max": 168,
+      "label": "Check interval (hours)"
+    }
+  }
+}

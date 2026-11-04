@@ -117,7 +117,11 @@ QtObject {
     function run(argv) {
         if (!Array.isArray(argv) || argv.length === 0) { ctx.log("run: argv must be a non-empty array"); return false }
         var cmd = String(argv[0])
-        var declared = ctx.manifest && Array.isArray(ctx.manifest.commands) ? ctx.manifest.commands : []
+        // Manifest arrays cross the QML/C++ boundary as QVariantList, for
+        // which Array.isArray() is false. Normalize to a real JS array.
+        var declared = []
+        var raw = ctx.manifest && ctx.manifest.commands ? ctx.manifest.commands : []
+        for (var i = 0; i < raw.length; i++) declared.push(String(raw[i]))
         if (declared.indexOf(cmd) === -1) {
             ctx.log("run refused: '" + cmd + "' is not in manifest.commands")
             return false

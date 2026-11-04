@@ -129,7 +129,7 @@ in review and gated by the qa suite:
 | Path | What |
 |---|---|
 | `bar/` | The bar process: `shell.qml` host, engine (plugin host, popup coordinator), styles (`vector` default, `notch`, `ryoku`, `island`), builtins, components, services. See [bar/CLAUDE.md](bar/CLAUDE.md). |
-| `settings/` | The settings app (loaded into the bar process on first open): themes, wallpapers, control, core, logs panes. |
+| `settings/` | The settings app (loaded into the bar process on first open): system-info dashboard, telemetry + LCD cluster, themes, wallpapers, control, logs panes. |
 | `plugins/` | Opt-in plugins (`nikos.*`): clock, keyboard, power, storage, timezones. See [plugins/README.md](plugins/README.md). |
 | `shared/` | Files byte-identical across import roots, distributed by `tools/sync-shared`. See [shared/README.md](shared/README.md). |
 | `lock/` | The lock screen (separate process, WlSessionLock + PAM). |

@@ -6,6 +6,7 @@ ThemeModule 1.0 ThemeModule.qml
 ThemePresetCard 1.0 ThemePresetCard.qml
 ManualThemeEditor 1.0 ManualThemeEditor.qml
 SystemInfoTab 1.0 SystemInfoTab.qml
+TelemetryTab 1.0 TelemetryTab.qml
 HudLedBar 1.0 HudLedBar.qml
 HudDotRing 1.0 HudDotRing.qml
 HudMeterBar 1.0 HudMeterBar.qml

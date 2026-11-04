@@ -344,7 +344,7 @@ Rectangle {
                             // how tall the header/footer strips run
                             Row {
                                 anchors.top: parent.top
-                                anchors.topMargin: 17
+                                anchors.topMargin: 22
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 spacing: 12
                                 Text {

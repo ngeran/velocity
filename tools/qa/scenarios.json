@@ -472,7 +472,7 @@
     {
       "id": "settings-pages-deeplink",
       "name": "Settings deep-links land on the requested page and the window hides clean",
-      "covers": "openCore remap (CORE tab dissolved 2026-11-01: system→dashboard TELEMETRY + LCD, events→logs EVENTS view) + openControlDisplay deep-link family; activeTab probes; hide verb",
+      "covers": "openCore remap (CORE tab dissolved 2026-11-01; system→TELEMETRY tab since the 2026-11-03 split, events→logs EVENTS view) + openControlDisplay deep-link family; activeTab probes; hide verb",
       "steps": [
         "ipc bar SettingsWindow openCore system",
         "sleep 1",
@@ -487,7 +487,7 @@
       ],
       "asserts": [
         "test ! -s $QA_EV/01-SettingsWindow-openCore-system.out",
-        "grep -q dashboard $QA_EV/03-SettingsWindow-activeTab.out",
+        "grep -q telemetry $QA_EV/03-SettingsWindow-activeTab.out",
         "grep -q logs $QA_EV/06-SettingsWindow-activeTab.out",
         "grep -q control $QA_EV/09-SettingsWindow-activeTab.out",
         "test ! -s $QA_EV/10-SettingsWindow-hide.out"

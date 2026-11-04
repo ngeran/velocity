@@ -4,7 +4,7 @@
 // The mock's tactical cluster: pure-black panel, 32px engineer's grid
 // backdrop, amber/cyan telemetry (HudConfig tokens — fixed, theme-independent),
 // hairline dividers between bands (not floating cards). Top to bottom:
-//   [A] header rail   SYSTEM / TELEMETRY · DIGITAL INSTRUMENT CLUSTER · ● LIVE
+//   [A] header rail   (removed 2026-11-03 — see the band note below)
 //   [B] load band     50-segment LED CPU meter, midpoint tick, 0/50/100 axis
 //   [C] hero row      GPU (dial + sub-engines + VRAM) | MEM & CPU (pools)
 //   [D] LCD band      embedded DeepCool Mystique controller (LcdControllerPanel)
@@ -134,36 +134,11 @@ Rectangle {
         spacing: 0
 
         // ═════════════════════════════════════════════════════════════════
-        // [A] HEADER RAIL — identity · cluster title · live status
+        // ([A] HEADER RAIL removed 2026-11-03 — "SYSTEM / TELEMETRY · LIVE"
+        // duplicated the TELEMETRY tab's own chrome and its 28px went back to
+        // the bands; freshness still reads in the [F] footer. The remaining
+        // bands keep their letters.)
         // ═════════════════════════════════════════════════════════════════
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 28
-
-            Text { anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter
-                text: "SYSTEM / TELEMETRY"
-                color: Config.HudConfig.textMid
-                font.family: Config.HudConfig.fontData; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1.6 }
-            Text { anchors.centerIn: parent
-                text: "DIGITAL INSTRUMENT CLUSTER"
-                color: Config.HudConfig.textFaint
-                font.family: Config.HudConfig.fontData; font.pixelSize: 8; font.letterSpacing: 2.4 }
-            RowLayout { anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter; spacing: 6
-                Rectangle {
-                    width: 6; height: 6; radius: 3
-                    color: Config.HudConfig.amber
-                    SequentialAnimation on opacity {
-                        loops: Animation.Infinite
-                        NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
-                        NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
-                    }
-                }
-                Text { text: "LIVE"
-                    color: Config.HudConfig.amber
-                    font.family: Config.HudConfig.fontData; font.pixelSize: 9; font.bold: true; font.letterSpacing: 1.6 }
-            }
-        }
-        HDivider { }
 
         // ═════════════════════════════════════════════════════════════════
         // [B] LOAD BAND — 50-segment LED matrix, midpoint tick, axis.

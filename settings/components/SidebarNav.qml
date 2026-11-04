@@ -9,8 +9,10 @@
 //   compact: today's icon rail verbatim.
 //
 // TAB MODEL IS CONTRACT: tabModel keys/order/indices drive the index-signficant
-// Loaders in SettingsWindowShell — never reorder here. (The former CORE tab
-// was dissolved into SYS INFO + LOGS; `openCore` deep links remap in
+// Loaders in SettingsWindowShell — never reorder here; if you must insert,
+// renumber every Loader's visitedTabs/opacity/x literals in the same change
+// (done for the TELEMETRY insert, 2026-11-03). (The former CORE tab was
+// dissolved into SYS INFO + LOGS + TELEMETRY; `openCore` deep links remap in
 // SettingsWindowShell.openCoreTab.)
 //
 // PUBLIC API:
@@ -36,11 +38,12 @@ Rectangle {
 
     readonly property var tabModel: [
         { key: "dashboard",  label: "SYS INFO",    icon: "⊞" },   // index 0
-        { key: "themes",     label: "THEMES",      icon: "◑" },   // index 1
-        { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 2
-        { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 3
-        { key: "logs",       label: "LOGS",        icon: "≡" },   // index 4  (in-app journal tab)
-        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 5
+        { key: "telemetry",  label: "TELEMETRY",   icon: "◈" },   // index 1  (cluster + LCD, split from SYS INFO 2026-11-03)
+        { key: "themes",     label: "THEMES",      icon: "◑" },   // index 2
+        { key: "wallpapers", label: "WALLPAPERS",  icon: "⬚" },   // index 3
+        { key: "control",    label: "CONTROL",     icon: "⋮" },   // index 4
+        { key: "logs",       label: "LOGS",        icon: "≡" },   // index 5  (in-app journal tab)
+        { key: "settings",   label: "SETTINGS",    icon: "⚙" }    // index 6
     ]
 
     readonly property bool compact: Config.UIScale.compact
