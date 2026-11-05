@@ -5,13 +5,16 @@
 // (components/NotificationRow.qml, MIT), re-tokenised for this rice: PopupMetrics
 // scaling, JetBrains Mono, MotionConfig durations, theme colors.
 //
-// Deliberate departures from the rice's old toast language (pure #000, radius 0,
-// hairline borders): the omarchy card is a soft raised surface — fill = text
-// color at 6 % (11 % hovered), rounded corners, NO border — and the same shape
-// serves BOTH surfaces (toast + center), omarchy's "finding the toast you missed
-// still sitting where it landed" doctrine. Fill opacity stays ≤ 0.11 (QD-OLED:
-// dim transient surfaces, no static bright fills); the countdown border canvas
-// became a thin draining accent line at the card's foot.
+// The card is a quiet raised surface: a low-alpha fill, a hairline edge, and
+// one small status dot — no full-height urgency rail. Criticality shows as a
+// faint error wash plus the dot; unread shares the same dot in the accent.
+// That keeps the card readable at a glance without a saturated bar shouting
+// across the screen, which is what the old leading rail did.
+//
+// Media is never shown twice: the avatar prefers the resolved app icon, then
+// falls back to the notification's own image; the inline image renders only
+// when it is NOT already the avatar. A drive notification that carried a
+// thumbnail used to repeat that thumbnail at 72px below its own 32px copy.
 //
 // One row, two modes:
 //   toast:  true  → countdown line, inline action buttons (compact, 2-line body)
@@ -52,6 +55,7 @@ Rectangle {
 
     readonly property bool hovered: hov.hovered
     readonly property color fg: Config.BarConfig.colorText
+    readonly property color errorColor: Config.ThemeConfig.colors.error
     readonly property bool isCritical: root.n().urgency === 2
 
     // Countdown frame (toasts only): the accent line drains over the toast's
@@ -81,14 +85,19 @@ Rectangle {
         return out
     }
 
-    // Icon resolution chain — per-notification media first (an avatar, album
-    // art), then the desktop entry, then the app-icon/theme name the arrival
-    // carried; glyph (nerd font) and initial cover the rest. All of it lives
-    // in the service so both surfaces resolve identically.
-    readonly property string iconSource: (root.n().image || "") !== ""
-        ? root.n().image
-        : Services.NotificationService.iconUrlFor(root.n().appIcon, root.n().appName)
+    // Media resolution: app identity first, content second. The desktop entry
+    // (or an explicit app icon) makes the avatar; only when the app has no
+    // icon does the notification's own image stand in for it. The inline image
+    // is then suppressed if it already became the avatar, so one picture is
+    // never stacked twice on the same card.
+    readonly property string appIconSource: Services.NotificationService.iconUrlFor(
+        root.n().appIcon, root.n().appName)
+    readonly property string mediaImage: String(root.n().image || "")
+    readonly property string iconSource: root.appIconSource !== ""
+        ? root.appIconSource : root.mediaImage
     readonly property bool hasIcon: root.iconSource !== ""
+    readonly property bool showInlineImage: root.mediaImage !== ""
+        && root.mediaImage !== root.iconSource
     readonly property string initial: {
         var a = String(root.n().appName || "")
         return a === "" ? "?" : a.charAt(0).toUpperCase()
@@ -116,14 +125,25 @@ Rectangle {
         return Qt.formatDateTime(new Date(root.n().timestamp || 0), "HH:mm")
     }
 
-    // The card is made of the foreground at low opacity — always whatever
-    // contrasts with the panel it sits on, light theme included.
-    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b,
-                   root.hovered ? 0.11 : 0.06)
-    radius: Config.PopupMetrics.px(10)
+    // A low-alpha wash over the desktop, edged by a hairline so the card holds
+    // its shape on any wallpaper. Critical cards take the same wash in the
+    // error hue — a tint you notice, not a rail that interrupts.
+    color: {
+        var c = root.isCritical ? root.errorColor : root.fg
+        return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.09 : 0.06)
+    }
+    radius: Config.PopupMetrics.px(12)
+    border.width: Config.PopupMetrics.hairline(root)
+    border.color: {
+        var c = root.isCritical ? root.errorColor : root.fg
+        if (root.isCritical)
+            return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.36 : 0.22)
+        return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.16 : 0.09)
+    }
     Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
 
-    implicitHeight: texts.implicitHeight + Config.PopupMetrics.px(20)
+    implicitHeight: Math.max(texts.implicitHeight, avatar.height)
+                    + Config.PopupMetrics.px(24)
 
     // Expired rows read as memory, not as mail: the whole card quieted.
     opacity: root.dead ? 0.45 : 1.0
@@ -140,19 +160,6 @@ Rectangle {
         }
     }
 
-    // Critical keeps the one piece of color on the card: a bar down the
-    // leading edge, readable from across the room an hour later.
-    Rectangle {
-        visible: root.isCritical
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: Config.PopupMetrics.px(6)
-        width: Config.PopupMetrics.px(3)
-        radius: width / 2
-        color: Config.ThemeConfig.colors.error
-    }
-
     // The icon slot is always the same size, filled or not — a list whose
     // left edge moves depending on whether an app shipped an icon is a
     // list you cannot scan down.
@@ -161,16 +168,21 @@ Rectangle {
         anchors.left: parent.left
         anchors.leftMargin: Config.PopupMetrics.px(12)
         anchors.top: parent.top
-        anchors.topMargin: Config.PopupMetrics.px(10)
+        anchors.topMargin: Config.PopupMetrics.px(12)
         width: Config.PopupMetrics.px(32)
         height: Config.PopupMetrics.px(32)
 
+        // A soft plate behind the glyph/initial; icons sit on it too, so a
+        // transparent app icon still has an edge to hold.
         Rectangle {
             anchors.fill: parent
             radius: Config.PopupMetrics.px(9)
-            visible: !root.hasIcon
-            color: root.fg
-            opacity: 0.12
+            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+            border.width: Config.PopupMetrics.hairline(root)
+            border.color: root.isCritical
+                ? Qt.rgba(root.errorColor.r, root.errorColor.g,
+                          root.errorColor.b, 0.22)
+                : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
         }
 
         // The sender's nerd glyph, for apps that arrive without an icon.
@@ -198,8 +210,10 @@ Rectangle {
             opacity: 0.7
         }
 
+        // Inset one pixel so the plate reads as a frame around the artwork.
         Image {
             anchors.fill: parent
+            anchors.margins: root.hasIcon ? Config.PopupMetrics.px(1) : 0
             visible: root.hasIcon
             source: root.iconSource
             sourceSize.width: width * 2
@@ -213,78 +227,95 @@ Rectangle {
     Column {
         id: texts
         anchors.left: avatar.right
-        anchors.leftMargin: Config.PopupMetrics.px(10)
+        anchors.leftMargin: Config.PopupMetrics.px(11)
         anchors.right: parent.right
-        anchors.rightMargin: Config.PopupMetrics.px(12)
+        anchors.rightMargin: Config.PopupMetrics.px(14)
         anchors.top: parent.top
-        anchors.topMargin: Config.PopupMetrics.px(10)
-        spacing: Config.PopupMetrics.px(2)
+        anchors.topMargin: Config.PopupMetrics.px(12)
+        spacing: Config.PopupMetrics.px(3)
 
-        // App and time on one line above the message, the way every chat
-        // client arranges the same three facts. The app name is the quiet
-        // one; what you came to read is underneath.
+        // App and time on one line above the message. The one status dot
+        // lives here, at the start of the quiet label — urgency and unread
+        // share the slot instead of painting the card's whole edge.
         Item {
             width: parent.width
-            height: appLabel.implicitHeight
+            height: Math.max(appLabel.implicitHeight, Config.PopupMetrics.px(10))
+
+            Rectangle {
+                id: indicator
+                visible: root.isCritical || root.unread
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: Config.PopupMetrics.px(5)
+                height: width
+                radius: width / 2
+                color: root.isCritical ? root.errorColor : Config.BarConfig.colorAccent
+                opacity: 0.9
+            }
 
             Text {
                 textFormat: Text.PlainText
                 id: appLabel
-                anchors.left: parent.left
-                width: parent.width - whenLabel.implicitWidth - Config.PopupMetrics.px(20)
+                anchors.left: indicator.visible ? indicator.right : parent.left
+                anchors.leftMargin: indicator.visible ? Config.PopupMetrics.px(7) : 0
+                anchors.right: trailing.left
+                anchors.rightMargin: Config.PopupMetrics.px(10)
+                anchors.verticalCenter: parent.verticalCenter
                 text: root.n().appName || ""
                 elide: Text.ElideRight
                 font.family: Config.BarConfig.fontUi
                 font.pixelSize: Config.PopupMetrics.px(9)
+                font.letterSpacing: 0.6
+                font.capitalization: Font.AllUppercase
                 color: root.fg
-                opacity: 0.5
+                opacity: 0.55
             }
 
-            // Swapped for the dismiss button while the pointer is over the
-            // card — they never coexist, so neither makes room for the
-            // other and the corner stays quiet until you reach for it.
-            Text {
-                textFormat: Text.PlainText
-                id: whenLabel
-                anchors.right: parent.right
-                visible: !root.hovered || root.dead
-                text: root.when
-                font.family: Config.BarConfig.fontUi
-                font.pixelSize: Config.PopupMetrics.px(9)
-                color: root.fg
-                opacity: 0.45
-            }
-
-            Rectangle {
-                id: dismiss
+            // Right corner: the clock, or a bare dismiss when reached for.
+            // They never coexist, so neither makes room for the other. The
+            // slot is as wide as whichever holds it — "59m ago" must never
+            // overdraw the app label that anchors to its left edge.
+            Item {
+                id: trailing
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                visible: root.hovered && !root.dead
-                width: Config.PopupMetrics.px(16)
-                height: width
-                radius: width / 2
-                color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b,
-                               dismissMa.containsMouse ? 0.25 : 0.15)
+                width: Math.max(Config.PopupMetrics.px(18), whenLabel.implicitWidth)
+                height: parent.height
 
                 Text {
                     textFormat: Text.PlainText
-                    anchors.centerIn: parent
+                    id: whenLabel
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: !root.hovered || root.dead
+                    text: root.when
+                    font.family: Config.BarConfig.fontUi
+                    font.pixelSize: Config.PopupMetrics.px(9)
+                    color: root.fg
+                    opacity: 0.4
+                }
+
+                Text {
+                    textFormat: Text.PlainText
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.hovered && !root.dead
                     // A multiplication sign, not the letter x: it is in
                     // every font, at every size, and reads as "close".
                     text: "×"
                     font.family: Config.BarConfig.fontUi
-                    font.pixelSize: Config.PopupMetrics.px(10)
+                    font.pixelSize: Config.PopupMetrics.px(13)
                     color: root.fg
-                    opacity: 0.8
-                }
+                    opacity: dismissMa.containsMouse ? 0.9 : 0.45
 
-                MouseArea {
-                    id: dismissMa
-                    anchors.fill: parent
-                    anchors.margins: -Config.PopupMetrics.px(3)
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.removeRequested()
+                    MouseArea {
+                        id: dismissMa
+                        anchors.fill: parent
+                        anchors.margins: -Config.PopupMetrics.px(4)
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.removeRequested()
+                    }
                 }
             }
         }
@@ -316,28 +347,29 @@ Rectangle {
             font.family: Config.BarConfig.fontUi
             font.pixelSize: Config.PopupMetrics.px(10)
             color: root.fg
-            opacity: 0.75
+            opacity: 0.65
         }
 
-        // The picture, when the notification came with one — the frame a
-        // camera caught, the screenshot that was just taken. Contained
-        // rather than edge-to-edge: a run of them keeps the list scannable
-        // however tall the originals were.
+        // The picture, when the notification came with one that is not
+        // already the avatar — the frame a camera caught, the screenshot
+        // that was just taken. Short and contained so a run of them keeps
+        // the list scannable however tall the originals were.
         Image {
             width: parent.width
-            visible: (root.n().image || "") !== ""
-            height: visible ? Config.PopupMetrics.px(72) : 0
-            source: root.n().image || ""
+            visible: root.showInlineImage
+            height: visible ? Config.PopupMetrics.px(60) : 0
+            source: root.mediaImage
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             smooth: true
+            opacity: 0.92
         }
 
         // Progress track (native hints.value).
         Rectangle {
             width: parent.width
             visible: root.n().progress !== undefined && root.n().progress >= 0
-            height: Config.PopupMetrics.px(3)
+            height: Config.PopupMetrics.px(2)
             radius: height / 2
             color: root.fg
             opacity: 0.08
@@ -350,10 +382,12 @@ Rectangle {
             }
         }
 
-        // Toast actions: quiet text buttons, one hover-tinted pill each.
+        // Toast actions: quiet text that lights in the accent on hover. No
+        // resting fill means a card with actions still reads as one message,
+        // not as a little toolbar.
         Row {
             width: parent.width
-            spacing: Config.PopupMetrics.px(6)
+            spacing: Config.PopupMetrics.px(4)
             visible: root.visibleActions.length > 0
 
             Repeater {
@@ -365,12 +399,11 @@ Rectangle {
                     // known Quickshell trap).
                     property var act: modelData
 
-                    width: actLabel.implicitWidth + Config.PopupMetrics.px(12)
-                    height: actLabel.implicitHeight + Config.PopupMetrics.px(5)
-                    radius: Config.PopupMetrics.px(4)
+                    width: actLabel.implicitWidth + Config.PopupMetrics.px(16)
+                    height: Config.PopupMetrics.px(20)
+                    radius: Config.PopupMetrics.px(5)
                     color: actMa.containsMouse
-                           ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.10)
-                           : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.05)
+                           ? Config.ThemeConfig.accentTint : "transparent"
 
                     Text {
                         id: actLabel
@@ -378,9 +411,11 @@ Rectangle {
                         textFormat: Text.PlainText
                         text: act ? (act.text || "") : ""
                         font.family: Config.BarConfig.fontUi
-                        font.pixelSize: Config.PopupMetrics.px(10)
+                        font.pixelSize: Config.PopupMetrics.px(9)
                         font.bold: true
-                        color: actMa.containsMouse ? root.fg
+                        font.letterSpacing: 0.4
+                        font.capitalization: Font.AllUppercase
+                        color: actMa.containsMouse ? Config.BarConfig.colorAccent
                                                    : Config.BarConfig.colorTextDim
                     }
                     MouseArea {
@@ -395,31 +430,18 @@ Rectangle {
         }
     }
 
-    // Unread marker: an accent dot on the leading edge, where an unread
-    // mail sits in every mail client.
-    Rectangle {
-        visible: root.unread && !root.isCritical
-        anchors.left: parent.left
-        anchors.leftMargin: Config.PopupMetrics.px(4)
-        anchors.verticalCenter: parent.verticalCenter
-        width: Config.PopupMetrics.px(5)
-        height: width
-        radius: width / 2
-        color: Config.BarConfig.colorAccent
-    }
-
     // The draining countdown, along the card's foot: accent at the
-    // ornament cap (0.45), receding as the lifespan runs out.
+    // ornament cap (0.5), receding as the lifespan runs out.
     Rectangle {
         visible: root.countingDown
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Config.PopupMetrics.px(5)
+        anchors.bottomMargin: Config.PopupMetrics.px(7)
         anchors.left: parent.left
-        anchors.leftMargin: Config.PopupMetrics.px(12)
+        anchors.leftMargin: Config.PopupMetrics.px(14)
         height: Config.PopupMetrics.px(2)
         radius: height / 2
         color: Config.BarConfig.colorAccent
-        opacity: 0.45
-        width: Math.max(0, (parent.width - Config.PopupMetrics.px(24)) * root.remaining)
+        opacity: 0.5
+        width: Math.max(0, (parent.width - Config.PopupMetrics.px(28)) * root.remaining)
     }
 }

@@ -80,6 +80,21 @@ for p in "${extra[@]}"; do [[ -n $p && -d $p ]] && imports+=(-I "$p"); done
 # it); the linter derives the same path directly so gates never drift.
 imports+=(-I "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)")
 
+# Quickshell's `qs` specifier is engine magic: `import qs.Ui` resolves against
+# the shell root (the folder shell.qml lives in) at runtime. qmllint has no
+# such mapping, so a linted root importing qs.Ui reads as a false fatal
+# ("PluginPopup was not found" — the f30839e velocity.ai-bot lesson). Give the
+# alias a physical shape: a throwaway import dir whose `qs` symlink points at
+# the bar config root, so URI qs.X resolves to bar/X exactly like the engine.
+qs_alias=""
+cleanup_qs_alias() { [[ -n $qs_alias && -d $qs_alias ]] && rm -rf "$qs_alias"; }
+trap cleanup_qs_alias EXIT
+if [[ -f "$(pwd)/bar/shell.qml" ]]; then
+  qs_alias="$(mktemp -d)"
+  ln -s "$(pwd)/bar" "$qs_alias/qs"
+  imports+=(-I "$qs_alias")
+fi
+
 # --- the findings that mean "this file will not load" ------------------------
 fatal='was not found\. Did you add all imports|no matching signal found for handler|Could not find property|is not a type\b|Duplicat(ed|e) (signal|method) name|Syntax error|Cannot assign to non-existent default property|Type .* is unavailable'
 
