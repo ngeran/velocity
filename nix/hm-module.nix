@@ -161,31 +161,57 @@ let
     pkgs.nerd-fonts.jetbrains-mono
   ];
 
-  # ── The wayland gate ─────────────────────────────────────────────────────────
+  # ── The wayland gate (an ExecStart wrapper, not an ExecStartPre) ─────────────
   # Ported from omni-nix home/quickshell.nix (qs-wait-wayland): on this host
   # Hyprland runs outside systemd, graphical-session.target NEVER activates,
   # and the WAYLAND_DISPLAY var reaches the user manager only after
   # environment.lua imports it. Binding units to graphical-session.target
   # meant they never started; starting them at default.target meant Qt fell
-  # back to xcb and crash-looped (18 core dumps across boots). The gate makes
-  # default.target safe on every host: no matter when the unit activates, the
-  # exec only happens once the session-declared socket exists.
+  # back to xcb and crash-looped (18 core dumps across boots).
+  #
+  # It WRAPS ExecStart because an ExecStartPre cannot observe the later env
+  # import: systemd freezes a unit's environment at start, so a pre-start
+  # polling $WAYLAND_DISPLAY waited the full 60s and failed on every boot
+  # (2026-11-05: bar + cliphist missing for ~64s after login). The wrapper
+  # discovers the socket itself, exports the display to the child, and
+  # execs immediately — no restart, no dead minute.
   waylandGate = pkgs.writeShellApplication {
     name = "velocity-wait-wayland";
     runtimeInputs = [ pkgs.coreutils ];   # seq, sleep, id
     text = ''
       rt="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-      # Gate on the session-declared $WAYLAND_DISPLAY — NEVER hardcode the
-      # socket name (compositors create wayland-0 OR wayland-1 et al).
-      # `_` (not `i`): writeShellApplication runs shellcheck, which only
-      # exempts `_` from its unused-variable check (SC2034).
+
+      # Only wayland-N is a display socket. The exact-name match filters out
+      # wayland-N-<name>.sock (awww-daemon) and wayland-N.lock is not a
+      # socket. `_` (not `i`): writeShellApplication runs shellcheck, which
+      # only exempts `_` from its unused-variable check (SC2034).
+      find_display() {
+        local s name
+        for s in "$rt"/wayland-*; do
+          [ -S "$s" ] || continue
+          name="''${s##*/}"
+          [[ "$name" =~ ^wayland-[0-9]+$ ]] || continue
+          printf '%s\n' "$name"
+          return 0
+        done
+        return 1
+      }
+
+      # ''${VAR:-}: nounset-safe — writeShellApplication runs set -u, and a
+      # bare $WAYLAND_DISPLAY aborts with "unbound variable" when the unit
+      # starts at default.target before environment.lua's env import.
+      display="''${WAYLAND_DISPLAY:-}"
       for _ in $(seq 1 120); do
-        # ''${VAR:-}: nounset-safe — writeShellApplication runs set -u, and a
-        # bare $WAYLAND_DISPLAY aborts with "unbound variable" when the unit
-        # starts at default.target before environment.lua's env import
-        # (2026-10-31: bar + cliphist each logged a failed start every boot;
-        # the bar only came up 2s later via the client-request restart).
-        [ -n "''${WAYLAND_DISPLAY:-}" ] && [ -S "$rt/''${WAYLAND_DISPLAY:-}" ] && exit 0
+        if [ -z "$display" ] || [ ! -S "$rt/$display" ]; then
+          display="$(find_display || true)"
+        fi
+        if [ -n "$display" ] && [ -S "$rt/$display" ]; then
+          export WAYLAND_DISPLAY="$display"
+          if [ "$#" -eq 0 ]; then
+            exit 0
+          fi
+          exec "$@"
+        fi
         sleep 0.5
       done
       echo "velocity-wait-wayland: timed out (WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-unset}, no socket in $rt)" >&2
@@ -262,10 +288,9 @@ let
   # = two singleton instances). Named resolution needs the config root on the
   # engine's import path.
   barUnit = mkVelocityUnit "bar (Quickshell)"
-    ([ "${waylandGate}/bin/velocity-wait-wayland" ]
-      ++ lib.optionals (cfg.enabledPlugins != [ ])
-        [ "${seedPlugins}/bin/velocity-seed-plugins" ])
-    "${cfg.quickshellPackage}/bin/quickshell -c bar"
+    (lib.optional (cfg.enabledPlugins != [ ])
+      "${seedPlugins}/bin/velocity-seed-plugins")
+    "${waylandGate}/bin/velocity-wait-wayland ${cfg.quickshellPackage}/bin/quickshell -c bar"
     [ "QML2_IMPORT_PATH=%h/.config/quickshell" ]
     # T6.1 resource caps: the bar is the session's biggest memory consumer
     # (measured 200–600MB RSS). MemoryHigh throttles reclaim long before the
@@ -281,8 +306,8 @@ let
     };
 
   cliphistUnit = mkVelocityUnit "clipboard history (cliphist)"
-    [ "${waylandGate}/bin/velocity-wait-wayland" ]
-    "${lib.getExe' pkgs.wl-clipboard "wl-paste"} --watch ${lib.getExe' pkgs.cliphist "cliphist"} store"
+    [ ]
+    "${waylandGate}/bin/velocity-wait-wayland ${lib.getExe' pkgs.wl-clipboard "wl-paste"} --watch ${lib.getExe' pkgs.cliphist "cliphist"} store"
     [ ]
     # T6.1: cliphist store is background bookkeeping — idle I/O class, lowest
     # nice, 256M hard cap (an unbounded clipboard db is the realistic failure;
