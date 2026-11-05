@@ -25,7 +25,7 @@ PanelWindow {
 
     // Full-screen transparent overlay. A click landing anywhere outside the
     // dropdown closes it — the same click-outside dismissal the
-    // Fastfetch/ZaiUsage/Keybinds overlays use. The card itself is drawn above
+    // Fastfetch/Keybinds overlays use. The card itself is drawn above
     // the backdrop and swallows clicks so interacting with it stays put.
     anchors { top: true; bottom: true; left: true; right: true }
     // Leave the bar strip itself interactive — excluded on the bar's edge.

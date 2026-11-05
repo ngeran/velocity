@@ -352,29 +352,6 @@
       ]
     },
     {
-      "id": "zai-toggle-cycle",
-      "name": "The z.ai usage overlay maps one layer surface and closes it clean",
-      "covers": "velocity.zai-usage builtin; SUPER+Z surface lifecycle (P0.5 overlay coverage)",
-      "steps": [
-        "layers before",
-        "ipc bar zaiUsage toggle",
-        "sleep 2",
-        "shot open",
-        "layers open",
-        "ipc bar zaiUsage toggle",
-        "sleep 2",
-        "layers closed"
-      ],
-      "asserts": [
-        "test -s $QA_EV/04-shot-open.png",
-        "test $(( $(cat $QA_EV/05-layers-open.alive) - $(cat $QA_EV/01-layers-before.alive) )) -eq 1",
-        "test \"$(cat $QA_EV/08-layers-closed.alive)\" = \"$(cat $QA_EV/01-layers-before.alive)\""
-      ],
-      "teardown": [
-        "N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); for i in 1 2 3; do [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ] && break; qs -c bar ipc call zaiUsage toggle >/dev/null 2>&1; sleep 1; N=$(hyprctl -j layers | jq --argjson p $(systemctl --user show -p MainPID --value quickshell-bar) '[.. | objects | select(.pid == $p)] | length'); done; [ \"$N\" -le \"$(cat $QA_EV/01-layers-before.alive)\" ]"
-      ]
-    },
-    {
       "id": "logs-toggle-cycle",
       "name": "Enabling velocity.logs, the logs overlay maps one layer and closes clean, then disables again",
       "covers": "velocity.logs enable→overlay lifecycle→disable roundtrip (plugin is disabled at rest)",

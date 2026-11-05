@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "velocity.ai-bot",
+  "name": "AI Bot",
+  "version": "1.1.0",
+  "description": "Built-in: AI bot glyph in the bar; click opens the simplified Z.ai usage panel anchored under the bar.",
+  "author": "velocity",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [],
+  "ipc": ["toggle", "open", "close"]
+}

@@ -1,6 +1,6 @@
 // ZaiAlertBridge.qml — Z.ai quota threshold alerts → NotificationService
-// (no notify-send on this box). Mounted by the velocity.zai-usage built-in;
-// referencing the service starts its polling.
+// (no notify-send on this box). Mounted once in shell.qml (host); referencing
+// the service starts its polling.
 import QtQuick
 import "../services" as Services
 

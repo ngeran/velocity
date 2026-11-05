@@ -102,7 +102,6 @@ Generated from the D3 attrset (`tools/keybinds-default.json` → `nix/hm-module.
 | `SUPER+K` | This cheat sheet |
 | `SUPER+A` | Settings dashboard |
 | `SUPER+T` | System logs |
-| `SUPER+Z` | Z.ai usage |
 | `SUPER+P` | Power menu |
 | `SUPER+SHIFT+B` | Toggle the bar |
 | `SUPER+SHIFT+SPACE` | Next keyboard layout |

@@ -26,7 +26,6 @@ export const KEYBINDS_DEFAULT = [
   { key: "SUPER+K",           action: "ipc keybinds toggle",            label: "This cheat sheet",        section: "OVERLAYS",     available: true,  order: 13 },
   { key: "SUPER+A",           action: "ipc SettingsWindow toggle",       label: "Settings dashboard",          section: "OVERLAYS",     available: true,  order: 14 },
   { key: "SUPER+T",           action: "ipc logs toggle",                label: "System logs",             section: "OVERLAYS",     available: true,  order: 15 },
-  { key: "SUPER+Z",           action: "ipc zaiUsage toggle",            label: "Z.ai usage",              section: "OVERLAYS",     available: true,  order: 16 },
   { key: "SUPER+P",           action: "ipc powerMenu toggle",           label: "Power menu",              section: "OVERLAYS",     available: true,  order: 17 },
   { key: "SUPER+SHIFT+B",     action: "ipc barToggle toggle",           label: "Toggle the bar",          section: "OVERLAYS",     available: true,  order: 18 },
   { key: "SUPER+SHIFT+SPACE", action: "ipc keyboard next",              label: "Next keyboard layout",    section: "OVERLAYS",     available: true,  order: 19 },

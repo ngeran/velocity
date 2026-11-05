@@ -432,6 +432,11 @@ ShellRoot {
 // (topClearance), so the stack lands UNDER the strip, never across it.
 Components.NotificationToasts { barClearance: shellRoot.topClearance }
 
+    // Z.ai quota threshold alerts → NotificationService. Mounted ONCE here
+    // (not per bar widget/output) so multi-monitor never double-notifies; the
+    // ai-bot panel drives polling via ZaiUsageService.active.
+    Components.ZaiAlertBridge { }
+
     // OSD IPC hook — lives here (not in the singleton) because IpcHandler
     // doesn't resolve inside qmldir-declared singletons in this Quickshell
     // build. Lets Hyprland keybinds / scripts drive the OSD.
@@ -665,16 +670,6 @@ Components.NotificationToasts { barClearance: shellRoot.topClearance }
 
         function toggle() {
             shellRoot.toggleOverlay("velocity.keybinds")
-        }
-    }
-
-    // Z.ai usage overlay toggle (for SUPER+Z — see ~/.config/hypr/velocity-binds.lua)
-    IpcHandler {
-        id: zaiUsageIpc
-        target: "zaiUsage"
-
-        function toggle() {
-            shellRoot.toggleOverlay("velocity.zai-usage")
         }
     }
 

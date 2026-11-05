@@ -2,14 +2,14 @@
 // OverlayShell.qml — full-screen overlay chrome BASE (DU11)
 // =============================================================================
 // The shared shell of the bar's big overlays (KeybindsOverlay, Fastfetch,
-// ZaiUsage, BarSettings): transparent full-anchor PanelWindow, dim backdrop
+// BarSettings): transparent full-anchor PanelWindow, dim backdrop
 // with click-outside close, centered pure-black card (island look — pixels
 // off on QD-OLED, rounded, no stroke), Esc close, 220ms hide timer.
 //
 // Subclasses declare their card interior as direct children — the shell's
 // default property routes them into the card. Open/close side effects go in
-// onAboutToOpen / onDismissed (Fastfetch's service activation, ZaiUsage's
-// active flag); card size via cardWidth/cardHeight; backdrop strength via
+// onAboutToOpen / onDismissed (Fastfetch's service activation); card size via
+// cardWidth/cardHeight; backdrop strength via
 // backdropDim.
 // =============================================================================
 

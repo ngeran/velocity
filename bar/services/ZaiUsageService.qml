@@ -3,9 +3,10 @@
 // =============================================================================
 // Polls the (undocumented) Z.ai subscription quota endpoint every 60s via curl
 // (python3 isn't on PATH under NixOS, so this is pure QML — Process +
-// SplitParser). Surfaced state is read directly by
-// ZaiUsageOverlay; threshold crossings are emitted as `thresholdAlert`, which
-// shell.qml bridges into NotificationService (no notify-send/mako on this box —
+// SplitParser). Surfaced state is read by the ai-bot panel
+// (components/ZaiUsagePanel.qml); threshold crossings are emitted as
+// `thresholdAlert`, bridged into NotificationService by ZaiAlertBridge (mounted
+// once in shell.qml — no notify-send/mako on this box —
 // the repo's own NotificationService is the single notification sink).
 //
 // ENDPOINT  GET https://api.z.ai/api/monitor/usage/quota/limit

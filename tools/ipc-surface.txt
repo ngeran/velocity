@@ -69,7 +69,6 @@ screenshot.status         manual    # JSON: lastFile/dir
 clipboard.close           manual
 keyboard.open            manual    # toggle the keyboard settings panel
 keybinds.toggle          bound     # SUPER+K
-zaiUsage.toggle          bound     # SUPER+Z
 logs.toggle              bound     # SUPER+T
 network.speedtest        manual    # P2.2: one process — NetworkCardBody calls
                                    # NetworkService.runSpeedTest() directly; the IPC verb
