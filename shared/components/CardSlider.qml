@@ -14,6 +14,15 @@
 // drags (live preview, debounced writers upstream); `committed(v)` fires once
 // on release (the P1.5 law — commit only on a real interaction, never from a
 // binding re-evaluation). A programmatic `value` change never emits either.
+//
+// DRAG-OWNERSHIP LAW (the trailing-handle bug): `value` is fed by a Binding
+// gated on !pressed, NOT a plain `value:` binding. A plain binding re-applies
+// the source on every async ack mid-drag — PipeWire volume round-trips land a
+// frame+ late and int-rounded, so the handle kept snapping back under the
+// cursor ("falls behind"). While pressed the drag owns value; on release the
+// gate stays shut for RESYNC_MS so the stale pre-ack frame can't yank it
+// either, then the source (settled by then) re-applies. RestoreNone makes the
+// press-time deactivation a strict no-op; delayed coalesces ack bursts.
 // OLED: groove is a hairline trough, the fill is the accent ONLY while the
 // control is meaningfully interactive (caller can pass dim colors).
 // =============================================================================
@@ -42,6 +51,10 @@ RowLayout {
     signal dragged(real v)
     signal committed(real v)
 
+    // Post-release hold (ms): how long the drag keeps ownership after the
+    // press drops, covering the source's ack latency for the final commit.
+    readonly property int resyncMs: 150
+
     spacing: 8 * root.uiScale
 
     Slider {
@@ -52,11 +65,28 @@ RowLayout {
         from: root.from
         to: root.to
         stepSize: root.stepSize
-        value: root.value
         opacity: root.dim ? 0.4 : 1.0
 
+        // ── drag-ownership gate (see header) ──
+        property bool _isFollowing: true
+        Binding on value {
+            when: s._isFollowing && !s.pressed
+            value: root.value
+            delayed: true
+            restoreMode: Binding.RestoreNone
+        }
+        Timer {
+            id: resync
+            interval: root.resyncMs
+            onTriggered: s._isFollowing = true
+        }
+
         onMoved: root.dragged(value)
-        onPressedChanged: if (!pressed) root.committed(value)
+        onPressedChanged: if (!pressed) {
+            root.committed(value)
+            s._isFollowing = false
+            resync.restart()
+        }
 
         background: Rectangle {
             x: s.leftPadding
@@ -91,7 +121,10 @@ RowLayout {
 
     Text {
         visible: root.suffix !== ""
-        text: Math.round(root.value) + root.suffix
+        // The slider's own value, not root.value: during a drag the source
+        // lags the handle by its ack latency (drag-ownership law) — the
+        // readout must track the handle, and both agree once idle.
+        text: Math.round(s.value) + root.suffix
         font.family: "Space Mono"
         font.pixelSize: Math.round(9 * root.uiScale)
         color: root.dim ? root.dimColor : root.textColor
