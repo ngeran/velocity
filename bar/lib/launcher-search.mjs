@@ -24,12 +24,26 @@ function subsequence(needle, hay) {
 }
 
 // 0 = name starts with the query, 1 = substring somewhere, 2 = in-order
-// subsequence, 99 = no match.
-function score(e, q) {
+// subsequence, 99 = no match. Learned terms (launcher-frecency.mjs) extend the
+// ladder downward: an EXACT term is an alias (tier −1, above a name prefix),
+// and a term the query prefixes (query ≥ 2 chars) joins tier 0 — so after
+// launching Firefox from "ff" once, "ff" keeps meaning Firefox.
+function termTier(terms, q) {
+    if (!terms) return 99
+    for (var i = 0; i < terms.length; i++) {
+        var t = terms[i]
+        if (t === q) return -1
+        if (q.length >= 2 && t.indexOf(q) === 0) return 0
+    }
+    return 99
+}
+
+function score(e, q, terms) {
+    var best = termTier(terms, q)
+    if (best === -1) return -1
     var name = (e.name || "").toLowerCase()
     if (name.indexOf(q) === 0) return 0
     var fields = haystacks(e)
-    var best = 99
     for (var i = 0; i < fields.length; i++) {
         var f = fields[i].toLowerCase()
         if (f.indexOf(q) !== -1) { best = Math.min(best, 1); continue }
@@ -45,9 +59,11 @@ function uses(usage, e) {
 }
 
 // Entries (plain objects with id/name[/genericName/keywords/noDisplay])
-// ranked against the query; usage is the frecency {id: count} map. Empty
-// query = the launch-frequency list (usage desc, then name).
-export function rank(entries, query, usage) {
+// ranked against the query. usage is the frecency {id: score} map (decayed
+// scores — see launcher-frecency.mjs) and terms the optional {id: [learned
+// terms]} map; both come from the LauncherFrecency singleton. Empty query =
+// the launch-frequency list (usage desc, then name).
+export function rank(entries, query, usage, terms) {
     usage = usage || {}
     var visible = []
     for (var i = 0; i < entries.length; i++)
@@ -64,7 +80,7 @@ export function rank(entries, query, usage) {
 
     var scored = []
     for (var k = 0; k < visible.length; k++) {
-        var s = score(visible[k], q)
+        var s = score(visible[k], q, terms ? terms[visible[k].id] : null)
         if (s < 99) scored.push({ e: visible[k], s: s })
     }
     scored.sort(function (a, b) {

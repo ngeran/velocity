@@ -3,9 +3,13 @@
 // =============================================================================
 // Spotlight-style card dropping from under the bar: a search field over app
 // results. Ranking is launcher-search.mjs (ryoku's fuzzy port: prefix >
-// substring > subsequence, launch frequency breaks ties — the empty query is
-// the "most used" list). The entries index is Quickshell's native
-// DesktopEntries; launch frequency lives in LauncherFrecency.
+// substring > subsequence, decayed launch frequency breaks ties — the empty
+// query is the "most used" list — and learned search terms act as aliases,
+// oma-cast-style). The entries index is Quickshell's native DesktopEntries;
+// frecency, learned terms and query history live in LauncherFrecency
+// (lib/launcher-frecency.mjs math). ↑ on an empty query recalls history,
+// Ctrl+1…9 quick-picks, and a bare query with no app match falls back to a
+// web-search row.
 //
 // Hosted as the overlay plugin velocity.launcher (builtins/): the PluginHost
 // claims the PopupCoordinator slot ("overlay:velocity.launcher") off `shown`,
@@ -37,6 +41,8 @@ PanelWindow {
         visible = true
         query = ""
         selection = { key: "", index: 0 }
+        _histWalk = -1
+        Services.LauncherFrecency.refresh()   // decayed scores sag while closed
         shown = true
         clientsProc.running = true   // one-shot open-windows fetch per open (P7 G1)
         searchInput.forceActiveFocus()
@@ -167,16 +173,23 @@ PanelWindow {
                                     { genericName: "web search — Enter opens the browser" }))
             return rows
         }
-        // apps (+ matching open windows above, non-empty query only)
+        // apps (+ matching open windows above, non-empty query only) —
+        // learned terms ride along as an alias tier (launcher-frecency)
         var q = r.arg.trim()
         if (q.length > 0) {
             var wins = Launcher.rank(root.windowRows, q, {})
             for (var i = 0; i < wins.length && i < 4; i++)
                 rows.push(root._tag("windows", wins[i]))
         }
-        var apps = Launcher.rank(root.entries, q, Services.LauncherFrecency.usage)
+        var apps = Launcher.rank(root.entries, q, Services.LauncherFrecency.usage,
+                                 Services.LauncherFrecency.terms)
         for (var j = 0; j < apps.length; j++)
             rows.push(root._tag("apps", apps[j]))
+        // web fallback (oma-cast): a bare query that matched no app still has
+        // somewhere to go — one dim row reusing the web provider dispatch
+        if (q.length > 0 && apps.length === 0)
+            rows.push(root._tag("web", { id: q, name: q },
+                                 { genericName: "no app match — Enter searches the web" }))
         return rows
     }
     // Re-rank selection — runs ONLY on results re-evaluations, never from
@@ -191,6 +204,7 @@ PanelWindow {
     // and Enter launched results[-1] (also proven live).
     property bool _snapNext: false
     onQueryChanged: {
+        if (!_recalling) _histWalk = -1
         if (_route.provider === "calc") calcDebounce.restart()
         else if (calcOut !== "") calcOut = ""
         _snapNext = true
@@ -205,6 +219,51 @@ PanelWindow {
         listScroll.contentY = 0
     }
 
+    // ── search-history recall (oma-cast ↑-on-empty) ──────────────────────────
+    // ↑ from an empty query at the top row recalls the most recent query and
+    // then walks older (while the selection sits at the top); ↓ walks back
+    // toward newer, and one ↓ past the newest clears the query. Any real
+    // keystroke exits recall mode — the _recalling guard keeps the
+    // programmatic query writes from resetting _histWalk mid-walk.
+    property int _histWalk: -1
+    property bool _recalling: false
+    function _recall(q) {
+        _recalling = true
+        query = q
+        _recalling = false
+    }
+    function _historyUp() {
+        var h = Services.LauncherFrecency.history
+        if (h.length === 0) return false
+        if (_histWalk >= 0) {
+            // index -1 (zero results) must keep walking older; index > 0 means
+            // the user moved off the top row — normal nav. Note: after a recall
+            // that still matches the previously selected row, reconcile lands
+            // mid-list and ↑ resumes normal nav until the row returns to top —
+            // same follow-the-row behavior as regular typing, by design.
+            if (selection.index > 0) return false
+            if (_histWalk > 0) _histWalk--
+            _recall(h[_histWalk].q)
+            return true
+        }
+        if (query.length > 0 || selection.index > 0) return false
+        _histWalk = h.length - 1
+        _recall(h[_histWalk].q)
+        return true
+    }
+    function _historyDown() {
+        if (_histWalk < 0) return false
+        var h = Services.LauncherFrecency.history
+        if (_histWalk < h.length - 1) {
+            _histWalk++
+            _recall(h[_histWalk].q)
+        } else {
+            _histWalk = -1
+            _recall("")
+        }
+        return true
+    }
+
     // ── actions ─────────────────────────────────────────────────────────────
     // Provider dispatch. Apps: the source DesktopEntry's pre-parsed command
     // via execDetached. P4.8's naive parse read a nonexistent `.exec` —
@@ -217,19 +276,25 @@ PanelWindow {
     function launch(entry) {
         if (!entry) return
         var provider = entry._provider || "apps"
-        if (provider === "windows") { _focusWindow(entry.id); close(); return }
-        if (provider === "calc") { _copyText(entry.name); close(); return }
+        // every launch teaches: apps fold a frecency visit and learn the
+        // query as a term; the other providers only remember the query
+        // (history) — their ids are ephemeral or not apps
+        function _record(id) { Services.LauncherFrecency.recordLaunch(id, root.query) }
+        if (provider === "windows") { _record(null); _focusWindow(entry.id); close(); return }
+        if (provider === "calc") { _record(null); _copyText(entry.name); close(); return }
         if (provider === "shell") {
+            _record(null)
             Quickshell.execDetached(["ghostty", "-e", "bash", "-c", entry.name])
             close(); return
         }
         if (provider === "web") {
+            _record(null)
             Quickshell.execDetached(["xdg-open", "https://duckduckgo.com/?q=" + encodeURIComponent(entry.name)])
             close(); return
         }
         var src = entry._src
         if (!src || typeof src.execString !== "string" || src.execString.length === 0) return
-        Services.LauncherFrecency.bump(entry.id)
+        _record(entry.id)
         // execute() is unusable as a gate on this build: it returned false
         // for ghostty WHILE successfully spawning it (systemd app scope in
         // the journal) and false for blender while spawning nothing — the
@@ -358,10 +423,22 @@ PanelWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                     Keys.onEscapePressed: root.close()
-                    Keys.onDownPressed: root.moveSelection(1)
-                    Keys.onUpPressed: root.moveSelection(-1)
+                    Keys.onDownPressed: if (!root._historyDown()) root.moveSelection(1)
+                    Keys.onUpPressed: if (!root._historyUp()) root.moveSelection(-1)
                     Keys.onReturnPressed: root.launch(root.results[root.selection.index])
                     Keys.onEnterPressed: root.launch(root.results[root.selection.index])
+                    // Ctrl+1…9 quick-pick (oma-cast): launch the nth visible
+                    // row. Ctrl+digits have no specific handler above, so the
+                    // generic onPressed is the one place to catch them.
+                    Keys.onPressed: function(event) {
+                        if (event.modifiers & Qt.ControlModifier) {
+                            var d = event.key - Qt.Key_0
+                            if (d >= 1 && d <= 9 && d <= root.rowCount) {
+                                event.accepted = true
+                                root.launch(root.results[d - 1])
+                            }
+                        }
+                    }
                 }
                 Text {
                     text: "ESC"

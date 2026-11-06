@@ -62,6 +62,40 @@ ok("equal tier: usage breaks the tie", () => {
     assert.equal(out[0].id, "b.desktop")
 })
 
+ok("learned term: exact match is an alias above a name prefix", () => {
+    const pool = [
+        { id: "files.desktop", name: "Files" },      // "fi" prefix (tier 0)
+        { id: "ff.desktop", name: "Firefox" },       // "fi" subsequence (tier 2)
+    ]
+    const out = rank(pool, "fi", {}, { "ff.desktop": ["fi"] })
+    assert.equal(out[0].id, "ff.desktop")            // term −1 beats both
+})
+
+ok("learned term: query prefixing a term joins tier 0, usage breaks the tie", () => {
+    const pool = [
+        { id: "files.desktop", name: "Files" },
+        { id: "ff.desktop", name: "Firefox" },
+    ]
+    const plain = rank(pool, "fi", {})
+    assert.equal(plain[0].id, "files.desktop")       // no terms: prefix wins
+    const learned = rank(pool, "fi", { "ff.desktop": 50 }, { "ff.desktop": ["fin"] })
+    assert.equal(learned[0].id, "ff.desktop")        // term-prefix tier 0 + usage
+})
+
+ok("learned terms never leak to other ids", () => {
+    const pool = [
+        { id: "v.desktop", name: "FFview" },         // "ff" name prefix
+        { id: "ff.desktop", name: "Firefox" },       // "ff" subsequence
+    ]
+    const out = rank(pool, "ff", {}, { "unrelated.desktop": ["ff"] })
+    assert.equal(out[0].id, "v.desktop")
+})
+
+ok("empty query ignores terms (usage order unchanged)", () => {
+    const out = rank(APPS, "", { "kitty.desktop": 9 }, { "calc.desktop": ["zz"] })
+    assert.equal(out[0].id, "kitty.desktop")
+})
+
 ok("highlight: subsequence spans, merged runs", () => {
     assert.deepEqual(highlight("NetworkManager", "net"), [{ start: 0, len: 3 }])
     assert.deepEqual(highlight("Netflix", "ntx"), [{ start: 0, len: 1 }, { start: 2, len: 1 }, { start: 6, len: 1 }])
