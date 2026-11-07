@@ -82,6 +82,14 @@ Singleton {
         _recompute(Date.now())
     }
 
+    // Tier 4: favorites reorder (Ctrl+Alt+↑/↓ in the launcher). moveId clamps
+    // at the ends; a clamped move still reassigns — harmless re-notify.
+    function moveFavorite(id, delta) {
+        state = Object.assign({}, state, { favorites: Frecency.moveId(state.favorites, id, delta) })
+        _persist()
+        _recompute(Date.now())
+    }
+
     FileView {
         id: store
         path: root.file

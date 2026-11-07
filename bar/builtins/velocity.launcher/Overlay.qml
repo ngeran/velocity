@@ -20,7 +20,9 @@ Item {
     Loader {
         id: loader
         active: root._wanted
-        sourceComponent: Component { Components.LauncherOverlay { } }
+        // ctx threads the plugin host through to the overlay (Tier 4: the
+        // Settings sys row opens the dashboard via ctx.host.settingsCall)
+        sourceComponent: Component { Components.LauncherOverlay { ctx: root.ctx } }
         onLoaded: item.open()
     }
 }

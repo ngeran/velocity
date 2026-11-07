@@ -21,7 +21,9 @@
     "printf",
     "wl-copy",
     "ghostty",
-    "xdg-open"
+    "xdg-open",
+    "systemctl",
+    "velocity-lock"
   ],
   "ipc": [
     "toggle",

@@ -13,7 +13,12 @@
 // (FAVORITES / SUGGESTIONS / APPLICATIONS — captions ride the first row of
 // each group, never a row of their own), Ctrl+Return runs the selected app's
 // first .desktop secondary action, Ctrl+Shift+F pins/unpins, Ctrl+Shift+X
-// hides, and typing "hidden" lists hidden apps for unhiding.
+// hides, and typing "hidden" lists hidden apps for unhiding. Tier 4
+// (oma-cast): system command rows (settings/lock/suspend/logout/reboot/
+// shutdown — the destructive ones arm on a second Enter instead of a
+// dialog) rank alongside apps, a web-search row rides under matched
+// results, ctrl+K opens the full .desktop action panel, and ctrl+alt+↑↓
+// reorders favorites.
 //
 // Hosted as the overlay plugin velocity.launcher (builtins/): the PluginHost
 // claims the PopupCoordinator slot ("overlay:velocity.launcher") off `shown`,
@@ -40,10 +45,15 @@ PanelWindow {
     id: root
 
     property bool shown: false
+    // Tier 4: the plugin host injects itself here (built-ins: ctx.host ===
+    // the shell root) — the Settings sys row opens the dashboard through it.
+    // Null-guarded: the component must not break hosted without a ctx.
+    property var ctx: null
     visible: false
     function open() {
         visible = true
         query = ""
+        if (_actionPanel) _exitActionPanel()   // a stale panel never survives
         selection = { key: "", index: 0 }
         _histWalk = -1
         _toast = ""       // a copy-failure toast can land after close() (its
@@ -58,6 +68,7 @@ PanelWindow {
         hideTimer.restart()
         _toast = ""       // the card is going away; a stale toast must not
         toastTimer.stop() // flash on the next open
+        _disarmSys()      // an armed power row must not survive the close
     }
     function toggle() { shown ? close() : open() }
 
@@ -79,6 +90,29 @@ PanelWindow {
     function _toastMsg(msg) {
         _toast = msg
         toastTimer.restart()
+    }
+
+    // ── Tier 4 two-step arm (oma-cast's confirm gate, dialog-free) ──────────
+    // Destructive sys rows (reboot/shutdown) fire only on a second Enter
+    // within 3 s of the first. Any query change, close, or selection move
+    // off the row disarms; the fire path disarms too, so an auto-repeated
+    // Enter can at worst re-arm (toast), never double-fire.
+    property string _armedSys: ""
+    Timer { id: armTimer; interval: 2500; onTriggered: root._disarmSys() }
+    function _armSys(entry) {
+        _armedSys = entry.id
+        armTimer.restart()
+        _toastMsg("press enter again to " + String(entry.name || "").toLowerCase())
+    }
+    function _disarmSys() {
+        _armedSys = ""
+        armTimer.stop()
+        // a disarm makes the armed toast stale advice — drop it (but leave
+        // unrelated toasts, e.g. a clipboard failure, their full 2.5 s)
+        if (_toast.indexOf("press enter again") === 0) {
+            _toast = ""
+            toastTimer.stop()
+        }
     }
 
     // ── the app index ────────────────────────────────────────────────────────
@@ -105,6 +139,37 @@ PanelWindow {
         function onApplicationsChanged() { root._rebuildEntries() }
     }
     Component.onCompleted: _rebuildEntries()
+
+    // ── Tier 4 system rows (oma-cast sys commands) ──────────────────────────
+    // Static entries ranked alongside apps on NON-EMPTY queries only (never
+    // in the empty/hidden views). argv is constant — nothing user-typed ever
+    // reaches a spawn. lock = velocity-lock and suspend = systemctl suspend
+    // follow the settings tree's sanctioned commands (PowerStrip); logout is
+    // Hyprland's own exit dispatch. keywords are ARRAYS (haystacks() reads
+    // e.keywords as a list); argv (null on the settings row) is also the
+    // sys-row discriminator in the results binding.
+    readonly property var _sysEntries: [
+        { id: "sys:settings", name: "Settings",
+          genericName: "open the settings dashboard",
+          keywords: ["settings", "preferences", "config"], argv: null },
+        { id: "sys:lock", name: "Lock",
+          genericName: "lock the screen",
+          keywords: ["lock", "screen"], argv: ["velocity-lock"] },
+        { id: "sys:suspend", name: "Suspend",
+          genericName: "suspend to memory",
+          keywords: ["suspend", "sleep"], argv: ["systemctl", "suspend"] },
+        { id: "sys:logout", name: "Log Out",
+          genericName: "end the Hyprland session",
+          keywords: ["log", "out", "logout"], argv: ["hyprctl", "dispatch", "exit"] },
+        { id: "sys:reboot", name: "Reboot",
+          genericName: "restart the machine",
+          keywords: ["reboot", "restart"],
+          argv: ["systemctl", "reboot"], destructive: true },
+        { id: "sys:shutdown", name: "Shut Down",
+          genericName: "power off the machine",
+          keywords: ["shutdown", "poweroff", "off"],
+          argv: ["systemctl", "poweroff"], destructive: true }
+    ]
 
     // ── query + ranking + selection ─────────────────────────────────────────
     property string query: ""
@@ -198,6 +263,7 @@ PanelWindow {
     }
 
     readonly property var results: {
+        if (root._actionPanel) return root._actionRows   // ctrl+k panel view
         var r = _route
         var rows = []
         if (r.provider === "calc") {
@@ -252,15 +318,33 @@ PanelWindow {
         var wins = Launcher.rank(root.windowRows, q, {})
         for (var i = 0; i < wins.length && i < 4; i++)
             rows.push(root._tag("windows", wins[i]))
-        var apps = Launcher.rank(Launcher.filterHidden(root.entries, frec.hidden),
-                                 q, frec.usage, frec.terms)
-        for (var j = 0; j < apps.length; j++)
-            rows.push(root._tag("apps", apps[j]))
-        // web fallback (oma-cast): a bare query that matched no app still has
-        // somewhere to go — one dim row reusing the web provider dispatch
-        if (q.length > 0 && apps.length === 0)
-            rows.push(root._tag("web", { id: q, name: q },
-                                 { genericName: "no app match — Enter searches the web" }))
+        // Tier 4: sys rows join the ranked pool on queries (never empty/
+        // hidden views); the argv field discriminates them from app rows
+        var pool = Launcher.filterHidden(root.entries, frec.hidden).concat(_sysEntries)
+        var apps = Launcher.rank(pool, q, frec.usage, frec.terms)
+        for (var j = 0; j < apps.length; j++) {
+            var e = apps[j]
+            if (e.argv !== undefined)
+                rows.push(root._tag("sys", e, {
+                    // the armed row shows the second-Enter hint in its subtitle
+                    genericName: e.genericName
+                                 + (root._armedSys === e.id ? " · enter again" : ""),
+                }))
+            else
+                rows.push(root._tag("apps", e))
+        }
+        // web fallback (oma-cast): a bare query that matched nothing still has
+        // somewhere to go — one dim row reusing the web provider dispatch.
+        // Tier 4: the same row rides UNDER matched results (oma-cast's
+        // fallback-under-results) so searching is always one Enter away.
+        if (q.length > 0) {
+            if (apps.length === 0)
+                rows.push(root._tag("web", { id: q, name: q },
+                                     { genericName: "no app match — Enter searches the web" }))
+            else
+                rows.push(root._tag("web", { id: q, name: q },
+                                     { genericName: "search the web — Enter" }))
+        }
         return rows
     }
     // Re-rank selection — runs ONLY on results re-evaluations, never from
@@ -276,6 +360,8 @@ PanelWindow {
     property bool _snapNext: false
     onQueryChanged: {
         if (!_recalling) _histWalk = -1
+        if (_actionPanel) _exitActionPanel()   // typing exits the panel, keeps editing
+        if (_armedSys !== "") _disarmSys()   // typing disarms armed power rows
         if (_route.provider === "calc") calcDebounce.restart()
         else if (calcOut !== "") calcOut = ""
         _snapNext = true
@@ -283,6 +369,14 @@ PanelWindow {
     onResultsChanged: {
         _reconcile(_snapNext ? 0 : selection.index)
         _snapNext = false
+    }
+    onSelectionChanged: {
+        // an armed power row disarms the moment a different row is selected;
+        // re-ranks that keep the armed row selected keep the arm (id match)
+        if (_armedSys !== "") {
+            var e = results[selection.index]
+            if (!e || e.id !== _armedSys) _disarmSys()
+        }
     }
     function _reconcile(fallbackIdx) {
         var next = Launcher.reconcileSelection(results.slice(0, 12), selection.key, fallbackIdx)
@@ -353,6 +447,61 @@ PanelWindow {
         if (e) Services.LauncherFrecency.toggleHidden(e.id)
     }
 
+    // Tier 4 favorites reorder: ctrl+alt+↑/↓ on a pinned row shifts it in
+    // the favorites array (moveId clamps at the ends); the selection then
+    // FOLLOWS the row — reconcile picks its resultKey up at the new slot
+    function _moveSelectedFavorite(delta) {
+        var e = results[selection.index]
+        if (!e || e._provider !== "apps") return
+        if (Services.LauncherFrecency.favorites.indexOf(e.id) === -1) return
+        Services.LauncherFrecency.moveFavorite(e.id, delta)
+    }
+
+    // ── Tier 4 action panel (oma-cast ctrl+k) ───────────────────────────────
+    // ctrl+k on a selected app row with .desktop actions swaps the results
+    // for one row per action (ctrl+return runs only the first; this lists
+    // ALL of them). Enter runs the action argv and records the APP launch
+    // (the panel rides the query that selected the app); Esc exits the
+    // panel without closing the launcher; typing exits and keeps editing;
+    // ctrl+k toggles. Windows/web/calc are suppressed while the panel is
+    // open. Rows without actions: ctrl+k is a swallowed no-op.
+    property bool _actionPanel: false
+    property var _actionPanelEntry: null   // the app's source DesktopEntry
+    readonly property var _actionRows: {
+        if (!_actionPanel || !_actionPanelEntry || !_actionPanelEntry.actions) return []
+        var rows = []
+        var acts = _actionPanelEntry.actions
+        for (var i = 0; i < acts.length; i++) {
+            var argv = root._execArgv(acts[i].command)
+            if (argv.length === 0) continue   // unspawnable actions never list
+            rows.push(root._tag("action",
+                                { id: _actionPanelEntry.id + "#" + i,
+                                  name: String(acts[i].name || ""), argv: argv },
+                                { genericName: _actionPanelEntry.name || "" }))
+        }
+        return rows
+    }
+    function _enterActionPanel() {
+        var e = results[selection.index]
+        var src = e && e._provider === "apps" ? e._src : null
+        if (!src || !src.actions || src.actions.length === 0) return
+        // an entry whose actions are ALL unspawnable would render an empty
+        // panel — open only if at least one action produces a runnable argv
+        for (var i = 0; i < src.actions.length; i++) {
+            if (root._execArgv(src.actions[i].command).length === 0) continue
+            _actionPanelEntry = src
+            _actionPanel = true
+            selection = { key: "", index: 0 }   // panel rows start at the top
+            return
+        }
+    }
+    function _exitActionPanel() {
+        _actionPanel = false
+        _actionPanelEntry = null
+        selection = { key: "", index: 0 }
+        _snapNext = true   // the restored rows snap selection to the top
+    }
+
     // ── actions ─────────────────────────────────────────────────────────────
     // Provider dispatch. Apps: the source DesktopEntry's pre-parsed command
     // via execDetached. P4.8's naive parse read a nonexistent `.exec` —
@@ -376,7 +525,7 @@ PanelWindow {
         return argv
     }
 
-    function launch(entry, secondary) {
+    function launch(entry, secondary, confirmed) {
         if (!entry) return
         var provider = entry._provider || "apps"
         // every launch teaches: apps fold a frecency visit and learn the
@@ -398,6 +547,42 @@ PanelWindow {
             _record(null)
             Quickshell.execDetached(["xdg-open", "https://duckduckgo.com/?q=" + encodeURIComponent(entry.name)])
             close(); return
+        }
+        // Tier 4 sys rows: settings opens the hosted dashboard through the
+        // plugin host; the rest spawn constant argv. Destructive rows fire
+        // only on the second KEYBOARD Enter (two-step arm above) —
+        // Ctrl+digits and clicks can arm/refresh but never fire them.
+        if (provider === "sys") {
+            var sys = entry._src || entry
+            if (!sys.argv) {
+                if (ctx && ctx.host && ctx.host.settingsCall) {
+                    _record(entry.id)
+                    ctx.host.settingsCall("toggle")
+                    close()
+                } else {
+                    console.warn("[launcher] settings row without a host")
+                    _toastMsg("settings unavailable in this host")
+                }
+                return
+            }
+            if (sys.destructive) {
+                if (_armedSys !== entry.id || !confirmed) { _armSys(entry); return }
+            }
+            _disarmSys()
+            _record(entry.id)
+            Quickshell.execDetached(sys.argv)
+            close()
+            return
+        }
+        // Tier 4 action panel rows: run the pre-parsed action argv, record
+        // the APP launch ("#n" suffix stripped — the id is the entry's)
+        if (provider === "action") {
+            if (entry.argv && entry.argv.length > 0) {
+                _record(String(entry.id).split("#")[0])
+                Quickshell.execDetached(entry.argv)
+            }
+            close()
+            return
         }
         var src = entry._src
         if (!src || typeof src.execString !== "string" || src.execString.length === 0) {
@@ -569,13 +754,33 @@ PanelWindow {
                         font: searchInput.font
                         verticalAlignment: Text.AlignVCenter
                     }
-                    Keys.onEscapePressed: root.close()
-                    Keys.onDownPressed: if (!root._historyDown()) root.moveSelection(1)
-                    Keys.onUpPressed: if (!root._historyUp()) root.moveSelection(-1)
+                    Keys.onEscapePressed: if (root._actionPanel) root._exitActionPanel(); else root.close()
+                    Keys.onDownPressed: {
+                        // Tier 4 favorites reorder: ctrl+alt+↑↓ — accept
+                        // always (the combo must never scroll), act only on
+                        // a real press; specific handlers outrank the
+                        // generic Keys.onPressed so this is the only home
+                        if ((event.modifiers & Qt.AltModifier)
+                            && (event.modifiers & Qt.ControlModifier)) {
+                            event.accepted = true
+                            if (!event.isAutoRepeat) root._moveSelectedFavorite(1)
+                            return
+                        }
+                        if (!root._historyDown()) root.moveSelection(1)
+                    }
+                    Keys.onUpPressed: {
+                        if ((event.modifiers & Qt.AltModifier)
+                            && (event.modifiers & Qt.ControlModifier)) {
+                            event.accepted = true
+                            if (!event.isAutoRepeat) root._moveSelectedFavorite(-1)
+                            return
+                        }
+                        if (!root._historyUp()) root.moveSelection(-1)
+                    }
                     Keys.onReturnPressed: root.launch(root.results[root.selection.index],
-                                                      (event.modifiers & Qt.ControlModifier) !== 0)
+                                                      (event.modifiers & Qt.ControlModifier) !== 0, true)
                     Keys.onEnterPressed: root.launch(root.results[root.selection.index],
-                                                     (event.modifiers & Qt.ControlModifier) !== 0)
+                                                     (event.modifiers & Qt.ControlModifier) !== 0, true)
                     // Ctrl+1…9 quick-pick (oma-cast): launch the nth visible
                     // row. Ctrl+digits have no specific handler above, so the
                     // generic onPressed is the one place to catch them — and,
@@ -583,6 +788,18 @@ PanelWindow {
                     // Tier 3 adds Ctrl+Shift+C: copy the toast (oma-cast's
                     // copy-error affordance) through the stdin-safe path.
                     Keys.onPressed: function(event) {
+                        // Tier 4 ctrl+k action panel (oma-cast): toggle on a
+                        // selected app row; swallowed even when it's a no-op
+                        // (rows without actions) so the k never leaks
+                        if ((event.modifiers & Qt.ControlModifier)
+                            && !(event.modifiers & Qt.ShiftModifier)
+                            && event.key === Qt.Key_K) {
+                            event.accepted = true
+                            if (event.isAutoRepeat) return
+                            if (root._actionPanel) root._exitActionPanel()
+                            else root._enterActionPanel()
+                            return
+                        }
                         if ((event.modifiers & Qt.ControlModifier)
                             && (event.modifiers & Qt.ShiftModifier)
                             && (event.key === Qt.Key_F || event.key === Qt.Key_X
@@ -660,7 +877,7 @@ PanelWindow {
                     return y
                 }
 
-                WheelHandler { onWheel: listScroll.contentY -= wheel.angleDelta.y / 4 }
+                WheelHandler { onWheel: { root._disarmSys(); listScroll.contentY -= wheel.angleDelta.y / 4 } }
 
                 ColumnLayout {
                     id: listCol

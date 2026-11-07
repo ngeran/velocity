@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert"
 import {
     DAY_MS, LAMBDA, TERM_WINDOW_MS, TERM_CAP, HISTORY_CAP,
     scoreOf, bumpAnchor, scoresFromAnchors, emptyState, loadState,
-    recordTerm, liveTerms, recordHistory, recordLaunch, toggleId,
+    recordTerm, liveTerms, recordHistory, recordLaunch, toggleId, moveId,
 } from "./launcher-frecency.mjs"
 
 let n = 0
@@ -224,6 +224,29 @@ ok("toggleId: absent → appended, present → removed, order preserved", () => 
     assert.deepEqual(toggleId(["a", "b", "c"], "b"), ["a", "c"])
     assert.deepEqual(toggleId(null, "x"), ["x"])
     assert.deepEqual(toggleId(["a"], "a"), [])
+})
+
+ok("moveId: moves up and down, inserts at the target slot", () => {
+    assert.deepEqual(moveId(["a", "b", "c"], "b", -1), ["b", "a", "c"])
+    assert.deepEqual(moveId(["a", "b", "c"], "b", 1), ["a", "c", "b"])
+    assert.deepEqual(moveId(["a", "b", "c"], "c", -2), ["c", "a", "b"])
+})
+
+ok("moveId: clamps at both ends — no-op moves return a fresh copy", () => {
+    const top = ["a", "b", "c"]
+    const r1 = moveId(top, "a", -1)
+    assert.deepEqual(r1, top)
+    assert.notEqual(r1, top)                       // new array, callers re-notify
+    assert.deepEqual(moveId(top, "c", 1), top)
+    assert.deepEqual(moveId(top, "a", 0), top)
+    assert.deepEqual(moveId(top, "a", 99), ["b", "c", "a"])   // far delta clamps to the far end
+    assert.deepEqual(moveId(top, "b", 1.9), ["a", "c", "b"])  // fractional delta truncates (splice coerces)
+})
+
+ok("moveId: unknown id / junk input / junk delta pass through", () => {
+    assert.deepEqual(moveId(["a", "b"], "zzz", 1), ["a", "b"])
+    assert.deepEqual(moveId(null, "a", 1), [])
+    assert.deepEqual(moveId(["a", "b"], "a", NaN), ["a", "b"])
 })
 
 ok("recordLaunch leaves favorites/hidden untouched", () => {

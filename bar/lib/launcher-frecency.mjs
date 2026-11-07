@@ -87,6 +87,23 @@ export function toggleId(list, id) {
     return out
 }
 
+// Move an id ±delta slots inside an ordered list (favorites reorder,
+// Ctrl+Alt+↑/↓). Clamps at both ends — a no-op move still returns a fresh
+// array (cheap; callers re-notify on assignment anyway). Unknown ids and
+// junk input pass through unchanged. Returns a NEW array always.
+export function moveId(list, id, delta) {
+    var src = Array.isArray(list) ? list : []
+    var i = src.indexOf(id)
+    if (i === -1 || typeof delta !== "number" || !isFinite(delta) || delta === 0)
+        return src.slice()
+    var j = Math.min(src.length - 1, Math.max(0, i + Math.trunc(delta)))
+    if (j === i) return src.slice()
+    var out = src.slice()
+    out.splice(i, 1)
+    out.splice(j, 0, id)
+    return out
+}
+
 // Parse whatever the state file holds into a valid v2 state.
 //   v2 shape (clean)      → passed through, changed = false (no rewrite)
 //   v2 shape (junk mixed) → junk fields dropped, changed = true (repair)
