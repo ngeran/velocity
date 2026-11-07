@@ -1,5 +1,6 @@
-// launcher-frecency.mjs — decayed frecency, learned search terms and query
-// history for the native launcher (oma-cast adaptation, Tier 1). Pure state
+// launcher-frecency.mjs — decayed frecency, learned search terms, query
+// history and the favorites/hidden lists for the native launcher (oma-cast
+// adaptation, Tiers 1–2). Pure state
 // math only; the IO (file, writes, derived bindings) lives in
 // services/LauncherFrecency.qml — repo doctrine keeps logic in lib/*.mjs with
 // a sibling .test.mjs. Dual-environment: imported by QML and node tests.
@@ -53,7 +54,37 @@ export function scoresFromAnchors(frecency, now) {
 }
 
 export function emptyState() {
-    return { v: 2, frecency: {}, terms: {}, history: [] }
+    return { v: 2, frecency: {}, terms: {}, history: [], favorites: [], hidden: [] }
+}
+
+// favorites/hidden are ordered id arrays (pin order = array order; Tier 2).
+// An ABSENT field means empty — no rewrite churn for pre-Tier-2 files; a
+// present-but-junk list (non-strings, empty ids, dupes) is repaired in place
+// with changed = true.
+function parseIdList(v) {
+    if (!Array.isArray(v)) return { list: null, junk: true }
+    var out = []
+    var junk = false
+    for (var i = 0; i < v.length; i++) {
+        var id = v[i]
+        if (typeof id !== "string" || id.length === 0 || out.indexOf(id) !== -1) {
+            junk = true
+            continue
+        }
+        out.push(id)
+    }
+    return { list: out, junk: junk }
+}
+
+// Toggle an id in an ordered list (favorites/hidden): present → removed;
+// absent → appended at the end, so pins keep the order they were made in.
+export function toggleId(list, id) {
+    var src = Array.isArray(list) ? list : []
+    var out = []
+    for (var i = 0; i < src.length; i++)
+        if (src[i] !== id) out.push(src[i])
+    if (out.length === src.length) out.push(id)
+    return out
 }
 
 // Parse whatever the state file holds into a valid v2 state.
@@ -109,6 +140,15 @@ export function loadState(parsed, now) {
                 changed = true
             }
         } else if (parsed.history !== undefined) changed = true
+        var listKeys = ["favorites", "hidden"]
+        for (var k = 0; k < listKeys.length; k++) {
+            var key = listKeys[k]
+            if (parsed[key] === undefined) continue          // absent = empty
+            var r = parseIdList(parsed[key])
+            if (r.list === null) { changed = true; continue } // junk type → []
+            st[key] = r.list
+            if (r.junk) changed = true
+        }
         return { state: st, changed: changed }
     }
 

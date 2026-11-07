@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert"
 import {
     DAY_MS, LAMBDA, TERM_WINDOW_MS, TERM_CAP, HISTORY_CAP,
     scoreOf, bumpAnchor, scoresFromAnchors, emptyState, loadState,
-    recordTerm, liveTerms, recordHistory, recordLaunch,
+    recordTerm, liveTerms, recordHistory, recordLaunch, toggleId,
 } from "./launcher-frecency.mjs"
 
 let n = 0
@@ -195,6 +195,44 @@ ok("recordLaunch: short query still bumps frecency, learns nothing", () => {
     const st = recordLaunch(emptyState(), "ff.desktop", "f", NOW)
     assert.ok(Math.abs(scoreOf(st.frecency["ff.desktop"], NOW) - 100) < EPS)
     assert.deepEqual(st.terms, {})
+})
+
+ok("loadState: v2 favorites/hidden backfilled, junk repaired, dupes collapsed", () => {
+    const r = loadState({ v: 2, favorites: ["a.desktop", "a.desktop", 7, ""],
+                          hidden: "nope" }, NOW)
+    assert.equal(r.changed, true)
+    assert.deepEqual(r.state.favorites, ["a.desktop"])
+    assert.deepEqual(r.state.hidden, [])
+})
+
+ok("loadState: clean v2 favorites/hidden pass through, absent = empty, no rewrite", () => {
+    const st = emptyState()
+    st.favorites = ["a.desktop", "b.desktop"]
+    const r = loadState(st, NOW)
+    assert.equal(r.changed, false)
+    assert.deepEqual(r.state.favorites, ["a.desktop", "b.desktop"])
+    const absent = loadState({ v: 2 }, NOW)
+    assert.equal(absent.changed, false)
+    assert.deepEqual(absent.state.favorites, [])
+    assert.deepEqual(absent.state.hidden, [])
+    const explicit = loadState({ v: 2, favorites: [], hidden: [] }, NOW)
+    assert.equal(explicit.changed, false)
+})
+
+ok("toggleId: absent → appended, present → removed, order preserved", () => {
+    assert.deepEqual(toggleId(["a", "b"], "c"), ["a", "b", "c"])
+    assert.deepEqual(toggleId(["a", "b", "c"], "b"), ["a", "c"])
+    assert.deepEqual(toggleId(null, "x"), ["x"])
+    assert.deepEqual(toggleId(["a"], "a"), [])
+})
+
+ok("recordLaunch leaves favorites/hidden untouched", () => {
+    const st0 = emptyState()
+    st0.favorites = ["a.desktop"]
+    st0.hidden = ["b.desktop"]
+    const st = recordLaunch(st0, "c.desktop", "cc", NOW)
+    assert.deepEqual(st.favorites, ["a.desktop"])
+    assert.deepEqual(st.hidden, ["b.desktop"])
 })
 
 console.log("launcher-frecency: " + n + " assertions passed")

@@ -166,6 +166,100 @@ export function windowEntries(clientsJson) {
     return out
 }
 
+// ── Tier 2 views: favorites / suggestions / hidden (oma-cast) ───────────────
+// The empty query becomes a grouped view (FAVORITES → SUGGESTIONS →
+// APPLICATIONS) and hidden ids leave every app result. Helpers return
+// {entry, section} markers — section is set ONLY on the first entry of each
+// non-empty group; the overlay renders it as a caption above that row, so
+// selection indices never see a caption "row". Favorites shape ONLY the
+// empty view (a pinned shelf); query results stay pure relevance.
+
+function hiddenSet(hidden) {
+    var set = {}
+    if (hidden) for (var i = 0; i < hidden.length; i++) set[hidden[i]] = true
+    return set
+}
+
+// usage-desc, name-asc — the empty-query order both rest and hidden rows use.
+function byUsageThenName(usage) {
+    return function (a, b) {
+        var ua = usage && usage[a.id] ? usage[a.id] : 0
+        var ub = usage && usage[b.id] ? usage[b.id] : 0
+        if (ua !== ub) return ub - ua
+        return (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase())
+    }
+}
+
+export function filterHidden(entries, hidden) {
+    var set = hiddenSet(hidden)
+    var out = []
+    if (!entries) return out
+    for (var i = 0; i < entries.length; i++)
+        if (entries[i] && !entries[i].noDisplay && !set[entries[i].id]) out.push(entries[i])
+    return out
+}
+
+// The empty-query grouped view. favorites = pinned ids in pin order (apps
+// gone from the index drop out silently); suggestions = ever-launched apps
+// (a usage score exists) by decayed score, excluding favorites/hidden, cap
+// suggestLimit; rest keeps the classic usage-desc order.
+export function groupedEmptyView(entries, usage, favorites, hidden, suggestLimit) {
+    var limit = suggestLimit || 6
+    var set = hiddenSet(hidden)
+    var byId = {}
+    var rest = []
+    if (entries) for (var i = 0; i < entries.length; i++) {
+        var e = entries[i]
+        if (!e || e.noDisplay || set[e.id]) continue
+        byId[e.id] = e
+        rest.push(e)
+    }
+    rest.sort(byUsageThenName(usage))
+
+    var favs = []
+    if (favorites) for (var k = 0; k < favorites.length; k++)
+        if (byId[favorites[k]]) favs.push(byId[favorites[k]])
+
+    var favIds = {}
+    for (var q = 0; q < favs.length; q++) favIds[favs[q].id] = true
+    var suggestions = []
+    for (var s = 0; s < rest.length && suggestions.length < limit; s++)
+        if (!favIds[rest[s].id] && usage && usage[rest[s].id] > 0)
+            suggestions.push(rest[s])
+    var sugIds = {}
+    for (var t = 0; t < suggestions.length; t++) sugIds[suggestions[t].id] = true
+
+    var out = []
+    function emit(group, label) {
+        if (group.length === 0) return
+        for (var g = 0; g < group.length; g++)
+            out.push({ entry: group[g], section: g === 0 ? label : undefined })
+    }
+    emit(favs, "FAVORITES")
+    emit(suggestions, "SUGGESTIONS")
+    var tail = []
+    for (var r = 0; r < rest.length; r++)
+        if (!favIds[rest[r].id] && !sugIds[rest[r].id]) tail.push(rest[r])
+    emit(tail, "APPLICATIONS")
+    return out
+}
+
+// Typing "hidden" lists ONLY the hidden apps (usage-desc) under one HIDDEN
+// caption — the unhide path: Ctrl+Shift+X on those rows unmasks them.
+export function hiddenRows(entries, hidden, usage) {
+    var set = hiddenSet(hidden)
+    var out = []
+    if (entries) for (var i = 0; i < entries.length; i++) {
+        var e = entries[i]
+        if (e && !e.noDisplay && set[e.id]) out.push(e)
+    }
+    out.sort(byUsageThenName(usage))
+    var marked = []
+    for (var k = 0; k < out.length; k++)
+        marked.push({ entry: out[k], section: k === 0 ? "HIDDEN" : undefined })
+    return marked
+}
+
 // ── selection stability ─────────────────────────────────────────────────────
 // Identity key for a result row (provider is implied — apps — but the shape
 // keeps the door open for prefixed providers later).

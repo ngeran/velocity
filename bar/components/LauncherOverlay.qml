@@ -9,7 +9,11 @@
 // frecency, learned terms and query history live in LauncherFrecency
 // (lib/launcher-frecency.mjs math). ↑ on an empty query recalls history,
 // Ctrl+1…9 quick-picks, and a bare query with no app match falls back to a
-// web-search row.
+// web-search row. Tier 2 (oma-cast): the empty query renders a grouped view
+// (FAVORITES / SUGGESTIONS / APPLICATIONS — captions ride the first row of
+// each group, never a row of their own), Ctrl+Return runs the selected app's
+// first .desktop secondary action, Ctrl+Shift+F pins/unpins, Ctrl+Shift+X
+// hides, and typing "hidden" lists hidden apps for unhiding.
 //
 // Hosted as the overlay plugin velocity.launcher (builtins/): the PluginHost
 // claims the PopupCoordinator slot ("overlay:velocity.launcher") off `shown`,
@@ -42,12 +46,19 @@ PanelWindow {
         query = ""
         selection = { key: "", index: 0 }
         _histWalk = -1
+        _toast = ""       // a copy-failure toast can land after close() (its
+        toastTimer.stop() // onExited is async) — never flash it on the next open
         Services.LauncherFrecency.refresh()   // decayed scores sag while closed
         shown = true
         clientsProc.running = true   // one-shot open-windows fetch per open (P7 G1)
         searchInput.forceActiveFocus()
     }
-    function close() { shown = false; hideTimer.restart() }
+    function close() {
+        shown = false
+        hideTimer.restart()
+        _toast = ""       // the card is going away; a stale toast must not
+        toastTimer.stop() // flash on the next open
+    }
     function toggle() { shown ? close() : open() }
 
     anchors { top: true; bottom: true; left: true; right: true }
@@ -58,6 +69,17 @@ PanelWindow {
 
     onShownChanged: if (!shown) hideTimer.restart()
     Timer { id: hideTimer; interval: 220; onTriggered: if (!root.shown) root.visible = false }
+
+    // Tier 3 toast (oma-cast): transient failure line in the card footer,
+    // 2.5 s auto-clear; ctrl+shift+c copies it through the stdin-safe
+    // clipboard path. Toasts only make sense while the card is open — the
+    // failure paths that raise one keep the launcher open.
+    property string _toast: ""
+    Timer { id: toastTimer; interval: 2500; onTriggered: root._toast = "" }
+    function _toastMsg(msg) {
+        _toast = msg
+        toastTimer.restart()
+    }
 
     // ── the app index ────────────────────────────────────────────────────────
     // Built imperatively, not as a binding: reading `.values` while the model
@@ -118,6 +140,17 @@ PanelWindow {
     property string calcOut: ""
     property int _calcGen: 0
     property string _calcBuf: ""
+    // Tier 3 deferred loading (oma-cast): never flash a pending state —
+    // warm qalc answers in ~50 ms. Only a pending that is STILL pending
+    // after 500 ms (cold qalc loading its definitions for ~0.5–2 s) gets
+    // a dim "working" row instead of a stale answer.
+    property bool _calcPending: false
+    property bool _calcSlow: false
+    Timer {
+        id: calcSlowTimer
+        interval: 500
+        onTriggered: if (root._calcPending) root._calcSlow = true
+    }
     Timer { id: calcDebounce; interval: 150; onTriggered: root._runCalc() }
     Process {   // unbounded-ok: one-shot qalc evaluation per debounce tick
         id: calcProc
@@ -131,12 +164,24 @@ PanelWindow {
             var out = calcProc.buffer
             calcProc.buffer = ""
             if (calcProc.gen !== root._calcGen) return   // superseded keystroke
+            root._calcPending = false
+            root._calcSlow = false
+            calcSlowTimer.stop()   // bare id: ids are not root properties
             root.calcOut = out.trim().split("\n")[0]
         }
     }
     function _runCalc() {
         var expr = _route.arg.trim()
-        if (expr.length === 0) { calcOut = ""; return }
+        if (expr.length === 0) {
+            _calcPending = false
+            _calcSlow = false
+            calcSlowTimer.stop()
+            calcOut = ""
+            return
+        }
+        _calcPending = true
+        _calcSlow = false
+        calcSlowTimer.restart()
         var gen = ++_calcGen
         calcProc.gen = gen
         calcProc.command = ["qalc", "-t", expr]
@@ -156,9 +201,16 @@ PanelWindow {
         var r = _route
         var rows = []
         if (r.provider === "calc") {
+            if (root._calcSlow) {
+                // >500 ms without an answer: dim working row (its own
+                // provider so Enter can't copy the "…" sentinel)
+                rows.push(root._tag("calcpending", { id: r.arg, name: "…" },
+                                     { genericName: "= " + r.arg + " — working" }))
+                return rows
+            }
             if (root.calcOut.length > 0)
                 rows.push(root._tag("calc", { id: r.arg, name: root.calcOut },
-                                        { genericName: "= " + r.arg + " — Enter copies" }))
+                                     { genericName: "= " + r.arg + " — Enter copies" }))
             return rows
         }
         if (r.provider === "shell") {
@@ -173,16 +225,35 @@ PanelWindow {
                                     { genericName: "web search — Enter opens the browser" }))
             return rows
         }
-        // apps (+ matching open windows above, non-empty query only) —
-        // learned terms ride along as an alias tier (launcher-frecency)
+        // apps: the empty query is the grouped Tier 2 view (FAVORITES →
+        // SUGGESTIONS → APPLICATIONS, launcher-search.mjs); the literal query
+        // "hidden" is the unhide listing; anything else ranks hidden-filtered
+        // apps (+ matching open windows above) with learned terms as the
+        // alias tier
         var q = r.arg.trim()
-        if (q.length > 0) {
-            var wins = Launcher.rank(root.windowRows, q, {})
-            for (var i = 0; i < wins.length && i < 4; i++)
-                rows.push(root._tag("windows", wins[i]))
+        var frec = Services.LauncherFrecency
+        if (q.length === 0) {
+            var groups = Launcher.groupedEmptyView(root.entries, frec.usage,
+                                                   frec.favorites, frec.hidden)
+            for (var g = 0; g < groups.length; g++)
+                rows.push(root._tag("apps", groups[g].entry,
+                                    groups[g].section ? { section: groups[g].section } : null))
+            return rows
         }
-        var apps = Launcher.rank(root.entries, q, Services.LauncherFrecency.usage,
-                                 Services.LauncherFrecency.terms)
+        if (q.toLowerCase() === "hidden") {
+            var hid = Launcher.hiddenRows(root.entries, frec.hidden, frec.usage)
+            for (var d = 0; d < hid.length; d++)
+                rows.push(root._tag("apps", hid[d].entry, {
+                    section: hid[d].section,
+                    genericName: "hidden — ctrl+shift+x unhides",
+                }))
+            return rows
+        }
+        var wins = Launcher.rank(root.windowRows, q, {})
+        for (var i = 0; i < wins.length && i < 4; i++)
+            rows.push(root._tag("windows", wins[i]))
+        var apps = Launcher.rank(Launcher.filterHidden(root.entries, frec.hidden),
+                                 q, frec.usage, frec.terms)
         for (var j = 0; j < apps.length; j++)
             rows.push(root._tag("apps", apps[j]))
         // web fallback (oma-cast): a bare query that matched no app still has
@@ -264,6 +335,24 @@ PanelWindow {
         return true
     }
 
+    // ── Tier 2 toggles (oma-cast favorites / hide) ──────────────────────────
+    // Apps rows only — windows/calc/shell/web rows have no persistent
+    // identity worth pinning. Hiding re-ranks the results immediately (the
+    // service property change re-evaluates the binding); the reconcile
+    // machinery holds the selection index when the row vanishes.
+    function _selectedApp() {
+        var e = results[selection.index]
+        return e && e._provider === "apps" ? e : null
+    }
+    function _toggleFavorite() {
+        var e = _selectedApp()
+        if (e) Services.LauncherFrecency.toggleFavorite(e.id)
+    }
+    function _toggleHidden() {
+        var e = _selectedApp()
+        if (e) Services.LauncherFrecency.toggleHidden(e.id)
+    }
+
     // ── actions ─────────────────────────────────────────────────────────────
     // Provider dispatch. Apps: the source DesktopEntry's pre-parsed command
     // via execDetached. P4.8's naive parse read a nonexistent `.exec` —
@@ -273,7 +362,21 @@ PanelWindow {
     // Lua dispatcher focus form proven live in P7 (hl.dsp.focus dropped
     // address:-prefixed targets; bare 0x… does not match). Calc: copy via
     // wl-copy. Shell/web: detached ghostty / browser.
-    function launch(entry) {
+    //
+    // Exec argv pipeline shared by app launches and .desktop secondary
+    // actions (Tier 2): command is the pre-parsed argv; strip Exec field
+    // codes the parse may keep, execDetached the rest — never execute(),
+    // which misreports and double-spawned (P4.8, proven live: photocraft ×2).
+    function _execArgv(raw) {
+        var argv = []
+        if (raw) for (var i = 0; i < raw.length; i++) {
+            var t = String(raw[i])
+            if (!/^%[a-zA-Z%]$/.test(t)) argv.push(t)
+        }
+        return argv
+    }
+
+    function launch(entry, secondary) {
         if (!entry) return
         var provider = entry._provider || "apps"
         // every launch teaches: apps fold a frecency visit and learn the
@@ -281,6 +384,10 @@ PanelWindow {
         // (history) — their ids are ephemeral or not apps
         function _record(id) { Services.LauncherFrecency.recordLaunch(id, root.query) }
         if (provider === "windows") { _record(null); _focusWindow(entry.id); close(); return }
+        if (provider === "calcpending") {
+            _toastMsg("still working — the answer lands in a moment")
+            return
+        }
         if (provider === "calc") { _record(null); _copyText(entry.name); close(); return }
         if (provider === "shell") {
             _record(null)
@@ -293,25 +400,38 @@ PanelWindow {
             close(); return
         }
         var src = entry._src
-        if (!src || typeof src.execString !== "string" || src.execString.length === 0) return
-        _record(entry.id)
-        // execute() is unusable as a gate on this build: it returned false
-        // for ghostty WHILE successfully spawning it (systemd app scope in
-        // the journal) and false for blender while spawning nothing — the
-        // bool cannot tell refusal from success, so execute()+fallback
-        // double-spawned (proven live: photocraft ×2). Launch the entry's
-        // pre-parsed argv directly through the execDetached path the shell
-        // provider proved; strip Exec field codes the parse may keep.
-        var raw = src.command
-        var argv = []
-        if (raw) for (var i = 0; i < raw.length; i++) {
-            var t = String(raw[i])
-            if (!/^%[a-zA-Z%]$/.test(t)) argv.push(t)
+        if (!src || typeof src.execString !== "string" || src.execString.length === 0) {
+            // nothing spawnable — STAY OPEN with a toast (closing would
+            // kill the message with the card; journal keeps the detail).
+            // Covers no-Exec entries; the argv-empty corner below is the
+            // rarer execString-but-unparseable twin.
+            console.warn("[launcher] no runnable command for " + (entry.id))
+            _toastMsg("no runnable command for " + entry.name)
+            return
         }
-        if (argv.length > 0)
+        // Tier 2 secondary action (oma-cast Ctrl+Enter): the first .desktop
+        // action of the selected app; rows without one fall through to a
+        // normal launch
+        if (secondary && src.actions && src.actions.length > 0) {
+            var actArgv = root._execArgv(src.actions[0].command)
+            if (actArgv.length > 0) {
+                _record(entry.id)
+                Quickshell.execDetached(actArgv)
+                close()
+                return
+            }
+        }
+        _record(entry.id)
+        var argv = root._execArgv(src.command)
+        if (argv.length > 0) {
             Quickshell.execDetached(argv)
-        else
+        } else {
+            // nothing spawnable — STAY OPEN with a toast (closing would
+            // kill the message with the card; journal keeps the detail)
             console.warn("[launcher] no runnable command for " + (src.id || entry.id))
+            _toastMsg("no runnable command for " + entry.name)
+            return
+        }
         close()
     }
 
@@ -336,12 +456,36 @@ PanelWindow {
         focusProc.running = true
     }
 
-    Process {   // unbounded-ok: wl-copy serves the clipboard from a detached child
-        id: copyProc
-        running: false
+    Process {   // unbounded-ok: wl-copy takes the text on STDIN — user text
+        id: copyProc          // never appears in any argv (/proc cmdline is
+        running: false        // world-readable). quickshell 0.3 has no
+        stdinEnabled: true    // closeStdin: disabling the channel right
+        command: ["wl-copy"]  // after the write IS the EOF (oma-cast
+        property string text: ""   // ClipboardWriter pattern)
+        onStarted: {
+            if (text.length > 0) write(text)
+            text = ""
+            stdinEnabled = false   // → EOF: wl-copy finishes and exits
+        }
+        onExited: function(code) {
+            if (code !== 0) {
+                console.warn("[launcher] wl-copy exited with code " + code)
+                root._toastMsg("clipboard copy failed")
+            }
+        }
+        // Spawn failure (wl-copy absent from PATH) is undetectable here:
+        // quickshell 0.3's Process exposes no errorOccurred signal (runtime-
+        // probed: `onErrorOccurred` is a non-existent property, and a missing
+        // binary reports neither started nor exited nor running=true) — same
+        // silence as every other Process in this repo if wl-copy vanishes.
     }
     function _copyText(t) {
-        copyProc.command = ["sh", "-c", 'printf "%s" "$1" | wl-copy', "copy", String(t)]
+        // an EOF'd wl-copy exits within milliseconds; the only overlapping
+        // pair (calc Enter vs a ctrl+shift+c toast copy) copies near-identical
+        // text — drop a race instead of queueing it
+        if (copyProc.running) return
+        copyProc.text = String(t)
+        copyProc.stdinEnabled = true   // re-arm: onStarted closed the channel
         copyProc.running = true
     }
     function moveSelection(delta) {
@@ -373,7 +517,10 @@ PanelWindow {
           : Config.PopupMetrics.px(60)
         width: Math.min(Config.PopupMetrics.px(640), parent.width - Config.PopupMetrics.px(48))
         height: Math.min(
-            searchRow.implicitHeight + Config.PopupMetrics.px(24) + Math.max(listCol.implicitHeight, hairline.height + Config.PopupMetrics.px(4)),
+            searchRow.implicitHeight + Config.PopupMetrics.px(24)
+            + Math.max(listCol.implicitHeight, hairline.height + Config.PopupMetrics.px(4))
+            // the Tier 3 toast footer grows the card while it shows
+            + (root._toast.length > 0 ? Config.PopupMetrics.px(16) : 0),
             parent.height - Config.PopupMetrics.px(120))
         // Pure black (pixels off on QD-OLED) like every ephemeral card.
         color: "#000000"
@@ -425,17 +572,41 @@ PanelWindow {
                     Keys.onEscapePressed: root.close()
                     Keys.onDownPressed: if (!root._historyDown()) root.moveSelection(1)
                     Keys.onUpPressed: if (!root._historyUp()) root.moveSelection(-1)
-                    Keys.onReturnPressed: root.launch(root.results[root.selection.index])
-                    Keys.onEnterPressed: root.launch(root.results[root.selection.index])
+                    Keys.onReturnPressed: root.launch(root.results[root.selection.index],
+                                                      (event.modifiers & Qt.ControlModifier) !== 0)
+                    Keys.onEnterPressed: root.launch(root.results[root.selection.index],
+                                                     (event.modifiers & Qt.ControlModifier) !== 0)
                     // Ctrl+1…9 quick-pick (oma-cast): launch the nth visible
                     // row. Ctrl+digits have no specific handler above, so the
-                    // generic onPressed is the one place to catch them.
+                    // generic onPressed is the one place to catch them — and,
+                    // since Tier 2, the Ctrl+Shift+F/X favorites/hide toggles.
+                    // Tier 3 adds Ctrl+Shift+C: copy the toast (oma-cast's
+                    // copy-error affordance) through the stdin-safe path.
                     Keys.onPressed: function(event) {
+                        if ((event.modifiers & Qt.ControlModifier)
+                            && (event.modifiers & Qt.ShiftModifier)
+                            && (event.key === Qt.Key_F || event.key === Qt.Key_X
+                                || event.key === Qt.Key_C)) {
+                            // accept even on auto-repeat — holding the toggle
+                            // must not flap favorite/hidden (a disk write per
+                            // flip) through the rows it unmasks/remasks, and
+                            // Shift+C must never leak a symbol into the query
+                            event.accepted = true
+                            if (event.isAutoRepeat) return
+                            if (event.key === Qt.Key_F) root._toggleFavorite()
+                            else if (event.key === Qt.Key_X) root._toggleHidden()
+                            else if (root._toast.length > 0) root._copyText(root._toast)
+                            return
+                        }
                         if (event.modifiers & Qt.ControlModifier) {
                             var d = event.key - Qt.Key_0
                             if (d >= 1 && d <= 9 && d <= root.rowCount) {
+                                // Ctrl+(Shift+)digit: always swallow — Shift
+                                // must not leak a symbol into the query; the
+                                // launch itself stays the no-Shift combo
                                 event.accepted = true
-                                root.launch(root.results[d - 1])
+                                if (!(event.modifiers & Qt.ShiftModifier))
+                                    root.launch(root.results[d - 1])
                             }
                         }
                     }
@@ -468,13 +639,26 @@ PanelWindow {
                 boundsBehavior: Flickable.StopAtBounds
 
                 function ensureVisibleRow(idx) {
-                    var y = listCol.y + idx * rowHeightHint
+                    var y = listCol.y + rowTop(idx)
+                    var h = rowHeightAt(idx)
                     if (y < contentY) contentY = y
-                    else if (y + rowHeightHint > contentY + height) contentY = y + rowHeightHint - height
+                    else if (y + h > contentY + height) contentY = y + h - height
                 }
-                // Rows are fixed-height (title + subtitle line); used for the
+                // Rows are fixed-height (title + subtitle line); Tier 2
+                // section heads grow by the caption height. Used for the
                 // keyboard-scroll math only.
                 readonly property real rowHeightHint: Config.PopupMetrics.px(44)
+                readonly property real sectionHeightHint: Config.PopupMetrics.px(22)
+
+                function rowHeightAt(i) {
+                    var e = root.results[i]
+                    return rowHeightHint + (e && e.section ? sectionHeightHint : 0)
+                }
+                function rowTop(idx) {
+                    var y = 0
+                    for (var i = 0; i < idx; i++) y += rowHeightAt(i)
+                    return y
+                }
 
                 WheelHandler { onWheel: listScroll.contentY -= wheel.angleDelta.y / 4 }
 
@@ -492,14 +676,42 @@ PanelWindow {
                             // plain property (NOT required): JS-array model
                             property var entry: root.results[index] || null
                             readonly property bool selected: index === root.selection.index
+                            // Tier 2 section captions ride the group's first
+                            // row (which grows by the caption height) — never
+                            // a row of their own, so selection indices and
+                            // resultKey reconcile stay untouched
+                            readonly property bool hasSection: !!(row.entry && row.entry.section)
+                            readonly property string actionName: {
+                                var src = row.entry && row.entry._provider === "apps" ? row.entry._src : null
+                                if (!src || !src.actions || src.actions.length === 0) return ""
+                                var a = String(src.actions[0].name || "")
+                                return a.length > 18 ? a.slice(0, 17) + "…" : a
+                            }
 
                             Layout.fillWidth: true
                             implicitHeight: listScroll.rowHeightHint
+                                             + (hasSection ? listScroll.sectionHeightHint : 0)
                             color: selected ? Config.ThemeConfig.colors.surfaceVariant : "transparent"
+
+                            // section caption (FAVORITES / SUGGESTIONS / …)
+                            Text {
+                                visible: row.hasSection
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.topMargin: Config.PopupMetrics.px(6)
+                                anchors.leftMargin: Config.PopupMetrics.px(10)
+                                text: row.entry ? (row.entry.section || "") : ""
+                                color: Config.ThemeConfig.colors.textDim
+                                font.family: Config.BarConfig.fontFamily
+                                font.pixelSize: Config.PopupMetrics.px(9)
+                                font.letterSpacing: 1.2
+                            }
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: Config.PopupMetrics.px(8)
+                                anchors.topMargin: Config.PopupMetrics.px(8)
+                                                + (row.hasSection ? listScroll.sectionHeightHint : 0)
                                 spacing: Config.PopupMetrics.px(10)
 
                                 // selection tick: a 2px accent bar, dim enough for the doctrine
@@ -542,6 +754,15 @@ PanelWindow {
                                         elide: Text.ElideRight
                                     }
                                 }
+                                // Tier 2: first .desktop secondary action hint
+                                // on the selected app row (Ctrl+Return runs it)
+                                Text {
+                                    visible: row.selected && row.actionName.length > 0
+                                    text: "ctrl+↵ " + row.actionName
+                                    color: Config.ThemeConfig.colors.textDim
+                                    font.family: Config.BarConfig.fontFamily
+                                    font.pixelSize: Config.PopupMetrics.px(10)
+                                }
                                 Text {
                                     text: "↵"
                                     visible: row.selected
@@ -551,6 +772,13 @@ PanelWindow {
                                 }
                             }
 
+                            // Hover selects only on a REAL pointer move
+                            // (oma-cast PointerMoveGate): when rows re-rank
+                            // under a stationary cursor — typing, pinning,
+                            // hiding — the delegate under it must not steal
+                            // the keyboard selection. onPositionChanged fires
+                            // only on physical movement; containsPointer
+                            // alone would flap on every re-layout.
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -584,6 +812,20 @@ PanelWindow {
                         font.pixelSize: Config.PopupMetrics.px(11)
                     }
                 }
+            }
+            // ---- toast footer (Tier 3): dim failure line + copy hint ----
+            Text {
+                id: toastRow
+                visible: root._toast.length > 0
+                Layout.fillWidth: true
+                Layout.topMargin: Config.PopupMetrics.px(4)
+                Layout.leftMargin: Config.PopupMetrics.px(4)
+                Layout.rightMargin: Config.PopupMetrics.px(4)
+                text: root._toast + "  ·  ctrl+shift+c copies"
+                color: Config.ThemeConfig.colors.textDim
+                font.family: Config.BarConfig.fontFamily
+                font.pixelSize: Config.PopupMetrics.px(10)
+                elide: Text.ElideRight
             }
         }
     }

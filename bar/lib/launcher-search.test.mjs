@@ -1,6 +1,6 @@
 // launcher-search.test.mjs — the launcher's rank/highlight/selection core.
 import { strict as assert } from "node:assert"
-import { rank, highlight, segments, resultKey, reconcileSelection, route, windowEntries } from "./launcher-search.mjs"
+import { rank, highlight, segments, resultKey, reconcileSelection, route, windowEntries, filterHidden, groupedEmptyView, hiddenRows } from "./launcher-search.mjs"
 
 let n = 0
 function ok(name, fn) { fn(); n++; console.log("  ok " + name) }
@@ -190,5 +190,90 @@ ok("windowEntries: malformed input → empty (apps-only launcher)", () => {
     assert.ok(ms < 50, "rank over 1000 entries x 7 queries took " + ms.toFixed(1) + " ms (budget 50)")
     ok("benchmark: 7 keystrokes over 1000 entries in " + ms.toFixed(1) + " ms (< 50)", () => {})
 }
+
+// ── Tier 2: filterHidden / groupedEmptyView / hiddenRows ────────────────────
+const VIEW_APPS = [
+    { id: "a.desktop", name: "Alpha" },
+    { id: "b.desktop", name: "Bravo" },
+    { id: "c.desktop", name: "Charlie" },
+    { id: "d.desktop", name: "Delta" },
+    { id: "e.desktop", name: "Echo" },
+    { id: "nope.desktop", name: "Ghost", noDisplay: true },
+]
+
+ok("filterHidden: hidden and noDisplay ids drop out", () => {
+    const out = filterHidden(VIEW_APPS, ["b.desktop", "zz-gone.desktop"])
+    assert.deepEqual(out.map(e => e.id), ["a.desktop", "c.desktop", "d.desktop", "e.desktop"])
+})
+
+ok("groupedEmptyView: FAVORITES → SUGGESTIONS → APPLICATIONS with head-only sections", () => {
+    const usage = { "a.desktop": 5, "c.desktop": 3, "d.desktop": 1, "e.desktop": 9 }
+    const out = groupedEmptyView(VIEW_APPS, usage, ["c.desktop"], [], 2)
+    assert.deepEqual(out.map(m => [m.entry.id, m.section || ""]), [
+        ["c.desktop", "FAVORITES"],
+        ["e.desktop", "SUGGESTIONS"],
+        ["a.desktop", ""],
+        ["d.desktop", "APPLICATIONS"],
+        ["b.desktop", ""],
+    ])
+})
+
+ok("groupedEmptyView: suggestions = launched, non-favorite, capped; unlaunched land in APPLICATIONS", () => {
+    const usage = { "a.desktop": 5, "c.desktop": 3 }
+    const out = groupedEmptyView(VIEW_APPS, usage, ["a.desktop"], [], 6)
+    assert.deepEqual(out.map(m => [m.entry.id, m.section || ""]), [
+        ["a.desktop", "FAVORITES"],
+        ["c.desktop", "SUGGESTIONS"],
+        ["b.desktop", "APPLICATIONS"],
+        ["d.desktop", ""],
+        ["e.desktop", ""],
+    ])
+})
+
+ok("groupedEmptyView: hidden masked everywhere (even favorites); stale pins drop silently", () => {
+    const usage = { "c.desktop": 3 }
+    const out = groupedEmptyView(VIEW_APPS, usage, ["b.desktop", "c.desktop", "uninstalled.desktop"], ["b.desktop"], 6)
+    assert.deepEqual(out.map(m => [m.entry.id, m.section || ""]), [
+        ["c.desktop", "FAVORITES"],
+        ["a.desktop", "APPLICATIONS"],
+        ["d.desktop", ""],
+        ["e.desktop", ""],
+    ])
+})
+
+ok("groupedEmptyView: no favorites, no launches → one APPLICATIONS head only", () => {
+    const out = groupedEmptyView(VIEW_APPS, {}, [], [], 6)
+    assert.equal(out.filter(m => m.section).length, 1)
+    assert.equal(out[0].section, "APPLICATIONS")
+})
+
+ok("hiddenRows: only hidden ids, usage-desc, one HIDDEN head", () => {
+    const out = hiddenRows(VIEW_APPS, ["b.desktop", "d.desktop", "not-here"], { "b.desktop": 2, "d.desktop": 8 })
+    assert.deepEqual(out.map(m => [m.entry.id, m.section || ""]), [
+        ["d.desktop", "HIDDEN"],
+        ["b.desktop", ""],
+    ])
+})
+
+ok("hiddenRows: a noDisplay hidden id stays out (it can never be shown)", () => {
+    const out = hiddenRows(VIEW_APPS, ["nope.desktop", "b.desktop"], {})
+    assert.deepEqual(out.map(m => m.entry.id), ["b.desktop"])
+})
+
+ok("groupedEmptyView: empty index → no rows, no section markers", () => {
+    assert.deepEqual(groupedEmptyView([], { "a.desktop": 3 }, ["a.desktop"], [], 6), [])
+})
+
+ok("groupedEmptyView: suggestLimit 0 (or absent) falls back to 6", () => {
+    const usage = {}
+    for (const id of ["a", "b", "c", "d", "e", "f", "g", "h"]) usage[id + ".desktop"] = 1
+    const apps = Object.keys(usage).map(id => ({ id, name: id }))
+    const out0 = groupedEmptyView(apps, usage, [], [], 0)
+    const outU = groupedEmptyView(apps, usage, [], [])
+    const i0 = out0.findIndex(m => m.section === "SUGGESTIONS")
+    const i1 = out0.findIndex(m => m.section === "APPLICATIONS")
+    assert.equal(i1 - i0, 6)          // 6 suggestion rows before the tail head
+    assert.deepEqual(out0, outU)
+})
 
 console.log("launcher-search: " + n + " assertions passed")
