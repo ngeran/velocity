@@ -94,7 +94,7 @@ PanelWindow {
 
     // ── Tier 4 two-step arm (oma-cast's confirm gate, dialog-free) ──────────
     // Destructive sys rows (reboot/shutdown) fire only on a second Enter
-    // within 3 s of the first. Any query change, close, or selection move
+    // within 2.5 s of the first. Any query change, close, or selection move
     // off the row disarms; the fire path disarms too, so an auto-repeated
     // Enter can at worst re-arm (toast), never double-fire.
     property string _armedSys: ""
@@ -105,6 +105,9 @@ PanelWindow {
         _toastMsg("press enter again to " + String(entry.name || "").toLowerCase())
     }
     function _disarmSys() {
+        // already disarmed — wheel/hover paths call this on every event;
+        // bail before touching anything so a disarmed list can't re-notify
+        if (_armedSys === "") return
         _armedSys = ""
         armTimer.stop()
         // a disarm makes the armed toast stale advice — drop it (but leave
@@ -146,29 +149,32 @@ PanelWindow {
     // reaches a spawn. lock = velocity-lock and suspend = systemctl suspend
     // follow the settings tree's sanctioned commands (PowerStrip); logout is
     // Hyprland's own exit dispatch. keywords are ARRAYS (haystacks() reads
-    // e.keywords as a list); argv (null on the settings row) is also the
-    // sys-row discriminator in the results binding.
+    // e.keywords as a list); argv (null on the settings row) is the spawn
+    // payload, and the explicit _sys flag — not argv presence — marks these
+    // rows as sys entries in the results binding (DesktopEntry must never
+    // be duck-typed: a future Quickshell could grow an argv).
     readonly property var _sysEntries: [
         { id: "sys:settings", name: "Settings",
           genericName: "open the settings dashboard",
-          keywords: ["settings", "preferences", "config"], argv: null },
+          keywords: ["settings", "preferences", "config"], argv: null, _sys: true },
         { id: "sys:lock", name: "Lock",
           genericName: "lock the screen",
-          keywords: ["lock", "screen"], argv: ["velocity-lock"] },
+          keywords: ["lock", "screen"], argv: ["velocity-lock"], _sys: true },
         { id: "sys:suspend", name: "Suspend",
           genericName: "suspend to memory",
-          keywords: ["suspend", "sleep"], argv: ["systemctl", "suspend"] },
+          keywords: ["suspend", "sleep"], argv: ["systemctl", "suspend"], _sys: true },
         { id: "sys:logout", name: "Log Out",
           genericName: "end the Hyprland session",
-          keywords: ["log", "out", "logout"], argv: ["hyprctl", "dispatch", "exit"] },
+          keywords: ["log", "out", "logout"],
+          argv: ["hyprctl", "dispatch", "exit"], _sys: true },
         { id: "sys:reboot", name: "Reboot",
           genericName: "restart the machine",
           keywords: ["reboot", "restart"],
-          argv: ["systemctl", "reboot"], destructive: true },
+          argv: ["systemctl", "reboot"], destructive: true, _sys: true },
         { id: "sys:shutdown", name: "Shut Down",
           genericName: "power off the machine",
           keywords: ["shutdown", "poweroff", "off"],
-          argv: ["systemctl", "poweroff"], destructive: true }
+          argv: ["systemctl", "poweroff"], destructive: true, _sys: true }
     ]
 
     // ── query + ranking + selection ─────────────────────────────────────────
@@ -319,12 +325,12 @@ PanelWindow {
         for (var i = 0; i < wins.length && i < 4; i++)
             rows.push(root._tag("windows", wins[i]))
         // Tier 4: sys rows join the ranked pool on queries (never empty/
-        // hidden views); the argv field discriminates them from app rows
+        // hidden views); the _sys flag discriminates them from app rows
         var pool = Launcher.filterHidden(root.entries, frec.hidden).concat(_sysEntries)
         var apps = Launcher.rank(pool, q, frec.usage, frec.terms)
         for (var j = 0; j < apps.length; j++) {
             var e = apps[j]
-            if (e.argv !== undefined)
+            if (e._sys === true)
                 rows.push(root._tag("sys", e, {
                     // the armed row shows the second-Enter hint in its subtitle
                     genericName: e.genericName
