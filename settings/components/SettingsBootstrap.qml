@@ -79,6 +79,24 @@ Item {
     function networkLatency(): string { return networkIpc.latency() }
     function networkEngineer(): string { return networkIpc.engineer() }
 
+    // `theme applyCustomTheme` — apply a saved custom theme through the
+    // settings ThemeService (the sole palette writer), preserving the user's
+    // current OLED-clamp choice. Declared here so the verb works before the
+    // dashboard window is opened. The ThemeService singleton is lazily
+    // constructed and loads custom-themes.json asynchronously, so the first
+    // call after a shell restart (or before the dashboard has ever opened)
+    // can race the load and return "unknown"; retry once it completes.
+    function applyCustomTheme(name: string): string {
+        var themes = Services.ThemeService.customThemes
+        for (var i = 0; i < themes.length; i++) {
+            if (themes[i].name === name) {
+                Services.ThemeService.applyCustomTheme(name)
+                return "ok"
+            }
+        }
+        return "error: unknown custom theme: " + name
+    }
+
     // ── C4: bar-owned keys written FROM the bar surfaces (BarSettingsBody
     // picks; the old velocity.bar-settings overlay was deleted in P4.8) ──────
     // Moved verbatim from the old settings/shell.qml SettingsWindow IpcHandler

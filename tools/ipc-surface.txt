@@ -37,6 +37,7 @@ plugins.summon           manual    # (id, payload) — BOTH required (Quickshell
 plugins.hide             manual
 plugins.call             manual    # (id, verb, arg) — plugin-declared verbs (manifest.ipc); handler in bar/engine/PluginHost.qml
 theme.reload             internal  # ThemeService push nudge after colors.json write
+theme.applyCustomTheme   manual    # (name) — apply a saved custom theme via ThemeService
 config.reload            manual    # P2.5: the writer (bar's BarConfigWriter) reloads
                                    # BarConfig in-process; the verb stays for external
                                    # writers (scripts/hand-edit tooling that want an

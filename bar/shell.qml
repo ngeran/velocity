@@ -498,6 +498,12 @@ Components.NotificationToasts { barClearance: shellRoot.topClearance }
             Config.ThemeConfig.reloadFromDisk()
             return "ok"
         }
+        // Apply a saved custom theme by name through the settings ThemeService
+        // (the sole palette writer), so external tooling can switch themes
+        // without opening the dashboard.
+        function applyCustomTheme(name: string): string {
+            return shellRoot.settingsBootstrapFn("applyCustomTheme", name)
+        }
     }
 
     // bar-config.json nudge — settings fires it after its atomic write.
