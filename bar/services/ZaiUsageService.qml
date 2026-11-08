@@ -10,11 +10,11 @@
 // the repo's own NotificationService is the single notification sink).
 //
 // ENDPOINT  GET https://api.z.ai/api/monitor/usage/quota/limit
-//           Bearer auth. data.limits[] entries of type TOKENS_LIMIT carry:
-//             unit/number  -> window identity ((3,5)=5h session, (6,7)=weekly)
-//             percentage   -> % of quota used
-//             usage/currentValue/remaining -> token counts
-//             nextResetTime -> epoch ms (drives the reset countdown + re-arm)
+//           Bearer auth. data.limits[] entries:
+//             TOKENS_LIMIT — unit/number identity ((3,5)=5h session,
+//               (6,1)=weekly), percentage, nextResetTime.
+//             TIME_LIMIT   — the search quota: usage/currentValue/remaining,
+//               percentage, nextResetTime, usageDetails[] per tool.
 //
 // API KEY   Read from ~/.config/secrets/zai_usage_key (a sibling dir, OUTSIDE
 //           this repo, so it's GitHub-safe). The curl command reads the file
@@ -24,7 +24,10 @@
 //           so the key is read from the file directly rather than via env.
 //
 // PROPERTIES
-//   windows      : var[]   — {key,type,label,pct,remaining,resetLabel,tier,statusWord}
+//   windows      : var[]   — {key,type,unit,number,role,label,pct,remaining,
+//                             usage,currentValue,usageDetails,resetMs,
+//                             resetLabel,resetAbsLabel,tier,statusWord,
+//                             burnPerHour,etaLabel}
 //   peakPct      : real    — highest window % (the HUD headline figure)
 //   peakTier     : int     — severity tier (0/1/2) of the peak window
 //   peakLabel    : string  — label of the peak window
@@ -35,6 +38,11 @@
 //   errorMessage : string
 //   lastUpdated  : string
 //   keyConfigured: bool
+//
+// Window roles: "session" (5h tokens), "weekly" (7d tokens), "search"
+// (TIME_LIMIT) or "other". burnPerHour/etaLabel come from an in-memory
+// per-window sample history (60 polls max), so they are "—" until the second
+// poll after a reset.
 //
 // SIGNALS
 //   thresholdAlert(var info)  — {windowName, pct, urgency, resetLabel}
@@ -78,6 +86,10 @@ Item {
     // In-memory only (stateless like every other service); a new reset cycle
     // (nextResetTime change) re-arms all thresholds for that window.
     property var _threshState: ({})
+
+    // Rolling samples per window key for burn-rate/ETA: [{t, pct, reset}],
+    // capped at 60 polls. Same lifetime as _threshState (process memory only).
+    property var _history: ({})
 
     signal thresholdAlert(var info)
     signal dataRefreshed()
@@ -191,11 +203,18 @@ Item {
             wins.push({
                 key: lim.type + "-" + lim.unit + "-" + lim.number,
                 type: lim.type,
+                unit: lim.unit,
+                number: lim.number,
+                role: root._windowRole(lim.type, lim.unit, lim.number),
                 label: root._windowLabel(lim.type, lim.unit, lim.number),
                 pct: pct,
                 remaining: remaining,
+                usage: (lim.usage != null) ? Number(lim.usage) : null,
+                currentValue: (lim.currentValue != null) ? Number(lim.currentValue) : null,
+                usageDetails: Array.isArray(lim.usageDetails) ? lim.usageDetails : [],
                 resetMs: lim.nextResetTime || null,
                 resetLabel: root._formatReset(lim.nextResetTime),
+                resetAbsLabel: root._formatResetAbs(lim.nextResetTime),
                 tier: root._tier(pct),
                 statusWord: root._statusWord(pct)
             })
@@ -211,6 +230,7 @@ Item {
             return
         }
 
+        root._attachTelemetry(wins)
         root.windows = wins
         root.peakPct = peakPct
         root.peakTier = peakTier
@@ -264,6 +284,13 @@ Item {
     }
 
     // ---- helpers ----
+    function _windowRole(type, unit, number) {
+        if (type === "TOKENS_LIMIT" && unit === 3 && number === 5) return "session"
+        if (type === "TOKENS_LIMIT" && unit === 6 && number === 1) return "weekly"
+        if (type === "TIME_LIMIT" && unit === 5 && number === 1) return "search"
+        return "other"
+    }
+
     function _windowLabel(type, unit, number) {
         if (type === "TOKENS_LIMIT") {
             if (unit === 3 && number === 5) return "5HR QUOTA"
@@ -306,11 +333,65 @@ Item {
         return mins + "m"
     }
 
+    // Rolling burn-rate/ETA per window, computed from the in-memory samples.
+    // A reset cycle change (nextResetTime differs from the last sample) clears
+    // that window's history so pre-reset burn never leaks into the new cycle.
+    function _attachTelemetry(wins) {
+        var hist = root._history
+        var now = Date.now()
+        for (var i = 0; i < wins.length; i++) {
+            var win = wins[i]
+            var samples = hist[win.key] || []
+            if (samples.length > 0 && samples[samples.length - 1].reset !== win.resetMs)
+                samples = []
+            samples.push({ t: now, pct: win.pct, reset: win.resetMs })
+            while (samples.length > 60) samples.shift()
+            hist[win.key] = samples
+            win.burnPerHour = root._burnRate(samples)
+            win.etaLabel = root._etaLabel(win, samples)
+        }
+        root._history = hist
+    }
+
+    function _burnRate(samples) {
+        if (!samples || samples.length < 2) return null
+        var first = samples[0], last = samples[samples.length - 1]
+        var hours = (last.t - first.t) / 3600000
+        if (!(hours > 0)) return null
+        return Math.max(0, (last.pct - first.pct) / hours)
+    }
+
+    function _etaLabel(win, samples) {
+        if (win.pct >= 100) return "NOW"
+        var rate = root._burnRate(samples)
+        if (rate === null) return "—"
+        if (rate <= 0.01) return "STABLE"
+        var etaH = (100 - win.pct) / rate
+        if (win.resetMs) {
+            var toResetH = (win.resetMs - Date.now()) / 3600000
+            if (toResetH > 0 && etaH > toResetH) return "RESET FIRST"
+        }
+        if (etaH >= 24) return (etaH / 24).toFixed(1) + "D"
+        if (etaH >= 1) return etaH.toFixed(1) + "H"
+        return Math.max(1, Math.round(etaH * 60)) + "M"
+    }
+
+    function _formatResetAbs(epochMs) {
+        if (!epochMs) return "—"
+        var d = new Date(epochMs)
+        var now = new Date()
+        var dayTag = d.toDateString() === now.toDateString()
+            ? "TODAY"
+            : ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getDay()]
+        return dayTag + " " + root._pad2(d.getHours()) + ":" + root._pad2(d.getMinutes())
+    }
+
+    function _pad2(n) { return (n < 10 ? "0" : "") + n }
+
     // Plain-JS HH:MM:SS (avoids Qt.locale()/toLocaleTimeString portability quirks).
     function _clock() {
         var d = new Date()
-        var p = function (n) { return (n < 10 ? "0" : "") + n }
-        return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds())
+        return root._pad2(d.getHours()) + ":" + root._pad2(d.getMinutes()) + ":" + root._pad2(d.getSeconds())
     }
 
     // =========================================================================
