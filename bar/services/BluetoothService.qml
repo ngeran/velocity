@@ -382,7 +382,18 @@ Item {
 
     BoundedProcess {   // bounded: queued one-shot verbs (pair/trust/connect/remove) (P8.1)
         id: actionProc
+        // BlueZ verbs legitimately run long — pairing and first connects do
+        // key exchange + profile setup, tens of seconds. The 5s default would
+        // abort live pairings halfway.
+        timeoutMs: 30000
         property string label: ""
+        // A timeout/overflow kill suppresses onDone — without draining here
+        // _busy would stay true forever and every later pair/connect/remove
+        // from BOTH UIs (popup + settings) would silently no-op (wedged queue).
+        onLimit: function (reason) {
+            console.log("[BluetoothService] " + actionProc.label + " aborted (" + reason + ")")
+            root._drainQueue()
+        }
         onDone: function (out, err, code) {
             if (code === 0) console.log("[BluetoothService] " + actionProc.label + " ok")
             else console.log("[BluetoothService] " + actionProc.label +

@@ -240,7 +240,11 @@ ColumnLayout {
                 textColor: Config.BarConfig.colorText
                 detailColor: Config.BarConfig.colorTextDim
                 accentColor: Config.BarConfig.colorAccent
-                glyph: modelData.icon !== "" ? modelData.icon : "\u{f05aa}"
+                // modelData.icon is BlueZ's raw icon NAME ("audio-headset") —
+                // painting it as the glyph overlaps title+detail (ListRow's
+                // glyph slot is a fixed 18px, unelided). Map it through the
+                // service's glyph table, same as the connected-cards rows.
+                glyph: Services.BluetoothService._glyphFor(modelData.icon)
                 glyphColor: Config.BarConfig.colorTextDim
                 title: modelData.name
                 detail: Services.BluetoothService.connectingTo === modelData.mac
