@@ -206,6 +206,7 @@ To move the bar to the bottom: Settings ▸ SETTINGS ▸ BAR → BAR EDGE (`barP
 | `journalctl` | KernelEventRecorder kernel incident tail + LogService logs-overlay follow (both backoff-laddered, cursor-resumed) |
 | `nmcli` | NetworkService (one process since P2): wifi scan enrichment, join, engineer/latency probes, DNS |
 | `bluetoothctl` | BluetoothService action queue (pair/trust/connect/remove); power/disconnect are native writes |
+| `wpctl` | AudioService volume writes (native pipewire volume writes silently die on bluez5 nodes — see the service's WRITES note); reads/mutes stay native |
 | `qrencode` | Settings Wi-Fi QR share |
 | `jq` | `tools/qa` harness (asserts, layer evidence) |
 | `grim` | `tools/qa` screenshot evidence |

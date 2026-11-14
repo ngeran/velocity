@@ -179,8 +179,15 @@ ColumnLayout {
             grooveColor: Config.ThemeConfig.hairlineSoft
             onDragged: function(v) {
                 Services.AudioService.setVolume(v)
-                Services.OsdService.showVolume(v, Services.AudioService.muted)
+                // Rounded: the OSD renders whole-percent segments — feeding it
+                // the raw fractional drag value re-renders it at ~60Hz for
+                // nothing while the compositor is already busy with the drag.
+                Services.OsdService.showVolume(Math.round(v), Services.AudioService.muted)
             }
+            // Release re-writes the final value — guarantees the source echo
+            // CardSlider's resync gate waits for, even if the last dragged
+            // write were coalesced away.
+            onCommitted: function(v) { Services.AudioService.setVolume(v) }
         }
         ListRow {
             uiScale: Config.PopupMetrics.scale
@@ -259,6 +266,7 @@ ColumnLayout {
             textColor: Config.BarConfig.colorText
             grooveColor: Config.ThemeConfig.hairlineSoft
             onDragged: function(v) { Services.AudioService.setMicVolume(v) }
+            onCommitted: function(v) { Services.AudioService.setMicVolume(v) }
         }
         ListRow {
             uiScale: Config.PopupMetrics.scale
@@ -421,6 +429,9 @@ ColumnLayout {
                     textColor: Config.BarConfig.colorText
                     grooveColor: Config.ThemeConfig.hairlineSoft
                     onDragged: function(v) {
+                        Services.AudioService.setSinkInputVolume(modelData.id, v)
+                    }
+                    onCommitted: function(v) {
                         Services.AudioService.setSinkInputVolume(modelData.id, v)
                     }
                 }

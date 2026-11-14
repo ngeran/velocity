@@ -14,6 +14,14 @@
 // (Connections + onCompleted) or the declarative binding evaluates once at
 // boot against an empty registry and never re-fires.
 //
+// WRITES (memory: quickshell-pw-bluez-volume-writes): volume WRITES go
+// through `wpctl set-volume`, NOT native `node.audio.volume` — on bluez5
+// nodes (Eris 3.5BT, PipeWire 1.6.6) the native write is silently dropped:
+// local echo only, never reaches PipeWire (verified: same write lands via
+// wpctl; ALSA nodes accept the native write; mute writes land natively on
+// both). Reads/mutes stay native (events + mute proven working). When a
+// quickshell release fixes pipewire volume writes, revert to native.
+//
 // PROPERTIES
 //   volume / muted / hasAudio          default sink (as before)
 //   micVolume / micMuted / hasMic      default source (P4.3: input slider)
@@ -151,10 +159,76 @@ Scope {
     onMutedChanged: if (Config.DebugConfig.debugService)
         console.log("[AudioService] muted " + muted)
 
+    // ── VOLUME WRITE PATH (wpctl — see WRITES note in the header) ──────────
+    // Later writes for the same node replace the pending one (latest-wins,
+    // keyed by node id) — the same queue shape as BluetoothService's
+    // actionProc. Spawns are ALSO gap-throttled (_flushGapMs): a drag fires
+    // onMoved at ~60Hz, and each spawn's PipeWire event re-evaluates every
+    // tracked model (sink rows, streams) — spawning at drag rate stalls the
+    // render loop and the handle renders behind the cursor. One wpctl in
+    // flight at a time; the trailing flush guarantees the LAST value (the
+    // release commit) always lands.
+    BoundedProcess {   // bounded: coalesced one-shot volume writes
+        id: wpProc
+        timeoutMs: 2000
+        property string label: ""
+        // A timeout/overflow kill suppresses onDone — reschedule here too or
+        // the remaining pending writes would sit in the map forever.
+        onLimit: function (reason) {
+            console.log("[AudioService] " + wpProc.label + " aborted (" + reason + ")")
+            root._scheduleFlush()
+        }
+        onDone: function (out, err, code) {
+            if (code !== 0)
+                console.log("[AudioService] " + wpProc.label +
+                    " failed (exit " + code + "): " + (out + err).trim())
+            root._scheduleFlush()
+        }
+    }
+
+    // Trailing edge of the flush gap: fires while writes are pending but the
+    // gap/wpProc isn't ready yet; retries until both clear.
+    Timer {
+        id: flushGap
+        interval: root._flushGapMs
+        onTriggered: root._scheduleFlush()
+    }
+
+    property var _pendingVol: ({})   // node-id string → float, latest-wins
+    readonly property int _flushGapMs: 150
+    property real _lastFlushAt: 0
+
+    function _writeVolume(id, fl) {
+        root._pendingVol[id] = fl
+        root._scheduleFlush()
+    }
+
+    // Single flush entry point: flushes now only when idle AND outside the
+    // gap, else defers to the trailing timer (restarted, never stacked).
+    // A failed spawn (non-zero exit / timeout) DROPS that value: re-queueing
+    // would retry-loop a dead node every 2s — the next user interaction
+    // rewrites it anyway (and the slider's resync cap re-arms the handle).
+    function _scheduleFlush() {
+        if (Object.keys(root._pendingVol).length === 0) return
+        if (!wpProc.running && Date.now() - root._lastFlushAt >= root._flushGapMs) {
+            const ids = Object.keys(root._pendingVol)
+            const id = ids[0]
+            const fl = root._pendingVol[id]
+            delete root._pendingVol[id]
+            root._lastFlushAt = Date.now()
+            wpProc.label = "set-volume " + id
+            wpProc.command = ["wpctl", "set-volume", id, fl.toFixed(3)]
+            wpProc.run()
+            return
+        }
+        if (!flushGap.running) flushGap.restart()
+    }
+
     // ── DEFAULT-NODE ACTIONS (bar popup) ──
     function setVolume(val) {
         if (!root.sink) return
-        root.sink.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
+        _writeVolume(String(root.sink.id),
+            Math.max(0, Math.min(100, Math.round(val))) / 100)
     }
 
     function toggleMute() {
@@ -167,7 +241,8 @@ Scope {
 
     function setMicVolume(val) {
         if (!root.source) return
-        root.source.audio.volume = Math.max(0, Math.min(100, Math.round(val))) / 100
+        _writeVolume(String(root.source.id),
+            Math.max(0, Math.min(100, Math.round(val))) / 100)
     }
 
     function toggleMicMute() {
@@ -208,19 +283,19 @@ Scope {
     }
 
     function setSinkVolume(id, pct) {
-        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+        const n = _node(id); if (n) _writeVolume(String(id), _volFloat(pct))
     }
     function toggleSinkMute(id) {
         const n = _node(id); if (n) n.audio.muted = !n.audio.muted
     }
     function setSinkInputVolume(id, pct) {
-        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+        const n = _node(id); if (n) _writeVolume(String(id), _volFloat(pct))
     }
     function toggleSinkInputMute(id) {
         const n = _node(id); if (n) n.audio.muted = !n.audio.muted
     }
     function setSourceVolume(id, pct) {
-        const n = _node(id); if (n) n.audio.volume = _volFloat(pct)
+        const n = _node(id); if (n) _writeVolume(String(id), _volFloat(pct))
     }
     function toggleSourceMute(id) {
         const n = _node(id); if (n) n.audio.muted = !n.audio.muted

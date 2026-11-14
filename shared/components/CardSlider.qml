@@ -19,10 +19,15 @@
 // gated on !pressed, NOT a plain `value:` binding. A plain binding re-applies
 // the source on every async ack mid-drag — PipeWire volume round-trips land a
 // frame+ late and int-rounded, so the handle kept snapping back under the
-// cursor ("falls behind"). While pressed the drag owns value; on release the
-// gate stays shut for RESYNC_MS so the stale pre-ack frame can't yank it
-// either, then the source (settled by then) re-applies. RestoreNone makes the
-// press-time deactivation a strict no-op; delayed coalesces ack bursts.
+// cursor ("falls behind"). While pressed the drag owns value; after release
+// the gate stays shut until the source ECHOES the committed value (the resync
+// timer re-checks every RESYNC_MS, echo = within ±0.5 of the commit) — a fixed
+// hold re-arms against a stale frame whenever the ack trails it, and
+// Bluetooth/AVRCP acks trail by hundreds of ms. MAX_RESYNC_TRIES is the
+// starvation cap (~1.65s worst-case hold): past it the source
+// re-applies even unacked (a rejected/clamped write), so external changes
+// never starve the control. RestoreNone makes the press-time deactivation a
+// strict no-op; delayed coalesces ack bursts.
 // OLED: groove is a hairline trough, the fill is the accent ONLY while the
 // control is meaningfully interactive (caller can pass dim colors).
 // =============================================================================
@@ -54,6 +59,9 @@ RowLayout {
     // Post-release hold (ms): how long the drag keeps ownership after the
     // press drops, covering the source's ack latency for the final commit.
     readonly property int resyncMs: 150
+    // Ack-wait cap (resyncMs ticks) for sources that never echo the commit —
+    // past it the source re-applies anyway so it can't starve the control.
+    readonly property int maxResyncTries: 10
 
     spacing: 8 * root.uiScale
 
@@ -69,6 +77,9 @@ RowLayout {
 
         // ── drag-ownership gate (see header) ──
         property bool _isFollowing: true
+        // What the drag last committed — the re-arm gate waits for the source
+        // to echo THIS value, not just any elapsed time.
+        property real _lastCommit: 0
         Binding on value {
             when: s._isFollowing && !s.pressed
             value: root.value
@@ -78,13 +89,29 @@ RowLayout {
         Timer {
             id: resync
             interval: root.resyncMs
-            onTriggered: s._isFollowing = true
+            property int _tries: 0
+            onTriggered: {
+                // Re-arm only once the source has acked the commit (or the
+                // cap hits): re-arming against a stale frame is what yanked
+                // the handle back off the user's value after release.
+                // ±0.5 is tuned to 0–100 callers — a 0..1-scale source needs
+                // a tighter threshold or the echo matches too early.
+                if (Math.abs(root.value - s._lastCommit) <= 0.5 || _tries >= root.maxResyncTries) {
+                    s._isFollowing = true
+                    _tries = 0
+                } else {
+                    _tries++
+                    restart()
+                }
+            }
         }
 
         onMoved: root.dragged(value)
         onPressedChanged: if (!pressed) {
             root.committed(value)
+            s._lastCommit = value
             s._isFollowing = false
+            resync._tries = 0
             resync.restart()
         }
 
