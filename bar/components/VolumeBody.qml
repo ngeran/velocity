@@ -1,13 +1,14 @@
 // =============================================================================
 // VolumeBody.qml — TrayCard audio body (P4.3 rework on the I8 extraction)
 // =============================================================================
-// HERO % + OUTPUT (master slider, mute, output picker) + INPUT (mic slider,
-// mute, input picker) + NOW PLAYING (Mpris transport) + APPS (per-stream
-// volume) + OPEN IN SETTINGS link. Pure view — state lives in AudioService
-// (native PipeWire) and MprisService (native MPRIS); feedback via OsdService.
-// Interface follows NetworkCardBody: the card is injected as `tray`, settings
-// deep links come back through settingsRequested(verb). Instantiated lazily
-// by TrayCard on the body's first open.
+// HERO % + output peak eq bars + OUTPUT (master slider, mute, output picker)
+// + INPUT (mic slider, mute, input picker) + NOW PLAYING (Mpris transport) +
+// APPS (per-stream volume, 0-150%) + OPEN IN SETTINGS link. Pure view — state
+// lives in AudioService (native PipeWire) and MprisService (native MPRIS);
+// feedback via OsdService. Interface follows NetworkCardBody: the card is
+// injected as `tray`, settings deep links come back through
+// settingsRequested(verb). Instantiated lazily by TrayCard on the body's
+// first open.
 //
 // Lists use the frozen-slice pattern (array-identity law): the Repeater
 // models reassign only on membership change, while per-row volume/mute read
@@ -17,8 +18,10 @@
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell.Services.Pipewire
 import "../services" as Services
 import "../config" as Config
+import "../lib/audio-classify.mjs" as AudioClassify
 
 ColumnLayout {
     id: body
@@ -28,6 +31,24 @@ ColumnLayout {
 
     readonly property bool _ok: tray !== null
     readonly property real _hair: _ok ? tray.hair : 1
+
+    // ── hero peak meter (V2, omarchy eq port) ───────────────────────────────
+    // Open-gated: the monitor subscribes to PipeWire peak events, so it must
+    // cost nothing while the card is closed (and the phase timer idles too).
+    readonly property bool _cardOpen: _ok && tray.activeTray === "volume"
+    property real _eqPhase: 0
+
+    PwNodePeakMonitor {
+        id: outputPeak
+        node: Services.AudioService.sink
+        enabled: body._cardOpen
+    }
+    Timer {
+        interval: 90
+        running: body._cardOpen
+        repeat: true
+        onTriggered: body._eqPhase = (body._eqPhase + 0.55) % (Math.PI * 2)
+    }
 
     // Layout law: shared primitives as layout children need BOTH their own
     // implicitWidth AND Layout.fillWidth from the caller (ListRow carries the
@@ -90,11 +111,49 @@ ColumnLayout {
     Component.onCompleted: {
         body._resinkSinks(); body._resinkSources(); body._resinkApps()
     }
+    // PipeWire can free nodes while it is dispatching the removal signal;
+    // rebuilding a Repeater from that signal path has crashed (omarchy
+    // Panel.qml:103-110). Defer through ONE coalesced timer — the membership
+    // key diffs make a ≤50 ms delay safe (worst case the list settles late).
+    Timer {
+        id: resinkTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            body._resinkSinks(); body._resinkSources(); body._resinkApps()
+        }
+    }
     Connections {
         target: Services.AudioService
-        function onSinksChanged()      { body._resinkSinks() }
-        function onSourcesChanged()    { body._resinkSources() }
-        function onSinkInputsChanged() { body._resinkApps() }
+        function onSinksChanged()      { resinkTimer.restart() }
+        function onSourcesChanged()    { resinkTimer.restart() }
+        function onSinkInputsChanged() { resinkTimer.restart() }
+    }
+
+    // Three accent bars moving with the output peak (omarchy EqBars port).
+    // Hidden while silent — heights come from the pure, node-tested lib fn.
+    component EqBars: Row {
+        id: eq
+        property real peak: 0
+        readonly property var levels: AudioClassify.eqBarLevels(peak, body._eqPhase)
+        readonly property real barHeight: Config.PopupMetrics.px(20)
+        visible: levels[0] > 0
+        spacing: Math.max(1, Config.PopupMetrics.px(2))
+        height: barHeight
+
+        Repeater {
+            model: 3
+
+            Rectangle {
+                required property int index
+                anchors.bottom: parent.bottom
+                width: Math.max(2, Config.PopupMetrics.px(3))
+                height: Math.max(2, eq.barHeight * eq.levels[index])
+                radius: width / 2
+                color: Config.ThemeConfig.colors.primary
+                Behavior on height { NumberAnimation { duration: 90 } }
+            }
+        }
     }
 
     // Transport glyph button (NOW PLAYING) — text only, no fills (QD-OLED).
@@ -154,6 +213,10 @@ ColumnLayout {
             font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(52); font.bold: true
             color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
             Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        EqBars {
+            peak: outputPeak.peak
+            Layout.alignment: Qt.AlignVCenter
         }
         Item { Layout.fillWidth: true }
     }
@@ -224,7 +287,7 @@ ColumnLayout {
                 textColor: Config.BarConfig.colorText
                 detailColor: Config.BarConfig.colorTextDim
                 accentColor: Config.BarConfig.colorAccent
-                glyph: "\u{f028}"
+                glyph: modelData.glyph || "\u{f028}"
                 glyphColor: modelData.isDefault ? Config.BarConfig.colorAccent
                                                 : Config.BarConfig.colorTextDim
                 title: modelData.name
@@ -422,6 +485,7 @@ ColumnLayout {
                 CardSlider {
                     Layout.preferredWidth: Math.round(96 * Config.PopupMetrics.scale)
                     value: live ? live.volume : 0
+                    to: 150
                     dim: live ? live.mute : false
                     uiScale: Config.PopupMetrics.scale
                     accentColor: Config.ThemeConfig.colors.primary

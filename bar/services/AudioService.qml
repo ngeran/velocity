@@ -28,7 +28,7 @@
 //   hwLabel                            short node id for the popup header
 //   defaultSink / defaultSource        string ids of the default nodes
 //   sinks / sources / sinkInputs       device rows for the settings views:
-//                                      { id, name, desc, isDefault, volume(0-100), mute }
+//                                      { id, name, desc, glyph, isDefault, volume(0-100), mute }
 //                                      sinkInputs rows: { id, app, volume, mute }
 // METHODS: setVolume, toggleMute, volumeUp/Down, setMicVolume, toggleMicMute
 //          (default nodes)
@@ -42,6 +42,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Pipewire
 import "../config" as Config
+import "../lib/audio-classify.mjs" as AudioClassify
 
 Scope {
     id: root
@@ -95,18 +96,36 @@ Scope {
         ? Math.round(Math.min(root.source.audio.volume, 1.0) * 100) : 0
 
     // ── DEVICE ROWS (settings dashboard views) ──────────────────────────────
-    // Flag semantics (verified live): audio nodes carry Audio + Sink/Source.
-    // e.g. t=17 = Audio|Sink (a sink), t=9 = Audio|Source (a source).
+    // Classification (V1, live-verified): playback streams ALSO publish
+    // isSink:true and capture streams carry the Source type bit — so the
+    // isSink/type-bit filters of the pre-V1 service filed playing apps under
+    // OUTPUT and recording apps under INPUT/APPS. Filters now go through
+    // classifyNode (node-tested): "sink" = device outputs, "source" = device
+    // inputs (audio-bearing, non-stream), "playback" = playback streams only.
+    // Descriptor hasAudio passes `n.audio != null`; omarchy's warning about
+    // reading .properties before bind applies to CLASSIFICATION only — the
+    // classifier here never touches properties.
     readonly property var sinks: {
         const rows = []
         const nodes = Pipewire.nodes.values || []
         for (let i = 0; i < nodes.length; i++) {
             const n = nodes[i]
-            if (!n.isSink) continue
+            if (AudioClassify.classifyNode({ isSink: n.isSink, isStream: n.isStream,
+                                              hasAudio: n.audio != null }) !== "sink") continue
             rows.push({
                 id: String(n.id),
                 name: n.description || n.nickname || n.name,
                 desc: n.description || n.nickname || n.name,
+                // Device glyph for the popup picker (headphones/bluetooth/
+                // hdmi/generic) — pure pick in the node-tested lib.
+                glyph: AudioClassify.sinkGlyph({
+                    name: n.name,
+                    description: n.description,
+                    nickname: n.nickname,
+                    deviceApi: n.properties ? n.properties["device.api"] : "",
+                    iconName: n.properties ? n.properties["device.icon-name"] : "",
+                    productName: n.properties ? n.properties["device.product.name"] : ""
+                }),
                 isDefault: root.sink !== null && n.id === root.sink.id,
                 volume: Math.round(Math.min(n.audio.volume, 1.0) * 100),
                 mute: n.audio.muted
@@ -120,7 +139,8 @@ Scope {
         const nodes = Pipewire.nodes.values || []
         for (let i = 0; i < nodes.length; i++) {
             const n = nodes[i]
-            if (!(n.type & PwNodeType.Source)) continue
+            if (AudioClassify.classifyNode({ isSink: n.isSink, isStream: n.isStream,
+                                              hasAudio: n.audio != null }) !== "source") continue
             const name = n.description || n.nickname || n.name
             rows.push({
                 id: String(n.id),
@@ -139,11 +159,21 @@ Scope {
         const nodes = Pipewire.nodes.values || []
         for (let i = 0; i < nodes.length; i++) {
             const n = nodes[i]
-            if (!n.isStream || !(n.type & PwNodeType.Audio)) continue
+            if (AudioClassify.classifyNode({ isSink: n.isSink, isStream: n.isStream,
+                                              hasAudio: n.audio != null }) !== "playback") continue
             rows.push({
                 id: String(n.id),
-                app: n.nickname || n.name,
-                volume: Math.round(Math.min(n.audio.volume, 1.0) * 100),
+                // application.name is the real app id — Chromium's nickname is
+                // the useless literal "Playback" (streamLabel: first non-empty
+                // of appName/nickname/name, trimmed).
+                app: AudioClassify.streamLabel({
+                    appName: n.properties ? n.properties["application.name"] : "",
+                    nickname: n.nickname,
+                    name: n.name
+                }),
+                // No 1.0 read clamp: per-app streams may exceed 100% (150%
+                // slider max, omarchy parity) — the readout must stay truthful.
+                volume: Math.round(n.audio.volume * 100),
                 mute: n.audio.muted
             })
         }
@@ -258,11 +288,13 @@ Scope {
         return null
     }
 
-    function _volFloat(pct) {
-        // Accept number (50) or "50%" string from the UI sliders
+    function _volFloat(pct, maxPct) {
+        // Accept number (50) or "50%" string from the UI sliders. Devices cap
+        // at 100%; per-app streams pass maxPct 150 (omarchy parity).
         var n = typeof pct === "string" ? parseFloat(pct.replace("%", "")) : Number(pct)
         if (isNaN(n)) n = 0
-        return Math.max(0, Math.min(100, Math.round(n))) / 100
+        const max = (typeof maxPct === "number" && maxPct > 0) ? maxPct : 100
+        return Math.max(0, Math.min(max, Math.round(n))) / 100
     }
 
     // Event-driven state — kept for consumer compatibility.
@@ -289,7 +321,7 @@ Scope {
         const n = _node(id); if (n) n.audio.muted = !n.audio.muted
     }
     function setSinkInputVolume(id, pct) {
-        const n = _node(id); if (n) _writeVolume(String(id), _volFloat(pct))
+        const n = _node(id); if (n) _writeVolume(String(id), _volFloat(pct, 150))
     }
     function toggleSinkInputMute(id) {
         const n = _node(id); if (n) n.audio.muted = !n.audio.muted
