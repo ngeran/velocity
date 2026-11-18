@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "nikos.wireguard",
+  "name": "WireGuard",
+  "version": "1.0.0",
+  "description": "WireGuard tunnels (NetworkManager) + Tailscale in one panel: tunnel rows with .conf import, live sysfs traffic rates, Tailscale state/devices/exit nodes. Ported from ngeran.wireguard (Omarchy, MIT).",
+  "author": "nikos",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "ServiceRoot.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [
+    "nmcli",
+    "sh",
+    "tailscale"
+  ],
+  "ipc": [
+    "toggle",
+    "open",
+    "close",
+    "status",
+    "telemetry",
+    "up",
+    "down",
+    "toggleTunnel",
+    "tailscale",
+    "tailscaleUp",
+    "tailscaleDown",
+    "tailscaleExitNode",
+    "tab",
+    "refresh"
+  ],
+  "settings": {
+    "refreshIntervalSec": {
+      "type": "number",
+      "default": 5,
+      "min": 2,
+      "max": 60,
+      "label": "Refresh interval (seconds)"
+    }
+  }
+}

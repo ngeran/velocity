@@ -1,0 +1,3 @@
+module nikos.wireguard
+singleton WireGuardService 1.0 WireGuardService.qml
+singleton TailscaleService 1.0 TailscaleService.qml

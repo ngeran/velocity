@@ -419,18 +419,20 @@ in
       #   are native writes) · brightnessctl/ddcutil (brightness) ·
       #   powerprofilesctl (power profile tile). wpctl is NOT here: audio is
       #   the native Pipewire client (P2); nothing calls wpctl.
+      #   tailscale (nikos.wireguard plugin's Tailscale tab; WireGuard itself
+      #   is NM connections via nmcli from networkmanager above)
       default = with pkgs; [
         netcat networkmanager upower qrencode nodejs git coreutils findutils
         gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper
         dbus cliphist wl-clipboard wf-recorder slurp grim libqalculate wtype
-        swappy bluez brightnessctl ddcutil power-profiles-daemon
+        swappy bluez brightnessctl ddcutil power-profiles-daemon tailscale
       ];
       defaultText = lib.literalExpression ''
         with pkgs; [
           netcat networkmanager upower qrencode nodejs git coreutils findutils
           gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper
           dbus cliphist wl-clipboard wf-recorder slurp grim libqalculate wtype
-          swappy bluez brightnessctl ddcutil power-profiles-daemon
+          swappy bluez brightnessctl ddcutil power-profiles-daemon tailscale
         ]
       '';
       description = "Tools on the bar service's PATH (ahead of the user and system profiles). Also installed into the user profile so the session PATH gets them too (tools/check-tools reads the session).";
