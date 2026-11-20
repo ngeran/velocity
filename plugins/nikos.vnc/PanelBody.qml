@@ -362,7 +362,9 @@ ColumnLayout {
             Switch {
                 ctx: body.ctx
                 checked: body.formFullScreen
-                onToggled: body.formFullScreen = checked
+                // qs.Ui Switch is stateless (D13): clicking only EMITS
+                // toggled() — the caller flips its own state here.
+                onToggled: body.formFullScreen = !body.formFullScreen
             }
         }
 
