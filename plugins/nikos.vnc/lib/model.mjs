@@ -68,8 +68,30 @@ export function buildViewerArgs(settings) {
     const argv = ["vncviewer", endpoint(host, settings?.port)]
     const pw = String(settings?.passwordFile ?? settings?.pwFile ?? "").trim()
     if (pw) argv.push("-PasswordFile", pw)
+    const ds = normalizeDesktopSize(settings?.desktopSize)
+    if (ds) argv.push("-DesktopSize", ds)
     if (settings?.fullScreen) argv.push("-FullScreen")
     return argv
+}
+
+// ── per-connection desktop size (v2.2) ──────────────────────────────────────
+
+// Validate a user-entered resolution. Blank / "auto" (any case) → "" (server
+// default). Otherwise expects `WxH` with both axes in 200–10000 px; anything
+// else normalizes to "" — a bad value silently means "auto" on reload, and
+// the form validates before save so the user sees the error up front.
+// Verified live 2026-11-20: macOS Screen Sharing honors `-DesktopSize WxH`
+// on connect (single 2560x1440 screen instead of the combined dual-display
+// framebuffer); empty = server default (all displays).
+export function normalizeDesktopSize(raw) {
+    const s = String(raw ?? "").trim().toLowerCase()
+    if (!s || s === "auto") return ""
+    const m = s.match(/^(\d{2,5})x(\d{2,5})$/)
+    if (!m) return ""
+    const w = parseInt(m[1], 10)
+    const h = parseInt(m[2], 10)
+    if (w < 200 || w > 10000 || h < 200 || h > 10000) return ""
+    return `${w}x${h}`
 }
 
 // ── formatting ─────────────────────────────────────────────────────────────
@@ -117,6 +139,7 @@ export function newConnection(now) {
         port: 5900,
         user: "",
         pwFile: "",
+        desktopSize: "",
         fullScreen: false,
         lastUsedMs: 0,
         createdAtMs: Math.floor(now),
@@ -142,6 +165,7 @@ export function normalizeConnection(raw, now = Date.now()) {
         port: clampPort(raw.port),
         user: String(raw.user ?? "").trim().slice(0, 40),
         pwFile: String(raw.pwFile ?? "").trim(),
+        desktopSize: normalizeDesktopSize(raw.desktopSize),
         fullScreen: !!raw.fullScreen,
         lastUsedMs: ms(raw.lastUsedMs),
         createdAtMs: ms(raw.createdAtMs),

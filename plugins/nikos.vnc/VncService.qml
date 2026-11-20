@@ -200,6 +200,7 @@ Item {
         root.activeConnectionId = c.id
         root._launch({
             host: c.host, port: c.port, pwFile: c.pwFile,
+            desktopSize: c.desktopSize,
             fullScreen: root.fullScreen || c.fullScreen
         })
     }
@@ -225,8 +226,10 @@ Item {
     }
 
     // ── connection CRUD ──────────────────────────────────────────────────────
-    // draft: { id?, name, host, port, user, password, fullScreen? } — password
-    // is PLAINTEXT from the form and only ever travels to vncpasswd stdin.
+    // draft: { id?, name, host, port, user, desktopSize?, password, fullScreen? }
+    // — password is PLAINTEXT from the form and only ever travels to vncpasswd
+    // stdin; desktopSize is a raw form string normalized by the model ("" or
+    // invalid → server default).
     // autoConnect (SAVE & CONNECT) launches the saved connection once its
     // record is durable — for password drafts that is AFTER vncpasswd lands,
     // so the viewer always finds the file it is pointed at.
@@ -253,7 +256,7 @@ Item {
         var conn = Model.normalizeConnection({
             id: isEdit ? existing.id : Model.connectionId(Date.now()),
             name: d.name, host: host, port: d.port,
-            user: d.user, fullScreen: d.fullScreen,
+            user: d.user, desktopSize: d.desktopSize, fullScreen: d.fullScreen,
             lastUsedMs: isEdit ? existing.lastUsedMs : 0,
             createdAtMs: isEdit ? existing.createdAtMs : Date.now()
         })
@@ -275,11 +278,13 @@ Item {
         conn.pwFile = pwWriter.path
         // tmp+mv (indexWriter discipline): a failed vncpasswd must never
         // truncate the old secret an existing record may still point at —
-        // edits reuse the same <id>.vnc path.
+        // edits reuse the same <id>.vnc path. The leading rm sweeps any tmp
+        // a SIGKILL left behind (the failure branch cannot run under SIGKILL).
         // unbounded-ok: one-shot local write; killed by a 10s watchdog
         pwWriter.command = ["sh", "-c",
-            'mkdir -p "$(dirname "$1")" && vncpasswd -f > "$1.tmp" && chmod 600 "$1.tmp" && mv -f "$1.tmp" "$1" || { rm -f "$1.tmp"; exit 1; }',
+            'rm -f "$1.tmp" && mkdir -p "$(dirname "$1")" && vncpasswd -f > "$1.tmp" && chmod 600 "$1.tmp" && mv -f "$1.tmp" "$1" || { rm -f "$1.tmp"; exit 1; }',
             "vncpasswd", pwWriter.path]
+        pwWriter.stdinEnabled = true   // re-arm: onStarted closed the channel
         pwWriter.running = true
         root._hint("storing password…")
         return ""
@@ -571,7 +576,8 @@ Item {
     }
 
     // Password writer — vncpasswd reads the plaintext over STDIN (never
-    // argv; NetworkService PSK idiom) and writes the encrypted file itself.
+    // argv) and only flushes once stdin hits EOF: write() then disable the
+    // channel (LauncherOverlay wl-copy idiom); re-armed on every fire.
     Process {
         id: pwWriter   // unbounded-ok: secret travels over stdin, never argv
         property var pendingConn: null
@@ -584,6 +590,8 @@ Item {
             if (pendingSecret !== "") {
                 write(pendingSecret + "\n")
                 pendingSecret = ""
+                stdinEnabled = false   // → EOF: vncpasswd -f flushes only
+                                       //   when stdin closes
             }
         }
 

@@ -91,6 +91,9 @@ ColumnLayout {
     property bool formOpen: false
     property string editingId: ""
     property string formError: ""
+    // Fullscreen is a checkbox, not text — kept as plain form state (seeded
+    // from the record) instead of a FormField variant.
+    property bool formFullScreen: false
 
     function openForm(conn) {
         body.editingId = conn ? conn.id : ""
@@ -98,6 +101,8 @@ ColumnLayout {
         fPort.seed(conn ? String(conn.port) : "5900")
         fName.seed(conn ? conn.name : "")
         fUser.seed(conn ? conn.user : "")
+        fRes.seed(conn ? conn.desktopSize : "")
+        body.formFullScreen = conn ? conn.fullScreen : false
         fPass.seed("")
         fPass.reveal = false
         body.formError = ""
@@ -114,13 +119,24 @@ ColumnLayout {
     }
 
     function submitForm(andConnect) {
+        // Resolution is the one field with a strict shape — reject it here so
+        // the user sees the error instead of the model silently degrading a
+        // junk value to "server default".
+        var res = fRes.value.trim()
+        if (res !== "" && res.toLowerCase() !== "auto"
+                && Model.normalizeDesktopSize(res) === "") {
+            body.formError = "resolution must be WIDTHxHEIGHT, e.g. 2560x1440 (or blank)"
+            return
+        }
         var draft = {
             id: body.editingId,
             name: fName.value,
             host: fHost.value,
             port: fPort.value,   // raw text — clampPort parses it ("" → 5900)
             user: fUser.value,
-            password: fPass.value
+            desktopSize: res,    // raw text — normalizeDesktopSize parses it
+            password: fPass.value,
+            fullScreen: body.formFullScreen
         }
         var err = body.svc.saveConnection(draft, andConnect)
         if (err !== "") { body.formError = err; return }
@@ -297,6 +313,13 @@ ColumnLayout {
                 caption: "PORT"
                 placeholder: "5900"
             }
+
+            FormField {
+                id: fRes
+                Layout.preferredWidth: sp(112)
+                caption: "RESOLUTION"
+                placeholder: "auto"
+            }
         }
 
         RowLayout {
@@ -316,6 +339,30 @@ ColumnLayout {
                 caption: "PASSWORD"
                 placeholder: body.editingId === "" ? "optional" : "unchanged"
                 isPassword: true
+            }
+        }
+
+        // Fullscreen pairs with RESOLUTION: a WxH matching the local logical
+        // resolution maps 1:1 only when the window covers the output (a tiled
+        // window shows the same remote desktop scaled down).
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: sp(6)
+
+            Text {
+                Layout.fillWidth: true
+                textFormat: Text.PlainText
+                text: "FULLSCREEN"
+                color: body._c("textDim", "#808080")
+                font.family: body.fontBody
+                font.pixelSize: body.sizeCaption
+                font.letterSpacing: 1
+            }
+
+            Switch {
+                ctx: body.ctx
+                checked: body.formFullScreen
+                onToggled: body.formFullScreen = checked
             }
         }
 
@@ -357,7 +404,7 @@ ColumnLayout {
         Text {
             Layout.fillWidth: true
             textFormat: Text.PlainText
-            text: G.glyph("key") + "  password encrypts to ~/.config/secrets/vnc (vncpasswd, 8-char DES limit) — plain-auth user+pass is prompted by the viewer"
+            text: G.glyph("key") + "  password encrypts to ~/.config/secrets/vnc (vncpasswd, 8-char DES limit) — resolution WxH asks the server for a single screen (blank = server default)"
             color: body._c("textDim", "#808080")
             opacity: 0.8
             font.family: body.fontNerd
@@ -735,8 +782,9 @@ ColumnLayout {
     }
 
     // One saved connection: state dot (pulses while it is the active target
-    // without a session yet) · name + user@host:port meta · CONNECT / EDIT /
-    // DELETE (two-step confirm — a stray click must not destroy a secret).
+    // without a session yet) · name + user@host:port (+ WxH when set) meta ·
+    // CONNECT / EDIT / DELETE (two-step confirm — a stray click must not
+    // destroy a secret).
     component ConnectionRow: Rectangle {
         id: crow
         property var conn: null
@@ -818,6 +866,7 @@ ColumnLayout {
                     text: crow.conn
                         ? (crow.conn.user !== "" ? crow.conn.user + "@" : "")
                           + Model.endpoint(crow.conn.host, crow.conn.port)
+                          + (crow.conn.desktopSize !== "" ? " · " + crow.conn.desktopSize : "")
                         : ""
                     color: body._c("textDim", "#808080")
                     font.family: body.fontBody

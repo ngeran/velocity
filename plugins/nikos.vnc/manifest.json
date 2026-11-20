@@ -3,8 +3,8 @@
   "api": 2,
   "id": "nikos.vnc",
   "name": "VNC",
-  "version": "0.2.0",
-  "description": "TigerVNC client pill for the Mac mini: monitor glyph shows viewer state, popup shows reachability probes (ICMP + VNC port), RTT sparkline telemetry, and connect/disconnect. Single session, argv-only, secrets stay in a vncpasswd file.",
+  "version": "0.3.0",
+  "description": "TigerVNC client pill for the Mac mini: monitor glyph shows viewer state, popup shows reachability probes (ICMP + VNC port), RTT sparkline telemetry, saved connections with per-connection resolution (-DesktopSize), and connect/disconnect. Single session, argv-only, secrets stay in a vncpasswd file.",
   "author": "nikos",
   "license": "MIT",
   "kinds": [

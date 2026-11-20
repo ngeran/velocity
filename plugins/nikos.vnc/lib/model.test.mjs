@@ -5,7 +5,8 @@ import {
     parsePingMs, pingOk, portOpenFromExit, viewerRunningFromExit,
     clampPort, clampIntervalSec, endpoint, buildViewerArgs,
     fmtRtt, fmtDuration, rttPush, sanitizeError,
-    connectionId, newConnection, normalizeConnection, mergeConnections
+    connectionId, newConnection, normalizeConnection, mergeConnections,
+    normalizeDesktopSize
 } from "./model.mjs"
 
 let n = 0
@@ -98,6 +99,39 @@ ok("buildViewerArgs passes a connection pwFile through", () => {
     )
 })
 
+// ── desktop size (v2.2) ────────────────────────────────────────────────────
+ok("normalizeDesktopSize accepts WxH and auto/blank", () => {
+    assert.strictEqual(normalizeDesktopSize("2560x1440"), "2560x1440")
+    assert.strictEqual(normalizeDesktopSize(" 1920X1080 "), "1920x1080")   // caps X, trimmed
+    assert.strictEqual(normalizeDesktopSize("AUTO"), "")
+    assert.strictEqual(normalizeDesktopSize(""), "")
+    assert.strictEqual(normalizeDesktopSize(null), "")
+    assert.strictEqual(normalizeDesktopSize(undefined), "")
+})
+
+ok("normalizeDesktopSize rejects junk and out-of-range axes", () => {
+    assert.strictEqual(normalizeDesktopSize("1440"), "")            // missing axis
+    assert.strictEqual(normalizeDesktopSize("2560×1440"), "")       // unicode × is not x
+    assert.strictEqual(normalizeDesktopSize("2560 x 1440"), "")     // spaces inside
+    assert.strictEqual(normalizeDesktopSize("100x100"), "")         // below 200 floor
+    assert.strictEqual(normalizeDesktopSize("20000x1440"), "")      // above 10000 ceiling
+    assert.strictEqual(normalizeDesktopSize("x1440"), "")
+    assert.strictEqual(normalizeDesktopSize(2560), "")              // non-string
+})
+
+ok("buildViewerArgs adds -DesktopSize only for a valid WxH", () => {
+    assert.deepStrictEqual(
+        buildViewerArgs({ host: "10.0.0.70", port: 5900, passwordFile: "", desktopSize: "2560x1440" }),
+        ["vncviewer", "10.0.0.70::5900", "-DesktopSize", "2560x1440"]
+    )
+    // junk never reaches argv — record read off disk with a bad value degrades
+    // to "server default", never an invalid viewer parameter
+    assert.deepStrictEqual(
+        buildViewerArgs({ host: "10.0.0.70", port: 5900, passwordFile: "", desktopSize: "garbage" }),
+        ["vncviewer", "10.0.0.70::5900"]
+    )
+})
+
 // ── saved-connection store (v2) ────────────────────────────────────────────
 ok("connectionId is c- + base36 of the timestamp", () => {
     assert.strictEqual(connectionId(0), "c-0")
@@ -110,6 +144,7 @@ ok("newConnection returns a blank typed draft", () => {
     assert.strictEqual(c.host, "")
     assert.strictEqual(c.port, 5900)
     assert.strictEqual(c.pwFile, "")
+    assert.strictEqual(c.desktopSize, "")
     assert.strictEqual(c.fullScreen, false)
     assert.strictEqual(c.lastUsedMs, 0)
     assert.strictEqual(c.createdAtMs, 5000)
@@ -118,11 +153,11 @@ ok("newConnection returns a blank typed draft", () => {
 ok("normalizeConnection coerces types and trims", () => {
     const c = normalizeConnection({
         id: " c-x ", name: "  Mac mini ", host: " 10.0.0.70 ", port: "70000",
-        user: " nikos ", pwFile: " /tmp/p.vnc ", fullScreen: 1, lastUsedMs: "123.7",
+        user: " nikos ", pwFile: " /tmp/p.vnc ", desktopSize: " 2560X1440 ", fullScreen: 1, lastUsedMs: "123.7",
     })
     assert.deepStrictEqual(c, {
         id: "c-x", name: "Mac mini", host: "10.0.0.70", port: 65535,
-        user: "nikos", pwFile: "/tmp/p.vnc", fullScreen: true,
+        user: "nikos", pwFile: "/tmp/p.vnc", desktopSize: "2560x1440", fullScreen: true,
         lastUsedMs: 123, createdAtMs: 0,
     })
 })
