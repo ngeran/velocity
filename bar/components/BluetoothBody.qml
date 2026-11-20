@@ -238,7 +238,9 @@ ColumnLayout {
                 // `property var dev: modelData` capture does not resolve).
                 uiScale: Config.PopupMetrics.scale
                 textColor: Config.BarConfig.colorText
-                detailColor: Config.BarConfig.colorTextDim
+                detailColor: Services.BluetoothService.connectFailedTo === modelData.mac
+                             ? Config.ThemeConfig.colors.error
+                             : Config.BarConfig.colorTextDim
                 accentColor: Config.BarConfig.colorAccent
                 // modelData.icon is BlueZ's raw icon NAME ("audio-headset") —
                 // painting it as the glyph overlaps title+detail (ListRow's
@@ -248,7 +250,10 @@ ColumnLayout {
                 glyphColor: Config.BarConfig.colorTextDim
                 title: modelData.name
                 detail: Services.BluetoothService.connectingTo === modelData.mac
-                        ? "connecting…" : modelData.mac
+                        ? "connecting…"
+                        : Services.BluetoothService.connectFailedTo === modelData.mac
+                          ? "failed — tap to retry"
+                          : modelData.mac
                 dimmed: Services.BluetoothService.connectingTo === modelData.mac
                 onClicked: Services.BluetoothService.connect(modelData.mac)
             }

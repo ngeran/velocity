@@ -37,14 +37,22 @@ duration, and connect/disconnect.
 - **Resolution** — per-connection `WIDTHxHEIGHT` (e.g. `2560x1440`,
   blank or `auto` = server default) passes `-DesktopSize` to the
   viewer, which asks the server to reconfigure its desktop on connect.
-  Verified live against macOS Screen Sharing (2026-11-20): the Mac
-  honors it and serves a single screen at the requested size instead
-  of the combined dual-display framebuffer — this is the fix for
-  "both displays stitched side-by-side". Letterboxed if the aspect
-  ratios differ. Pair it with the row's **FULLSCREEN** toggle: a WxH
-  equal to the local logical resolution maps 1:1 only when the viewer
-  window covers the whole output (a tiled window scales the same
-  remote desktop down).
+  **macOS caveat (verified live 2026-11-20):** Screen Sharing serves
+  whatever the display is CURRENTLY set to — it ignores the RFB
+  reconfigure request for physical displays (that path only works for
+  virtual/headless displays and servers like Xvnc). The one-time fix
+  is on the Mac itself: System Settings › Displays › select the
+  native mode (e.g. 2560x1440 for a QHD panel). Sharing then comes
+  through at that resolution — pair it with the row's **FULLSCREEN**
+  toggle so a WxH equal to the local logical resolution maps 1:1 (a
+  tiled window scales the same desktop down).
+- **Fullscreen at open** — this Hyprland build does not honor the
+  Xwayland client's own fullscreen request (the `-FullScreen` argv
+  flag), so sessions opened tiled at half the output. The host
+  enforces it instead: `configs/hypr/rules.lua` in `.omni-nix`
+  fullscreens any `Vncviewer` session window at map and floats the
+  password dialog centered (deployed via rebuild; live-tested via
+  `hyprctl eval` 2026-11-20).
 - SAVE + CONNECT persists the record and secret first; the viewer only
   launches after both are durable. Editing with a blank password keeps
   the existing secret; DELETE removes the row and its secret file.

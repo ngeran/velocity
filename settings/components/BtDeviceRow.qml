@@ -9,6 +9,7 @@
 // Behaviour:
 //   • connected row → left accent bar + CONNECTED chip + Disconnect button
 //   • busy (pairing/connecting) → Pairing.../Connecting... label + amber tint
+//   • paired row, last connect failed → FAILED chip + Retry button
 //   • paired/disconnected → PAIRED chip + Connect button
 //   • unpaired beacon → NEW chip + Confirm button
 //   • paired row + hover → [×] forget (HostBridge.bluetooth.remove)
@@ -40,6 +41,11 @@ Item {
     readonly property bool pairing:    Services.HostBridge.bluetooth.pairingTo    === dev.mac
     readonly property bool connecting: Services.HostBridge.bluetooth.connectingTo === dev.mac
     readonly property bool busy:       pairing || connecting
+
+    // Last connect to this mac failed (service flags non-zero exit / abort —
+    // e.g. page timeout on a standby speaker). Cleared on retry (Connect →
+    // Retry press) or once the device actually connects.
+    readonly property bool connectFailed: Services.HostBridge.bluetooth.connectFailedTo === dev.mac
 
     // ── Icon glyph map (dev.icon → Nerd Font). Order matters: "headphone" and
     //    "microphone" must be tested before "phone" (both contain "phone"). ────
@@ -79,18 +85,20 @@ Item {
     //    single consumer of one source of truth. NEW is the "uncoloured" state
     //    (transparent bg + border colours.border; text still textDim). ─────────
     readonly property string stateText: dev.connected ? "CONNECTED"
-                                         : row.busy   ? (row.pairing ? "PAIRING" : "CONNECTING")
-                                         : dev.paired ? "PAIRED"
-                                         : "NEW"
+                                     : row.busy   ? (row.pairing ? "PAIRING" : "CONNECTING")
+                                     : row.connectFailed && dev.paired ? "FAILED"
+                                     : dev.paired ? "PAIRED"
+                                     : "NEW"
     readonly property color stateColor: dev.connected ? Config.ThemeConfig.colors.success
-                                         : row.busy   ? Config.ThemeConfig.colors.warning
-                                         : dev.paired ? Config.ControlConfig.accent
-                                         : Config.ThemeConfig.colors.textDim
+                                      : row.busy   ? Config.ThemeConfig.colors.warning
+                                      : row.connectFailed && dev.paired ? Config.ThemeConfig.colors.error
+                                      : dev.paired ? Config.ControlConfig.accent
+                                      : Config.ThemeConfig.colors.textDim
     readonly property bool stateColored: dev.connected || row.busy || dev.paired
 
     // ── Action button label/border (Disconnect / Connect / Confirm) ───────────────
     readonly property string actionText: dev.connected ? "Disconnect"
-                                         : dev.paired  ? "Connect"
+                                         : dev.paired  ? (row.connectFailed ? "Retry" : "Connect")
                                          : "Confirm"
     readonly property color actionBorderColor: dev.connected ? Config.ThemeConfig.colors.error
                                                 : Config.ControlConfig.accent

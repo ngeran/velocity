@@ -53,6 +53,10 @@ Item {
     property bool scanning: false
     property string pairingTo: ""     // mac currently being paired; "" = idle
     property string connectingTo: ""  // mac currently being connected; "" = idle
+    // mac whose LAST connect failed (exit ≠ 0 / abort — e.g. page timeout on
+    // a standby speaker). "" = none. Cleared by a retry (connect()) or by the
+    // device actually connecting; rows read it to show a visible error state.
+    property string connectFailedTo: ""
     property int scanSecondsLeft: 0   // counts down while scanning
 
     property int deviceCount: {
@@ -178,6 +182,9 @@ Item {
         const rows = []
         for (let i = 0; i < devs.length; i++) {
             const d = devs[i]
+            // A connected device can't be in a failed state — covers connects
+            // that succeed via any path (queue, CLI, speaker-initiated).
+            if (d.connected && root.connectFailedTo === d.address) root.connectFailedTo = ""
             rows.push({
                 mac: d.address,
                 name: d.name || d.deviceName || d.address,
@@ -387,17 +394,36 @@ Item {
         // abort live pairings halfway.
         timeoutMs: 30000
         property string label: ""
+        // verb/mac of the RUNNING action — onDone/onLimit attribute a failure
+        // to the right mac (label is display-only).
+        property string verb: ""
+        property string mac: ""
         // A timeout/overflow kill suppresses onDone — without draining here
         // _busy would stay true forever and every later pair/connect/remove
         // from BOTH UIs (popup + settings) would silently no-op (wedged queue).
         onLimit: function (reason) {
             console.log("[BluetoothService] " + actionProc.label + " aborted (" + reason + ")")
+            if (actionProc.verb === "connect") root.connectFailedTo = actionProc.mac
             root._drainQueue()
         }
         onDone: function (out, err, code) {
-            if (code === 0) console.log("[BluetoothService] " + actionProc.label + " ok")
-            else console.log("[BluetoothService] " + actionProc.label +
+            if (code === 0) {
+                console.log("[BluetoothService] " + actionProc.label + " ok")
+                // Clear here too (not just via _collectDevices' connected-flip):
+                // BlueZ can mark the device connected around process exit, so
+                // the watcher alone leaves a sub-second stale "failed" render.
+                // Match the mac — a success elsewhere must not erase another
+                // device's truthful FAILED state.
+                if (actionProc.verb === "connect" && root.connectFailedTo === actionProc.mac)
+                    root.connectFailedTo = ""
+            } else {
+                console.log("[BluetoothService] " + actionProc.label +
                              " failed (exit " + code + "): " + (out + err).trim())
+                // Surface connect failures (br-connection-page-timeout on a
+                // standby speaker looks like a silent no-op otherwise) — the
+                // popup's PAIRED rows and the settings rows read this.
+                if (actionProc.verb === "connect") root.connectFailedTo = actionProc.mac
+            }
             root._drainQueue()
         }
     }
@@ -422,6 +448,8 @@ Item {
         root._busy = true
         var next = root._queue.shift()
         actionProc.label = next.verb + " " + next.mac
+        actionProc.verb = next.verb
+        actionProc.mac = next.mac
         actionProc.command = ["bluetoothctl", next.verb, next.mac]
         actionProc.run()
     }
@@ -434,9 +462,19 @@ Item {
         root._enqueue("connect", mac)
     }
     function trust(mac)      { root._enqueue("trust", mac) }
-    function connect(mac)    { root.connectingTo = mac; root._enqueue("connect", mac) }
+    function connect(mac) {
+        root.connectingTo = mac
+        if (root.connectFailedTo === mac) root.connectFailedTo = ""   // retry begins
+        root._enqueue("connect", mac)
+    }
     function disconnect(mac) { root._enqueue("disconnect", mac) }
-    function remove(mac)     { console.log("[BluetoothService] removing " + mac); root._enqueue("remove", mac) }
+    function remove(mac) {
+        console.log("[BluetoothService] removing " + mac)
+        // Forget wipes the slate — a stale failure must not surface as FAILED
+        // if this mac is later re-paired.
+        if (root.connectFailedTo === mac) root.connectFailedTo = ""
+        root._enqueue("remove", mac)
+    }
 
     // Registry enumeration is async — settle/hotplug visibility in the journal.
     onAdapterChanged: console.log("[BluetoothService] adapter now: " +
