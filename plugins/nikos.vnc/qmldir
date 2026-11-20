@@ -1,0 +1,2 @@
+module nikos.vnc
+singleton VncService 1.0 VncService.qml

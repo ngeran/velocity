@@ -421,11 +421,15 @@ in
       #   the native Pipewire client (P2); nothing calls wpctl.
       #   tailscale (nikos.wireguard plugin's Tailscale tab; WireGuard itself
       #   is NM connections via nmcli from networkmanager above)
+      #   iputils (ping) + tigervnc (vncviewer, vncpasswd) — nikos.vnc plugin's
+      #   reachability probe and client launch; the viewer itself also comes
+      #   from the host's modules/vnc.nix, this keeps the bar self-sufficient
       default = with pkgs; [
         netcat networkmanager upower qrencode nodejs git coreutils findutils
         gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper
         dbus cliphist wl-clipboard wf-recorder slurp grim libqalculate wtype
         swappy bluez brightnessctl ddcutil power-profiles-daemon tailscale
+        iputils tigervnc
       ];
       defaultText = lib.literalExpression ''
         with pkgs; [
@@ -433,6 +437,7 @@ in
           gnused gnugrep curl util-linux procps bash awww ffmpeg matugen mpvpaper
           dbus cliphist wl-clipboard wf-recorder slurp grim libqalculate wtype
           swappy bluez brightnessctl ddcutil power-profiles-daemon tailscale
+          iputils tigervnc
         ]
       '';
       description = "Tools on the bar service's PATH (ahead of the user and system profiles). Also installed into the user profile so the session PATH gets them too (tools/check-tools reads the session).";

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "api": 2,
+  "id": "nikos.vnc",
+  "name": "VNC",
+  "version": "0.2.0",
+  "description": "TigerVNC client pill for the Mac mini: monitor glyph shows viewer state, popup shows reachability probes (ICMP + VNC port), RTT sparkline telemetry, and connect/disconnect. Single session, argv-only, secrets stay in a vncpasswd file.",
+  "author": "nikos",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "ServiceRoot.qml"
+  },
+  "bar": {
+    "defaultSection": "right"
+  },
+  "commands": [
+    "vncviewer",
+    "pgrep",
+    "pkill",
+    "ping",
+    "nc",
+    "sh",
+    "mkdir",
+    "rm",
+    "vncpasswd"
+  ],
+  "ipc": [
+    "toggle",
+    "open",
+    "close",
+    "refresh",
+    "status",
+    "telemetry",
+    "connect",
+    "disconnect"
+  ],
+  "settings": {
+    "host": {
+      "type": "string",
+      "default": "10.0.0.70",
+      "label": "VNC host (ad-hoc, used when no saved connection is active; IP or mDNS name)"
+    },
+    "port": {
+      "type": "number",
+      "default": 5900,
+      "min": 1,
+      "max": 65535,
+      "label": "VNC port"
+    },
+    "passwordFile": {
+      "type": "string",
+      "default": "",
+      "label": "Password file path (blank = viewer prompts itself; create once with vncpasswd)"
+    },
+    "refreshIntervalSec": {
+      "type": "number",
+      "default": 5,
+      "min": 2,
+      "max": 60,
+      "label": "Refresh interval (seconds)"
+    },
+    "fullScreen": {
+      "type": "bool",
+      "default": false,
+      "label": "Launch viewer fullscreen"
+    }
+  }
+}
