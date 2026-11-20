@@ -888,7 +888,9 @@ ColumnLayout {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: sp(28)
+            // Height follows the field's own metrics so scaled fonts never
+            // clip (fixed sp(28) was too tight at high contentScale).
+            implicitHeight: Math.max(sp(28), tf.implicitHeight + 2 * sp(4))
             radius: sp(6)
             color: body._wa(body._c("fillRest", "#0d0d0d"), 0.6, "#0a0a0a")
             border.width: 1
@@ -902,6 +904,11 @@ ColumnLayout {
                 anchors.margins: sp(4)
                 anchors.rightMargin: fld.isPassword ? sp(26) : sp(4)
                 background: null
+                // Zero vertical padding + centered text: the wrapper (not the
+                // style) owns the insets, so sizing stays deterministic.
+                topPadding: 0
+                bottomPadding: 0
+                verticalAlignment: TextInput.AlignVCenter
                 color: body._c("text", "#e0e0e0")
                 placeholderText: fld.placeholder
                 placeholderTextColor: body._c("textDim", "#808080")
