@@ -455,6 +455,12 @@ Item {
     }
 
     function pair(mac) {
+        // Paging during the adapter's own inquiry scan fails the whole verb
+        // with br-connection-page-timeout (the radio interleaves inquiry and
+        // paging badly on this controller class). The popup's rows stay
+        // clickable during a scan by design, so any queued PAIR/CONNECT must
+        // first yield the radio. cancelScan() is a no-op when idle.
+        if (root.scanning) root.cancelScan()
         root.pairingTo = mac
         console.log("[BluetoothService] pair " + mac)
         root._enqueue("pair", mac)
@@ -463,6 +469,9 @@ Item {
     }
     function trust(mac)      { root._enqueue("trust", mac) }
     function connect(mac) {
+        // Same radio conflict as pair(): a live scan must not overlap the
+        // page attempt ("clicks survive live scans" in the popup rows).
+        if (root.scanning) root.cancelScan()
         root.connectingTo = mac
         if (root.connectFailedTo === mac) root.connectFailedTo = ""   // retry begins
         root._enqueue("connect", mac)

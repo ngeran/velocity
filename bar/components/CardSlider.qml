@@ -16,19 +16,25 @@
 // on release (the P1.5 law — commit only on a real interaction, never from a
 // binding re-evaluation). A programmatic `value` change never emits either.
 //
-// DRAG-OWNERSHIP LAW (the trailing-handle bug): `value` is fed by a Binding
-// gated on !pressed, NOT a plain `value:` binding. A plain binding re-applies
-// the source on every async ack mid-drag — PipeWire volume round-trips land a
-// frame+ late and int-rounded, so the handle kept snapping back under the
-// cursor ("falls behind"). While pressed the drag owns value; after release
-// the gate stays shut until the source ECHOES the committed value (the resync
-// timer re-checks every RESYNC_MS, echo = within ±0.5 of the commit) — a fixed
-// hold re-arms against a stale frame whenever the ack trails it, and
-// Bluetooth/AVRCP acks trail by hundreds of ms. MAX_RESYNC_TRIES is the
-// starvation cap (~1.65s worst-case hold): past it the source
-// re-applies even unacked (a rejected/clamped write), so external changes
-// never starve the control. RestoreNone makes the press-time deactivation a
-// strict no-op; delayed coalesces ack bursts.
+// DRAG-OWNERSHIP LAW (the trailing-handle bug): `value` follows the source
+// through an IMPERATIVE gated write (the Connections inside the slider), NOT
+// a plain `value:` binding and NOT a Binding{when;delayed} proxy. A plain
+// binding re-applies the source on every async ack mid-drag — PipeWire volume
+// round-trips land a frame+ late and int-rounded, so the handle kept snapping
+// back under the cursor ("falls behind"). The proxy variant had its own bug:
+// `delayed` retains a pending write queued mid-drag, and at release `pressed`
+// flips false inside Qt input handling — `when` transiently re-evaluates true
+// before `_isFollowing` shuts the gate on the next line, so the proxy flushed
+// the stale echo and the handle slammed back off the cursor on every drag.
+// The imperative follower guards with live values at signal time: mid-drag
+// echoes are simply dropped, nothing is retained to flush. While pressed the
+// drag owns value; after release the gate stays shut until the source ECHOES
+// the committed value (the resync timer re-checks every RESYNC_MS, echo =
+// within ±0.5 of the commit) — a fixed hold re-arms against a stale frame
+// whenever the ack trails it, and Bluetooth/AVRCP acks trail by hundreds of
+// ms. MAX_RESYNC_TRIES is the starvation cap (~1.65s worst-case hold): past
+// it the source re-applies even unacked (a rejected/clamped write), so
+// external changes never starve the control.
 // OLED: groove is a hairline trough, the fill is the accent ONLY while the
 // control is meaningfully interactive (caller can pass dim colors).
 // =============================================================================
@@ -81,12 +87,17 @@ RowLayout {
         // What the drag last committed — the re-arm gate waits for the source
         // to echo THIS value, not just any elapsed time.
         property real _lastCommit: 0
-        Binding on value {
-            when: s._isFollowing && !s.pressed
-            value: root.value
-            delayed: true
-            restoreMode: Binding.RestoreNone
+        // Imperative follower (probe-verified): see header — a Binding
+        // {when;delayed} proxy retains a mid-drag pending write and flushes
+        // it at release; an explicit write guarded with live values just
+        // drops mid-drag echoes instead.
+        Connections {
+            target: root
+            function onValueChanged() {
+                if (s._isFollowing && !s.pressed) s.value = root.value
+            }
         }
+        Component.onCompleted: if (s._isFollowing && !s.pressed) s.value = root.value
         Timer {
             id: resync
             interval: root.resyncMs
