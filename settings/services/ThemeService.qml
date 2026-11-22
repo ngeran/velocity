@@ -153,12 +153,22 @@ Item {
     // Last payload written per path. Re-applying the same palette (OLED toggle,
     // re-clicking the active theme, a seed reload) must not rewrite every app
     // file: identical bytes are skipped before spawning a process. A failed
-    // write clears its entry so the next apply retries.
+    // write clears its entry so the next apply retries. Trade-off: the map
+    // trusts memory, not disk — a file deleted/changed OUTSIDE ThemeService
+    // (HM switch, ghostty .bak restore) is not healed by a same-palette
+    // re-apply; the next real palette change rewrites it. Existence-probing
+    // each skip was rejected: it re-adds the per-apply process forks this
+    // guard exists to remove.
     property var _lastWritten: ({})
     // Same idempotence for ghostty: its write is in-place (inode-preserving)
     // and validates the config twice, so re-applying an identical block is the
     // most expensive no-op in the sync set.
     property string _lastGhosttyBlock: ""
+    // Same idempotence for the btop.conf sed edit — it routes through _runSh
+    // (no _atomicWrite guard), so without this it rewrites on every apply.
+    // The line derives from the fixed "velocity" theme name, not the palette,
+    // so a single memo suffices. Same memory-not-disk trade-off as above.
+    property string _lastBtopConfLine: ""
 
     function _atomicWrite(path, content, onDone) {
         var text = String(content);
@@ -845,6 +855,14 @@ Item {
         maxBytes: 8192
         command: ["sh", "-c", "for c in kitty rofi; do command -v \"$c\" >/dev/null 2>&1 && printf '%s\\n' \"$c\"; done"]
         onDone: function(out, err, code) {
+            // Only a probe that actually complained keeps the optimistic
+            // defaults (a silent nonzero exit is the normal "not found"
+            // path — `command -v` fails the for-loop when a tool is absent).
+            if (String(err).trim().length > 0) {
+                console.error("[ThemeService] tool probe failed, keeping defaults:",
+                              String(err).trim());
+                return;
+            }
             var found = {};
             var lines = String(out).split("\n");
             for (var i = 0; i < lines.length; i++) {
@@ -1044,13 +1062,28 @@ Item {
         // edit below stays here — path-dependent sh.)
         var themeFile = ThemeSync.btopTheme(colors)
 
+        // Mark health once, after BOTH writes settle — the conf edit used to
+        // bypass the health map entirely (review: its failure was invisible).
+        var pending = 2
+        var failed = false
+        function done(ok) {
+            pending -= 1
+            if (!ok) failed = true
+            if (pending === 0)
+                themeService._markSyncer("btop", !failed, failed ? "write failed" : "")
+        }
+
         themeService._atomicWrite(themeService.homeDir + "/.config/btop/themes/velocity.theme", themeFile, function(ok) {
-            themeService._markSyncer("btop", ok, ok ? "" : "write failed");
+            done(ok)
         })
 
         // Point btop.conf at velocity WITHOUT clobbering other btop settings.
         var conf = themeService.homeDir + "/.config/btop/btop.conf"
         var line = "color_theme = \"velocity\""
+        if (line === themeService._lastBtopConfLine) {
+            done(true) // identical edit already on disk — skip the sed process
+            return
+        }
         var script =
             "CONF=" + JSON.stringify(conf) + " ; " +
             "if [ ! -f \"$CONF\" ]; then " +
@@ -1061,7 +1094,11 @@ Item {
             "else " +
               "printf '" + line + "\\n' >> \"$CONF\" ; " +
             "fi"
-        themeService._runSh(script, "btop conf color_theme")
+        themeService._lastBtopConfLine = line
+        themeService._runSh(script, "btop conf color_theme", function(ok) {
+            if (!ok) themeService._lastBtopConfLine = "" // retry on next apply
+            done(ok)
+        })
     }
 
     // -------------------------------------------------------------------------
