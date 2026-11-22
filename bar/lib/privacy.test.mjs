@@ -33,6 +33,12 @@ const SCR_CAPTURE = {
   mediaClass: "Stream/Input/Video", name: "xdg-desktop-portal", description: "",
   props: { "application.name": "xdg-desktop-portal", "application.process.id": "910" },
 }
+// Live shape: quickshell's own PwNodePeakDetect stream while the volume
+// card is open (captured via pw-dump, node targets the default sink).
+const QS_PEAK = {
+  mediaClass: "Stream/Input/Audio", name: ".quickshell-wrapped", description: "",
+  props: { "application.name": "Quickshell Peak Detect", "stream.capture.sink": "true" },
+}
 const PLAYBACK = {
   mediaClass: "Stream/Output/Audio", name: "spotify", description: "",
   props: { "application.name": "Spotify" },
@@ -57,6 +63,9 @@ ok("playback streams are nobody's business", () => {
 })
 ok("capture stream playing to a sink is not privacy-relevant", () => {
   assert.equal(classifyLink(MIC_CAPTURE, SINK), null)
+})
+ok("quickshell's own peak meter is not screen capture", () => {
+  assert.equal(classifyLink(SINK_MONITOR, QS_PEAK), null)
 })
 ok("missing endpoints classify as nothing", () => {
   assert.equal(classifyLink(null, MIC_CAPTURE), null)
@@ -87,6 +96,12 @@ ok("stream without application.name falls back to source then node name", () => 
     { 1: USB_MIC, 2: anonymous },
     [{ sourceId: 1, targetId: 2 }])
   assert.equal(survey.mic[0].app, "Blue Microphones Analog Stereo")
+})
+ok("survey ignores quickshell peak meter links (volume card open)", () => {
+  const survey = surveyPrivacy(
+    { 1: SINK_MONITOR, 2: QS_PEAK },
+    [{ sourceId: 1, targetId: 2 }])
+  assert.deepEqual(survey, { mic: [], camera: [], screen: [] })
 })
 ok("pid parses only real integers", () => {
   assert.equal(pidFor({ props: { "application.process.id": "4242" } }), 4242)

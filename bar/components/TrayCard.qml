@@ -74,6 +74,9 @@ PanelWindow {
         if (activeTray === "bluetooth") _btEverOpened = true
         if (activeTray === "volume")    _volumeEverOpened = true
         if (activeTray === "privacy")   _privacyEverOpened = true
+        // WIDTH FREEZE (see cardWidth): re-measure through each open's
+        // settle, then hold the card width until close.
+        if (activeTray !== "") { widthSettle.shots = 0; widthSettle.restart() }
         // Popup-gated polling: detail probes run only while their popup is the
         // active one (fetch fires immediately on open; timers stop on close).
         Services.NetworkService.popupOpen = activeTray === "network"
@@ -96,6 +99,13 @@ PanelWindow {
         // Clamp/anchor shifts move the card — keep the carve under the caret.
         function onCardCenterXChanged() {
             if (card.activeTray !== "") card._publishConnected()
+        }
+        // TEMP TRACE (drag diagnosis) — remove once the bug is pinned.
+        function onCardWidthChanged() {
+            console.log("[TrayCard] cardWidth=" + dropdown.cardWidth.toFixed(1)
+                + " net=" + networkBody.implicitWidth.toFixed(1)
+                + " bt=" + (btLoader.item ? btLoader.item.implicitWidth.toFixed(1) : -1)
+                + " vol=" + (volLoader.item ? volLoader.item.implicitWidth.toFixed(1) : -1))
         }
     }
 
@@ -144,10 +154,35 @@ PanelWindow {
         // (DISABLE BLUETOOTH / MUTE / DISABLE WI-FI) clipped exactly — and
         // 12px narrow, squeezing every row.
         readonly property real bodyPad: 2 * Config.PopupMetrics.px(16)
-        cardWidth: Math.max(300, networkBody.implicitWidth,
+        // WIDTH FREEZE (drag-ownership twin of Popover's ANCHOR FREEZE): the
+        // card is sized by the WIDEST body — including the always-instantiated
+        // NETWORK page, whose live texts (signal %, hero status, dBm) breathe
+        // their implicit widths for as long as their data churns. A live
+        // cardWidth re-centered the open card and resized the slider groove
+        // under the cursor: the same pointer position mapped to a different
+        // value on every churn event, the handle teleported horizontally, and
+        // the drag "didn't follow the cursor" (the user chases the jumping
+        // handle, the volume writes oscillate, the lagged echoes then make
+        // the % readout jump). Measure while closed or settling (a bounded
+        // burst after every open), then HOLD until close. Height stays live:
+        // content that legitimately appears while open (QR view, newly
+        // connected devices, app streams) must still grow the card.
+        readonly property real _liveCardWidth: Math.max(300, networkBody.implicitWidth,
                              btLoader.item ? btLoader.item.implicitWidth : 0,
                              volLoader.item ? volLoader.item.implicitWidth : 0,
                              privacyLoader.item ? privacyLoader.item.implicitWidth : 0) + 24 + bodyPad
+        property real _frozenCardWidth: _liveCardWidth
+        cardWidth: activeTray !== "" && !widthSettle.running
+                   ? _frozenCardWidth : _liveCardWidth
+        Timer {
+            id: widthSettle
+            interval: 60; repeat: true
+            property int shots: 0
+            onTriggered: {
+                dropdown._frozenCardWidth = dropdown._liveCardWidth
+                if (++shots >= 12) widthSettle.stop()
+            }
+        }
         // Keyed on lastTray so the height stays frozen through the fade-out.
         // The QR credentials view replaces the network body and has its own
         // height budget. Lazy bodies contribute 0 until first open; once a

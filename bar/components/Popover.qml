@@ -189,21 +189,47 @@ Item {
     // the notch style): panel windows spawn at a placeholder 500×500 and size
     // after layer attach, while the bar scene may still be running its lobe
     // layout — the first measure can be wrong (even negative), and nothing
-    // re-measures. Fix: an explicit tick the binding depends on, bumped by
-    // the anchor's own geometry signals and a bounded settle burst after
-    // open (Shibumi's budgeted-recovery pattern: 5 × 60ms, no standing timer).
-    property int _anchorTick: 0
-    function _nudge() { _anchorTick++ }
-    readonly property real anchorCenterX: {
-        _anchorTick   // dependency: re-measure on every nudge
-        if (anchorItem)
-            return anchorItem.mapToItem(null, anchorItem.width / 2, 0).x
-        if (anchorFallback === "center") return parent ? parent.width / 2 : 0
-        return parent ? parent.width : 0   // "right"
+    // re-measures. Fix: explicit re-measure points, bumped by the anchor's
+    // own geometry signals and a bounded settle burst after open (Shibumi's
+    // budgeted-recovery pattern: 5 × 60ms, no standing timer).
+    // Measured imperatively — NO binding. A binding here would capture
+    // anchorItem.width as a live dependency, so the bar's hover rollovers
+    // (HoverGlyph label reveal animates the trigger's width) would re-anchor
+    // an open card directly: the Connections gate below only blocks nudges,
+    // not property dependencies. Writing from _nudge() makes re-measuring an
+    // explicit list — anchor/parent swap, the anchor's geometry (while closed
+    // or settling), host-window resize, and the settle burst. Past the burst
+    // an open card is frozen until it closes.
+    property real anchorCenterX: 0
+    function _nudge() {
+        if (anchorItem) {
+            anchorCenterX = anchorItem.mapToItem(null, anchorItem.width / 2, 0).x
+        } else if (anchorFallback === "center") {
+            anchorCenterX = parent ? parent.width / 2 : 0
+        } else {
+            anchorCenterX = parent ? parent.width : 0
+        }
     }
+    Component.onCompleted: _nudge()
     onAnchorItemChanged: _nudge()
     onParentChanged: _nudge()
     Connections {
+        // Host-window resize is structural (not a rollover): always
+        // re-measure, freeze or not. Null parent pre-reparent is fine —
+        // Connections with a null target simply idles.
+        target: pop.parent
+        function onWidthChanged() { pop._nudge() }
+    }
+    Connections {
+        // ANCHOR FREEZE: past the settle burst, an open card must NOT follow
+        // the anchor's x/width — the bar's hover rollovers (HoverGlyph label
+        // reveal) animate the trigger's own width and reflow the whole tray
+        // row, which used to slide an open popup around (and its live label,
+        // e.g. "VOL 49%", kept re-anchoring mid-drag). Re-measure only while
+        // closed or settling: the burst already covers window-spawn races and
+        // the post-click rollover collapse, so the card settles under the
+        // collapsed trigger and then stays PUT until it closes.
+        enabled: !pop.opened || settleBurst.running
         target: pop.anchorItem
         function onXChanged() { pop._nudge() }
         function onWidthChanged() { pop._nudge() }

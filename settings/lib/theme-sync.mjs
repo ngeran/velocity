@@ -274,9 +274,10 @@ export function btopTheme(colors) {
         "theme[process_end]=\"" + colors.error + "\"\n"
 }
 
-// GTK (4/libadwaita + 3): @define-color overrides in colors.css (both
-// versions get the same content — the service writes the two paths).
-export function gtkColorsCss(colors) {
+// GTK4/libadwaita: the `window_*` / `view_*` / `accent_*` names libadwaita
+// widgets read. GTK3 ignores this dialect (it uses the `theme_*` names below),
+// which is why the two roots get DIFFERENT content.
+export function gtk4ColorsCss(colors) {
     return "/* Managed by QuickShell ThemeService — do not edit. */\n" +
         "@define-color window_bg_color " + colors.background + ";\n" +
         "@define-color window_fg_color " + colors.text + ";\n" +
@@ -305,6 +306,34 @@ export function gtkColorsCss(colors) {
         "@define-color error_bg_color " + colors.error + ";\n" +
         "@define-color borders " + colors.border + ";\n" +
         "@define-color insensitive_fg_color " + colors.textDim + ";\n"
+}
+
+// GTK3 (Adwaita): the `theme_*` names GTK3 widgets actually read. The GTK4
+// `window_*` dialect above is ignored here; both roots need their own file.
+export function gtk3ColorsCss(colors) {
+    return "/* Managed by QuickShell ThemeService — do not edit. */\n" +
+        "@define-color theme_fg_color " + colors.text + ";\n" +
+        "@define-color theme_text_color " + colors.text + ";\n" +
+        "@define-color theme_bg_color " + colors.background + ";\n" +
+        "@define-color theme_base_color " + colors.surface + ";\n" +
+        "@define-color theme_selected_bg_color " + colors.primary + ";\n" +
+        "@define-color theme_selected_fg_color " + colors.background + ";\n" +
+        "@define-color insensitive_bg_color " + colors.surfaceVariant + ";\n" +
+        "@define-color insensitive_fg_color " + colors.textDim + ";\n" +
+        "@define-color insensitive_base_color " + colors.surface + ";\n" +
+        "@define-color theme_unfocused_fg_color " + colors.textDim + ";\n" +
+        "@define-color theme_unfocused_text_color " + colors.text + ";\n" +
+        "@define-color theme_unfocused_bg_color " + colors.background + ";\n" +
+        "@define-color theme_unfocused_base_color " + colors.surface + ";\n" +
+        "@define-color theme_unfocused_selected_bg_color " + colors.primary + ";\n" +
+        "@define-color theme_unfocused_selected_fg_color " + colors.background + ";\n" +
+        "@define-color borders " + colors.border + ";\n" +
+        "@define-color unfocused_borders " + colors.border + ";\n" +
+        "@define-color warning_color " + colors.warning + ";\n" +
+        "@define-color error_color " + colors.error + ";\n" +
+        "@define-color success_color " + colors.success + ";\n" +
+        "@define-color content_view_bg " + colors.surface + ";\n" +
+        "@define-color text_view_bg " + colors.surface + ";\n"
 }
 
 // ── dominant color (P5.3/5: matugen 4.x source-color pre-step) ──────────────

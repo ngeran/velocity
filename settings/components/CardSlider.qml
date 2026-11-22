@@ -82,6 +82,12 @@ RowLayout {
         stepSize: root.stepSize
         opacity: root.dim ? 0.4 : 1.0
 
+        // Pointer affordance — the repo idiom (HoverGlyph, ListRow,
+        // CardToggle…) shows a pointing hand over every interactive element;
+        // the bare QQC2 Slider shows none, so the popup's slider read as
+        // non-interactive.
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
         // ── drag-ownership gate (see header) ──
         property bool _isFollowing: true
         // What the drag last committed — the re-arm gate waits for the source
@@ -94,15 +100,25 @@ RowLayout {
         Connections {
             target: root
             function onValueChanged() {
+                console.log("[CardSlider:" + root.objectName + "] echo v=" + root.value.toFixed(1)
+                            + " pressed=" + s.pressed + " following=" + s._isFollowing
+                            + " s.value=" + s.value.toFixed(1))
                 if (s._isFollowing && !s.pressed) s.value = root.value
             }
         }
-        Component.onCompleted: if (s._isFollowing && !s.pressed) s.value = root.value
+        Component.onCompleted: {
+            console.log("[CardSlider:" + root.objectName + "] completed v=" + root.value.toFixed(1))
+            if (s._isFollowing && !s.pressed) s.value = root.value
+        }
         Timer {
             id: resync
             interval: root.resyncMs
             property int _tries: 0
             onTriggered: {
+                // TEMP TRACE (drag diagnosis) — remove once the bug is pinned.
+                console.log("[CardSlider:" + root.objectName + "] resync tick root=" + root.value.toFixed(1)
+                            + " lastCommit=" + s._lastCommit.toFixed(1)
+                            + " tries=" + _tries)
                 // Re-arm only once the source has acked the commit (or the
                 // cap hits): re-arming against a stale frame is what yanked
                 // the handle back off the user's value after release.
@@ -118,13 +134,26 @@ RowLayout {
             }
         }
 
-        onMoved: root.dragged(value)
-        onPressedChanged: if (!pressed) {
-            root.committed(value)
-            s._lastCommit = value
-            s._isFollowing = false
-            resync._tries = 0
-            resync.restart()
+        onMoved: {
+            root.dragged(value)
+            // TEMP TRACE (drag diagnosis) — remove once the bug is pinned.
+            console.log("[CardSlider:" + root.objectName + "] moved v=" + value.toFixed(1)
+                        + " pos=" + s.position.toFixed(3)
+                        + " w=" + s.width.toFixed(1)
+                        + " avail=" + s.availableWidth.toFixed(1))
+        }
+        onWidthChanged: console.log("[CardSlider:" + root.objectName
+                                    + "] WIDTH=" + s.width.toFixed(1))
+        onPressedChanged: {
+            console.log("[CardSlider:" + root.objectName + "] pressed=" + pressed
+                        + " v=" + value.toFixed(1))
+            if (!pressed) {
+                root.committed(value)
+                s._lastCommit = value
+                s._isFollowing = false
+                resync._tries = 0
+                resync.restart()
+            }
         }
 
         background: Rectangle {

@@ -226,6 +226,17 @@ Item {
             }
         }
 
+        // Failed external-app syncers surface here; quiet when all succeed.
+        Text {
+            Layout.fillWidth: true
+            visible: Services.ThemeService.syncerFailureSummary.length > 0
+            text: "APP SYNC FAILED: " + Services.ThemeService.syncerFailureSummary
+            font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.5
+            font.family: Config.SettingsConfig.fontFamily
+            color: Config.ThemeConfig.colors.error
+            elide: Text.ElideRight
+        }
+
         // ── Thin border: header / main ──
         Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
 

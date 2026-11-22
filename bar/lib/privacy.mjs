@@ -33,10 +33,20 @@ function looksLikeCamera(node) {
          hay.indexOf("v4l2") !== -1 || hay.indexOf("uvc") !== -1
 }
 
+// The volume card's EQ bars meter the output sink via Quickshell's
+// PwNodePeakMonitor, which PipeWire implements as a capture stream attached
+// to the sink's monitor. That is us listening to levels we already own —
+// not surveillance — so without this guard the pill lights up "screen"
+// every time the volume card opens.
+function isOwnMetering(node) {
+  return ((node.props || {})["application.name"] === "Quickshell Peak Detect")
+}
+
 // "mic" | "camera" | "screen" | null for one active link group.
 // Only capture streams count — a sink playing music is nobody's business.
 export function classifyLink(source, target) {
   if (!source || !target || !isCaptureStream(target)) return null
+  if (isOwnMetering(target)) return null
   var video = (target.mediaClass || "") === "Stream/Input/Video"
   if (video) return looksLikeCamera(source) ? "camera" : "screen"
   return looksLikeMonitor(source) ? "screen" : "mic"

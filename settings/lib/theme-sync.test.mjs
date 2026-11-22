@@ -118,12 +118,24 @@ ok(bt.endsWith("theme[process_end]=\"#f44336\"\n"), "btop last line + trailing n
 ok((bt.match(/^theme\[/gm) || []).length === 48, "btop key count (line-anchored; comment mention excluded)")
 
 // ── gtk ─────────────────────────────────────────────────────────────────────
-const css = T.gtkColorsCss(C)
-ok(css.startsWith("/* Managed by QuickShell ThemeService — do not edit. */\n"), "css header")
-ok(css.includes("@define-color card_bg_color #161616;\n"), "css card = surfaceContainer")
-ok(css.includes("@define-color accent_fg_color #000000;\n"), "css accent_fg = background")
-ok(css.includes("@define-color insensitive_fg_color #808080;\n") && css.endsWith("\n"), "css last line + newline")
-ok((css.match(/@define-color/g) || []).length === 27, "css define count")
+// GTK4/libadwaita and GTK3 use different named-color dialects; the service
+// writes each to its own root (gtk.css is GTK's user-CSS entry point).
+const gtk4 = T.gtk4ColorsCss(C)
+ok(gtk4.startsWith("/* Managed by QuickShell ThemeService — do not edit. */\n"), "gtk4 css header")
+ok(gtk4.includes("@define-color card_bg_color #161616;\n"), "gtk4 card = surfaceContainer")
+ok(gtk4.includes("@define-color accent_fg_color #000000;\n"), "gtk4 accent_fg = background")
+ok(gtk4.includes("@define-color insensitive_fg_color #808080;\n") && gtk4.endsWith("\n"), "gtk4 last line + newline")
+ok((gtk4.match(/@define-color/g) || []).length === 27, "gtk4 define count")
+
+const gtk3 = T.gtk3ColorsCss(C)
+ok(gtk3.startsWith("/* Managed by QuickShell ThemeService — do not edit. */\n"), "gtk3 css header")
+ok(gtk3.includes("@define-color theme_bg_color #000000;\n"), "gtk3 theme_bg = background")
+ok(gtk3.includes("@define-color theme_base_color #0a0a0a;\n"), "gtk3 theme_base = surface")
+ok(gtk3.includes("@define-color theme_selected_bg_color #00dce5;\n"), "gtk3 selected_bg = primary")
+ok(gtk3.includes("@define-color theme_selected_fg_color #000000;\n"), "gtk3 selected_fg = background")
+ok(gtk3.includes("@define-color insensitive_fg_color #808080;\n") && gtk3.endsWith("\n"), "gtk3 last line + newline")
+ok((gtk3.match(/@define-color/g) || []).length === 22, "gtk3 define count")
+ok(!gtk3.includes("window_bg_color") && !gtk4.includes("theme_bg_color"), "gtk dialects do not leak")
 
 // ── matugen mapping ─────────────────────────────────────────────────────────
 const D = {

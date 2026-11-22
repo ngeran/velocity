@@ -84,6 +84,7 @@ Item {
     Component.onCompleted: {
         themeService.loadCustomThemes();
         themeService.loadStylixSeed();
+        themeService.optionalToolProbe.run();
     }
 
     // =========================================================================
@@ -149,13 +150,33 @@ Item {
         return p;
     }
 
+    // Last payload written per path. Re-applying the same palette (OLED toggle,
+    // re-clicking the active theme, a seed reload) must not rewrite every app
+    // file: identical bytes are skipped before spawning a process. A failed
+    // write clears its entry so the next apply retries.
+    property var _lastWritten: ({})
+    // Same idempotence for ghostty: its write is in-place (inode-preserving)
+    // and validates the config twice, so re-applying an identical block is the
+    // most expensive no-op in the sync set.
+    property string _lastGhosttyBlock: ""
+
     function _atomicWrite(path, content, onDone) {
+        var text = String(content);
+        if (themeService._lastWritten[path] === text) {
+            if (onDone) onDone(true);
+            return;
+        }
+        themeService._lastWritten[path] = text;
         var dir = path.substring(0, path.lastIndexOf("/"));
         themeService._runSh(
             'mkdir -p "$1" && tmp="$1/.tmp.$$" && printf \'%s\' "$2" > "$tmp" && mv -f "$tmp" "$3"',
             "write " + path,
-            onDone,
-            [dir, String(content), path]);
+            function(ok) {
+                if (!ok && themeService._lastWritten[path] === text)
+                    themeService._lastWritten[path] = "";
+                if (onDone) onDone(ok);
+            },
+            [dir, text, path]);
     }
 
     /**
@@ -790,6 +811,50 @@ Item {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Sync health + optional-target probe (P1)
+    // -------------------------------------------------------------------------
+    // syncerHealth is keyed by the registry key; the settings UI shows a line
+    // only when a target failed, so a broken syncer is visible instead of
+    // living in the console. Async write/reload completions update it.
+    property var syncerHealth: ({})
+
+    readonly property string syncerFailureSummary: {
+        var names = [];
+        for (var key in themeService.syncerHealth) {
+            if (!themeService.syncerHealth[key].ok) names.push(key);
+        }
+        return names.join(", ");
+    }
+
+    function _markSyncer(key, ok, detail) {
+        var next = {};
+        for (var k in themeService.syncerHealth) next[k] = themeService.syncerHealth[k];
+        next[key] = { ok: ok, at: new Date().toISOString(), detail: detail || "" };
+        themeService.syncerHealth = next;
+    }
+
+    // kitty and rofi are absent on many installs (rofi was removed from this
+    // setup); probing once avoids a write (+ SIGUSR1) per switch for a tool
+    // that cannot consume the palette. Defaults stay true so a startup seed
+    // apply still targets an installed tool before the probe returns.
+    property var _optionalTools: ({ kitty: true, rofi: true })
+
+    property var optionalToolProbe: BoundedProcess {
+        timeoutMs: 3000
+        maxBytes: 8192
+        command: ["sh", "-c", "for c in kitty rofi; do command -v \"$c\" >/dev/null 2>&1 && printf '%s\\n' \"$c\"; done"]
+        onDone: function(out, err, code) {
+            var found = {};
+            var lines = String(out).split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                var name = lines[i].trim();
+                if (name) found[name] = true;
+            }
+            themeService._optionalTools = found;
+        }
+    }
+
     // Registry — add a target by appending {key, fn}.
     property var _syncers: [
         { key: "ghostty",  fn: function(c) { themeService._syncGhostty(c) } },
@@ -817,6 +882,7 @@ Item {
                 var msg = "syncer '" + s.key + "' threw: " + e;
                 console.error("[ThemeService] " + msg);
                 CommandService.pushLog("[ThemeService] " + msg, "error");
+                themeService._markSyncer(s.key, false, "threw: " + e);
             }
         }
     }
@@ -836,6 +902,8 @@ Item {
         var ghosttyMain = themeService.homeDir + "/.config/ghostty/config";
         // (I8: block content in ../lib/theme-sync.mjs — byte-tested.)
         var block = ThemeSync.ghosttyBlock(colors);
+        if (block === themeService._lastGhosttyBlock) return;
+        themeService._lastGhosttyBlock = block;
         // sh single-quote escape (same scheme as _atomicWrite); block has no quotes.
         var quoted = "'" + String(block).replace(/'/g, "'\\''") + "'";
         // Rewrite the config IN PLACE — preserve the file's inode. ghostty has no
@@ -875,7 +943,11 @@ Item {
                 "echo \"ghostty rejected the new palette — previous config restored\" >&2; " +
                 "exit 1; " +
             "fi";
-        themeService._runSh(script, "sync ghostty");
+        themeService._runSh(script, "sync ghostty", function(ok) {
+            if (!ok && themeService._lastGhosttyBlock === block)
+                themeService._lastGhosttyBlock = "";
+            themeService._markSyncer("ghostty", ok, ok ? "" : "write failed");
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -883,9 +955,12 @@ Item {
     // includes it). SIGUSR1 asks kitty to reload. Atomic write.
     // -------------------------------------------------------------------------
     function _syncKitty(colors) {
+        if (!themeService._optionalTools["kitty"]) return;
         var kittyConf = themeService.homeDir + "/.cache/theme/kitty.conf";
         // (I8: content in ../lib/theme-sync.mjs. SIGUSR1 asks kitty to reload.)
-        themeService._atomicWrite(kittyConf, ThemeSync.kittyConf(colors));
+        themeService._atomicWrite(kittyConf, ThemeSync.kittyConf(colors), function(ok) {
+            themeService._markSyncer("kitty", ok, ok ? "" : "write failed");
+        });
         themeService._runSh("pkill -SIGUSR1 kitty || true", "kitty reload");
     }
 
@@ -901,7 +976,9 @@ Item {
         var tmuxConf = themeService.homeDir + "/.cache/theme/tmux.conf";
         // (I8: content in ../lib/theme-sync.mjs — colour mapping matches the
         // ghostty palette block.)
-        themeService._atomicWrite(tmuxConf, ThemeSync.tmuxConf(colors));
+        themeService._atomicWrite(tmuxConf, ThemeSync.tmuxConf(colors), function(ok) {
+            themeService._markSyncer("tmux", ok, ok ? "" : "write failed");
+        });
         // Apply to every running server (default socket for the user). No server
         // running → `|| true` makes it a silent no-op; new sessions pick the file
         // up via the source-file line in ~/.config/tmux/tmux.conf.
@@ -916,7 +993,9 @@ Item {
     function _syncHyprlock(colors) {
         var hyprlockFile = themeService.homeDir + "/.config/hypr/quickshell-colors.conf";
         // (I8: content in ../lib/theme-sync.mjs.)
-        themeService._atomicWrite(hyprlockFile, ThemeSync.hyprlockConf(colors));
+        themeService._atomicWrite(hyprlockFile, ThemeSync.hyprlockConf(colors), function(ok) {
+            themeService._markSyncer("hyprlock", ok, ok ? "" : "write failed");
+        });
     }
 
     // NOTE: Hyprland window borders are intentionally NOT themed (read-only
@@ -931,7 +1010,9 @@ Item {
     function _syncNvim(colors) {
         // (I8: content in ../lib/theme-sync.mjs.)
         themeService._atomicWrite(themeService.homeDir + "/.cache/theme/nvim-base16.lua",
-                                  ThemeSync.nvimLua(colors));
+                                  ThemeSync.nvimLua(colors), function(ok) {
+            themeService._markSyncer("nvim", ok, ok ? "" : "write failed");
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -939,9 +1020,12 @@ Item {
     // store workaround). Hyphen-free var names; UNQUOTED hex (quoting breaks it).
     // -------------------------------------------------------------------------
     function _syncRofi(colors) {
+        if (!themeService._optionalTools["rofi"]) return;
         // (I8: content in ../lib/theme-sync.mjs.)
         themeService._atomicWrite(themeService.homeDir + "/.cache/theme/rofi.rasi",
-                                  ThemeSync.rofiRasi(colors));
+                                  ThemeSync.rofiRasi(colors), function(ok) {
+            themeService._markSyncer("rofi", ok, ok ? "" : "write failed");
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -960,7 +1044,9 @@ Item {
         // edit below stays here — path-dependent sh.)
         var themeFile = ThemeSync.btopTheme(colors)
 
-        themeService._atomicWrite(themeService.homeDir + "/.config/btop/themes/velocity.theme", themeFile)
+        themeService._atomicWrite(themeService.homeDir + "/.config/btop/themes/velocity.theme", themeFile, function(ok) {
+            themeService._markSyncer("btop", ok, ok ? "" : "write failed");
+        })
 
         // Point btop.conf at velocity WITHOUT clobbering other btop settings.
         var conf = themeService.homeDir + "/.config/btop/btop.conf"
@@ -979,17 +1065,29 @@ Item {
     }
 
     // -------------------------------------------------------------------------
-    // GTK (4/libadwaita + 3): @define-color overrides in colors.css. libadwaita
-    // reads ~/.config/gtk-4.0/colors.css at app STARTUP — running apps do not
-    // recolor live; newly opened GTK apps pick up the change. No collision with
-    // HM (apps.nix writes settings.ini, not colors.css). Qt is NOT covered here
-    // (platformTheme=gtk won't read named colors) — see home/apps.nix follow-up.
+    // GTK (4/libadwaita + 3): GTK auto-loads gtk.css as user CSS; colors.css
+    // alone is NOT an entry point (it was never imported — the old syncer was
+    // inert). Write both: gtk.css for GTK, colors.css for tools that @import
+    // it. GTK3 and GTK4 use different @define-color dialects, so each root
+    // gets its own content. Read at app STARTUP — running apps do not recolor
+    // live; newly opened GTK apps pick up the change. No collision with HM
+    // (apps.nix writes settings.ini, no gtk.extraConfig). Qt is NOT covered
+    // here (platformTheme=gtk won't read named colors).
     // -------------------------------------------------------------------------
     function _syncGtk(colors) {
-        // (I8: content in ../lib/theme-sync.mjs — both GTK versions get the
-        // same file.)
-        var css = ThemeSync.gtkColorsCss(colors);
-        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-4.0/colors.css", css);
-        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-3.0/colors.css", css);
+        var gtk4 = ThemeSync.gtk4ColorsCss(colors);
+        var gtk3 = ThemeSync.gtk3ColorsCss(colors);
+        var pending = 4;
+        var failed = false;
+        function done(ok) {
+            if (!ok) failed = true;
+            pending--;
+            if (pending === 0)
+                themeService._markSyncer("gtk", !failed, failed ? "write failed" : "");
+        }
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-4.0/gtk.css", gtk4, done);
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-4.0/colors.css", gtk4, done);
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-3.0/gtk.css", gtk3, done);
+        themeService._atomicWrite(themeService.homeDir + "/.config/gtk-3.0/colors.css", gtk3, done);
     }
 }

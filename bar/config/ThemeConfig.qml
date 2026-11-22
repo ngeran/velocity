@@ -180,11 +180,16 @@ Item {
     // -------------------------------------------------------------------------
     // Fixed alphas over theme roles instead of hardcoded Qt.rgba() literals,
     // so every tint in the bar re-derives when the theme swaps. withAlpha()
-    // takes a HEX STRING token (the colors.* values) — never a color object
-    // (a color has no .replace; that is exactly the old tint() bug).
+    // takes a HEX STRING token (the colors.* values), but plugins re-tint
+    // derived surfaces too (artcraft/wireguard/vnc pass `color` properties
+    // back in) — so color objects are accepted via string coercion. A QColor
+    // with alpha < 1 stringifies as #aarrggbb; the alpha channel is dropped
+    // and the caller's `a` wins. Opaque colors stringify as #rrggbb already.
     // =========================================================================
     function withAlpha(hex, a) {
-        var h = (hex || "#ffffff").replace("#", "")
+        var s = "" + (hex || "#ffffff")
+        var h = s.replace("#", "")
+        if (h.length === 8) h = h.substring(2) // #aarrggbb → rrggbb
         if (h.length !== 6) return Qt.rgba(1, 1, 1, a)
         return Qt.rgba(parseInt(h.substring(0, 2), 16) / 255,
                        parseInt(h.substring(2, 4), 16) / 255,

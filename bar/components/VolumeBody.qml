@@ -190,12 +190,44 @@ ColumnLayout {
     }
 
     // ── HERO — big glyph (tap = mute) + huge % ──
+    // WIDTH FREEZE: the popup centers under its trigger (Popover anchorCenterX),
+    // and TrayCard's cardWidth follows this body's implicitWidth — so ANY
+    // live-changing text width here shifts the whole centered card left/right
+    // mid-drag. Three sources, all frozen to fixed footprints measured on
+    // their WIDTEST content: the % number (digit count 9→10 / 99→100), the
+    // glyph (󰕾/󰕿 swap at >66, 󰝟 when muted — advances differ), and EqBars
+    // (hidden Rows leave the layout, so peak flicker used to breathe the row).
+    TextMetrics {
+        id: heroGlyphHi
+        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
+        text: "󰕾"
+    }
+    TextMetrics {
+        id: heroGlyphLo
+        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
+        text: "󰕿"
+    }
+    TextMetrics {
+        id: heroGlyphMute
+        font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
+        text: "󰝟"
+    }
+    TextMetrics {
+        id: heroPctBox
+        font.family: Config.BarConfig.fontFamily
+        font.pixelSize: Config.PopupMetrics.px(52)
+        font.bold: true
+        text: "100%"   // longest numeric readout
+    }
     RowLayout {
         visible: Services.AudioService.hasAudio
         Layout.fillWidth: true; spacing: Config.PopupMetrics.px(12)
 
         Text {
             text: Services.AudioService.muted ? "󰝟" : (Services.AudioService.volume > 66 ? "󰕾" : "󰕿")
+            // Fixed box for the widest of the three glyphs (see WIDTH FREEZE).
+            Layout.preferredWidth: Math.max(heroGlyphHi.width, heroGlyphLo.width,
+                                            heroGlyphMute.width)
             font.family: Config.BarConfig.fontNerd; font.pixelSize: Config.PopupMetrics.px(30)
             color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.ThemeConfig.colors.primary
             Behavior on color { ColorAnimation { duration: 120 } }
@@ -210,13 +242,26 @@ ColumnLayout {
         }
         Text {
             text: Math.round(Services.AudioService.volume) + "%"
+            // Fixed box for "100%" (see WIDTH FREEZE) — the number grows
+            // rightward inside it, so its left edge (and the row width) hold.
+            Layout.preferredWidth: heroPctBox.width
             font.family: Config.BarConfig.fontFamily; font.pixelSize: Config.PopupMetrics.px(52); font.bold: true
             color: Services.AudioService.muted ? Config.BarConfig.colorTextDim : Config.BarConfig.colorText
             Behavior on color { ColorAnimation { duration: 120 } }
         }
-        EqBars {
-            peak: outputPeak.peak
+        // EqBars' own `visible: levels[0] > 0` hides only the bars INSIDE this
+        // constant footprint (see WIDTH FREEZE) — peak flicker no longer
+        // changes the row's implicit width.
+        Item {
+            Layout.preferredWidth: heroEq.implicitWidth
+            Layout.preferredHeight: heroEq.barHeight
             Layout.alignment: Qt.AlignVCenter
+            EqBars {
+                id: heroEq
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                peak: outputPeak.peak
+            }
         }
         Item { Layout.fillWidth: true }
     }
@@ -232,6 +277,7 @@ ColumnLayout {
         Layout.fillWidth: true
 
         CardSlider {
+            objectName: "vol-out"   // TEMP TRACE (drag diagnosis)
             Layout.fillWidth: true
             value: Services.AudioService.volume
             dim: Services.AudioService.muted
@@ -320,6 +366,7 @@ ColumnLayout {
         Layout.fillWidth: true
 
         CardSlider {
+            objectName: "vol-in"    // TEMP TRACE (drag diagnosis)
             Layout.fillWidth: true
             value: Services.AudioService.micVolume
             dim: Services.AudioService.micMuted
