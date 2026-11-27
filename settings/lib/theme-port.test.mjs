@@ -65,4 +65,95 @@ ok(Port.parseAny(yaml).name === "Yaml Theme", "parseAny: YAML name survives");
 var low = Port.parseJson('{"name":"l","colors":{"text":"#abcd12"}}');
 ok(low.ok && low.colors.text === "#ABCD12", "JSON: lowercase hex normalized");
 
+// ── Omarchy colors.toml ─────────────────────────────────────────────────────
+// The user's own theme: quoted hex, inline # comments after values, and
+// unmapped keys (selection, bright_*, hyprland_*_border). Every mapping
+// source key is exercised.
+var AURA = [
+    '# Aura Dark for Omarchy, from the official palette by Dalton Menezes',
+    'mode = "dark"',
+    '',
+    'accent = "#a277ff"             # violet, Aura\'s signature colour',
+    'selection = "#29263c"          # unmapped',
+    'muted = "#525156"              # inactive elements',
+    '',
+    'background = "#15141b"',
+    'dark_background = "#110f18"',
+    'darker_background = "#0f0f0f"',
+    'lighter_background = "#2d2b38"',
+    '',
+    'foreground = "#edecee"',
+    'dark_foreground = "#6d6d6d"    # comment colour',
+    'light_foreground = "#cdccce"',
+    'bright_foreground = "#edecee"',
+    '',
+    'red = "#ff6767"',
+    'yellow = "#ffca85"',
+    'orange = "#ffca85"',
+    'green = "#61ffca"              # mint',
+    'cyan = "#82e2ff"',
+    'blue = "#a277ff"',
+    'magenta = "#f694ff"            # pink',
+    'brown = "#a19c77"',
+    '',
+    'bright_magenta = "#f694ff"',
+    'hyprland_active_border = "rgba(26a269ee) rgba(2ec27eee) 45deg"',   // upstream hackerman
+    'hyprland_inactive_border = "#2d2b38"',
+    ''
+].join("\n");
+var po = Port.parseOmarchyToml(AURA, "aura-dark");
+ok(po.ok && po.name === "aura-dark", "Omarchy: named by the caller (the folder)");
+ok(po.ok && Object.keys(po.colors).length === 16, "Omarchy: all 16 tokens mapped");
+ok(po.ok && po.colors.background === "#0F0F0F" && po.colors.surface === "#110F18"
+   && po.colors.surfaceVariant === "#15141B" && po.colors.surfaceContainer === "#2D2B38",
+   "Omarchy: background ladder -> background..surfaceContainer, in order");
+ok(po.ok && po.colors.text === "#EDECEE" && po.colors.textDim === "#6D6D6D",
+   "Omarchy: foreground -> text, dark_foreground -> textDim");
+ok(po.ok && po.colors.outline === "#6D6D6D" && po.colors.border === "#6D6D6D"
+   && po.colors.outlineVariant === "#6D6D6D",
+   "Omarchy: dark_foreground -> border + outline + outlineVariant");
+ok(po.ok && po.colors.primary === "#A277FF" && po.colors.secondary === "#82E2FF"
+   && po.colors.info === "#82E2FF" && po.colors.accent === "#FF6767"
+   && po.colors.error === "#FF6767" && po.colors.success === "#61FFCA"
+   && po.colors.warning === "#FFCA85",
+   "Omarchy: accents, paired like the default seed");
+ok(po.ok && po.invalid.length === 0, "Omarchy: unmapped + non-hex keys skipped, not reported bad");
+ok(po.ok && po.colors.selection === undefined && po.colors.bright_foreground === undefined,
+   "Omarchy: unmapped keys never reach the bundle");
+// dark only, by the file's own mode line
+var light = Port.parseOmarchyToml(AURA.replace('mode = "dark"', 'mode = "light"'));
+ok(!light.ok && /mode = "light"/.test(light.error), "Omarchy: light theme rejected, names the mode");
+var noMode = Port.parseOmarchyToml(AURA.replace('mode = "dark"\n', ""));
+ok(!noMode.ok && /no mode line/.test(noMode.error), "Omarchy: missing mode line rejected");
+var badFirst = Port.parseOmarchyToml('mode = "light"\nforeground = "oops"\n');
+ok(!badFirst.ok && /no valid color tokens/.test(badFirst.error),
+   "Omarchy: bad tokens reported before the mode check");
+ok(!Port.parseOmarchyToml('mode = "dark"\nfoo = "#123456"\n').ok, "Omarchy: no mapped keys rejected");
+var oneBad = Port.parseOmarchyToml('mode = "dark"\nforeground = "#edecee"\naccent = "zzz"\nred = "#ff6767"\n');
+ok(oneBad.ok && oneBad.invalid.length === 1 && oneBad.invalid[0] === "primary"
+   && oneBad.colors.primary === undefined && oneBad.colors.accent === "#FF6767",
+   "Omarchy: a mapped key with bad hex is reported, the rest import");
+ok(Port.parseOmarchyToml('mode = "dark"\r\nforeground = "#edecee"\r\n').ok,
+   "Omarchy: CRLF line endings accepted");
+ok(/mode = ""/.test(Port.parseOmarchyToml('mode =\nforeground = "#edecee"\n').error)
+   && /mode = ""/.test(Port.parseOmarchyToml('mode = ""\nforeground = "#edecee"\n').error),
+   "Omarchy: an empty mode line is reported as seen, not as missing");
+// bare (unquoted) values + auto-detect
+var bare = Port.parseAny('background = #0a1220\nmode = dark\n', "bare");
+ok(bare.ok && bare.name === "bare" && bare.colors.surfaceVariant === "#0A1220",
+   "Omarchy: bare hex + bare mode accepted");
+ok(Port.parseAny(AURA, "aura-dark").ok && Port.parseAny(AURA).name === "imported",
+   "parseAny: Omarchy TOML detected (comment-first); clipboard falls back to \"imported\"");
+ok(Port.parseAny(json).name === "My Theme" && Port.parseAny(yaml, "ignored").name === "Yaml Theme"
+   && Port.parseAny('scheme: x = y\nbase00: "#101010"\n').colors.background === "#101010",
+   "parseAny: JSON + base16 keep their own path and names");
+// name = the theme's folder
+ok(Port.themeFolderName("/home/u/.config/omarchy/themes/tokyo-night/colors.toml") === "tokyo-night"
+   && Port.themeFolderName("themes/aura-dark/colors.toml") === "aura-dark",
+   "themeFolderName: the file's parent folder");
+ok(Port.themeFolderName("colors.toml") === "" && Port.themeFolderName("./colors.toml") === ""
+   && Port.themeFolderName("/x/../colors.toml") === ""
+   && Port.themeFolderName("") === "" && Port.themeFolderName(null) === "",
+   "themeFolderName: no usable folder -> \"\"");
+
 process.exit(failed ? 1 : 0);

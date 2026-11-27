@@ -12,6 +12,11 @@
 //   • base16 — the standard scheme YAML (scheme/author/base00..base0F).
 //              Flat "key: value" lines only; quoted or bare hex; comments
 //              and blank lines ignored. A full YAML parser is NOT attempted.
+//   • omarchy — Omarchy's theme file colors.toml (flat `key = "#rrggbb"`
+//              lines; quoted or bare hex; comments ignored). DARK THEMES
+//              ONLY, by the file's own `mode` line. The file carries no
+//              name — the theme is its folder — so the caller passes it.
+//              Import only; there is no Omarchy export.
 //
 // Token ↔ base16 mapping (documented choices, lossless for our own exports):
 //   base00 background   base08 error
@@ -22,6 +27,11 @@
 //   base05 text   base0D primary
 //   base06 surface   base0E secondary
 //   base07 outlineVariant   base0F border
+//
+// Token ← Omarchy mapping (user-approved 2026-11-27; LOSSY — Omarchy has 24+
+// keys and most have no slot here): selection, bright_*, orange, brown,
+// blue, magenta, light/bright_foreground and the hyprland_*_border values
+// are dropped. The table itself is TOKEN_TO_OMARCHY, below.
 // =============================================================================
 
 export const BASE16_TO_TOKEN = {
@@ -37,6 +47,32 @@ export const BASE16_TO_TOKEN = {
 
 var TOKEN_TO_BASE16 = {}
 for (var b in BASE16_TO_TOKEN) TOKEN_TO_BASE16[BASE16_TO_TOKEN[b]] = b
+
+// Our token ← the Omarchy key it is imported from (import direction only).
+// Several tokens share one source on purpose — the default seed pairs
+// secondary = info and accent = error the same way. Every source key exists
+// in every upstream Omarchy theme, so a dark theme maps to a complete bundle.
+// The three line tokens take dark_foreground rather than a background rung:
+// dark_background sits one faint step above the base (1.01-1.13:1 across the
+// upstream corpus), which left borders and control edges invisible.
+export const TOKEN_TO_OMARCHY = {
+    background:       "darker_background",
+    surface:          "dark_background",
+    surfaceVariant:   "background",
+    surfaceContainer: "lighter_background",
+    text:             "foreground",
+    textDim:          "dark_foreground",
+    border:           "dark_foreground",
+    outline:          "dark_foreground",
+    outlineVariant:   "dark_foreground",
+    primary:          "accent",
+    secondary:        "cyan",
+    accent:           "red",
+    success:          "green",
+    warning:          "yellow",
+    error:            "red",
+    info:             "cyan"
+}
 
 var HEX_RE = /^#[0-9a-fA-F]{6}$/
 
@@ -126,8 +162,63 @@ export function parseBase16Yaml(text) {
     return { ok: true, name: out.name, colors: v.colors, invalid: v.invalid }
 }
 
+// ── Omarchy colors.toml (flat subset) ───────────────────────────────────────
+// `key = "#rrggbb"` lines. A TOML parser is NOT attempted (same stance as
+// base16): no upstream theme uses tables, arrays or multiline strings.
+// A quoted value is taken verbatim — a '#' INSIDE the quotes is the colour,
+// not a comment — and anything after the closing quote is ignored, so inline
+// `# comments` work. Keys outside the mapping are skipped silently (they are
+// not "bad tokens"). `name` is the theme's folder name: the file has none.
+// Returns { ok: true, name, colors, invalid } or { ok: false, error }.
+export function parseOmarchyToml(text, name) {
+    var raw = {}, mode
+    var lines = String(text).split("\n")
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim()
+        if (line.length === 0 || line.charAt(0) === "#") continue
+        var eq = line.indexOf("=")
+        if (eq <= 0) continue
+        var key = line.substring(0, eq).trim()
+        var val = line.substring(eq + 1).trim()
+        var quoted = /^["']([^"']*)["']/.exec(val)
+        if (quoted) val = quoted[1]
+        else val = val.replace(/\s+#.*$/, "").trim()
+        if (key === "mode") mode = val
+        else raw[key] = val
+    }
+    var out = {}
+    for (var token in TOKEN_TO_OMARCHY) {
+        var v = raw[TOKEN_TO_OMARCHY[token]]
+        if (v !== undefined) out[token] = v
+    }
+    var res = validateBundle(out)
+    if (!res.ok) return res
+    // Dark only, by the file's own declaration. Checked AFTER the tokens so
+    // text that is not an Omarchy theme at all keeps the useful error.
+    // No mode line leaves `mode` undefined; "mode =" is a line declaring "".
+    if (mode !== "dark") {
+        return { ok: false, error: "only dark themes are allowed (" +
+            (mode === undefined ? "no mode line" : 'mode = "' + mode + '"') + ")" }
+    }
+    return { ok: true, name: name || "imported", colors: res.colors, invalid: res.invalid }
+}
+
+// Name for a path import: an Omarchy theme is named by its FOLDER
+// (`…/themes/<name>/colors.toml`), not by anything in the file. "" when
+// there is none to use (bare filename, "./colors.toml", "/x/../colors.toml")
+// — the caller falls back to the generic name.
+export function themeFolderName(path) {
+    var parts = String(path || "").trim().split("/")
+    var folder = parts.length > 1 ? parts[parts.length - 2] : ""
+    return folder === "." || folder === ".." ? "" : folder
+}
+
 // Format auto-detect for a pasted/imported blob: JSON objects start with "{".
-export function parseAny(text) {
+// Omarchy's `key = "#rrggbb"` lines are told from base16's `key: value` by
+// the "="; `fallbackName` only names an Omarchy theme (its file has none).
+export function parseAny(text, fallbackName) {
     var t = String(text).trim()
-    return t.charAt(0) === "{" ? parseJson(t) : parseBase16Yaml(t)
+    if (t.charAt(0) === "{") return parseJson(t)
+    return /^[A-Za-z_][A-Za-z0-9_-]*\s*=\s*["']?#/m.test(t)
+        ? parseOmarchyToml(t, fallbackName) : parseBase16Yaml(t)
 }

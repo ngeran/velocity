@@ -752,8 +752,9 @@ Item {
             }, [payload])
     }
 
-    function importThemeText(text) {
-        var r = ThemePort.parseAny(text)
+    // `fallbackName` names an Omarchy import — its file carries no name.
+    function importThemeText(text, fallbackName) {
+        var r = ThemePort.parseAny(text, fallbackName)
         if (!r.ok) { themeService.portError = "import rejected: " + r.error; themeService.portStatus = ""; return }
         var bundle = themeService.normalizeBundle(r.colors)
         themeService.clampOLED(bundle, themeService.isOledClampActive)
@@ -772,11 +773,15 @@ Item {
 
     function importFromPath(path) {
         var p = (path || "").trim()
+        // A file picker hands back a percent-encoded `file://` URL; `cat`
+        // wants a plain path (same unwrap as the WireGuard conf import).
+        if (p.indexOf("file://") === 0) p = decodeURIComponent(p.slice(7))
         if (p.length === 0) { themeService.portError = "no path given"; return }
         themeService._portProc.onDone = function(out, err, code) {
             if (code !== 0 || String(out).trim().length === 0)
                 themeService.portError = "cannot read " + p
-            else themeService.importThemeText(out)
+            // An Omarchy theme is named by its folder, not by its file.
+            else themeService.importThemeText(out, ThemePort.themeFolderName(p))
         }
         themeService._portProc.command = ["cat", p]
         themeService._portProc.running = true

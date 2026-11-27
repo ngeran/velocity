@@ -39,6 +39,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import "../config" as Config
 import "../services" as Services
 import "." as Components
@@ -109,6 +110,16 @@ Item {
             if (c && !seen[c]) { seen[c] = true; out.push({ key: root.spectrumTokens[i].key, color: c, tier: root.spectrumTokens[i].tier }) }
         }
         return out
+    }
+
+    // Omarchy ships a theme as `<name>/colors.toml`; importFromPath reads it
+    // and names the theme after that folder. A loose *.toml is offered too,
+    // for a hand-written theme.
+    FileDialog {
+        id: omarchyDialog
+        title: "Import Omarchy theme"
+        nameFilters: ["Omarchy theme (colors.toml *.toml)"]
+        onAccepted: Services.ThemeService.importFromPath(omarchyDialog.selectedFile)
     }
 
     ColumnLayout {
@@ -392,7 +403,9 @@ Item {
                 // ── PORT (P5.5): export/import the live palette. Export is
                 //    always the POST-clamp live palette; import validates,
                 //    clamps, saves as a custom theme and applies. File path
-                //    empty → ~/.cache/theme/export/<theme>.<ext>. ──
+                //    empty → ~/.cache/theme/export/<theme>.<ext>. The line
+                //    above the row is the Omarchy import (file picker); the
+                //    row keeps the typed-path and clipboard imports. ──
                 ColumnLayout {
                     id: portSection
                     property string exportFmt: "json"
@@ -401,6 +414,29 @@ Item {
                     spacing: 4
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+
+                    // Omarchy import on its own line: the row below is full,
+                    // and this is the action a user comes looking for. The
+                    // outcome line at the bottom reports for both.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Components.Pill {
+                            text: "IMPORT OMARCHY THEME"
+                            accentStyle: true
+                            onActivated: omarchyDialog.open()
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "colors.toml from a theme folder - dark themes only, named after the folder"
+                            font.pixelSize: 8
+                            font.family: Config.SettingsConfig.fontFamily
+                            color: Config.ThemeConfig.colors.textDim
+                            elide: Text.ElideRight
+                        }
+                    }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -464,7 +500,7 @@ Item {
                             font.family: Config.SettingsConfig.fontFamily
                             selectByMouse: true
                             clip: true
-                            property string placeholder: "/path/to/theme.json|yaml (empty = default)"
+                            property string placeholder: "/path/to/theme.json|yaml|toml (empty = default)"
                             Text {
                                 visible: portPathField.text === "" && !portPathField.activeFocus
                                 text: portPathField.placeholder
