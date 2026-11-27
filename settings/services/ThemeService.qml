@@ -775,7 +775,11 @@ Item {
         var p = (path || "").trim()
         // A file picker hands back a percent-encoded `file://` URL; `cat`
         // wants a plain path (same unwrap as the WireGuard conf import).
-        if (p.indexOf("file://") === 0) p = decodeURIComponent(p.slice(7))
+        if (p.indexOf("file://") === 0) {
+            try {
+                p = decodeURIComponent(p.slice(7))
+            } catch (e) { /* broken escape in a typed URL - `cat` reports it */ }
+        }
         if (p.length === 0) { themeService.portError = "no path given"; return }
         themeService._portProc.onDone = function(out, err, code) {
             if (code !== 0 || String(out).trim().length === 0)
