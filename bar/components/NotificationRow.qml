@@ -5,11 +5,13 @@
 // (components/NotificationRow.qml, MIT), re-tokenised for this rice: PopupMetrics
 // scaling, JetBrains Mono, MotionConfig durations, theme colors.
 //
-// The card is a quiet raised surface: a low-alpha fill, a hairline edge, and
-// one small status dot — no full-height urgency rail. Criticality shows as a
-// faint error wash plus the dot; unread shares the same dot in the accent.
-// That keeps the card readable at a glance without a saturated bar shouting
-// across the screen, which is what the old leading rail did.
+// The card is a quiet raised surface: a SOLID theme-black fill on toasts (they
+// float over the desktop on a transparent window), a low-alpha fill inside the
+// center's opaque panel, a hairline edge, and one small status dot — no
+// full-height urgency rail. Criticality shows as an error edge (plus a faint
+// error wash in the center) and the dot; unread shares the same dot in the
+// accent. That keeps the card readable at a glance without a saturated bar
+// shouting across the screen, which is what the old leading rail did.
 //
 // Media is never shown twice: the avatar prefers the resolved app icon, then
 // falls back to the notification's own image; the inline image renders only
@@ -125,10 +127,16 @@ Rectangle {
         return Qt.formatDateTime(new Date(root.n().timestamp || 0), "HH:mm")
     }
 
-    // A low-alpha wash over the desktop, edged by a hairline so the card holds
-    // its shape on any wallpaper. Critical cards take the same wash in the
-    // error hue — a tint you notice, not a rail that interrupts.
+    // Two surfaces, one card. A TOAST floats on a transparent window straight
+    // over the desktop, so its fill is SOLID: the theme's background token
+    // (pure black on every OLED-clamped palette — pixels off, no wallpaper
+    // bleeding through), edged by the theme's own border, which steps up to
+    // the outline on hover. A CENTER row already sits on the panel's opaque
+    // black and keeps the low-alpha wash that lifts it off the panel. Either
+    // way a critical card takes the error edge — a tint you notice, not a
+    // rail that interrupts.
     color: {
+        if (root.toast) return Config.ThemeConfig.colors.background
         var c = root.isCritical ? root.errorColor : root.fg
         return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.09 : 0.06)
     }
@@ -138,6 +146,9 @@ Rectangle {
         var c = root.isCritical ? root.errorColor : root.fg
         if (root.isCritical)
             return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.36 : 0.22)
+        if (root.toast)
+            return root.hovered ? Config.ThemeConfig.colors.outline
+                                : Config.ThemeConfig.colors.border
         return Qt.rgba(c.r, c.g, c.b, root.hovered ? 0.16 : 0.09)
     }
     Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }

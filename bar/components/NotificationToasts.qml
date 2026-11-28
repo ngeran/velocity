@@ -56,6 +56,13 @@ PanelWindow {
     // Keyboard-inert (H1 doctrine — no tray/toast body takes input).
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     WlrLayershell.namespace: "velocity-toasts"
+    // The OVERLAY layer, not the default top one. The shell's other full
+    // surfaces (launcher, settings, tray cards, the center) are top-layer
+    // surfaces too, and same-layer stacking follows map order — a toast
+    // could land under whichever of them mapped last. Overlay is the topmost
+    // layer and sits strictly above top (the OSD's and the plugin popups'
+    // layer: Osd.qml, PluginPopup.qml).
+    WlrLayershell.layer: WlrLayer.Overlay
 
     anchors { top: true; right: true }
     // Land UNDER the bar, never on it: bar height + the same corner float the
