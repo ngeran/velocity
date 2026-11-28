@@ -101,4 +101,18 @@ for (var name in PRESETS) {
     ok(hueOk, name + ": capped tokens keep hue");
 }
 
+// ── contrastRatio / contrastLabel ───────────────────────────────────────────
+
+// WCAG anchors: 21:1 black on white, 1:1 for one colour, order-independent.
+ok(near(Core.contrastRatio("#000000", "#ffffff"), 21), "contrastRatio: black on white is 21");
+ok(near(Core.contrastRatio("#808080", "#808080"), 1), "contrastRatio: same colour is 1");
+ok(near(Core.contrastRatio("#ffffff", "#000000"), 21), "contrastRatio: order does not matter");
+ok(near(Core.contrastRatio("#767676", "#ffffff"), 4.54, 0.01), "contrastRatio: #767676 on white is about 4.54 (AA threshold grey)");
+// An unparseable colour reads as luminance 0, so it is treated as black.
+ok(near(Core.contrastRatio("oops", "#ffffff"), 21), "contrastRatio: unparseable counts as black");
+// Labels switch at the WCAG thresholds.
+ok(Core.contrastLabel(7) === "AAA" && Core.contrastLabel(6.99) === "AA", "contrastLabel: AAA from 7");
+ok(Core.contrastLabel(4.5) === "AA" && Core.contrastLabel(4.49) === "LOW", "contrastLabel: AA from 4.5, LOW below");
+ok(Core.contrastLabel(Core.contrastRatio("#e0e0e0", "#000000")) === "AAA", "contrastLabel: default seed text on black is AAA");
+
 process.exit(failed ? 1 : 0);

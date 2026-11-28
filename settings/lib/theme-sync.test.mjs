@@ -46,6 +46,24 @@ eq(T.ghosttyBlock(C),
    "ghostty block exact")
 ok(!T.ghosttyBlock(C).endsWith("\n"), "ghostty block has no trailing newline")
 
+// ── ghostty theme file ──────────────────────────────────────────────────────
+eq(T.ghosttyTheme("OLED Pure Black", C),
+   "# OLED Pure Black - exported from Velocity\n" +
+   "background = #000000\n" +
+   "foreground = #e0e0e0\n" +
+   "cursor-color = #00dce5\n" +
+   "selection-background = #00dce5\n" +
+   "selection-foreground = #000000\n" +
+   "palette = 0=#000000\npalette = 1=#f44336\npalette = 2=#4caf50\n" +
+   "palette = 3=#ff9800\npalette = 4=#00dce5\npalette = 5=#00b3ba\n" +
+   "palette = 6=#00dce5\npalette = 7=#e0e0e0\npalette = 8=#333333\n" +
+   "palette = 9=#f44336\npalette = 10=#4caf50\npalette = 11=#ff9800\n" +
+   "palette = 12=#808080\npalette = 13=#007f85\npalette = 14=#00dce5\n" +
+   "palette = 15=#e0e0e0\n",
+   "ghostty theme exact")
+ok(!T.ghosttyTheme("x", C).includes("quickshell-theme"), "ghostty theme carries no managed-block markers")
+eq(T.ghosttyTheme("", C).split("\n")[0], "# velocity theme - exported from Velocity", "ghostty theme names a fallback")
+
 // ── kitty ───────────────────────────────────────────────────────────────────
 eq(T.kittyConf(C),
    "background #000000\nforeground #e0e0e0\ncursor #00dce5\n" +

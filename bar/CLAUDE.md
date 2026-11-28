@@ -117,6 +117,9 @@ Every directory has a `qmldir` file. Components/services are registered there an
 ### ArtCraft (nikos.artcraft)
 - **Click**: the ARTCRAFT popup — one row per app (PhotoCraft / VectorCraft / PdfCraft) with CURRENT / NEW / STATUS, CHECK NOW, per-row UPDATE and UPDATE ALL. Live download → hash → rebuild progress comes from `$XDG_STATE_HOME/artcraft/progress.json`; the pill is the palette at rest, a down-arrow + N UPDATES when pending, pulsing while upgrading, and error-tinted on failure. Backend: `~/.omni-nix/home/artcraft` (versions.json + artcraft-check/upgrade + user timer); upgrades run the fixed `/etc/artcraft-switch` NOPASSWD wrapper.
 
+### AI Bot (velocity.ai-bot)
+- **Click**: the Z.AI USAGE card (`components/ZaiUsagePanel.qml`) — quota windows fed by `ZaiUsageService` (key at `~/.config/secrets/zai_usage_key`; a rejected key reads `API KEY REJECTED`, not `CONNECTION ERROR`). The card is keyboard-inert like every tray body, so the footer's KEY ▸ PASTE & SAVE takes the key from the clipboard: ONE `sh` process checks it with Z.ai before anything is written (0600, tmp+mv); the key never enters argv or QML memory — only the outcome line does.
+
 ### Keyboard (US/GR)
 - **Click**: Cycle to the next XKB layout (EN ↔ GR); **right click** opens the layout manager panel (`hyprctl switchxkblayout`, tracked by the `nikos.keyboard` plugin via socket2 `activelayout` events from `ctx.events`). Layout list lives in `~/.omni-nix/configs/hypr/look-and-feel.lua` (`input.kb_layout`). Also SUPER+SHIFT+SPACE (D3 binds `qs -c bar ipc call keyboard next`; the `keyboard` target in shell.qml forwards to the plugin's declared verbs).
 
@@ -207,6 +210,7 @@ To move the bar to the bottom: Settings ▸ SETTINGS ▸ BAR → BAR EDGE (`barP
 | `nmcli` | NetworkService (one process since P2): wifi scan enrichment, join, engineer/latency probes, DNS |
 | `bluetoothctl` | BluetoothService action queue (pair/trust/connect/remove); power/disconnect are native writes |
 | `wpctl` | AudioService volume writes (native pipewire volume writes silently die on bluez5 nodes — see the service's WRITES note); reads/mutes stay native |
+| `wl-paste` (wl-clipboard) | ZaiUsageService PASTE & SAVE (reads the clipboard inside the shell; without it the panel reports an empty clipboard) + clipboard overlay capture (`wl-paste --watch cliphist store`) |
 | `qrencode` | Settings Wi-Fi QR share |
 | `jq` | `tools/qa` harness (asserts, layer evidence) |
 | `grim` | `tools/qa` screenshot evidence |

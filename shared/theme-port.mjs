@@ -17,6 +17,9 @@
 //              ONLY, by the file's own `mode` line. The file carries no
 //              name — the theme is its folder — so the caller passes it.
 //              Import only; there is no Omarchy export.
+//   • scan   — the Omarchy themes FOLDER is read in one process: a
+//              `>>> <path>` header, then that colors.toml, per theme.
+//              parseOmarchyScan() lists what came back.
 //
 // Token ↔ base16 mapping (documented choices, lossless for our own exports):
 //   base00 background   base08 error
@@ -169,7 +172,8 @@ export function parseBase16Yaml(text) {
 // not a comment — and anything after the closing quote is ignored, so inline
 // `# comments` work. Keys outside the mapping are skipped silently (they are
 // not "bad tokens"). `name` is the theme's folder name: the file has none.
-// Returns { ok: true, name, colors, invalid } or { ok: false, error }.
+// Returns { ok: true, name, colors, invalid }; { ok: false, light: true,
+// error } for a theme that is not dark; or { ok: false, error }.
 export function parseOmarchyToml(text, name) {
     var raw = {}, mode
     var lines = String(text).split("\n")
@@ -196,11 +200,49 @@ export function parseOmarchyToml(text, name) {
     // Dark only, by the file's own declaration. Checked AFTER the tokens so
     // text that is not an Omarchy theme at all keeps the useful error.
     // No mode line leaves `mode` undefined; "mode =" is a line declaring "".
+    // `light` is what the folder scan counts by, so the wording may change.
     if (mode !== "dark") {
-        return { ok: false, error: "only dark themes are allowed (" +
+        return { ok: false, light: true, error: "only dark themes are allowed (" +
             (mode === undefined ? "no mode line" : 'mode = "' + mode + '"') + ")" }
     }
     return { ok: true, name: name || "imported", colors: res.colors, invalid: res.invalid }
+}
+
+// The reverse of TOKEN_TO_OMARCHY: an Omarchy `colors.toml` for a theme.
+// Omarchy has more keys than this engine stores, so the file is built from an
+// explicit table: where several tokens import from ONE key (cyan is secondary
+// AND info, red is accent AND error, dark_foreground is textDim AND the three
+// line tokens) the first-named token writes it, and the keys with no token of
+// their own take the nearest role. A round trip (export, then import) gives
+// back exactly those first-named eleven; the file's comment says the rest is
+// derived.
+export function exportToml(name, bundle) {
+    var b = bundle || {}
+    // Omarchy key <- token (import order; see TOKEN_TO_OMARCHY).
+    var fromToken = {
+        accent: "primary", selection: "surfaceContainer", muted: "textDim",
+        darker_background: "background", dark_background: "surface",
+        background: "surfaceVariant", lighter_background: "surfaceContainer",
+        foreground: "text", dark_foreground: "textDim",
+        light_foreground: "text", bright_foreground: "text",
+        red: "accent", yellow: "warning", orange: "warning", green: "success",
+        cyan: "secondary", blue: "primary", magenta: "accent", brown: "error"
+    }
+    var bright = ["red", "yellow", "green", "cyan", "blue", "magenta"]
+    var title = String(name || "velocity theme").replace(/[\r\n]+/g, " ")
+    var lines = [
+        "# " + title + " - exported from Velocity as a dark theme.",
+        "# Keys this engine does not store are derived from the closest token.",
+        'mode = "dark"'
+    ]
+    // A token that is missing or not 6-digit hex is written as black.
+    function line(key, token) {
+        var v = b[token]
+        return key + ' = "' + (HEX_RE.test(v || "") ? v.toUpperCase() : "#000000") + '"'
+    }
+    for (var key in fromToken) lines.push(line(key, fromToken[key]))
+    for (var i = 0; i < bright.length; i++) lines.push(line("bright_" + bright[i], fromToken[bright[i]]))
+    return lines.join("\n") + "\n"
 }
 
 // Name for a path import: an Omarchy theme is named by its FOLDER
@@ -221,4 +263,46 @@ export function parseAny(text, fallbackName) {
     if (t.charAt(0) === "{") return parseJson(t)
     return /^[A-Za-z_][A-Za-z0-9_-]*\s*=\s*["']?#/m.test(t)
         ? parseOmarchyToml(t, fallbackName) : parseBase16Yaml(t)
+}
+
+// ── Omarchy themes folder scan ───────────────────────────────────────────────
+// The settings service reads every `~/.config/omarchy/themes/<name>/colors.toml`
+// in ONE process: `find` prints `>>> <path>` (OMARCHY_SCAN_MARK) before each
+// file, and this turns that stream into a theme list. A header is the mark
+// AND a path ending in the theme file's name — `find` (called with the same
+// constant) emits nothing else — so file text that starts with the mark stays
+// file text, and text before the first header is not a file. A light theme is
+// counted, not listed — the Theme page says so in its hint — and so is
+// anything unreadable.
+// Returns { themes: [{ name, path, colors }], light, invalid }, sorted by name.
+export const OMARCHY_THEME_FILE = "colors.toml"
+export const OMARCHY_SCAN_MARK = ">>> "
+
+export function parseOmarchyScan(text) {
+    var themes = [], light = 0, invalid = 0
+    var path = "", buf = null
+    var tail = "/" + OMARCHY_THEME_FILE
+    var lines = String(text).split("\n")
+    // One finished file -> one list entry, or one count.
+    function flush() {
+        if (!buf) return
+        var r = parseOmarchyToml(buf.join("\n"), themeFolderName(path))
+        if (r.ok) themes.push({ name: r.name, path: path, colors: r.colors })
+        else if (r.light) light++
+        else invalid++
+    }
+    for (var i = 0; i < lines.length; i++) {
+        // Trailing whitespace dropped: a CR would otherwise hide a real header.
+        var line = lines[i].replace(/\s+$/, "")
+        if (line.indexOf(OMARCHY_SCAN_MARK) === 0 && line.slice(-tail.length) === tail) {
+            flush()
+            path = line.substring(OMARCHY_SCAN_MARK.length).trim()
+            buf = []
+        } else if (buf) {
+            buf.push(line)
+        }
+    }
+    flush()
+    themes.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0 })
+    return { themes: themes, light: light, invalid: invalid }
 }

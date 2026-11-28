@@ -15,6 +15,9 @@
 //               (6,1)=weekly), percentage, nextResetTime.
 //             TIME_LIMIT   — the search quota: usage/currentValue/remaining,
 //               percentage, nextResetTime, usageDetails[] per tool.
+//           A revoked, expired or bogus key still answers HTTP 200, with
+//           {"code":1000,…} or {"code":401,"msg":"token expired or incorrect"}
+//           — surfaced as "API KEY REJECTED".
 //
 // API KEY   Read from ~/.config/secrets/zai_usage_key (a sibling dir, OUTSIDE
 //           this repo, so it's GitHub-safe). The curl command reads the file
@@ -22,6 +25,11 @@
 //           an optional $ZAI_API_KEY env override wins if set. NB: nix
 //           home.sessionVariables do NOT reach the bar (Hyprland exec_cmd child),
 //           so the key is read from the file directly rather than via env.
+//           PASTE & SAVE (installKeyFromClipboard, from the ai-bot panel)
+//           installs a new key: ONE sh process reads the clipboard, checks it
+//           against the endpoint, and only then writes the file (0600, tmp+mv).
+//           The key is never in argv, in QML JS memory or in any log — the
+//           process prints one status word.
 //
 // PROPERTIES
 //   windows      : var[]   — {key,type,unit,number,role,label,pct,remaining,
@@ -35,9 +43,16 @@
 //   sparkline    : var[]   — rolling 5h-session % samples (≤60) for the Canvas
 //   loading      : bool
 //   hasError     : bool
+//   errorTitle   : string  — headline of the error card: "CONNECTION ERROR"
+//                             (default), "API KEY REJECTED" (Z.ai code 1000 or 401)
+//                             or "NO API KEY" (key file missing)
 //   errorMessage : string
+//   hasKeyError  : bool    — the error is about the key (missing or rejected):
+//                             PASTE & SAVE is the fix, not a network retry
 //   lastUpdated  : string
 //   keyConfigured: bool
+//   isInstallingKey: bool    — a PASTE & SAVE check is in flight
+//   keyInstallMessage : string — last PASTE & SAVE outcome ("" = none)
 //
 // Window roles: "session" (5h tokens), "weekly" (7d tokens), "search"
 // (TIME_LIMIT) or "other". burnPerHour/etaLabel come from an in-memory
@@ -47,6 +62,9 @@
 // SIGNALS
 //   thresholdAlert(var info)  — {windowName, pct, urgency, resetLabel}
 //   dataRefreshed()           — new data in; overlays re-paint sparkline
+//
+// FUNCTIONS
+//   installKeyFromClipboard() — PASTE & SAVE; see API KEY above
 // =============================================================================
 
 pragma Singleton
@@ -76,10 +94,18 @@ Item {
     property var sparkline: []
     property bool loading: false
     property bool hasError: false
+    property string errorTitle: "CONNECTION ERROR"
     property string errorMessage: ""
     property string lastUpdated: ""
     property bool keyConfigured: false
     property bool active: false             // overlay drives this with shown-state
+    property bool isInstallingKey: false      // PASTE & SAVE check in flight
+    property string keyInstallMessage: ""   // last PASTE & SAVE outcome
+
+    // True while the error is about the key (missing or rejected) rather than
+    // the network — the panel offers PASTE & SAVE for exactly those two.
+    readonly property bool hasKeyError: hasError
+        && (errorTitle === "API KEY REJECTED" || errorTitle === "NO API KEY")
 
     // ---- threshold re-arm state per window, keyed by window.key ----
     //   { <key>: { reset: <epochMs|null>, notified: [<thresholds>] } }
@@ -107,8 +133,9 @@ Item {
         onDone: function(out) {
             root.keyConfigured = (out.trim() === "1")
             if (!root.keyConfigured) {
-                root.hasError = true
-                root.errorMessage = "No Z.ai API key. Put it at " + root.keyFile
+                root._setError("NO API KEY",
+                               "No Z.ai API key saved. Copy the key from z.ai, then PASTE & SAVE.")
+                root.keyInstallMessage = ""
             } else {
                 root.refresh()   // first poll immediately once we know we're configured
             }
@@ -133,8 +160,7 @@ Item {
                 // above; surface a SOFT error instead of silently looking
                 // alive on stale data (the next good poll clears it).
                 if (root.keyConfigured) {
-                    root.hasError = true
-                    root.errorMessage = "No response from Z.ai"
+                    root._setError("CONNECTION ERROR", "No response from Z.ai")
                 }
                 return
             }
@@ -143,8 +169,7 @@ Item {
             } catch (e) {
                 // don't clobber a real "unconfigured" error with a parse noise message
                 if (root.keyConfigured) {
-                    root.hasError = true
-                    root.errorMessage = "Bad response from Z.ai"
+                    root._setError("CONNECTION ERROR", "Bad response from Z.ai")
                 }
                 console.warn("[ZaiUsageService] JSON parse error")
             }
@@ -157,6 +182,56 @@ Item {
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh()
+    }
+
+    // =========================================================================
+    // PASTE & SAVE — install a new key from the clipboard
+    // =========================================================================
+    // ONE sh process does everything, so the key never enters QML JS memory or
+    // any argv: wl-paste is read INSIDE the shell, checked against the
+    // endpoint (the same curl --config - trick as the poll), and only a key
+    // Z.ai accepts is written — 0600 via umask, tmp+mv so a crashed write
+    // cannot leave a half file or loosen the mode. The process prints exactly
+    // one status word:
+    //   EMPTY        clipboard empty / wl-paste failed
+    //   REJECTED     Z.ai refused the key (401 "token expired or incorrect", or the 10xx family — both seen live)
+    //   NO_RESPONSE  curl timed out / network down — the key was NOT judged
+    //   BAD_RESPONSE Z.ai answered something else (5xx, HTML page)
+    //   WRITE_FAILED the file could not be written
+    //   OK           saved
+    // curl's --max-time (10s) sits under the 15s bound, so a slow check is
+    // reported by the script rather than dropped by the limit.
+    BoundedProcess {
+        id: keyInstaller
+        command: []
+        timeoutMs: 15000
+        onDone: function(out) {
+            root.isInstallingKey = false
+            var status = (out || "").trim()
+            if (status === "OK") {
+                root.keyInstallMessage = "KEY SAVED · SYNCED " + root._clock()
+                root.keyConfigured = true
+                root.refresh()
+                return
+            }
+            console.warn("[ZaiUsageService] key install: " + status)
+            root.keyInstallMessage =
+                status === "REJECTED"     ? "Z.ai rejected the clipboard key — copy the API key itself." :
+                status === "EMPTY"        ? "Clipboard is empty — copy the API key first." :
+                status === "NO_RESPONSE"  ? "No response from Z.ai — nothing was saved. Try again." :
+                status === "BAD_RESPONSE" ? "Z.ai answered unexpectedly — nothing was saved. Try again." :
+                status === "WRITE_FAILED" ? "Could not write " + root.keyFile + " — nothing was saved." :
+                                            "Key check failed — nothing was saved."
+        }
+        // onDone is not called when the bound trips — without this the
+        // panel's button would stay disabled forever.
+        onLimit: function(reason) {
+            root.isInstallingKey = false
+            root.keyInstallMessage = reason === "overflow"
+                ? "Key check hit its output limit — nothing was saved."
+                : "Key check timed out — nothing was saved."
+            console.warn("[ZaiUsageService] key install limit: " + reason)
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -177,13 +252,59 @@ Item {
         return ["sh", "-c", cmd]
     }
 
+    // -------------------------------------------------------------------------
+    // PASTE & SAVE (the panel button). Guards against a double click; the
+    // outcome lands in keyInstallMessage, a saved key triggers a fresh poll.
+    function installKeyFromClipboard() {
+        if (root.isInstallingKey) return
+        root.isInstallingKey = true
+        root.keyInstallMessage = "CHECKING WITH Z.AI…"
+        keyInstaller.command = root._installCommand()
+        keyInstaller.run()
+    }
+
+    // $1 = key file, $2 = endpoint. The key lives only in the shell variable
+    // KEY (never exported) and in curl's stdin config — never in argv.
+    function _installCommand() {
+        return ["sh", "-c", root._installScript, "sh", root.keyFile, root.apiUrl]
+    }
+
+    // The statements are joined with a space. Every quote in the shell text is
+    // a double quote (the JS delimiters are single quotes); printf's "\042"
+    // is a literal double quote, so the needles need no nested quoting.
+    // The EXIT trap removes the tmp file if the process is killed between
+    // mktemp and mv — otherwise a valid key copy would stay on disk.
+    readonly property string _installScript: [
+        'TMP=""; trap "[ -n \\"\\$TMP\\" ] && rm -f \\"\\$TMP\\"" EXIT;',
+        'KEY="$(wl-paste --no-newline 2>/dev/null | tr -d "[:space:]")";',
+        '[ -n "$KEY" ] || { echo EMPTY; exit 0; };',
+        'BODY="$(printf "header = \\"Authorization: Bearer %s\\"\\n" "$KEY" | curl -s --max-time 10 --config - "$2")";',
+        '[ -n "$BODY" ] || { echo NO_RESPONSE; exit 0; };',
+        'PAT="$(printf "\\042success\\042:true")"; REJ="$(printf "\\042code\\042:401")"; REJ2="$(printf "\\042code\\042:10")";',
+        'case "$(printf "%s" "$BODY" | tr -d "[:space:]")" in *"$PAT"*) ;; *"$REJ"*) echo REJECTED; exit 0 ;; *"$REJ2"[0-9][0-9]*) echo REJECTED; exit 0 ;; *) echo BAD_RESPONSE; exit 0 ;; esac;',
+        'umask 077;',
+        'TMP="$(mktemp "$1.XXXXXX")" || { echo WRITE_FAILED; exit 0; };',
+        'printf "%s\\n" "$KEY" > "$TMP" && mv -f "$TMP" "$1" || { echo WRITE_FAILED; exit 0; };',
+        'echo OK'
+    ].join(" ")
+
     // =========================================================================
     // RESPONSE HANDLING
     // =========================================================================
     function _handleJson(payload) {
         if (!payload || !payload.success || !payload.data || !payload.data.limits) {
-            root.hasError = true
-            root.errorMessage = "Z.ai usage response unsuccessful."
+            // 1000 ("authentication failed", seen live on a revoked key) and
+            // 401 ("token expired or incorrect", seen live on a bogus key)
+            // are Z.ai's auth failures: the key is dead, not the network —
+            // say so, the panel offers PASTE & SAVE right under this message.
+            if (payload && (payload.code === 1000 || payload.code === 401)) {
+                console.warn("[ZaiUsageService] API key rejected by Z.ai (code " + payload.code + ")")
+                root.keyInstallMessage = ""
+                root._setError("API KEY REJECTED",
+                               "Z.ai rejected the saved key. Copy a new one and PASTE & SAVE.")
+            } else {
+                root._setError("CONNECTION ERROR", "Z.ai usage response unsuccessful.")
+            }
             return
         }
 
@@ -225,8 +346,7 @@ Item {
         }
 
         if (wins.length === 0) {
-            root.hasError = true
-            root.errorMessage = "No quota limits in Z.ai response."
+            root._setError("CONNECTION ERROR", "No quota limits in Z.ai response.")
             return
         }
 
@@ -284,6 +404,14 @@ Item {
     }
 
     // ---- helpers ----
+    // Every error goes through here so the card's title and message always
+    // describe the same failure (a rejected key is not a connection error).
+    function _setError(title, message) {
+        root.hasError = true
+        root.errorTitle = title
+        root.errorMessage = message
+    }
+
     function _windowRole(type, unit, number) {
         if (type === "TOKENS_LIMIT" && unit === 3 && number === 5) return "session"
         if (type === "TOKENS_LIMIT" && unit === 6 && number === 1) return "weekly"

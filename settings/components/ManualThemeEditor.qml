@@ -1,71 +1,119 @@
+// ManualThemeEditor.qml — Theme page editor column.
 // =============================================================================
-// ManualThemeEditor.qml — Custom Theme Color Editor
-// =============================================================================
+// Everything here edits the LIVE palette:
+//   • a tile's hex field commits on Enter or focus loss;
+//   • the picker drafts one token and commits on APPLY;
+//   • every commit is one undo step (ThemeService undo / redo).
+// Nothing is saved until the dock's SAVE names it.
 //
-// Build a color scheme by typing a hex value OR picking from an in-app HSV
-// color picker. Every change is applied LIVE to:
-//   • the settings shell (ThemeConfig.updateColorToken)
-//   • the bar (via ~/.cache/theme/colors.json, written by applyManualOverride)
-//   • ghostty (via syncToExternalApps → ~/.config/ngeran/theme/ghostty.conf)
-//
-// The picker is implemented fully in QML (no Qt.labs.platform ColorDialog),
-// because native platform dialogs are unreliable under Quickshell/Wayland.
+// The terminal preview shows the palette exactly as Ghostty receives it: it is
+// read back from the block ThemeSync writes (`palette = N=#rrggbb`), so the
+// preview cannot drift from the real mapping.
 // =============================================================================
-
 import QtQuick
 import QtQuick.Layouts
+
 import "../config" as Config
 import "../services" as Services
+import "../lib/theme-core.mjs" as ThemeCore
+import "../lib/theme-sync.mjs" as ThemeSync
 
 Item {
     id: root
-    implicitWidth: 600
-    implicitHeight: 400
+    // Size for the page: the editor is as tall as its column, and a window
+    // shorter than that scrolls the column instead of squeezing it.
+    implicitWidth: mainColumn.implicitWidth + 24
+    implicitHeight: mainColumn.implicitHeight + 12
 
-    // -------------------------------------------------------------------------
-    // STATE
-    // -------------------------------------------------------------------------
-    // EDIT-session flag (set by ThemeModule's EDIT corner action, cleared by
-    // clicking any theme card / RESET). While on, ThemeModule suppresses the
-    // card hover previews: every swatch + hex field below binds to the LIVE
-    // Config.ThemeConfig.colors, and a preview would fade ANOTHER theme's
-    // values under the cursor mid-edit — with the save field prefilled, one
-    // stray SAVE would overwrite the scheme being edited.
-    property bool   editing:      false
-    property string selectedToken: ""   // token the picker is editing
-    property bool   pickerOpen:   false
-    property real   pickerHue:    0.0
-    property real   pickerSat:    1.0
-    property real   pickerVal:    1.0
+    // Outlined action button of the editor bar and the picker. `available` is the
+    // disabled state: dimmed and not clickable.
+    component BarButton: Rectangle {
+        id: barButton
 
-    // Derived from the current HSV selection.
-    readonly property string currentHex:   root.hsvToHex(root.pickerHue, root.pickerSat, root.pickerVal)
-    readonly property string pureHueColor: root.hsvToHex(root.pickerHue, 1.0, 1.0)
+        property string label: ""
+        property color tint: Config.ThemeConfig.colors.secondary
+        property bool available: true
+        property bool filled: false
 
-    // Editable tokens (key into ThemeConfig.colors). value is read live in the
-    // delegate so swatches + hex fields track the canonical theme reactively.
+        signal activated()
+
+        Layout.preferredHeight: 22
+        Layout.preferredWidth: Math.max(52, buttonText.implicitWidth + 20)
+        color: (filled || barHover.containsMouse) ? barButton.tint : "transparent"
+        border.width: 1
+        border.color: barButton.available ? barButton.tint : Config.ThemeConfig.colors.outline
+        enabled: barButton.available
+        opacity: barButton.available ? 1 : 0.45
+
+        Behavior on color { ColorAnimation { duration: 120 } }
+
+        Text {
+            id: buttonText
+
+            anchors.centerIn: parent
+            text: barButton.label
+            font.pixelSize: 9
+            font.bold: true
+            font.letterSpacing: 1
+            font.family: Config.SettingsConfig.fontFamily
+            color: (barButton.filled || barHover.containsMouse) ? Config.ThemeConfig.colors.background
+                                                                 : barButton.tint
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        MouseArea {
+            id: barHover
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: barButton.activated()
+        }
+    }
+
+
+    // True while a saved custom theme is open for editing (the page sets it):
+    // card hover previews are held off so they cannot cover the edits.
+    property bool editing: false
+
+    // Token the picker is drafting. "" closes it (clicking the selected tile
+    // again does that); the terminal preview then takes the whole bottom row.
+    property string selectedToken: ""
+
+    // The picker's draft. It becomes part of the theme only on APPLY.
+    property real pickerHue: 0
+    property real pickerSat: 0
+    property real pickerVal: 0
+
+    readonly property string currentHex: root.hsvToHex(root.pickerHue, root.pickerSat, root.pickerVal).toUpperCase()
+    readonly property color pureHueColor: root.hsvToHex(root.pickerHue, 1, 1)
+
+    // One tile per engine token, in ThemeSchema's order.
     readonly property var colorTokens: [
-        { key: "background",       name: "Background" },
-        { key: "surface",          name: "Surface" },
-        { key: "surfaceVariant",   name: "Surf. Variant" },
-        { key: "surfaceContainer", name: "Surf. Container" },
-        { key: "text",             name: "Text" },
-        { key: "textDim",          name: "Text Dim" },
-        { key: "border",           name: "Border" },
-        { key: "outline",          name: "Outline" },
-        { key: "outlineVariant",   name: "Outl. Variant" },
-        { key: "primary",          name: "Primary" },
-        { key: "secondary",        name: "Secondary" },
-        { key: "accent",           name: "Accent" },
-        { key: "success",          name: "Success" },
-        { key: "warning",          name: "Warning" },
-        { key: "error",            name: "Error" },
-        { key: "info",             name: "Info" }
+        { key: "background",       symbol: "Bg", name: "Background" },
+        { key: "surface",          symbol: "Sf", name: "Surface" },
+        { key: "surfaceVariant",   symbol: "Sv", name: "Surface variant" },
+        { key: "surfaceContainer", symbol: "Sc", name: "Surface container" },
+        { key: "text",             symbol: "Tx", name: "Text" },
+        { key: "textDim",          symbol: "Td", name: "Text dim" },
+        { key: "border",           symbol: "Bd", name: "Border" },
+        { key: "outline",          symbol: "Ol", name: "Outline" },
+        { key: "outlineVariant",   symbol: "Ov", name: "Outline variant" },
+        { key: "primary",          symbol: "Pr", name: "Primary" },
+        { key: "secondary",        symbol: "Sd", name: "Secondary" },
+        { key: "accent",           symbol: "Ac", name: "Accent" },
+        { key: "success",          symbol: "Su", name: "Success" },
+        { key: "warning",          symbol: "Wn", name: "Warning" },
+        { key: "error",            symbol: "Er", name: "Error" },
+        { key: "info",             symbol: "In", name: "Info" }
     ]
 
-    // -------------------------------------------------------------------------
-    // COLOR MATH HELPERS
-    // -------------------------------------------------------------------------
+    function tokenName(key) {
+        for (var i = 0; i < root.colorTokens.length; i++)
+            if (root.colorTokens[i].key === key) return root.colorTokens[i].name
+        return key
+    }
+
     function isValidHex(v) {
         return typeof v === "string" && /^#[0-9A-Fa-f]{6}$/.test(v)
     }
@@ -121,585 +169,689 @@ Item {
         return ((r * 299 + g * 587 + b * 114) / 1000) > 128 ? "#000000" : "#ffffff"
     }
 
-    // -------------------------------------------------------------------------
-    // PICKER ACTIONS
-    // -------------------------------------------------------------------------
-    function openPicker(key) {
+    function rgbText(hex) {
+        var h = (hex || "#000000").replace("#", "")
+        return "RGB(" + parseInt(h.substring(0, 2), 16) + ", "
+                         + parseInt(h.substring(2, 4), 16) + ", "
+                         + parseInt(h.substring(4, 6), 16) + ")"
+    }
+
+    function hsvText() {
+        var deg = Math.round(root.pickerHue * 360)
+        if (deg >= 360) deg = 0
+        return "HSV(" + deg + "deg, " + Math.round(root.pickerSat * 100) + "%, "
+                        + Math.round(root.pickerVal * 100) + "%)"
+    }
+
+    // ── commits ───────────────────────────────────────────────────────────────
+
+    function selectToken(key) {
+        // Clicking the selected tile again closes the picker.
+        if (root.selectedToken === key) {
+            root.selectedToken = ""
+            return
+        }
         root.selectedToken = key
-        // Seed from the COMMITTED palette — a hover preview armed at this
-        // instant (or its 210ms fade) must not hand the picker another
-        // theme's color as the starting point (APPLY would commit it).
+        root.syncPicker()
+    }
+
+    // Re-seed the picker from the committed token: on selection and on every
+    // theme switch, so the picker never carries a draft over to another theme.
+    function syncPicker() {
+        if (root.selectedToken === "") return
         Services.ThemeService.endPreview()
-        var hsv = root.hexToHsv(Config.ThemeConfig.colors[key] || "#000000")
+        var hsv = root.hexToHsv((Config.ThemeConfig.colors[root.selectedToken] || "#000000").toUpperCase())
         root.pickerHue = hsv.h
         root.pickerSat = hsv.s
         root.pickerVal = hsv.v
-        root.pickerOpen = true
     }
 
     function applyFromPicker() {
-        if (root.selectedToken.length > 0)
-            Services.ThemeService.applyManualOverride(root.selectedToken, root.currentHex)
-        root.pickerOpen = false
+        Services.ThemeService.applyManualOverride(root.selectedToken, root.currentHex)
+        root.syncPicker()
     }
 
+    // A tile's hex field. Invalid text is dropped and the field springs back.
     function applyHex(key, value) {
-        var v = (value || "").trim()
-        if (root.isValidHex(v))
-            Services.ThemeService.applyManualOverride(key, v)
+        var hex = String(value || "").trim().toUpperCase()
+        if (root.isValidHex(hex))
+            Services.ThemeService.applyManualOverride(key, hex)
+        if (key === root.selectedToken) root.syncPicker()
     }
 
-    // Called from ThemeModule's CUSTOM rows (EDIT) after the palette is
-    // applied live — pre-fills the save field so the next SAVE updates this
-    // scheme in place (saveCustomTheme dedupes by name) instead of creating
-    // a duplicate.
-    function prefillSchemeName(name) {
-        schemeNameInput.text = name
-        schemeNameInput.forceActiveFocus()
+    Connections {
+        target: Services.ThemeService
+        function onCurrentThemeNameChanged() { root.syncPicker() }
     }
 
-    // -------------------------------------------------------------------------
-    // MAIN LAYOUT
-    // -------------------------------------------------------------------------
+    // ── editor column ─────────────────────────────────────────────────────────
+
     ColumnLayout {
+        id: mainColumn
         anchors.fill: parent
         anchors.margins: 12
-        spacing: 8
+        anchors.bottomMargin: 0
+        spacing: 10
 
-        Text {
-            text: "Click a swatch to pick, or type a hex value. Changes apply live to QuickShell + ghostty."
-            font.pixelSize: 9
-            font.family: Config.SettingsConfig.fontFamily
-            color: Config.ThemeConfig.colors.textDim
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-        }
-
-        // ── PALETTE-FROM-WALLPAPER STRIP ── on-demand extract actions.
-        // FROM WALLPAPER = run matugen on the CURRENT wallpaper and map its
-        //   colors into the editor LIVE (instant, no rebuild). Tweak tokens,
-        //   then SAVE to keep it as a custom theme. This does NOT auto-apply on
-        //   every wallpaper change — that is the separate, OFF-by-default
-        //   "Auto-theme from wallpaper" toggle in the Wallpaper tab (kept off
-        //   so the burn-in wallpaper cycler won't clobber your custom theme).
-        // LOAD STYLIX = pull the build-time Stylix SEED into the editor instead.
+        // Action bar: what is live, how to edit, and the ways to load a palette.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             color: Config.ThemeConfig.colors.surfaceContainer
-            border.color: Config.ThemeConfig.colors.border
             border.width: 1
+            border.color: Config.ThemeConfig.colors.border
 
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10
-                anchors.rightMargin: 8
-                spacing: 10
+                anchors.rightMargin: 5
+                spacing: 8
 
-                // Status dot + label
                 Rectangle {
-                    Layout.preferredWidth: 8
-                    Layout.preferredHeight: 8
+                    width: 8
+                    height: 8
                     radius: 4
                     color: Services.ThemeService.isRegenerating
-                           ? Config.ThemeConfig.colors.warning
-                           : Config.ThemeConfig.colors.success
+                           ? Config.ThemeConfig.colors.warning : Config.ThemeConfig.colors.success
                 }
 
                 Text {
-                    text: Services.ThemeService.isRegenerating
-                          ? "GENERATING…"
-                          : (Config.ThemeConfig.metadata.source === "matugen"
-                              ? "WALLPAPER PALETTE"
-                              : (Config.ThemeConfig.metadata.source === "stylix"
-                                  ? "STYLIX SEED"
-                                  : "EDITOR READY"))
+                    readonly property string source: Config.ThemeConfig.metadata.source
+                    text: Services.ThemeService.isRegenerating ? "GENERATING..."
+                         : source === "matugen" ? "WALLPAPER PALETTE"
+                         : source === "stylix" ? "STYLIX SEED" : "EDITOR READY"
                     font.pixelSize: 9
                     font.bold: true
+                    font.letterSpacing: 1
                     font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.text
                 }
 
-                Item { Layout.fillWidth: true }
-
-                // FROM WALLPAPER — matugen extract into the editor (disabled while generating)
-                Rectangle {
-                    Layout.preferredWidth: 120
-                    Layout.preferredHeight: 22
-                    color: applyWallpaperArea.containsMouse && !Services.ThemeService.isRegenerating
-                           ? Config.ThemeConfig.colors.secondary : "transparent"
-                    border.color: Services.ThemeService.isRegenerating
-                                  ? Config.ThemeConfig.colors.border
-                                  : Config.ThemeConfig.colors.secondary
-                    border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: Services.ThemeService.isRegenerating ? "…" : "FROM WALLPAPER"
-                        font.pixelSize: 9; font.bold: true
-                        font.family: Config.SettingsConfig.fontFamily
-                        color: (applyWallpaperArea.containsMouse && !Services.ThemeService.isRegenerating)
-                               ? Config.ThemeConfig.colors.background
-                               : (Services.ThemeService.isRegenerating
-                                   ? Config.ThemeConfig.colors.textDim
-                                   : Config.ThemeConfig.colors.secondary)
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    MouseArea {
-                        id: applyWallpaperArea
-                        anchors.fill: parent
-                        enabled: !Services.ThemeService.isRegenerating
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.ThemeService.applyDynamicTheme(
-                                       Services.WallpaperService.currentWallpaper,
-                                       Services.WallpaperService.previewSourceFor(
-                                           Services.WallpaperService.currentWallpaper))
-                    }
+                Text {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: "Type a hex or click a swatch to pick. Changes apply live to QuickShell and Ghostty."
+                    font.pixelSize: 8
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.textDim
+                    elide: Text.ElideRight
                 }
 
-                // LOAD STYLIX — pull existing seed into the editor live
-                Rectangle {
-                    Layout.preferredWidth: 92
-                    Layout.preferredHeight: 22
-                    color: loadStylixArea.containsMouse ? Config.ThemeConfig.colors.secondary : "transparent"
-                    border.color: Config.ThemeConfig.colors.secondary
-                    border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                BarButton {
+                    label: "FROM WALLPAPER"
+                    tint: Config.ThemeConfig.colors.info
+                    available: !Services.ThemeService.isRegenerating
+                    onActivated: Services.ThemeService.applyDynamicTheme(
+                                     Services.WallpaperService.currentWallpaper,
+                                     Services.WallpaperService.previewSourceFor(Services.WallpaperService.currentWallpaper))
+                }
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: "LOAD STYLIX"
-                        font.pixelSize: 9; font.bold: true
-                        font.family: Config.SettingsConfig.fontFamily
-                        color: loadStylixArea.containsMouse ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.secondary
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    MouseArea {
-                        id: loadStylixArea
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Services.ThemeService.applyStylixSeedNow()
-                    }
+                BarButton {
+                    label: "LOAD STYLIX"
+                    tint: Config.ThemeConfig.colors.warning
+                    onActivated: Services.ThemeService.applyStylixSeedNow()
+                }
+
+                BarButton {
+                    label: "UNDO"
+                    tint: Config.ThemeConfig.colors.text
+                    available: Services.ThemeService.canUndo
+                    onActivated: { Services.ThemeService.undoManualEdit(); root.syncPicker() }
+                }
+
+                BarButton {
+                    label: "REDO"
+                    tint: Config.ThemeConfig.colors.text
+                    available: Services.ThemeService.canRedo
+                    onActivated: { Services.ThemeService.redoManualEdit(); root.syncPicker() }
                 }
             }
         }
 
-        // Rebuild error display (visible only when a rebuild fails)
         Text {
-            Layout.fillWidth: true
             visible: Services.ThemeService.regenFailed && Services.ThemeService.regenError !== ""
-            text: "⚠ " + Services.ThemeService.regenError
-            font.pixelSize: 9
+            text: "REBUILD FAILED: " + Services.ThemeService.regenError
+            Layout.fillWidth: true
+            font.pixelSize: 8
             font.family: Config.SettingsConfig.fontFamily
             color: Config.ThemeConfig.colors.error
-            wrapMode: Text.Wrap
+            elide: Text.ElideRight
         }
 
-        // Token grid — 3 columns (was 4). 4 columns needed ~700px+ to lay
-        // out cleanly, which the editor's actual allocated width couldn't
-        // guarantee; GridLayout would then compress each column below the
-        // label's content width, and the label — having no elide — simply
-        // painted past its box, with the swatch rendered on top of it.
-        // 3 columns needs ~530px, which comfortably fits, and the label
-        // now has elide as a permanent safety net if space ever tightens
-        // again (e.g. narrower window, longer future token name).
-        GridLayout {
-            id: tokenGrid
-            Layout.fillWidth: true
-            columns: 3
-            columnSpacing: 14
-            rowSpacing: 8
-
-                Repeater {
-                    model: root.colorTokens
-
-                    delegate: RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        Text {
-                            text: modelData.name
-                            font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.text
-                            Layout.preferredWidth: 78
-                            elide: Text.ElideRight
-                        }
-
-                        // Swatch (click → open picker). Reactive to ThemeConfig.colors.
-                        Rectangle {
-                            Layout.preferredWidth: 24
-                            Layout.preferredHeight: 20
-                            color: Config.ThemeConfig.colors[modelData.key] || "#000000"
-                            border.color: Config.ThemeConfig.colors.border
-                            border.width: 1
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.openPicker(modelData.key)
-                            }
-                        }
-
-                        // Hex text entry (type → apply on commit)
-                        Rectangle {
-                            Layout.preferredWidth: 80
-                            Layout.preferredHeight: 20
-                            color: Config.ThemeConfig.colors.background
-                            border.color: Config.ThemeConfig.colors.border
-                            border.width: 1
-
-                            TextInput {
-                                id: hexField
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                verticalAlignment: TextInput.AlignVCenter
-                                font.pixelSize: 9
-                                font.family: Config.SettingsConfig.fontFamily
-                                color: Config.ThemeConfig.colors.text
-                                selectByMouse: true
-                                text: (Config.ThemeConfig.colors[modelData.key] || "#000000").toUpperCase()
-
-                                // Re-sync from the live token color when not actively editing.
-                                Binding on text {
-                                    value: (Config.ThemeConfig.colors[modelData.key] || "#000000").toUpperCase()
-                                    when: !hexField.activeFocus
-                                    restoreMode: Binding.RestoreBinding
-                                }
-
-                                onEditingFinished: root.applyHex(modelData.key, hexField.text)
-                            }
-                        }
-                    }
-                }
-            }
-
-        // Spacer — pins the save + saved-schemes group to the bottom of the
-        // column so the editor fills the available height (no internal scroll).
-        Item { Layout.fillHeight: true }
-
-        // ── Save current scheme + reset (one row to save vertical space) ──
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+        // ── the colour matrix ──────────────────────────────────────────────────
+        // Four by four, one tile per token: number, symbol, swatch, hex. The hex
+        // is typed in place; clicking elsewhere on the tile opens the picker.
 
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 24
-                color: Config.ThemeConfig.colors.background
-                border.color: Config.ThemeConfig.colors.border
-                border.width: 1
-
-                TextInput {
-                    id: schemeNameInput
-                    anchors.fill: parent
-                    anchors.leftMargin: 8
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 9
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.text
-                    selectByMouse: true
-                    text: ""
-                }
-
-                // Placeholder — SAVE with an empty name silently does nothing
-                // (saveCustomTheme early-returns); this says why the field
-                // matters instead of leaving a mute box.
-                Text {
-                    anchors.fill: parent
-                    anchors.leftMargin: 8
-                    verticalAlignment: Text.AlignVCenter
-                    visible: schemeNameInput.text.length === 0 && !schemeNameInput.activeFocus
-                    text: "name your palette, then SAVE"
-                    font.pixelSize: 9
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.textDim
-                }
+            Text {
+                text: "COLOR MATRIX"
+                font.pixelSize: 9
+                font.bold: true
+                font.letterSpacing: 1
+                font.family: Config.SettingsConfig.fontFamily
+                color: Config.ThemeConfig.colors.text
             }
-
-            Rectangle {
-                Layout.preferredWidth: 60
-                Layout.preferredHeight: 24
-                color: saveSchemeArea.containsMouse ? Config.ThemeConfig.colors.secondary : "transparent"
-                border.color: Config.ThemeConfig.colors.secondary
-                border.width: 1
-                Behavior on color { ColorAnimation { duration: 120 } }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "SAVE"
-                    font.pixelSize: 9; font.bold: true
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: saveSchemeArea.containsMouse ? Config.ThemeConfig.colors.background : Config.ThemeConfig.colors.secondary
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-                MouseArea {
-                    id: saveSchemeArea
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        Services.ThemeService.saveCustomTheme(schemeNameInput.text)
-                        schemeNameInput.text = ""
-                    }
-                }
+            Text {
+                text: "16 TOKENS"
+                font.pixelSize: 7
+                font.letterSpacing: 1
+                font.family: Config.SettingsConfig.fontFamily
+                color: Config.ThemeConfig.colors.textDim
             }
-
-            // Reset — moved up to share the save row so it can't be clipped
-            Rectangle {
-                Layout.preferredWidth: 120
-                Layout.preferredHeight: 24
-                color: resetSchemeArea.containsMouse ? Config.ThemeConfig.colors.surfaceVariant : "transparent"
-                border.color: Config.ThemeConfig.colors.border
-                border.width: 1
-                Behavior on color { ColorAnimation { duration: 120 } }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "RESET TO DEFAULT"
-                    font.pixelSize: 8; font.bold: true
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: resetSchemeArea.containsMouse ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-                MouseArea {
-                    id: resetSchemeArea
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        Services.ThemeService.applyPreset("OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
-                        root.editing = false   // back to the default scheme — leave EDIT mode
-                    }
-                }
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // COLOR PICKER OVERLAY (self-contained, in-QML)
-    // -------------------------------------------------------------------------
-    Item {
-        id: pickerOverlay
-        anchors.fill: parent
-        visible: root.pickerOpen
-        z: 100
-
-        // Backdrop — click outside to cancel.
-        Rectangle {
-            anchors.fill: parent
-            color: "#000000"
-            opacity: 0.6
-            MouseArea {
-                anchors.fill: parent
-                onClicked: root.pickerOpen = false
-            }
+            Item { Layout.fillWidth: true }
         }
 
-        // Panel
-        Rectangle {
-            id: pickerPanel
-            anchors.centerIn: parent
-            width: 300
-            height: 340
-            color: Config.ThemeConfig.colors.surface
-            border.color: Config.ThemeConfig.colors.secondary
-            border.width: 1
+        GridLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            columns: 4
+            columnSpacing: 8
+            rowSpacing: 8
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 12
+            Repeater {
+                model: root.colorTokens
 
-                Text {
-                    text: "PICK COLOR  ·  " + (root.selectedToken || "").toUpperCase()
-                    font.pixelSize: 10
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.text
+                delegate: Rectangle {
+                    id: tile
+
+                    readonly property var token: modelData
+                    readonly property int number: index + 1
+                    readonly property string hex: (Config.ThemeConfig.colors[tile.token.key] || "#000000").toUpperCase()
+                    readonly property bool selected: root.selectedToken === tile.token.key
+
                     Layout.fillWidth: true
-                }
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: 70
+                    color: Config.ThemeConfig.colors.background
+                    border.width: 1
+                    border.color: tile.selected ? Config.ThemeConfig.colors.accent : Config.ThemeConfig.colors.border
 
-                // SV square + hue strip
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-
-                    // Saturation/Value square
-                    Item {
-                        id: svArea
-                        Layout.preferredWidth: 180
-                        Layout.preferredHeight: 180
-
-                        // Saturation axis: white → pure hue
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                orientation: Qt.Horizontal
-                                GradientStop { position: 0.0; color: "#ffffff" }
-                                GradientStop { position: 1.0; color: root.pureHueColor }
-                            }
-                        }
-                        // Value axis: transparent → black
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                orientation: Qt.Vertical
-                                GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0) }
-                                GradientStop { position: 1.0; color: "#000000" }
-                            }
-                        }
-                        // Cursor
-                        Rectangle {
-                            width: 12; height: 12; radius: 6
-                            x: svArea.width * root.pickerSat - 6
-                            y: svArea.height * (1 - root.pickerVal) - 6
-                            color: "transparent"
-                            border.color: "#ffffff"
-                            border.width: 2
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            preventStealing: true
-                            function upd(mx, my) {
-                                root.pickerSat = Math.max(0, Math.min(1, mx / svArea.width))
-                                root.pickerVal = Math.max(0, Math.min(1, 1 - (my / svArea.height)))
-                            }
-                            onPressed: mouse => upd(mouse.x, mouse.y)
-                            onPositionChanged: mouse => upd(mouse.x, mouse.y)
-                        }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.selectToken(tile.token.key)
                     }
 
-                    // Hue strip
-                    Rectangle {
-                        id: hueStrip
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 180
-                        gradient: Gradient {
-                            orientation: Qt.Vertical
-                            GradientStop { position: 0.0;   color: "#ff0000" }
-                            GradientStop { position: 0.166; color: "#ffff00" }
-                            GradientStop { position: 0.333; color: "#00ff00" }
-                            GradientStop { position: 0.5;   color: "#00ffff" }
-                            GradientStop { position: 0.666; color: "#0000ff" }
-                            GradientStop { position: 0.833; color: "#ff00ff" }
-                            GradientStop { position: 1.0;   color: "#ff0000" }
-                        }
-                        Rectangle {
-                            width: parent.width; height: 4
-                            y: parent.height * root.pickerHue - 2
-                            color: "transparent"
-                            border.color: "#ffffff"
-                            border.width: 2
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            preventStealing: true
-                            function upd(my) {
-                                root.pickerHue = Math.max(0, Math.min(1, my / hueStrip.height))
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        spacing: 4
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+
+                            Text {
+                                text: ("0" + tile.number).slice(-2)
+                                font.pixelSize: 10
+                                font.family: Config.HudConfig.fontDoto
+                                color: Config.ThemeConfig.colors.textDim
                             }
-                            onPressed: mouse => upd(mouse.y)
-                            onPositionChanged: mouse => upd(mouse.y)
+                            Text {
+                                text: tile.token.symbol
+                                font.pixelSize: 9
+                                font.bold: true
+                                font.family: Config.ControlConfig.fontNerd
+                                color: Config.ThemeConfig.colors.text
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                text: tile.token.name
+                                font.pixelSize: 7
+                                font.family: Config.SettingsConfig.fontFamily
+                                color: Config.ThemeConfig.colors.textDim
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignRight
+                            }
                         }
-                    }
-                }
 
-                // Preview + hex entry
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
-
-                    Rectangle {
-                        Layout.preferredWidth: 36
-                        Layout.preferredHeight: 28
-                        color: root.currentHex
-                        border.color: Config.ThemeConfig.colors.border
-                        border.width: 1
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 28
-                        color: Config.ThemeConfig.colors.background
-                        border.color: Config.ThemeConfig.colors.border
-                        border.width: 1
+                        Rectangle {
+                            Layout.fillWidth: true
+                            // Takes the tile's spare height; never smaller than this.
+                            Layout.fillHeight: true
+                            Layout.preferredHeight: 24
+                            Layout.minimumHeight: 24
+                            color: tile.hex
+                            border.width: 1
+                            border.color: Config.ThemeConfig.colors.outline
+                        }
 
                         TextInput {
-                            id: pickerHex
-                            anchors.fill: parent
-                            anchors.leftMargin: 8
-                            verticalAlignment: TextInput.AlignVCenter
-                            font.pixelSize: 11
-                            font.family: Config.SettingsConfig.fontFamily
+                            id: hexField
+
+                            Layout.fillWidth: true
+                            font.pixelSize: 10
+                            font.family: Config.ControlConfig.fontNerd
                             color: Config.ThemeConfig.colors.text
                             selectByMouse: true
-                            text: root.currentHex.toUpperCase()
+                            text: tile.hex
+                            // While the field has focus the typed text is the
+                            // user's; once it loses focus the committed value wins.
+                            Binding on text { value: tile.hex; when: !hexField.activeFocus; restoreMode: Binding.RestoreBinding }
+                            onEditingFinished: root.applyHex(tile.token.key, text)
+                        }
+                    }
+                }
+            }
+        }
 
-                            Binding on text {
-                                value: root.currentHex.toUpperCase()
-                                when: !pickerHex.activeFocus
-                                restoreMode: Binding.RestoreBinding
+        // ── picker + terminal preview ──────────────────────────────────────────
+        // The picker is hidden until a tile is selected, so the first view is the
+        // matrix over a full-width terminal preview.
+
+        RowLayout {
+            Layout.fillWidth: true
+            // A nested layout grows by default; the tile grid takes the spare
+            // height instead. Never smaller than this.
+            Layout.fillHeight: false
+            Layout.minimumHeight: 220
+            Layout.preferredHeight: 220
+            spacing: 10
+
+            Rectangle {
+                visible: root.selectedToken !== ""
+                Layout.fillWidth: true
+                Layout.preferredWidth: 380
+                Layout.maximumWidth: 470
+                // A child of a layout: only Layout.* sizes are heard.
+                Layout.fillHeight: true
+                color: Config.ThemeConfig.colors.background
+                border.width: 1
+                border.color: Config.ThemeConfig.colors.accent
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 12
+
+                    ColumnLayout {
+                        spacing: 8
+
+                        Text {
+                            text: "PICK COLOR  -  " + root.tokenName(root.selectedToken).toUpperCase()
+                            font.pixelSize: 9
+                            font.bold: true
+                            font.letterSpacing: 1
+                            font.family: Config.SettingsConfig.fontFamily
+                            color: Config.ThemeConfig.colors.text
+                        }
+
+                        RowLayout {
+                            spacing: 8
+
+                            // Saturation / value square
+                            Item {
+                                id: svArea
+
+                                Layout.preferredWidth: 120
+                                Layout.preferredHeight: 120
+
+                                // Saturation axis: white -> pure hue
+                                Rectangle {
+                                    anchors.fill: parent
+                                    gradient: Gradient {
+                                        orientation: Qt.Horizontal
+                                        GradientStop { position: 0.0; color: "#ffffff" }
+                                        GradientStop { position: 1.0; color: root.pureHueColor }
+                                    }
+                                }
+                                // Value axis: transparent -> black
+                                Rectangle {
+                                    anchors.fill: parent
+                                    gradient: Gradient {
+                                        orientation: Qt.Vertical
+                                        GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0) }
+                                        GradientStop { position: 1.0; color: "#000000" }
+                                    }
+                                }
+                                // Cursor
+                                Rectangle {
+                                    width: 12
+                                    height: 12
+                                    radius: 6
+                                    x: svArea.width * root.pickerSat - 6
+                                    y: svArea.height * (1 - root.pickerVal) - 6
+                                    color: "transparent"
+                                    border.color: "#ffffff"
+                                    border.width: 2
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    preventStealing: true
+
+                                    function upd(mx, my) {
+                                        root.pickerSat = Math.max(0, Math.min(1, mx / svArea.width))
+                                        root.pickerVal = Math.max(0, Math.min(1, 1 - (my / svArea.height)))
+                                    }
+                                    onPressed: mouse => upd(mouse.x, mouse.y)
+                                    onPositionChanged: mouse => upd(mouse.x, mouse.y)
+                                }
                             }
 
-                            onEditingFinished: {
-                                var hsv = root.hexToHsv(pickerHex.text.trim())
-                                root.pickerHue = hsv.h
-                                root.pickerSat = hsv.s
-                                root.pickerVal = hsv.v
+                            // Hue strip
+                            Rectangle {
+                                id: hueStrip
+
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 120
+                                gradient: Gradient {
+                                    orientation: Qt.Vertical
+                                    GradientStop { position: 0.0;   color: "#ff0000" }
+                                    GradientStop { position: 0.166; color: "#ffff00" }
+                                    GradientStop { position: 0.333; color: "#00ff00" }
+                                    GradientStop { position: 0.5;   color: "#00ffff" }
+                                    GradientStop { position: 0.666; color: "#0000ff" }
+                                    GradientStop { position: 0.833; color: "#ff00ff" }
+                                    GradientStop { position: 1.0;   color: "#ff0000" }
+                                }
+
+                                // Cursor
+                                Rectangle {
+                                    width: parent.width
+                                    height: 4
+                                    y: hueStrip.height * root.pickerHue - 2
+                                    color: "transparent"
+                                    border.color: "#ffffff"
+                                    border.width: 2
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    preventStealing: true
+
+                                    function upd(my) {
+                                        root.pickerHue = Math.max(0, Math.min(1, my / hueStrip.height))
+                                    }
+                                    onPressed: mouse => upd(mouse.y)
+                                    onPositionChanged: mouse => upd(mouse.y)
+                                }
+                            }
+                        }
+                    }
+
+                    // The draft: large hex, its other notations, how it reads
+                    // on the page, and the two ways out.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Rectangle {
+                                width: 30
+                                height: 30
+                                color: root.currentHex
+                                border.width: 1
+                                border.color: Config.ThemeConfig.colors.outline
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 34
+                                color: Config.ThemeConfig.colors.surface
+                                border.width: 1
+                                border.color: Config.ThemeConfig.colors.outline
+
+                                TextInput {
+                                    id: pickerHex
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 20
+                                    font.family: Config.HudConfig.fontDoto
+                                    color: Config.ThemeConfig.colors.text
+                                    selectByMouse: true
+                                    text: root.currentHex
+                                    Binding on text { value: root.currentHex; when: !pickerHex.activeFocus; restoreMode: Binding.RestoreBinding }
+                                    onEditingFinished: {
+                                        var typed = String(text).trim()
+                                        if (!root.isValidHex(typed)) return
+                                        var hsv = root.hexToHsv(typed)
+                                        root.pickerHue = hsv.h
+                                        root.pickerSat = hsv.s
+                                        root.pickerVal = hsv.v
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            text: root.rgbText(root.currentHex) + "   " + root.hsvText()
+                            font.pixelSize: 8
+                            font.family: Config.ControlConfig.fontNerd
+                            color: Config.ThemeConfig.colors.textDim
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            // The background is judged by the text it carries;
+                            // every other token by how it reads on the background.
+                            readonly property bool isBackground: root.selectedToken === "background"
+                            readonly property real ratio: ThemeCore.contrastRatio(
+                                root.currentHex,
+                                isBackground ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.background)
+
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            text: ratio.toFixed(1) + ":1 " + (isBackground ? "for text on it" : "on the background")
+                                  + "   " + ThemeCore.contrastLabel(ratio)
+                            font.pixelSize: 8
+                            font.family: Config.SettingsConfig.fontFamily
+                            color: Config.ThemeConfig.colors.text
+                            elide: Text.ElideRight
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        RowLayout {
+                            spacing: 6
+
+                            BarButton {
+                                label: "APPLY"
+                                filled: true
+                                tint: Config.ThemeConfig.colors.primary
+                                onActivated: root.applyFromPicker()
+                            }
+                            BarButton {
+                                label: "COPY HEX"
+                                onActivated: Services.ThemeService.copyText(root.currentHex)
                             }
                         }
                     }
                 }
+            }
 
-                Item { Layout.fillHeight: true }
+            // Live Ghostty preview. Real prompt, real ANSI roles - no made-up log
+            // lines.
+            Rectangle {
+                id: preview
 
-                // Apply / Cancel
-                RowLayout {
-                    Layout.fillWidth: true
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Config.ThemeConfig.colors.background
+                border.width: 1
+                border.color: Config.ThemeConfig.colors.border
+
+                // ANSI 0-15, read back from the block Ghostty is given.
+                readonly property var palette: {
+                    var out = []
+                    var lines = ThemeSync.ghosttyBlock(Config.ThemeConfig.colors).split("\n")
+                    for (var i = 0; i < lines.length; i++) {
+                        var hit = /^palette = (\d+)=(#[0-9A-Fa-f]{6})$/.exec(lines[i])
+                        if (hit) out[parseInt(hit[1], 10)] = hit[2].toUpperCase()
+                    }
+                    return out
+                }
+
+                // The last sync result for Ghostty; absent until the first sync.
+                readonly property var ghosttyState: Services.ThemeService.syncerHealth
+                                                   ? Services.ThemeService.syncerHealth["ghostty"] : null
+
+                readonly property string prompt: {
+                    var m = Services.HostBridge.metrics
+                    var user = m && m.userName ? String(m.userName).toLowerCase() : ""
+                    var home = String(Services.ThemeService.homeDir || "")
+                    if (user === "" && home !== "") user = home.split("/").pop()
+                    var host = m && m.hostname && m.hostname !== "unknown" ? m.hostname : "host"
+                    return (user === "" ? "user" : user) + "@" + host
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
                     spacing: 10
 
-                    Item { Layout.fillWidth: true }
+                    // Title row
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
 
-                    Rectangle {
-                        Layout.preferredWidth: 90
-                        Layout.preferredHeight: 28
-                        color: "transparent"
-                        border.color: Config.ThemeConfig.colors.border
-                        border.width: 1
+                        Row {
+                            spacing: 4
+
+                            Repeater {
+                                model: ["error", "warning", "success"]
+
+                                Rectangle {
+                                    width: 6
+                                    height: 6
+                                    radius: 3
+                                    color: Config.ThemeConfig.colors[modelData]
+                                }
+                            }
+                        }
 
                         Text {
-                            anchors.centerIn: parent
-                            text: "CANCEL"
-                            font.pixelSize: 9
+                            text: "GHOSTTY PREVIEW"
+                            font.pixelSize: 8
+                            font.bold: true
+                            font.letterSpacing: 1
                             font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.textDim
+                            color: Config.ThemeConfig.colors.text
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.pickerOpen = false
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            readonly property bool synced: !!preview.ghosttyState && preview.ghosttyState.ok === true
+                            text: !preview.ghosttyState ? "NOT SYNCED YET"
+                                  : synced ? "SYNCED" : "SYNC FAILED"
+                            color: !preview.ghosttyState ? Config.ThemeConfig.colors.textDim
+                                   : synced ? Config.ThemeConfig.colors.success
+                                            : Config.ThemeConfig.colors.warning
+                            font.pixelSize: 7
+                            font.bold: true
+                            font.letterSpacing: 1
+                            font.family: Config.SettingsConfig.fontFamily
                         }
                     }
 
-                    Rectangle {
-                        Layout.preferredWidth: 90
-                        Layout.preferredHeight: 28
-                        color: Config.ThemeConfig.colors.secondary
-                        border.color: Config.ThemeConfig.colors.secondary
-                        border.width: 1
+                    // Prompt line: one prompt, no gaps between its parts.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
 
                         Text {
-                            anchors.centerIn: parent
-                            text: "APPLY"
+                            text: preview.prompt
                             font.pixelSize: 9
-                            font.family: Config.SettingsConfig.fontFamily
-                            font.bold: true
-                            color: Config.ThemeConfig.colors.background
+                            font.family: Config.ControlConfig.fontNerd
+                            color: Config.ThemeConfig.colors.success
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.applyFromPicker()
+                        Text {
+                            text: ":~ "
+                            font.pixelSize: 9
+                            font.family: Config.ControlConfig.fontNerd
+                            color: Config.ThemeConfig.colors.info
+                        }
+                        Text {
+                            text: " $"
+                            font.pixelSize: 9
+                            font.family: Config.ControlConfig.fontNerd
+                            color: Config.ThemeConfig.colors.text
+                        }
+                        // Blinking cursor
+                        Rectangle {
+                            width: 7
+                            height: 12
+                            color: Config.ThemeConfig.colors.text
+                            opacity: cursorBlink.on ? 1 : 0
+                        }
+
+                        Timer {
+                            id: cursorBlink
+
+                            property bool on: false
+
+                            interval: 530
+                            repeat: true
+                            running: preview.visible
+                            onTriggered: cursorBlink.on = !cursorBlink.on
+                        }
+                    }
+
+                    // ANSI 0-15 as Ghostty will render them
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: "ANSI 0-15"
+                            font.pixelSize: 7
+                            font.letterSpacing: 1
+                            font.family: Config.SettingsConfig.fontFamily
+                            color: Config.ThemeConfig.colors.textDim
+                            Layout.rightMargin: 6
+                        }
+                        Repeater {
+                            model: 16
+
+                            Rectangle {
+                                width: 18
+                                height: 16
+                                color: preview.palette[index] || "#000000"
+                                border.width: 1
+                                border.color: Config.ThemeConfig.colors.outline
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "0123456789ABCDEF".charAt(index)
+                                    font.pixelSize: 6
+                                    font.family: Config.ControlConfig.fontNerd
+                                    color: root.contrastColor(parent.color.toString())
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    // The accent roles by name
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+
+                        Repeater {
+                            model: ["error", "warning", "success", "accent", "textDim"]
+
+                            Text {
+                                readonly property string label: modelData === "textDim" ? "TEXT DIM" : modelData.toUpperCase()
+                                text: label
+                                font.pixelSize: 8
+                                font.family: Config.ControlConfig.fontNerd
+                                color: Config.ThemeConfig.colors[modelData]
+                            }
                         }
                     }
                 }

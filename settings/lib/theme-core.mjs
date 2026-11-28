@@ -150,3 +150,22 @@ export function clampOLED(bundle, clamp, defaults) {
     bundle.textDim = capLuminance(bundle.textDim, 0.25);
     return bundle;
 }
+
+// WCAG 2.x contrast ratio of two hex colours: (lighter + 0.05) / (darker +
+// 0.05), so 1:1 for identical colours and 21:1 for black on white. The Theme
+// page's cards badge a palette by its `text` on its `background`.
+export function contrastRatio(hexA, hexB) {
+    var la = luminance(hexA);
+    var lb = luminance(hexB);
+    var hi = la >= lb ? la : lb;
+    var lo = la >= lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+}
+
+// The ratio as a WCAG 2.x label for normal-size text: AAA from 7:1, AA from
+// 4.5:1, and "LOW" below that.
+export function contrastLabel(ratio) {
+    if (ratio >= 7) return "AAA";
+    if (ratio >= 4.5) return "AA";
+    return "LOW";
+}

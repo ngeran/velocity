@@ -13,7 +13,8 @@
 //   search    — the TIME_LIMIT quota card: used/limit, remaining, and the
 //               per-tool usageDetails breakdown
 //   advice    — peak/off-peak model hint
-//   footer    — plan-level badge, data source, sync time, refresh
+//   key       — PASTE & SAVE: install a new API key from the clipboard
+//   footer    — plan-level badge, data source, sync time, KEY pill, refresh
 //
 // Data + polling come from ZaiUsageService. `active` (bound to the popup's
 // open state) gates the polling and the multiplier clock.
@@ -28,6 +29,11 @@ ColumnLayout {
 
     // Bound to qs.Ui.PluginPopup.opened by the widget: open = poll + tick.
     property bool active: false
+
+    // The KEY card also shows on its own while the error is about the key;
+    // this pins it open from the footer when the key still works.
+    property bool showKeyInstall: false
+    readonly property string keyPathLabel: Services.ZaiUsageService.keyFile.replace(/^\/home\/[^/]+\//, "~/")
 
     Layout.fillWidth: true
     spacing: Config.PopupMetrics.px(12)
@@ -257,7 +263,7 @@ ColumnLayout {
             anchors.margins: Config.PopupMetrics.px(10)
             spacing: Config.PopupMetrics.px(3)
             Text {
-                text: "CONNECTION ERROR"
+                text: Services.ZaiUsageService.errorTitle
                 color: root.cCrit
                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true; font.letterSpacing: 1
             }
@@ -267,6 +273,89 @@ ColumnLayout {
                 color: root.cDim
                 font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10)
                 wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    // ---- API key install: PASTE & SAVE ----
+    // Shown on its own while the error is about the key, or pinned by the
+    // footer's KEY pill. The popup is keyboard-inert (PluginPopup keeps
+    // keyboardFocus None), so the key arrives from the clipboard: the service
+    // checks it with Z.ai before anything is written, and the key itself
+    // never reaches QML — only the outcome line does.
+    Rectangle {
+        visible: Services.ZaiUsageService.hasKeyError || root.showKeyInstall
+        Layout.fillWidth: true
+        implicitHeight: keyCol.implicitHeight + Config.PopupMetrics.px(18)
+        radius: Config.PopupMetrics.px(8)
+        color: Qt.rgba(root.cSurface.r, root.cSurface.g, root.cSurface.b, 0.35)
+        border.color: Qt.rgba(root.cBorder.r, root.cBorder.g, root.cBorder.b, 0.7)
+        border.width: Config.PopupMetrics.hairline(parent)
+        ColumnLayout {
+            id: keyCol
+            anchors.fill: parent
+            anchors.margins: Config.PopupMetrics.px(9)
+            spacing: Config.PopupMetrics.px(6)
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "API KEY"
+                    color: root.cAccent
+                    font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(10); font.bold: true; font.letterSpacing: 1
+                }
+                Item { Layout.fillWidth: true }
+                // Same pill as the footer's REFRESH
+                Rectangle {
+                    enabled: !Services.ZaiUsageService.isInstallingKey
+                    opacity: enabled ? 1 : 0.5
+                    implicitWidth: pasteLabel.implicitWidth + Config.PopupMetrics.px(16)
+                    implicitHeight: Config.PopupMetrics.px(24)
+                    radius: Config.PopupMetrics.px(5)
+                    color: pasteMa.containsMouse
+                        ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.16)
+                        : Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.06)
+                    border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.45)
+                    border.width: Config.PopupMetrics.hairline(parent)
+                    Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
+                    Text {
+                        id: pasteLabel
+                        anchors.centerIn: parent
+                        text: Services.ZaiUsageService.isInstallingKey ? "CHECKING…" : "PASTE & SAVE"
+                        color: root.cAccent
+                        font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
+                    }
+                    MouseArea {
+                        id: pasteMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Services.ZaiUsageService.installKeyFromClipboard()
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Copy the key from z.ai, then PASTE & SAVE. It is checked with Z.ai before anything is written."
+                color: root.cDim
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9)
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                visible: Services.ZaiUsageService.keyInstallMessage !== ""
+                Layout.fillWidth: true
+                text: Services.ZaiUsageService.keyInstallMessage
+                color: root.cAccent
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                Layout.fillWidth: true
+                text: "SAVES TO " + root.keyPathLabel + "  ·  MODE 600"
+                color: root.cDim
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(8)
+                elide: Text.ElideRight
             }
         }
     }
@@ -529,6 +618,32 @@ ColumnLayout {
             opacity: 0.7
         }
         Item { Layout.fillWidth: true }
+        // KEY — toggles the PASTE & SAVE card (same pill shape as REFRESH)
+        Rectangle {
+            implicitWidth: keyLabel.implicitWidth + Config.PopupMetrics.px(16)
+            implicitHeight: Config.PopupMetrics.px(24)
+            radius: Config.PopupMetrics.px(5)
+            color: root.showKeyInstall || keyMa.containsMouse
+                ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.16)
+                : Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.06)
+            border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.45)
+            border.width: Config.PopupMetrics.hairline(parent)
+            Behavior on color { ColorAnimation { duration: Config.MotionConfig.snap } }
+            Text {
+                id: keyLabel
+                anchors.centerIn: parent
+                text: "KEY"
+                color: root.cAccent
+                font.family: root.fontM; font.pixelSize: Config.PopupMetrics.px(9); font.bold: true; font.letterSpacing: 1
+            }
+            MouseArea {
+                id: keyMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.showKeyInstall = !root.showKeyInstall
+            }
+        }
         Rectangle {
             implicitWidth: refreshRow.implicitWidth + Config.PopupMetrics.px(16)
             implicitHeight: Config.PopupMetrics.px(24)

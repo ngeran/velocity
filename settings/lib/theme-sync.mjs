@@ -83,6 +83,15 @@ export function ghosttyBlock(colors) {
     return "# >>> quickshell-theme >>>\n" + ghosttyLines + "\n# <<< quickshell-theme <<<"
 }
 
+// ghostty THEME FILE (~/.config/ghostty/themes/<name>, picked with
+// `theme = <name>`): the managed block's keys without the markers, under a
+// comment that names the theme.
+export function ghosttyTheme(name, colors) {
+    var lines = ghosttyBlock(colors).split("\n")
+    return "# " + (name || "velocity theme") + " - exported from Velocity\n" +
+        lines.slice(1, -1).join("\n") + "\n"
+}
+
 // kitty: palette config sourced by kitty.conf; reload = SIGUSR1 (service).
 export function kittyConf(colors) {
     return "background " + colors.background + "\n" +

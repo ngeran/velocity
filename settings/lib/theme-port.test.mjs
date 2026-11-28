@@ -155,5 +155,56 @@ ok(Port.themeFolderName("colors.toml") === "" && Port.themeFolderName("./colors.
    && Port.themeFolderName("/x/../colors.toml") === ""
    && Port.themeFolderName("") === "" && Port.themeFolderName(null) === "",
    "themeFolderName: no usable folder -> \"\"");
+// the themes folder, read in one process: a `>>> <path>` header, then the file
+var M = Port.OMARCHY_SCAN_MARK;
+var stream = [M + "/t/zeta/colors.toml", AURA, "", M + "/t/muted/colors.toml",
+   'mode = "dark"\nforeground = "#f0f2f5"\n', "", M + "/t/latte/colors.toml",
+   AURA.replace('mode = "dark"', 'mode = "light"'), "", M + "/t/broken/colors.toml",
+   "not a theme\n", ""].join("\n");
+var scan = Port.parseOmarchyScan(stream);
+ok(scan.themes.length === 2 && scan.light === 1 && scan.invalid === 1,
+   "Omarchy scan: dark themes listed, light and unreadable counted");
+ok(scan.themes[0].name === "muted" && scan.themes[1].name === "zeta",
+   "Omarchy scan: sorted by folder name");
+ok(scan.themes[1].path === "/t/zeta/colors.toml" && scan.themes[1].colors.accent === "#FF6767",
+   "Omarchy scan: a card gets the path to import and the mapped colours");
+ok(Port.parseOmarchyScan("").themes.length === 0 && Port.parseOmarchyScan("noise\n").invalid === 0,
+   "Omarchy scan: no stream, or text before any header, is not a theme");
+
+// A header is the mark AND the theme file's name: file text starting with the
+// mark must not split its own file, whatever follows it.
+var forged = [M + "/t/forged/colors.toml", 'mode = "dark"', '>>> stray = "#111111"',
+    'foreground = "#123456"', ""].join("\n");
+var kept = Port.parseOmarchyScan(forged);
+ok(kept.themes.length === 1 && kept.themes[0].name === "forged"
+    && kept.themes[0].colors.text === "#123456" && kept.invalid === 0,
+    "Omarchy scan: a line of file text does not open a file");
+ok(Port.parseOmarchyScan([M + "/t/notes.txt", AURA, ""].join("\n")).themes.length === 0,
+    "Omarchy scan: a header must end in the theme file's name");
+ok(Port.parseOmarchyToml(AURA.replace('mode = "dark"', 'mode = "light"'), "x").light === true,
+    "Omarchy scan: a non-dark theme is flagged, not only worded");
+
+// ── Omarchy export (the import's reverse) ───────────────────────────────────
+// The eleven tokens the import reads come back unchanged; the rest of the file
+// is derived, and its comment says so.
+var STORED = ["background", "surface", "surfaceVariant", "surfaceContainer", "text",
+              "textDim", "primary", "secondary", "accent", "success", "warning"]
+var toml = Port.exportToml("aura", BUNDLE)
+var back = Port.parseOmarchyToml(toml, "x")
+ok(back.ok && STORED.every(function(k) { return back.colors[k] === BUNDLE[k].toUpperCase() }),
+    "exportToml: the eleven tokens the import reads round-trip")
+ok(/^mode = "dark"$/m.test(toml), "exportToml: declares a dark theme")
+function tomlValue(text, key) {
+    var m = text.match(new RegExp("^" + key + ' = "(.*)"$', "m"))
+    return m ? m[1] : null
+}
+ok(tomlValue(toml, "selection") === BUNDLE.surfaceContainer.toUpperCase()
+        && tomlValue(toml, "bright_red") === tomlValue(toml, "red")
+        && tomlValue(toml, "bright_magenta") === tomlValue(toml, "magenta"),
+    "exportToml: derived keys follow their rule")
+ok(/^darker_background = "#0A0B0C"$/m.test(Port.exportToml("x", { background: "#0a0b0c" })),
+    "exportToml: lower-case hex is written upper-case")
+ok(/^background = "#000000"$/m.test(Port.exportToml("x", {})), "exportToml: a missing token is written as black")
+ok(Port.parseAny(toml, "folder").name === "folder", "exportToml: parseAny reads the export as an Omarchy theme")
 
 process.exit(failed ? 1 : 0);

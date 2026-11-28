@@ -1,6 +1,8 @@
 // =============================================================================
 // settings/components/ThemePresetCard.qml
-// Redesigned System Theme Preset Card Element
+// One row of the Theme page's presets column: a theme, how legible it is, and
+// what can be done with it. Curated, custom and Omarchy folder themes all use
+// this card; the caller decides which actions to offer.
 // =============================================================================
 
 import QtQuick
@@ -11,260 +13,253 @@ import "../lib/theme-core.mjs" as ThemeCore
 Rectangle {
     id: root
 
-    // =========================================================================
-    // PUBLIC API PROPERTIES
-    // =========================================================================
+    // ── PUBLIC API ───────────────────────────────────────────────────────────
     property string themeName: ""
     property bool isActive: false
-    // Full 17-token palette override — set for CUSTOM palettes (ThemeModule's
-    // saved-theme grid): the card then previews the user's saved colors
-    // instead of looking the name up in the curated preset table.
+    // The palette the card shows. Curated presets leave it null and are looked
+    // up by name; custom and folder themes pass their colors.
     property var paletteOverride: null
-    // Show the always-visible EDIT / ✕ corner actions (custom palettes only).
-    // When on, the active ✓ is suppressed — the accent border + left bar +
-    // bold name already mark the active card, and the corner is needed for
-    // the actions.
+    // Custom palettes only: adds EDIT and DEL beside CLONE.
     property bool showActions: false
-    // Overridable size — 148×56 is the compact curated-grid footprint
-    // (ThemeModule). Pass these explicitly when a card should flex to
-    // fill a GridLayout cell instead.
-    property real cardWidth: 148
-    property real cardHeight: 56
+    // A neutral chip naming where the theme comes from ("OMARCHY").
+    property string sourceTag: ""
+    // The list sets these; the defaults are one row of the presets column.
+    property real cardWidth: 264
+    property real cardHeight: 60
+
     signal clicked()
     signal editClicked()
     signal deleteClicked()
+    signal cloneClicked()
     // HOVER PREVIEW (P5.4): the caller fades the live palette to this card's
-    // theme on enter and back on leave. Emitted from the card-wide area only
-    // (EDIT/✕ hovers bubble through it — acceptable: previewing while aiming
-    // at a corner action is the same theme).
+    // theme on enter and back on leave.
     signal previewEntered()
     signal previewExited()
 
-    // RAW palette behind the card (override for custom, curated lookup else)
-    // — the contrast badge judges the palette AS SAVED, before any clamp.
+    readonly property string fUi: Config.SettingsConfig.fontFamily
+    readonly property string fMono: Config.ControlConfig.fontNerd
+
+    // The palette AS SAVED — the contrast is judged before any clamp.
     readonly property var sourcePalette:
         root.paletteOverride || Config.ThemePresets.getPalette(root.themeName)
         || Config.ThemePresets.getPalette("OLED Pure Black")
 
-    // P5.4 contrast badge: text legible against black (lum ≤ 0.70, the clamp
-    // cap) and the accent visible on black (lum ≥ 0.10). Healthy cards show a
-    // dim "AA"; a failing palette gets a warning-tinted "LOW".
-    readonly property bool contrastOk:
-        ThemeCore.luminance(root.sourcePalette.text) <= 0.705
-        && ThemeCore.luminance(root.sourcePalette.accent) >= 0.10
+    // WCAG contrast of the palette's text on its own background.
+    readonly property real textContrast:
+        ThemeCore.contrastRatio(root.sourcePalette.text, root.sourcePalette.background)
 
-    // =========================================================================
-    // RECONCILED PRESET COLOR MAP DICTIONARY
-    // =========================================================================
-    readonly property var themeColors: getThemeColors(themeName)
-
-    function getThemeColors(name) {
-        // Derive preview colors from the override if set (custom palettes),
-        // else ThemePresets (single source of truth for curated themes)
-        var palette = root.paletteOverride || Config.ThemePresets.getPalette(name);
-        if (!palette) {
-            // Fallback to OLED Pure Black if theme not found
-            palette = Config.ThemePresets.getPalette("OLED Pure Black");
-        }
-
-        // Map the full 17-token palette to the simplified format used by the card
-        // Swatches now show a representative set of 12 colors (up from 4)
-        // giving a much better preview fidelity
-        return {
-            bg: palette.background,
-            accent: palette.secondary,
-            surface: palette.surfaceContainer,
-            text: palette.text,
-            swatches: [
-                // Tier 1: Structural foundations
-                palette.background,
-                palette.surface,
-                palette.surfaceVariant,
-                palette.surfaceContainer,
-                palette.text,
-                palette.textDim,
-                palette.border,
-                palette.outline,
-                palette.outlineVariant,
-                // Tier 2: Accent fields
-                palette.primary,
-                palette.secondary,
-                palette.accent
-            ]
-        };
+    // Right of the name, in this order: ACTIVE, the contrast level, the source.
+    readonly property var chips: {
+        var c = Config.ThemeConfig.colors
+        var list = []
+        if (root.isActive) list.push({ label: "ACTIVE", fg: c.accent, edge: c.accent })
+        var level = ThemeCore.contrastLabel(root.textContrast)
+        list.push({ label: level, fg: level === "LOW" ? c.warning : c.textDim,
+                    edge: level === "LOW" ? c.warning : c.outline })
+        if (root.sourceTag !== "")
+            list.push({ label: root.sourceTag, fg: c.textDim, edge: c.outline })
+        return list
     }
 
-    // =========================================================================
-    // VISUAL ARCHITECTURE HIERARCHY
-    // =========================================================================
-    implicitWidth:  cardWidth
+    // The 12 tokens a reader recognises a theme by, neutrals first.
+    readonly property var swatches: [
+        root.sourcePalette.background, root.sourcePalette.surface,
+        root.sourcePalette.surfaceVariant, root.sourcePalette.surfaceContainer,
+        root.sourcePalette.text, root.sourcePalette.textDim,
+        root.sourcePalette.border, root.sourcePalette.outline,
+        root.sourcePalette.outlineVariant,
+        root.sourcePalette.primary, root.sourcePalette.secondary, root.sourcePalette.accent
+    ]
+
+    // ── CARD ──────────────────────────────────────────────────────────────────
+    implicitWidth: cardWidth
     implicitHeight: cardHeight
-    color:  "#000000"   // always pure OLED black — the preset's own surface
-                         // color used to tint every card differently; the
-                         // swatch strip is the only place palette color
-                         // should show up now.
-    border.color: isActive ? themeColors.accent : Config.ThemeConfig.colors.border
-    border.width: isActive ? 2 : 1
-    radius: 0 // Hard enforcement of sharp corners
+    // The chrome follows the ACTIVE theme; only the strip shows the preset.
+    color: press.containsMouse ? Config.ThemeConfig.colors.surfaceVariant
+                              : Config.ThemeConfig.colors.background
+    border.color: root.isActive ? Config.ThemeConfig.colors.accent
+                                : Config.ThemeConfig.colors.border
+    border.width: 1
+    radius: 0
 
-    // Active status accent vertical indicator strip bar (left-aligned)
-    Rectangle {
-        id: activeIndicatorBar
-        anchors {
-            left:   parent.left
-            top:    parent.top
-            bottom: parent.bottom
-        }
-        width:   3
-        color:   isActive ? themeColors.accent : "transparent"
-        radius:  0
-    }
-
-    // Active checkmark — top-right flag on the currently-applied preset.
-    // Suppressed on action cards (custom palettes): the corner hosts the
-    // always-visible EDIT / ✕ there.
-    Text {
-        visible: root.isActive && !root.showActions
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: 3
-        anchors.rightMargin: 5
-        text: "✓"
-        font.family: Config.SettingsConfig.fontFamily
-        font.pixelSize: 10
-        font.bold: true
-        color: themeColors.accent
-    }
-
-    ColumnLayout {
-        anchors {
-            fill: parent
-            leftMargin:  10
-            rightMargin: 10
-            topMargin:   6
-            bottomMargin: 6
-        }
-        spacing: 4
-
-        // Theme String Identification Label Node
-        Text {
-            Layout.fillWidth: true
-            text:            root.themeName
-            font.pixelSize:  11
-            font.family: Config.SettingsConfig.fontFamily
-            font.bold:       isActive
-            color:           isActive ? Config.ThemeConfig.colors.text : themeColors.text
-            elide:           Text.ElideRight
-        }
-
-        Item { Layout.fillHeight: true }
-
-        // Color Swatch Strip Layout Grid Component Block
-        Row {
-            Layout.fillWidth: true
-            spacing: 2
-
-            Repeater {
-                model: root.themeColors.swatches
-                delegate: Rectangle {
-                    width:  7
-                    height: 10
-                    color:  modelData
-                    border.color: Config.ThemeConfig.colors.border
-                    border.width: 1
-                    radius: Config.SettingsConfig.radiusMd
-                }
-            }
-        }
-    }
-
-    // =========================================================================
-    // INTERACTION MOUSE HANDLING NODE LAYER
-    // =========================================================================
-    // NOTE: no focus/Keys keyboard handling — every card used to declare
-    // focus:true, so the LAST card created (Dracula) permanently held
-    // activeFocus and rendered a second 2px primary border alongside the
-    // actually-active preset. The shell does no keyboard navigation here.
+    // ── INTERACTION ───────────────────────────────────────────────────────────
+    // No focus/Keys handling: cards once took focus and the last one drew a
+    // second active border. The shell does no keyboard navigation here. The
+    // action links above sit on top of this area.
     MouseArea {
-        id: interactiveClickArea
+        id: press
+
         anchors.fill: parent
-        cursorShape:  Qt.PointingHandCursor
+        cursorShape: Qt.PointingHandCursor
         hoverEnabled: true
         onClicked: root.clicked()
         onEntered: root.previewEntered()
-        onExited:  root.previewExited()
+        onExited: root.previewExited()
     }
 
-    // Clean terminal press luminance modifier canvas overlay element
     Rectangle {
         anchors.fill: parent
-        color:        Config.ThemeConfig.colors.primary
-        opacity:      interactiveClickArea.pressed ? 0.04 : (interactiveClickArea.containsMouse ? 0.02 : 0.0)
-        radius:       0
+        radius: 0
+        color: Config.ThemeConfig.colors.primary
+        opacity: press.pressed ? 0.04 : (press.containsMouse ? 0.02 : 0.0)
 
         Behavior on opacity {
             NumberAnimation { duration: Config.MotionConfig.animDurationFast; easing.type: Easing.OutQuad }
         }
     }
 
-    // Contrast badge (P5.4) — dim "AA" when the palette is legible on black
-    // by design, warning-tinted "LOW" when text or accent fails the check.
-    // Bottom-right: the top corners belong to ✓ / EDIT / ✕.
-    Text {
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.rightMargin: 5
-        anchors.bottomMargin: 3
-        text: root.contrastOk ? "AA" : "LOW"
-        font.family: Config.SettingsConfig.fontFamily
-        font.pixelSize: 7
-        font.bold: true
-        font.letterSpacing: 1
-        color: root.contrastOk ? Config.ThemeConfig.colors.textDim : Config.ThemeConfig.colors.warning
-    }
+    ColumnLayout {
+        anchors {
+            fill: parent
+            leftMargin: 10
+            rightMargin: 10
+            topMargin: 8
+            bottomMargin: 8
+        }
+        spacing: 5
 
-    // =========================================================================
-    // CORNER ACTIONS — always visible, custom palettes only (showActions).
-    // Declared LAST so these MouseAreas sit above the card-wide click area.
-    // EDIT emits editClicked() (caller loads the palette into the manual
-    // editor); ✕ emits deleteClicked().
-    // =========================================================================
-    Row {
-        visible: root.showActions
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: 3
-        anchors.rightMargin: 5
-        spacing: 6
+        // Name and chips.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
 
-        Text {
-            text: "EDIT"
-            font.family: Config.SettingsConfig.fontFamily
-            font.pixelSize: 8
-            font.bold: true
-            color: cardEditMA.containsMouse ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-            Behavior on color { ColorAnimation { duration: 120 } }
-            MouseArea {
-                id: cardEditMA
-                anchors.fill: parent
-                anchors.margins: -3   // a little slack around 8px type
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.editClicked()
+            Text {
+                Layout.fillWidth: true
+                text: root.themeName
+                font.family: root.fUi
+                font.pixelSize: 10
+                font.bold: root.isActive
+                color: Config.ThemeConfig.colors.text
+                elide: Text.ElideRight
+            }
+
+            Row {
+                spacing: 4
+
+                Repeater {
+                    model: root.chips
+
+                    delegate: Rectangle {
+                        readonly property var chip: modelData
+
+                        width: chipText.implicitWidth + 8
+                        height: 12
+                        radius: 0
+                        color: "transparent"
+                        border.width: 1
+                        border.color: chip.edge
+
+                        Text {
+                            id: chipText
+
+                            anchors.centerIn: parent
+                            text: chip.label
+                            font.family: root.fUi
+                            font.pixelSize: 7
+                            font.bold: true
+                            font.letterSpacing: 1
+                            color: chip.fg
+                        }
+                    }
+                }
             }
         }
 
-        Text {
-            text: "✕"
-            font.family: Config.SettingsConfig.fontFamily
-            font.pixelSize: 10
-            color: cardDelMA.containsMouse ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
-            Behavior on color { ColorAnimation { duration: 120 } }
-            MouseArea {
-                id: cardDelMA
-                anchors.fill: parent
-                anchors.margins: -3
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.deleteClicked()
+        // Swatch strip.
+        Row {
+            id: strip
+
+            Layout.fillWidth: true
+            spacing: 2
+
+            Repeater {
+                model: root.swatches
+
+                delegate: Rectangle {
+                    width: (strip.width - 11 * strip.spacing) / 12
+                    height: 8
+                    radius: 0
+                    color: modelData
+                    border.width: 1
+                    border.color: Config.ThemeConfig.colors.outline
+                }
+            }
+        }
+
+        // Actions, and the measured contrast at the right.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+
+            Text {
+                text: "CLONE"
+                font.family: root.fUi
+                font.pixelSize: 7
+                font.bold: true
+                font.letterSpacing: 1
+                color: cloneMA.containsMouse ? Config.ThemeConfig.colors.info
+                                             : Config.ThemeConfig.colors.textDim
+                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
+
+                MouseArea {
+                    id: cloneMA
+
+                    anchors.fill: parent
+                    anchors.margins: -4   // slack around 7px type
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.cloneClicked()
+                }
+            }
+
+            Text {
+                visible: root.showActions
+                text: "EDIT"
+                font.family: root.fUi
+                font.pixelSize: 7
+                font.bold: true
+                font.letterSpacing: 1
+                color: editMA.containsMouse ? Config.ThemeConfig.colors.primary
+                                            : Config.ThemeConfig.colors.textDim
+                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
+
+                MouseArea {
+                    id: editMA
+
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.editClicked()
+                }
+            }
+
+            Text {
+                visible: root.showActions
+                text: "DEL"
+                font.family: root.fUi
+                font.pixelSize: 7
+                font.bold: true
+                font.letterSpacing: 1
+                color: delMA.containsMouse ? Config.ThemeConfig.colors.error
+                                           : Config.ThemeConfig.colors.textDim
+                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
+
+                MouseArea {
+                    id: delMA
+
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.deleteClicked()
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+                text: root.textContrast.toFixed(1) + ":1"
+                font.family: root.fMono
+                font.pixelSize: 7
+                color: Config.ThemeConfig.colors.textDim
             }
         }
     }

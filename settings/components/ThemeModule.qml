@@ -1,45 +1,21 @@
-// =============================================================================
-// settings/components/ThemeModule.qml — Unified Theme Control Panel (no-scroll)
-// =============================================================================
-// One screen, no scrolling.
+// ThemeModule.qml - Themes tab: pick a palette, edit it token by token, move it
+// in and out. One screen at the usual window size; a shorter window scrolls the
+// editor column.
 //
-// Layout (canvas ≈ 1052×592 on a 4K display):
-//   ┌─ HEADER: OLED SAFE + FOLLOW WALLPAPER switches │ spectrum skyline   ┐
-//   ├──────────────────────────────────────────────────────────────────── ┤ ← thin border
-//   │ CURATED PRESETS (2×3)   ││  MANUAL EDITOR                          │
-//   │  small preset cards     ││  token grid + actions + save row        │
-//   │ ────────────────        ││                                          │
-//   │ CUSTOM (scrolls) — same ││                                          │
-//   │  preset cards + EDIT ✕ ││                                          │
-//   └──────────────────────────┴──────────────────────────────────────────┘
-//               ↑ thin vertical border separates the two sections
+//   +----------------------------------------------------------------------+
+//   | OLED SAFE  FOLLOW WALLPAPER  HOVER PREVIEW  | MASTER SWATCHES (strip) |
+//   +-------------------------+--------------------------------------------+
+//   | [CURATED (7)] [CUSTOM]  | action bar: status, wallpaper / stylix, undo |
+//   | one wide card per row   | COLOR MATRIX: 4 x 4 tiles, hex typed inline  |
+//   | name, chips, swatches   | picker for the selected tile | Ghostty view   |
+//   | CLONE / EDIT / DEL      |--------------------------------------------|
+//   | + CREATE PRESET         | DOCK: formats, export, name + SAVE, imports  |
+//   +-------------------------+--------------------------------------------+
 //
-// Header is a slim pure-black strip (32px): the labelled OLED SAFE clamp
-// switch (P5.1: on by default — absent key means true), the FOLLOW WALLPAPER
-// switch (P5.3: matugen re-themes on every rotation; same
-// SettingsConfigService key as the Wallpapers page's AUTO-THEME pill), and a
-// spectrum "skyline" whose bar heights are set by token tier (structural
-// low, semantic mid, accent tall). Decorative static strokes (header border,
-// per-bar outlines) were removed in P5.4 — QD-OLED doctrine.
-//
-// Curated is a narrow 2×3 grid of compact 148×56 pure-black cards. CUSTOM
-// palettes (user-saved, UNLIMITED since P5.4) live DIRECTLY UNDER the
-// curated grid as the SAME cards (ThemePresetCard with a paletteOverride)
-// plus always-visible EDIT / ✕ corner actions, in a scrolling lazy GridView.
-// Hovering a card fades the live palette to that theme (ThemeService.
-// previewTheme → ThemeConfig.previewColors cross-fade) — OPT-IN via the
-// header HOVER PREVIEW switch (default OFF: the fade rewrote the live
-// palette the manual editor binds to, churning its values mid-edit).
-// When enabled: leaving reverts; clicking commits through the real apply
-// path and CANCELS the armed preview (cancelPreview — the card is still
-// hovered after its own click, so exit must not restore the replaced
-// palette). EDIT freezes the auditions entirely until the next card
-// click / RESET.
-// =============================================================================
-
+// Cards are ThemePresetCard, the editor is ManualThemeEditor. Every colour here
+// follows the active theme (Config.ThemeConfig.colors).
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import "../config" as Config
 import "../services" as Services
 import "." as Components
@@ -47,94 +23,250 @@ import "." as Components
 Item {
     id: root
 
-    // A destroyed card never emits previewExited (hover state dies with the
-    // MouseArea) — end any live preview when the module itself unloads, or
-    // the palette would stay stuck on the last hovered theme.
+    // A destroyed card never emits previewExited - end any armed hover preview.
     Component.onDestruction: Services.ThemeService.endPreview()
+    // The themes folder is read when the page first opens.
+    Component.onCompleted: Services.ThemeService.scanOmarchyThemes()
 
-    // -------------------------------------------------------------------------
-    // STATE (bound to Config.ThemeConfig.metadata → reactive)
-    // -------------------------------------------------------------------------
-    property string currentTheme:     Config.ThemeConfig.metadata.name || "OLED Pure Black"
-    // P5.1: the clamp is ON by default — an absent key means true (migration
-    // law; DEFAULT_METADATA agrees). Never `|| false` here: an undefined read
-    // would render the toggle OFF and invite an unclamped apply.
-    property bool   oledClampEnabled: Config.ThemeConfig.metadata.oledClamp !== false
-
-    // The theme follows the wallpaper (matugen re-runs on every rotation) —
-    // one owner: SettingsConfigService.matugenOnWallpaperChange, the same key
-    // the Wallpapers page's AUTO-THEME pill flips.
+    // ---- state ---------------------------------------------------------------
+    property string currentTheme: Config.ThemeConfig.metadata.name || "OLED Pure Black"
+    // The clamp is ON unless the theme says otherwise (never `|| false`).
+    property bool oledClampEnabled: Config.ThemeConfig.metadata.oledClamp !== false
     property bool followWallpaper: Services.SettingsConfigService.matugenOnWallpaperChange
-
-    // Card HOVER PREVIEW — OFF by default (SettingsConfigService owns the
-    // key). The preview faded the LIVE palette (ThemeConfig.colors) the
-    // manual editor binds to, so any card the mouse crossed rewrote the
-    // editor's values mid-edit. Auditioning is now opt-in via this switch;
-    // turning it OFF mid-preview ends the armed fade immediately.
     property bool hoverPreviewEnabled: Services.SettingsConfigService.themeHoverPreview
-
     readonly property var extendedThemes: Config.ThemePresets.paletteNames
 
-    // 16 palette tokens grouped by tier — drives the spectrum's bar
-    // heights (structural low, semantic mid, accent tall), giving the
-    // strip real shape instead of a flat block, with no hover required.
-    readonly property var spectrumTokens: [
-        { key: "background",       tier: "structural" },
-        { key: "surface",          tier: "structural" },
-        { key: "surfaceVariant",   tier: "structural" },
-        { key: "surfaceContainer", tier: "structural" },
-        { key: "text",             tier: "structural" },
-        { key: "textDim",          tier: "structural" },
-        { key: "border",           tier: "structural" },
-        { key: "outline",          tier: "structural" },
-        { key: "outlineVariant",   tier: "structural" },
-        { key: "primary",          tier: "accent" },
-        { key: "secondary",        tier: "accent" },
-        { key: "accent",           tier: "accent" },
-        { key: "success",          tier: "semantic" },
-        { key: "warning",          tier: "semantic" },
-        { key: "error",            tier: "semantic" },
-        { key: "info",             tier: "semantic" }
-    ]
+    // "curated" | "custom" - which list the presets column shows.
+    property string presetTab: "curated"
 
-    // Unique palette colors — first occurrence of each color value, so the
-    // strip shows one swatch per DISTINCT color. Lunar has duplicates
-    // (background/surface/surfaceVariant/surfaceContainer are all #000000,
-    // secondary==accent, success==warning); this collapses them. Recomputes
-    // when Config.ThemeConfig.colors changes (live with the theme).
+    // The custom list = saved palettes, then folder themes not saved yet. A saved
+    // palette and a folder theme with the same name are ONE card: a click on a
+    // folder card imports it, and from then on it is saved and tagged OMARCHY.
+    readonly property var customCards: {
+        var saved = Services.ThemeService.customThemes || []
+        var folder = Services.ThemeService.omarchyThemes || []
+        var byName = {}, done = {}, out = []
+        var i, j
+        for (j = 0; j < folder.length; j++) byName[folder[j].name] = folder[j]
+        for (i = 0; i < saved.length; i++) {
+            var f = byName[saved[i].name]
+            done[saved[i].name] = true
+            out.push({ name: saved[i].name, colors: saved[i].colors,
+                       folderOnly: false, omarchy: !!f, path: f ? f.path : "" })
+        }
+        for (j = 0; j < folder.length; j++) {
+            if (!done[folder[j].name])
+                out.push({ name: folder[j].name, colors: folder[j].colors,
+                           folderOnly: true, omarchy: true, path: folder[j].path })
+        }
+        return out
+    }
+    readonly property int folderOnlyCount: {
+        var n = 0
+        for (var i = 0; i < root.customCards.length; i++)
+            if (root.customCards[i].folderOnly) n++
+        return n
+    }
+
+    readonly property var spectrumTokens: [
+        { key: "background", tier: "structural" },
+        { key: "surface", tier: "structural" },
+        { key: "surfaceVariant", tier: "structural" },
+        { key: "surfaceContainer", tier: "structural" },
+        { key: "text", tier: "structural" },
+        { key: "textDim", tier: "structural" },
+        { key: "border", tier: "structural" },
+        { key: "outline", tier: "structural" },
+        { key: "outlineVariant", tier: "structural" },
+        { key: "primary", tier: "accent" },
+        { key: "secondary", tier: "accent" },
+        { key: "accent", tier: "accent" },
+        { key: "success", tier: "semantic" },
+        { key: "warning", tier: "semantic" },
+        { key: "error", tier: "semantic" },
+        { key: "info", tier: "semantic" }
+    ]
+    // One bar per DISTINCT colour of the palette, tallest for the accents.
     readonly property var uniqueSpectrumColors: {
         var seen = {}, out = []
         var cols = Config.ThemeConfig.colors
         for (var i = 0; i < root.spectrumTokens.length; i++) {
-            var c = cols[root.spectrumTokens[i].key]
-            if (c && !seen[c]) { seen[c] = true; out.push({ key: root.spectrumTokens[i].key, color: c, tier: root.spectrumTokens[i].tier }) }
+            var t = root.spectrumTokens[i], c = cols[t.key]
+            if (c && !seen[c]) { seen[c] = true; out.push({ key: t.key, color: c, tier: t.tier }) }
         }
         return out
     }
 
-    // Omarchy ships a theme as `<name>/colors.toml`; importFromPath reads it
-    // and names the theme after that folder. A loose *.toml is offered too,
-    // for a hand-written theme.
-    FileDialog {
-        id: omarchyDialog
-        title: "Import Omarchy theme"
-        nameFilters: ["Omarchy theme (colors.toml *.toml)"]
-        onAccepted: Services.ThemeService.importFromPath(omarchyDialog.selectedFile)
+    // ---- actions that span the lists and the editor --------------------------
+
+    // CLONE: a saved copy under "<name> copy", applied and opened in the editor
+    // under its own name.
+    function cloneCard(name, palette) {
+        var copy = Services.ThemeService.cloneTheme(name, palette)
+        manualEditor.editing = true
+        nameField.text = copy
     }
+
+    // CREATE: the live palette in the editor, under a name still to be typed.
+    // Nothing is saved until SAVE.
+    function startCreate() {
+        manualEditor.editing = true
+        manualEditor.selectToken("background")
+        nameField.text = ""
+        nameField.focusInput()
+    }
+
+    // ---- small building blocks of this page ----------------------------------
+
+    // A text link that names its action (EXPORT FILE, SAVE, ...). Hover brightens.
+    component TextLink: Item {
+        id: link
+        property string label: ""
+        property color tint: Config.ThemeConfig.colors.secondary
+        signal activated()
+        implicitWidth: linkText.implicitWidth
+        implicitHeight: linkText.implicitHeight
+        Text {
+            id: linkText
+            text: link.label
+            font.pixelSize: 8
+            font.bold: true
+            font.letterSpacing: 1
+            font.family: Config.SettingsConfig.fontFamily
+            color: linkMouse.containsMouse ? Config.ThemeConfig.colors.text : link.tint
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        MouseArea {
+            id: linkMouse
+            anchors.fill: parent
+            anchors.margins: -3
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: link.activated()
+        }
+    }
+
+    // One-line text field with a placeholder. Enter submits; leaving the field
+    // does not (a name must not be saved just because focus moved on).
+    component Field: Rectangle {
+        id: field
+        property string placeholder: ""
+        property alias text: input.text
+        signal submitted()
+        // Focus the text, not the frame (CREATE and a nameless SAVE land here).
+        function focusInput() { input.forceActiveFocus() }
+        implicitHeight: 26
+        color: Config.ThemeConfig.colors.background
+        border.width: 1
+        border.color: input.activeFocus ? Config.ThemeConfig.colors.primary
+                                        : Config.ThemeConfig.colors.outline
+        TextInput {
+            id: input
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            color: Config.ThemeConfig.colors.text
+            font.pixelSize: 9
+            font.family: Config.SettingsConfig.fontFamily
+            selectByMouse: true
+            clip: true
+            Keys.onReturnPressed: field.submitted()
+            Keys.onEnterPressed: field.submitted()
+        }
+        Text {
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            verticalAlignment: Text.AlignVCenter
+            visible: input.text === "" && !input.activeFocus
+            text: field.placeholder
+            font.pixelSize: 9
+            font.family: Config.SettingsConfig.fontFamily
+            color: Config.ThemeConfig.colors.textDim
+            elide: Text.ElideRight
+        }
+    }
+
+    // One segment of a segmented control (CURATED | CUSTOM, JSON | BASE16 | ...).
+    component SegTab: Rectangle {
+        id: tab
+        property string label: ""
+        property bool selected: false
+        signal activated()
+        implicitWidth: tabText.implicitWidth + 16
+        implicitHeight: 20
+        color: tab.selected ? Qt.alpha(Config.ThemeConfig.colors.primary, 0.12) : "transparent"
+        border.width: 1
+        border.color: tab.selected ? Config.ThemeConfig.colors.primary
+                                   : Config.ThemeConfig.colors.outline
+        Text {
+            id: tabText
+            anchors.centerIn: parent
+            text: tab.label
+            font.pixelSize: 8
+            font.bold: true
+            font.letterSpacing: 1
+            font.family: Config.SettingsConfig.fontFamily
+            color: tab.selected ? Config.ThemeConfig.colors.primary
+                                : Config.ThemeConfig.colors.textDim
+        }
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tab.activated()
+        }
+    }
+
+    // The dashed "+ CREATE PRESET" row that ends the custom list.
+    component CreateCard: Rectangle {
+        id: create
+        signal activated()
+        // Repainted when the theme changes colour under it.
+        property color dash: Config.ThemeConfig.colors.outlineVariant
+        implicitHeight: 40
+        color: "transparent"
+        Canvas {
+            id: canvas
+            anchors.fill: parent
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = create.dash
+                ctx.lineWidth = 1
+                ctx.setLineDash([4, 3])
+                ctx.strokeRect(0.5, 0.5, width - 1, height - 1)
+            }
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+        }
+        onDashChanged: canvas.requestPaint()
+        Text {
+            anchors.centerIn: parent
+            text: "+ CREATE PRESET"
+            font.pixelSize: 8
+            font.bold: true
+            font.letterSpacing: 1
+            font.family: Config.SettingsConfig.fontFamily
+            color: createMouse.containsMouse ? Config.ThemeConfig.colors.text
+                                             : Config.ThemeConfig.colors.textDim
+        }
+        MouseArea {
+            id: createMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: create.activated()
+        }
+    }
+
+    // ---- layout ---------------------------------------------------------------
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 8
 
-        // =====================================================================
-        // 1. HEADER — slim strip (32px): the OLED SAFE + FOLLOW WALLPAPER
-        //    switches (labelled, P5.4/P5.3) + the spectrum skyline. The theme
-        //    NAME used to live here too — redundant: the active card in the
-        //    grid already carries ✓ + accent border + bold name. The header's
-        //    border stroke and the skyline bars' 1px outlines were removed
-        //    (P5.4: decorative static strokes = standing burn-in risk; the
-        //    bars read by height + tier color alone).
-        // =====================================================================
+        // ---- header strip: the three switches, then the palette itself ----
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
@@ -142,38 +274,35 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.margins: 12
                 spacing: 14
 
-                // ── OLED SAFE — labelled ToggleSwitch (was the bracket-style
-                //    "[ OLED ● ]" terminal flag). Toggling re-applies the live
-                //    theme through ThemeService with the new clamp state.
                 RowLayout {
                     spacing: 6
                     Text {
                         text: "OLED SAFE"
-                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.pixelSize: 9
+                        font.bold: true
+                        font.letterSpacing: 1
                         font.family: Config.SettingsConfig.fontFamily
-                        color: root.oledClampEnabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                        color: root.oledClampEnabled ? Config.ThemeConfig.colors.text
+                                                     : Config.ThemeConfig.colors.textDim
                     }
                     ToggleSwitch {
                         checked: root.oledClampEnabled
                         onToggled: Services.ThemeService.setOledClamp(!root.oledClampEnabled)
                     }
                 }
-
-                // ── FOLLOW WALLPAPER (P5.3) — matugen re-themes from every
-                //    wallpaper the rotation lands on. Same owner as the
-                //    Wallpapers page's AUTO-THEME pill; always clamped (the
-                //    apply path routes through clampOLED).
                 RowLayout {
                     spacing: 6
                     Text {
                         text: "FOLLOW WALLPAPER"
-                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.pixelSize: 9
+                        font.bold: true
+                        font.letterSpacing: 1
                         font.family: Config.SettingsConfig.fontFamily
-                        color: root.followWallpaper ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                        color: root.followWallpaper ? Config.ThemeConfig.colors.text
+                                                    : Config.ThemeConfig.colors.textDim
                     }
                     ToggleSwitch {
                         checked: root.followWallpaper
@@ -181,17 +310,16 @@ Item {
                                        !Services.SettingsConfigService.matugenOnWallpaperChange)
                     }
                 }
-
-                // ── HOVER PREVIEW — opt-in (default OFF): fades the shell to
-                //    the hovered card's palette. Mutates the live palette the
-                //    editor binds to, so it stays off unless asked for.
                 RowLayout {
                     spacing: 6
                     Text {
                         text: "HOVER PREVIEW"
-                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                        font.pixelSize: 9
+                        font.bold: true
+                        font.letterSpacing: 1
                         font.family: Config.SettingsConfig.fontFamily
-                        color: root.hoverPreviewEnabled ? Config.ThemeConfig.colors.text : Config.ThemeConfig.colors.textDim
+                        color: root.hoverPreviewEnabled ? Config.ThemeConfig.colors.text
+                                                        : Config.ThemeConfig.colors.textDim
                     }
                     ToggleSwitch {
                         checked: root.hoverPreviewEnabled
@@ -202,15 +330,22 @@ Item {
                     }
                 }
 
-                // ── Divider ──
-                Rectangle { Layout.fillHeight: true; Layout.preferredWidth: 1; color: Config.ThemeConfig.colors.outlineVariant }
+                Rectangle {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 1
+                    color: Config.ThemeConfig.colors.outlineVariant
+                }
 
-                // ── Spectrum skyline — a PLAIN fillWidth Rectangle (NOT a
-                //    nested RowLayout: a nested layout whose children have no
-                //    intrinsic width collapses to a right-edge sliver). Plain
-                //    items stretch reliably via fillWidth. The bars are
-                //    positioned explicitly, so neither the container nor the
-                //    bars rely on per-item Layout.fillWidth.
+                Text {
+                    text: "MASTER SWATCHES"
+                    font.pixelSize: 7
+                    font.bold: true
+                    font.letterSpacing: 1
+                    font.family: Config.SettingsConfig.fontFamily
+                    color: Config.ThemeConfig.colors.textDim
+                }
+
+                // A plain Item, not a nested layout: bars are placed by hand.
                 Rectangle {
                     id: spectrumArea
                     Layout.fillWidth: true
@@ -220,13 +355,10 @@ Item {
 
                     Repeater {
                         model: root.uniqueSpectrumColors
-                        delegate: Rectangle {
-                            // Skyline bar — one per unique color, bottom-aligned,
-                            // height by token tier (structural low, semantic mid,
-                            // accent tall) so the strip has real shape.
+                        Rectangle {
                             x: index * (parent.width / root.uniqueSpectrumColors.length)
                             width: Math.max(6, parent.width / root.uniqueSpectrumColors.length - 8)
-                            height: modelData.tier === "accent"   ? parent.height - 2
+                            height: modelData.tier === "accent" ? parent.height - 2
                                   : modelData.tier === "semantic" ? parent.height - 6
                                                                   : parent.height - 10
                             anchors.bottom: parent.bottom
@@ -237,140 +369,153 @@ Item {
             }
         }
 
-        // Failed external-app syncers surface here; quiet when all succeed.
+        // ---- external apps that refused the last sync ----
         Text {
             Layout.fillWidth: true
             visible: Services.ThemeService.syncerFailureSummary.length > 0
             text: "APP SYNC FAILED: " + Services.ThemeService.syncerFailureSummary
-            font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.5
+            font.pixelSize: 8
+            font.bold: true
+            font.letterSpacing: 0.5
             font.family: Config.SettingsConfig.fontFamily
             color: Config.ThemeConfig.colors.error
             elide: Text.ElideRight
         }
 
-        // ── Thin border: header / main ──
-        Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+            color: Config.ThemeConfig.colors.outlineVariant
+        }
 
-        // =====================================================================
-        // 2 + 3. MAIN — CURATED (2×3)  │ thin vertical border │  MANUAL
-        // =====================================================================
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 14
+            spacing: 12
 
-            // ── CURATED PRESETS (2×3 grid of the new compact, pure-black
-            //    cards — sized to their natural footprint rather than
-            //    stretched, so the grid stays tight at the top and the
-            //    remaining space below reads as intentional whitespace,
-            //    consistent with the OLED/no-filled-bars aesthetic). ──
+            // ---- presets column ----
             ColumnLayout {
-                Layout.preferredWidth: 306     // 2 × 148 + 10px gap — real minimum, no slack
+                // The column keeps its width; the editor takes the rest.
+                Layout.preferredWidth: 300
+                Layout.fillWidth: false
+                Layout.minimumWidth: 260
+                Layout.maximumWidth: 300
                 Layout.fillHeight: true
                 spacing: 6
 
-                Text {
-                    text: "CURATED PRESETS"
-                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.text
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    SegTab {
+                        label: "CURATED (" + root.extendedThemes.length + ")"
+                        selected: root.presetTab === "curated"
+                        onActivated: {
+                            root.presetTab = "curated"
+                            Services.ThemeService.endPreview()
+                        }
+                    }
+                    SegTab {
+                        label: "CUSTOM (" + root.customCards.length + ")"
+                        selected: root.presetTab === "custom"
+                        onActivated: {
+                            root.presetTab = "custom"
+                            Services.ThemeService.endPreview()
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: root.presetTab === "curated"
+                              ? root.extendedThemes.length + " PRESETS"
+                              : (Services.ThemeService.customThemes || []).length + " SAVED"
+                                + (root.folderOnlyCount > 0
+                                   ? " + " + root.folderOnlyCount + " IN FOLDER" : "")
+                        font.pixelSize: 7
+                        font.letterSpacing: 1
+                        font.family: Config.SettingsConfig.fontFamily
+                        color: Config.ThemeConfig.colors.textDim
+                        elide: Text.ElideRight
+                    }
                 }
 
-                GridLayout {
+                // Both lists fill this one slot; only the selected tab is visible.
+                Item {
                     Layout.fillWidth: true
-                    columns: 2
-                    rowSpacing: 8
-                    columnSpacing: 10
+                    Layout.fillHeight: true
 
-                    Repeater {
+                    ListView {
+                        id: curatedList
+                        anchors.fill: parent
+                        visible: root.presetTab === "curated"
+                        clip: true
+                        spacing: 6
+                        cacheBuffer: 320
+                        boundsBehavior: Flickable.StopAtBounds
                         model: root.extendedThemes
+
                         delegate: Components.ThemePresetCard {
+                            width: curatedList.width - 6
                             themeName: modelData
                             isActive: root.currentTheme === modelData
-                            // Clicking COMMITS the theme and lifts the EDIT
-                            // freeze — auditions resume from the new palette.
                             onClicked: {
                                 Services.ThemeService.applyPreset(modelData, root.oledClampEnabled)
                                 manualEditor.editing = false
                             }
-                            // HOVER PREVIEW is opt-in (header switch) + frozen
-                            // during an EDIT session: previews fade the LIVE
-                            // palette the editor's swatches/hex fields bind to.
+                            onCloneClicked: root.cloneCard(
+                                modelData, Config.ThemePresets.getPalette(modelData))
                             onPreviewEntered: if (root.hoverPreviewEnabled && !manualEditor.editing)
-                                                  Services.ThemeService.previewTheme(
-                                                      Config.ThemePresets.getPalette(modelData))
+                                Services.ThemeService.previewTheme(Config.ThemePresets.getPalette(modelData))
                             onPreviewExited: Services.ThemeService.endPreview()
                         }
                     }
-                }
 
-                // ── CUSTOM — user-saved palettes, grouped with the presets
-                //    they sit beside. They used to be chips at the bottom of
-                //    the MANUAL EDITOR (44px name elide!) — wrong column: these
-                //    are themes you APPLY, not editor state. The old 5-entry
-                //    cap (n/5 counter, visibility-clamped rows, hidden-count
-                //    footer) is gone — the viewport SCROLLS (P5.4). ──
-                Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
+                    ListView {
+                        id: customList
+                        anchors.fill: parent
+                        visible: root.presetTab === "custom"
+                        clip: true
+                        spacing: 6
+                        cacheBuffer: 320
+                        boundsBehavior: Flickable.StopAtBounds
+                        model: root.customCards
 
-                Text {
-                    text: "CUSTOM"
-                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.text
-                }
-
-                // Card grid — custom palettes render as REAL ThemePresetCards
-                // (same anatomy as curated: name, 12-swatch strip, contrast
-                // badge, accent border + left bar when active) plus the
-                // always-visible EDIT / ✕ corner actions. Lazy GridView with
-                // a tuned cacheBuffer: 50+ saved palettes scroll without
-                // materializing every delegate.
-                GridView {
-                    id: customGrid
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    cellWidth: 153; cellHeight: 64
-                    cacheBuffer: 320
-                    boundsBehavior: Flickable.StopAtBounds
-                    model: Services.ThemeService.customThemes || []
-
-                    delegate: Components.ThemePresetCard {
-                        width: customGrid.cellWidth - 5
-                        height: customGrid.cellHeight - 8
-                        themeName: modelData.name
-                        paletteOverride: modelData.colors
-                        isActive: root.currentTheme === modelData.name
-                        showActions: true
-                        // Clicking COMMITS the theme and lifts the EDIT freeze.
-                        onClicked: {
-                            Services.ThemeService.applyCustomTheme(modelData.name)
-                            manualEditor.editing = false
+                        delegate: Components.ThemePresetCard {
+                            width: customList.width - 6
+                            themeName: modelData.name
+                            paletteOverride: modelData.colors
+                            sourceTag: modelData.omarchy ? "OMARCHY" : ""
+                            isActive: root.currentTheme === modelData.name
+                            // A folder-only card has nothing to edit or delete yet.
+                            showActions: !modelData.folderOnly
+                            onClicked: {
+                                if (modelData.folderOnly)
+                                    Services.ThemeService.importFromPath(modelData.path)
+                                else
+                                    Services.ThemeService.applyCustomTheme(modelData.name)
+                                manualEditor.editing = false
+                            }
+                            onEditClicked: {
+                                Services.ThemeService.applyCustomTheme(modelData.name)
+                                manualEditor.editing = true
+                                nameField.text = modelData.name
+                            }
+                            onDeleteClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
+                            onCloneClicked: root.cloneCard(modelData.name, modelData.colors)
+                            onPreviewEntered: if (root.hoverPreviewEnabled && !manualEditor.editing)
+                                Services.ThemeService.previewTheme(modelData.colors)
+                            onPreviewExited: Services.ThemeService.endPreview()
                         }
-                        // HOVER PREVIEW opt-in + EDIT freeze (see the curated
-                        // grid): no previews while an EDIT session is armed.
-                        onPreviewEntered: if (root.hoverPreviewEnabled && !manualEditor.editing)
-                                              Services.ThemeService.previewTheme(modelData.colors)
-                        onPreviewExited: Services.ThemeService.endPreview()
-                        // EDIT — apply live + pre-fill the save field
-                        // so the next SAVE updates in place. Arms the freeze:
-                        // the editor binds the live palette, so hover previews
-                        // of OTHER cards would shift the hex values mid-edit —
-                        // and a stray SAVE would overwrite this scheme with
-                        // them. Any card click / RESET lifts the freeze.
-                        onEditClicked: {
-                            Services.ThemeService.applyCustomTheme(modelData.name)
-                            manualEditor.editing = true
-                            manualEditor.prefillSchemeName(modelData.name)
+
+                        footer: CreateCard {
+                            width: customList.width - 6
+                            onActivated: root.startCreate()
                         }
-                        onDeleteClicked: Services.ThemeService.deleteCustomTheme(modelData.name)
                     }
 
-                    // Empty state — nothing saved yet
                     Text {
                         anchors.centerIn: parent
-                        visible: (Services.ThemeService.customThemes || []).length === 0
-                        text: "// none saved — tweak tokens in the editor, then SAVE"
+                        visible: root.presetTab === "custom" && root.customCards.length === 0
+                        text: "// none saved yet - edit the matrix, then SAVE"
                         font.pixelSize: 8
                         font.family: Config.SettingsConfig.fontFamily
                         color: Config.ThemeConfig.colors.textDim
@@ -378,173 +523,180 @@ Item {
                 }
             }
 
-            // ── Thin vertical border: curated / manual ──
-            Rectangle { Layout.fillHeight: true; Layout.preferredWidth: 1; color: Config.ThemeConfig.colors.outlineVariant }
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.preferredWidth: 1
+                color: Config.ThemeConfig.colors.outlineVariant
+            }
 
-            // ── MANUAL EDITOR (fills the rest — token grid now fits) ──
-            ColumnLayout {
+            // ---- editor column: the editor, then the dock. Taller than the
+            // window allows? The whole column scrolls. ----
+            // A plain Item takes the width from the row; the view fills it.
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 8
 
-                Text {
-                    text: "MANUAL EDITOR"
-                    font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
-                    font.family: Config.SettingsConfig.fontFamily
-                    color: Config.ThemeConfig.colors.text
-                }
+                Flickable {
+                    id: editorScroll
+                    anchors.fill: parent
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    contentWidth: width
+                    contentHeight: rightColumn.height
 
-                Components.ManualThemeEditor {
-                    id: manualEditor
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                }
+                    ColumnLayout {
+                        id: rightColumn
+                        // As tall as the viewport, or taller when the editor needs it.
+                        width: editorScroll.width
+                        height: Math.max(editorScroll.height, implicitHeight)
+                        spacing: 0
 
-                // ── PORT (P5.5): export/import the live palette. Export is
-                //    always the POST-clamp live palette; import validates,
-                //    clamps, saves as a custom theme and applies. File path
-                //    empty → ~/.cache/theme/export/<theme>.<ext>. The line
-                //    above the row is the Omarchy import (file picker); the
-                //    row keeps the typed-path and clipboard imports. ──
-                ColumnLayout {
-                    id: portSection
-                    property string exportFmt: "json"
-                    property string importPath: ""
-                    Layout.fillWidth: true
-                    spacing: 4
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Config.ThemeConfig.colors.outlineVariant }
-
-                    // Omarchy import on its own line: the row below is full,
-                    // and this is the action a user comes looking for. The
-                    // outcome line at the bottom reports for both.
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Components.Pill {
-                            text: "IMPORT OMARCHY THEME"
-                            accentStyle: true
-                            onActivated: omarchyDialog.open()
-                        }
-
-                        Text {
+                        Components.ManualThemeEditor {
+                            id: manualEditor
                             Layout.fillWidth: true
-                            text: "colors.toml from a theme folder - dark themes only, named after the folder"
-                            font.pixelSize: 8
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.textDim
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Text {
-                            text: "PORT"
-                            font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.textDim
+                            // Its content height is the floor; spare height goes here.
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: implicitHeight
+                            Layout.preferredHeight: implicitHeight
                         }
 
-                        // format pills — JSON | BASE16
-                        Repeater {
-                            model: [{ k: "json", label: "JSON" }, { k: "base16", label: "BASE16" }]
-                            delegate: Text {
-                                text: modelData.label
-                                font.pixelSize: 8; font.bold: true
-                                font.family: Config.SettingsConfig.fontFamily
-                                color: portSection.exportFmt === modelData.k
-                                       ? Config.ThemeConfig.colors.primary : Config.ThemeConfig.colors.textDim
-                                MouseArea {
-                                    anchors.fill: parent; anchors.margins: -3
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: portSection.exportFmt = modelData.k
+                        // ---- dock: formats and files, saving, importing, the folder ----
+                        ColumnLayout {
+                            id: dock
+                            property string exportFmt: "json"
+
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 1
+                                color: Config.ThemeConfig.colors.outlineVariant
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+
+                                Text {
+                                    text: "THEME DOCK"
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                    font.letterSpacing: 1
+                                    font.family: Config.SettingsConfig.fontFamily
+                                    color: Config.ThemeConfig.colors.textDim
+                                }
+                                Repeater {
+                                    model: [{ k: "json", label: "JSON" },
+                                            { k: "base16", label: "BASE16" },
+                                            { k: "toml", label: "TOML" },
+                                            { k: "ghostty", label: "GHOSTTY" }]
+                                    SegTab {
+                                        label: modelData.label
+                                        selected: dock.exportFmt === modelData.k
+                                        onActivated: dock.exportFmt = modelData.k
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                                TextLink {
+                                    label: "EXPORT FILE"
+                                    onActivated: Services.ThemeService.exportToFile(
+                                                     dock.exportFmt, pathField.text)
+                                }
+                                TextLink {
+                                    label: "EXPORT CLIP"
+                                    onActivated: Services.ThemeService.exportToClipboard(dock.exportFmt)
                                 }
                             }
-                        }
 
-                        Text {
-                            text: "EXPORT ▸ FILE"
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.secondary
-                            MouseArea {
-                                anchors.fill: parent; anchors.margins: -3
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.exportToFile(portSection.exportFmt, portPathField.text)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Field {
+                                    id: nameField
+                                    // A wide name must not crowd the path field.
+                                    Layout.fillWidth: true
+                                    Layout.maximumWidth: 260
+                                    placeholder: "name your palette, then SAVE"
+                                    onSubmitted: saveLink.activated()
+                                }
+                                TextLink {
+                                    id: saveLink
+                                    label: "SAVE"
+                                    onActivated: {
+                                        var n = nameField.text.trim()
+                                        if (n === "") {
+                                            Services.ThemeService.portError =
+                                                "SAVE needs a name - type one in the name field"
+                                            nameField.focusInput()
+                                        } else {
+                                            Services.ThemeService.saveCustomTheme(n)
+                                            Services.ThemeService.portStatus = "saved " + n
+                                            manualEditor.editing = false
+                                        }
+                                    }
+                                }
+                                TextLink {
+                                    label: "RESET TO DEFAULT"
+                                    onActivated: {
+                                        Services.ThemeService.applyPreset(
+                                            "OLED Pure Black", Config.ThemeConfig.metadata.oledClamp)
+                                        manualEditor.editing = false
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Field {
+                                    id: pathField
+                                    Layout.preferredWidth: 230
+                                    placeholder: "/path/to/theme.json|yaml|toml (empty = default)"
+                                    onSubmitted: Services.ThemeService.importFromPath(pathField.text)
+                                }
+                                TextLink {
+                                    label: "IMPORT FILE"
+                                    onActivated: Services.ThemeService.importFromPath(pathField.text)
+                                }
+                                TextLink {
+                                    label: "IMPORT CLIP"
+                                    onActivated: Services.ThemeService.importFromClipboard()
+                                }
                             }
-                        }
 
-                        Text {
-                            text: "EXPORT ▸ CLIP"
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.secondary
-                            MouseArea {
-                                anchors.fill: parent; anchors.margins: -3
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.exportToClipboard(portSection.exportFmt)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Components.Pill {
+                                    text: "RESCAN OMARCHY THEMES"
+                                    accentStyle: true
+                                    onActivated: Services.ThemeService.scanOmarchyThemes()
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: Services.ThemeService.omarchyHint
+                                    font.pixelSize: 8
+                                    font.family: Config.SettingsConfig.fontFamily
+                                    color: Config.ThemeConfig.colors.textDim
+                                    elide: Text.ElideRight
+                                }
                             }
-                        }
 
-                        Item { Layout.fillWidth: true }
-
-                        TextInput {
-                            id: portPathField
-                            Layout.preferredWidth: 220
-                            color: Config.ThemeConfig.colors.text
-                            font.pixelSize: 8
-                            font.family: Config.SettingsConfig.fontFamily
-                            selectByMouse: true
-                            clip: true
-                            property string placeholder: "/path/to/theme.json|yaml|toml (empty = default)"
+                            // What the last dock action did. An error wins over a status.
                             Text {
-                                visible: portPathField.text === "" && !portPathField.activeFocus
-                                text: portPathField.placeholder
-                                color: Config.ThemeConfig.colors.textDim
+                                Layout.fillWidth: true
+                                visible: Services.ThemeService.portError !== ""
+                                         || Services.ThemeService.portStatus !== ""
+                                text: Services.ThemeService.portError !== ""
+                                      ? Services.ThemeService.portError
+                                      : Services.ThemeService.portStatus
                                 font.pixelSize: 8
                                 font.family: Config.SettingsConfig.fontFamily
+                                color: Services.ThemeService.portError !== ""
+                                       ? Config.ThemeConfig.colors.error
+                                       : Config.ThemeConfig.colors.textDim
+                                elide: Text.ElideRight
                             }
                         }
-
-                        Text {
-                            text: "IMPORT FILE"
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.secondary
-                            MouseArea {
-                                anchors.fill: parent; anchors.margins: -3
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.importFromPath(portPathField.text)
-                            }
-                        }
-
-                        Text {
-                            text: "IMPORT CLIP"
-                            font.pixelSize: 8; font.bold: true
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.secondary
-                            MouseArea {
-                                anchors.fill: parent; anchors.margins: -3
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Services.ThemeService.importFromClipboard()
-                            }
-                        }
-                    }
-
-                    // outcome line — error tinted, success dim
-                    Text {
-                        visible: Services.ThemeService.portError !== "" || Services.ThemeService.portStatus !== ""
-                        text: Services.ThemeService.portError !== ""
-                              ? Services.ThemeService.portError : Services.ThemeService.portStatus
-                        font.pixelSize: 8
-                        font.family: Config.SettingsConfig.fontFamily
-                        color: Services.ThemeService.portError !== ""
-                               ? Config.ThemeConfig.colors.error : Config.ThemeConfig.colors.textDim
-                        elide: Text.ElideRight
                     }
                 }
             }

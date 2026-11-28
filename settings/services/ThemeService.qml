@@ -225,6 +225,8 @@ Item {
             // and reloading would discard a custom/manual/matugen palette.
             var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors);
             themeService.clampOLED(bundle, clamp);
+            // The clamped colours are the new baseline.
+            themeService._clearManualHistory();
             Config.ThemeConfig.applyTheme({
                 colors: bundle,
                 metadata: {
@@ -315,6 +317,7 @@ Item {
             oledClamp: applyOLEDClamp ? true : false,
             matugenEnabled: false
         };
+        themeService._clearManualHistory();
         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
         themeService._writeColorsJson(bundle, meta);
         themeService.syncToExternalApps(bundle);
@@ -352,6 +355,7 @@ Item {
                         oledClamp: liveClamp,
                         matugenEnabled: true
                     };
+                    themeService._clearManualHistory();
                     Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
                     themeService._writeColorsJson(bundle, meta);
                     themeService.syncToExternalApps(bundle);
@@ -576,6 +580,7 @@ Item {
                             matugenEnabled: false
                         };
                         themeService.clampOLED(bundle, liveClamp);
+                        themeService._clearManualHistory();
                         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta });
                         themeService._writeColorsJson(bundle, meta);
                         themeService.syncToExternalApps(bundle);
@@ -603,15 +608,33 @@ Item {
     /**
      * Manual per-token override. Runs through clampOLED so OLED-on + a manual
      * non-black surface is clamped back to pure black (the previous bypass bug).
+     * Each committed change is one undo step; writing the hex that is already
+     * live is a no-op, so the history holds real changes only.
      */
     function applyManualOverride(tokenKey, hexValue) {
         if (!/^#[0-9A-Fa-f]{6}$/.test(hexValue)) return;
 
         // Read-modify-write over the LIVE palette: restore the committed
         // theme first so a hover preview (or the 210ms fade it leaves
-        // running) is never the base the token lands on — otherwise one
-        // hex commit while hovering a card would push that card's WHOLE
-        // palette to colors.json + every external app.
+        // running) is never the base the token lands on.
+        themeService.endPreview();
+        var live = themeService.normalizeBundle(Config.ThemeConfig.colors);
+        var before = String(live[tokenKey] || "").toUpperCase();
+        if (before === hexValue.toUpperCase()) return;
+
+        var after = themeService._applyToken(tokenKey, hexValue);
+        // The clamp may leave the token where it was: nothing to undo then.
+        if (after === before) return;
+        themeService._undoSteps = themeService._undoSteps.concat([{ key: tokenKey, before: before, after: after }]);
+        themeService._redoSteps = [];
+    }
+
+    // The write half of a manual edit, shared with undo/redo. Restores the
+    // committed palette first, so a hover preview (or the 210ms fade it leaves
+    // running) is never the base the token lands on — otherwise one hex commit
+    // while hovering a card would push that card's WHOLE palette to
+    // colors.json + every external app.
+    function _applyToken(tokenKey, hexValue) {
         themeService.endPreview();
 
         Config.ThemeConfig.updateColorToken(tokenKey, hexValue);
@@ -631,6 +654,41 @@ Item {
         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true);
         themeService._writeColorsJson(bundle, meta);
         themeService.syncToExternalApps(bundle);
+        // What the theme holds now - the OLED clamp may have moved it.
+        return String(bundle[tokenKey] || "").toUpperCase();
+    }
+
+    // ── Manual edit history ─────────────────────────────────────────────────────
+    // One step per committed hex change, oldest first; undo/redo walk it. Any
+    // other theme change (preset, wallpaper, Stylix seed, custom) starts from
+    // a different palette and empties both stacks. The stacks are replaced,
+    // never mutated, so canUndo / canRedo re-evaluate.
+    property var _undoSteps: []
+    property var _redoSteps: []
+    readonly property bool canUndo: themeService._undoSteps.length > 0
+    readonly property bool canRedo: themeService._redoSteps.length > 0
+
+    function _clearManualHistory() {
+        themeService._undoSteps = [];
+        themeService._redoSteps = [];
+    }
+
+    function undoManualEdit() {
+        var steps = themeService._undoSteps;
+        if (steps.length === 0) return;
+        var step = steps[steps.length - 1];
+        themeService._undoSteps = steps.slice(0, -1);
+        themeService._redoSteps = themeService._redoSteps.concat([step]);
+        themeService._applyToken(step.key, step.before);
+    }
+
+    function redoManualEdit() {
+        var steps = themeService._redoSteps;
+        if (steps.length === 0) return;
+        var step = steps[steps.length - 1];
+        themeService._redoSteps = steps.slice(0, -1);
+        themeService._undoSteps = themeService._undoSteps.concat([step]);
+        themeService._applyToken(step.key, step.after);
     }
 
     // =========================================================================
@@ -677,6 +735,24 @@ Item {
         themeService._writeCustomThemes()
     }
 
+    // CLONE: a card's palette saved under a name of its own ("<name> copy",
+    // numbered when taken) and applied — a copy to edit without touching the
+    // original. Saved clamped, like an import, so what the card showed is
+    // what a later click puts back. Returns the new name for the editor.
+    function cloneTheme(name, palette) {
+        var base = (name || "theme") + " copy"
+        var taken = Object.create(null)
+        for (var i = 0; i < themeService.customThemes.length; i++) taken[themeService.customThemes[i].name] = true
+        var n = base, k = 2
+        while (taken[n]) { n = base + " " + k; k++ }
+        var bundle = themeService.normalizeBundle(palette || Config.ThemeConfig.colors)
+        themeService.clampOLED(bundle, themeService.isOledClampActive)
+        themeService.customThemes = [{ name: n, colors: bundle }].concat(themeService.customThemes)
+        themeService._writeCustomThemes()
+        themeService.applyCustomTheme(n)
+        return n
+    }
+
     function applyCustomTheme(name) {
         var found = null
         for (var i = 0; i < themeService.customThemes.length; i++) {
@@ -693,6 +769,7 @@ Item {
             oledClamp: themeService.isOledClampActive,
             matugenEnabled: false
         }
+        themeService._clearManualHistory()
         Config.ThemeConfig.applyTheme({ colors: bundle, metadata: meta }, true)
         themeService._writeColorsJson(bundle, meta)
         themeService.syncToExternalApps(bundle)
@@ -710,6 +787,8 @@ Item {
     // against the schema, then clamps over the LIVE clamp state, saves as a
     // CUSTOM theme and applies it. Export targets: a file (atomic write) or
     // the clipboard (wl-copy). Import sources: a path or the clipboard.
+    // Exports: JSON, base16 YAML, Omarchy TOML and a Ghostty theme file.
+    // Imports: JSON, base16 YAML, Omarchy TOML.
     // =========================================================================
     readonly property string exportDir: themeService.homeDir + "/.cache/theme/export"
 
@@ -724,13 +803,16 @@ Item {
         // preview or its fade blend).
         themeService.endPreview()
         var bundle = themeService.normalizeBundle(Config.ThemeConfig.colors)
-        return fmt === "base16" ? ThemePort.exportBase16Yaml(name, bundle)
-                                : ThemePort.exportJson(name, bundle)
+        if (fmt === "base16") return ThemePort.exportBase16Yaml(name, bundle)
+        if (fmt === "toml") return ThemePort.exportToml(name, bundle)
+        if (fmt === "ghostty") return ThemeSync.ghosttyTheme(name, bundle)
+        return ThemePort.exportJson(name, bundle)
     }
 
     function exportToFile(fmt, path) {
         var payload = themeService.exportThemePayload(fmt)
-        var ext = fmt === "base16" ? ".yaml" : ".json"
+        var ext = fmt === "base16" ? ".yaml" : fmt === "toml" ? ".toml"
+                : fmt === "ghostty" ? ".ghostty" : ".json"
         var p = (path || "").trim()
         if (p.length === 0) {
             var slug = String(Config.ThemeConfig.metadata.name || "theme")
@@ -753,6 +835,18 @@ Item {
     }
 
     // `fallbackName` names an Omarchy import — its file carries no name.
+    // Plain text to the clipboard (the editor's COPY HEX) - the same pipe as
+    // exportToClipboard, reported the same way.
+    function copyText(text) {
+        themeService._runSh('printf \'%s\' "$1" | wl-copy', "copy to clipboard", function(ok) {
+            if (ok) {
+                themeService.portStatus = "copied " + text
+                themeService.portError = ""
+            } else
+                themeService.portError = "wl-copy failed (is wl-clipboard installed?)"
+        }, [text])
+    }
+
     function importThemeText(text, fallbackName) {
         var r = ThemePort.parseAny(text, fallbackName)
         if (!r.ok) { themeService.portError = "import rejected: " + r.error; themeService.portStatus = ""; return }
@@ -773,8 +867,8 @@ Item {
 
     function importFromPath(path) {
         var p = (path || "").trim()
-        // A file picker hands back a percent-encoded `file://` URL; `cat`
-        // wants a plain path (same unwrap as the WireGuard conf import).
+        // A path pasted from a file manager is a percent-encoded `file://`
+        // URL; `cat` wants a plain path (same unwrap as the WireGuard conf import).
         if (p.indexOf("file://") === 0) {
             try {
                 p = decodeURIComponent(p.slice(7))
@@ -805,6 +899,82 @@ Item {
         timeoutMs: 8000
         maxBytes: 262144
         onDone: function(out, err, code) { /* replaced per call */ }
+    }
+
+    // ── Omarchy themes folder ──────────────────────────────────────────────────
+    // ~/.config/omarchy/themes is where Omarchy keeps user themes: one folder
+    // per theme, `<name>/colors.toml`. The Theme page lists them as cards, and
+    // a click imports that file by path, so a folder theme becomes an ordinary
+    // custom theme. One scan is ONE bounded process: `find` prints `>>> <path>`
+    // (ThemePort.OMARCHY_SCAN_MARK) before each file and ThemePort parses the
+    // whole stream. Light themes are counted, never listed.
+    readonly property string omarchyThemesDir: themeService.homeDir + "/.config/omarchy/themes"
+    // [{ name, path, colors }] — dark themes only, by name.
+    property var omarchyThemes: []
+    property int omarchyLightSkipped: 0
+    property int omarchyInvalid: 0
+    // idle | scanning | ready | empty | error
+    property string omarchyScanState: "idle"
+    readonly property string omarchyHint: themeService._omarchyHint()
+
+    // One line under RESCAN: what the last scan found, and where it looked.
+    function _omarchyHint() {
+        var dir = themeService.omarchyThemesDir.replace(themeService.homeDir, "~")
+        var n = themeService.omarchyThemes.length
+        var light = themeService.omarchyLightSkipped
+        var bad = themeService.omarchyInvalid
+        var found = []
+        if (n > 0) found.push(n + (n === 1 ? " theme" : " themes"))
+        if (light > 0) found.push(light + " light skipped")
+        if (bad > 0) found.push(bad + " unreadable")
+        var state = themeService.omarchyScanState
+        if (state === "idle") return ""
+        if (state === "scanning") return "scanning " + dir
+        if (state === "error")
+            return "cannot read " + dir + " - add a folder per theme (<name>/"
+                + ThemePort.OMARCHY_THEME_FILE + "), then RESCAN"
+        return (found.length > 0 ? found.join(" - ") : "no dark themes") + " - " + dir
+    }
+
+    // A failed scan says nothing about the folder: nothing is listed for it.
+    function _failOmarchyScan() {
+        themeService.omarchyThemes = []
+        themeService.omarchyLightSkipped = 0
+        themeService.omarchyInvalid = 0
+        themeService.omarchyScanState = "error"
+    }
+
+    function scanOmarchyThemes() {
+        themeService.omarchyScanState = "scanning"
+        themeService._scanProc.run()
+    }
+
+    // One command, one pair of handlers, set once: a rescan while a scan is in
+    // flight is queued by run(), and both read the same folder.
+    property var _scanProc: BoundedProcess {   // bounded: one-shot themes-folder scan
+        // `$0` is the mark; `echo` ends a file that lacks a final newline.
+        command: [
+            "find", "-L", themeService.omarchyThemesDir,
+            "-mindepth", "2", "-maxdepth", "2", "-name", ThemePort.OMARCHY_THEME_FILE,
+            "-exec", "sh", "-c", 'for f do printf "%s%s\\n" "$0" "$f"; cat "$f"; echo; done',
+            ThemePort.OMARCHY_SCAN_MARK, "{}", "+"]
+        timeoutMs: 5000
+        maxBytes: 1048576
+        onDone: function(out, err, code) {
+            var r = ThemePort.parseOmarchyScan(out)
+            // `find` exits 1 when it could not read something under the folder.
+            // Themes in hand are still listed; empty-handed, nothing is.
+            if (code !== 0 && r.themes.length === 0) { themeService._failOmarchyScan(); return }
+            // Cards draw a full 16-token strip, like the presets they sit under.
+            for (var i = 0; i < r.themes.length; i++)
+                r.themes[i].colors = themeService.normalizeBundle(r.themes[i].colors)
+            themeService.omarchyThemes = r.themes
+            themeService.omarchyLightSkipped = r.light
+            themeService.omarchyInvalid = r.invalid
+            themeService.omarchyScanState = r.themes.length > 0 ? "ready" : "empty"
+        }
+        // A scan that hit its limit says nothing about the folder either.
+        onLimit: function(reason) { themeService._failOmarchyScan() }
     }
 
     // =========================================================================
