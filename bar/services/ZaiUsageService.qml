@@ -61,6 +61,9 @@
 //
 // SIGNALS
 //   thresholdAlert(var info)  — {windowName, pct, urgency, resetLabel}
+//                               ONE per window per poll, and only from the
+//                               copy holding the alert role (alertRole);
+//                               announced thresholds survive reloads on disk
 //   dataRefreshed()           — new data in; overlays re-paint sparkline
 //
 // FUNCTIONS
@@ -71,6 +74,7 @@ pragma Singleton
 
 import QtQuick
 import Qt.labs.platform
+import Quickshell
 import Quickshell.Io
 
 Item {
@@ -109,12 +113,38 @@ Item {
 
     // ---- threshold re-arm state per window, keyed by window.key ----
     //   { <key>: { reset: <epochMs|null>, notified: [<thresholds>] } }
-    // In-memory only (stateless like every other service); a new reset cycle
-    // (nextResetTime change) re-arms all thresholds for that window.
+    // A new reset cycle (nextResetTime change) re-arms all thresholds for that
+    // window. This is the ONE piece of state the service keeps on disk (every
+    // other service is stateless): held in memory only, every start, restart
+    // and config reload began with `notified: []` and re-announced each
+    // threshold the quota had already passed.
     property var _threshState: ({})
+    readonly property string threshStateFile: (Quickshell.env("XDG_STATE_HOME")
+        || (Quickshell.env("HOME") + "/.local/state"))
+        + "/velocity/zai-thresholds.json"
+
+    // Only the copy wired to ZaiAlertBridge evaluates thresholds and owns the
+    // state file above. The shell instantiates this singleton under two URL
+    // roots (its config VFS, and the plugin host's file:// tree) — the same
+    // split the ownership pin in shell.qml describes — so "the copy that
+    // alerts" has to be claimed explicitly.
+    property bool alertRole: false
+    function claimAlertRole() { root.alertRole = true; return true }
+
+    // Same FileView contract as LauncherFrecency: blockLoading makes the boot
+    // read synchronous, atomicWrites keeps crash-writes clean.
+    FileView {
+        id: threshStore
+        path: root.threshStateFile
+        blockLoading: true
+        atomicWrites: true
+        printErrors: false
+        onSaveFailed: console.warn("[ZaiUsageService] threshold state save failed — passed thresholds may be re-announced")
+    }
 
     // Rolling samples per window key for burn-rate/ETA: [{t, pct, reset}],
-    // capped at 60 polls. Same lifetime as _threshState (process memory only).
+    // capped at 60 polls. Process memory only — unlike _threshState, samples
+    // are not worth a file.
     property var _history: ({})
 
     signal thresholdAlert(var info)
@@ -373,9 +403,14 @@ Item {
         root.dataRefreshed()
     }
 
-    // Fire one notification per freshly-crossed threshold, per window. Re-arms
-    // every threshold when the window's reset cycle changes.
+    // Fire ONE notification per window per poll: every threshold the window
+    // has freshly passed collapses into the highest of them (that one sets
+    // the urgency) and all of them are marked notified. Re-arms every
+    // threshold when the window's reset cycle changes. Only the alert-role
+    // copy evaluates (see alertRole), and a change is written to disk so a
+    // reload or restart never repeats an announcement.
     function _checkThresholds(wins) {
+        if (!root.alertRole) return
         var st = root._threshState
         var changed = false
         for (var i = 0; i < wins.length; i++) {
@@ -386,21 +421,54 @@ Item {
                 st[win.key] = cyc
                 changed = true
             }
+            var top = -1
             for (var t = 0; t < root.thresholds.length; t++) {
                 var th = root.thresholds[t]
                 if (win.pct >= th && cyc.notified.indexOf(th) < 0) {
-                    root.thresholdAlert({
-                        windowName: win.label,
-                        pct: win.pct,
-                        urgency: th >= 90 ? 2 : (th >= 75 ? 1 : 0),
-                        resetLabel: win.resetLabel
-                    })
                     cyc.notified.push(th)
+                    top = th
                     changed = true
                 }
             }
+            if (top >= 0) {
+                root.thresholdAlert({
+                    windowName: win.label,
+                    pct: win.pct,
+                    urgency: top >= 90 ? 2 : (top >= 75 ? 1 : 0),
+                    resetLabel: win.resetLabel
+                })
+            }
         }
-        if (changed) root._threshState = st
+        if (changed) {
+            root._threshState = st
+            root._persistThreshState()
+        }
+    }
+
+    function _persistThreshState() {
+        threshStore.setText(JSON.stringify({ v: 1, windows: root._threshState }))
+    }
+
+    // Disk shape { v: 1, windows: { <key>: { reset, notified: [...] } } }.
+    // Anything else — missing, empty, corrupt, another version — starts
+    // clean: a bad file costs one re-announce, never a crash.
+    function _loadThreshState(raw) {
+        var parsed
+        try {
+            parsed = JSON.parse(String(raw || ""))
+        } catch (e) {
+            return {}
+        }
+        if (!parsed || parsed.v !== 1 || !parsed.windows) return {}
+        var out = {}
+        var keys = Object.keys(parsed.windows)
+        for (var i = 0; i < keys.length; i++) {
+            var c = parsed.windows[keys[i]]
+            if (!c || !Array.isArray(c.notified)) continue
+            out[keys[i]] = { reset: (c.reset === undefined ? null : c.reset),
+                             notified: c.notified }
+        }
+        return out
     }
 
     // ---- helpers ----
@@ -527,6 +595,7 @@ Item {
     // =========================================================================
     Component.onCompleted: {
         console.log("[ZaiUsageService] started")
+        root._threshState = root._loadThreshState(threshStore.text())
         keyCheck.command = ["sh", "-c", 'test -f "$1" && echo 1 || echo 0', "sh", root.keyFile]
         keyCheck.run()
     }

@@ -17,6 +17,7 @@ import "../config" as Config
 import "../services" as Services
 import "../lib/theme-core.mjs" as ThemeCore
 import "../lib/theme-sync.mjs" as ThemeSync
+import "." as Components
 
 Item {
     id: root
@@ -24,53 +25,6 @@ Item {
     // shorter than that scrolls the column instead of squeezing it.
     implicitWidth: mainColumn.implicitWidth + 24
     implicitHeight: mainColumn.implicitHeight + 12
-
-    // Outlined action button of the editor bar and the picker. `available` is the
-    // disabled state: dimmed and not clickable.
-    component BarButton: Rectangle {
-        id: barButton
-
-        property string label: ""
-        property color tint: Config.ThemeConfig.colors.secondary
-        property bool available: true
-        property bool filled: false
-
-        signal activated()
-
-        Layout.preferredHeight: 22
-        Layout.preferredWidth: Math.max(52, buttonText.implicitWidth + 20)
-        color: (filled || barHover.containsMouse) ? barButton.tint : "transparent"
-        border.width: 1
-        border.color: barButton.available ? barButton.tint : Config.ThemeConfig.colors.outline
-        enabled: barButton.available
-        opacity: barButton.available ? 1 : 0.45
-
-        Behavior on color { ColorAnimation { duration: 120 } }
-
-        Text {
-            id: buttonText
-
-            anchors.centerIn: parent
-            text: barButton.label
-            font.pixelSize: 9
-            font.bold: true
-            font.letterSpacing: 1
-            font.family: Config.SettingsConfig.fontFamily
-            color: (barButton.filled || barHover.containsMouse) ? Config.ThemeConfig.colors.background
-                                                                 : barButton.tint
-            Behavior on color { ColorAnimation { duration: 120 } }
-        }
-
-        MouseArea {
-            id: barHover
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: barButton.activated()
-        }
-    }
-
 
     // True while a saved custom theme is open for editing (the page sets it):
     // card hover previews are held off so they cannot cover the edits.
@@ -87,6 +41,9 @@ Item {
 
     readonly property string currentHex: root.hsvToHex(root.pickerHue, root.pickerSat, root.pickerVal).toUpperCase()
     readonly property color pureHueColor: root.hsvToHex(root.pickerHue, 1, 1)
+
+    // The colour the theme holds for the selected token - the draft is compared to it.
+    readonly property string committedHex: (Config.ThemeConfig.colors[root.selectedToken] || "#000000").toUpperCase()
 
     // One tile per engine token, in ThemeSchema's order.
     readonly property var colorTokens: [
@@ -270,14 +227,14 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    text: "Type a hex or click a swatch to pick. Changes apply live to QuickShell and Ghostty."
+                    text: "Tile hex applies live. The picker drafts - APPLY sends it."
                     font.pixelSize: 8
                     font.family: Config.SettingsConfig.fontFamily
                     color: Config.ThemeConfig.colors.textDim
                     elide: Text.ElideRight
                 }
 
-                BarButton {
+                Components.BarButton {
                     label: "FROM WALLPAPER"
                     tint: Config.ThemeConfig.colors.info
                     available: !Services.ThemeService.isRegenerating
@@ -286,20 +243,20 @@ Item {
                                      Services.WallpaperService.previewSourceFor(Services.WallpaperService.currentWallpaper))
                 }
 
-                BarButton {
+                Components.BarButton {
                     label: "LOAD STYLIX"
                     tint: Config.ThemeConfig.colors.warning
                     onActivated: Services.ThemeService.applyStylixSeedNow()
                 }
 
-                BarButton {
+                Components.BarButton {
                     label: "UNDO"
                     tint: Config.ThemeConfig.colors.text
                     available: Services.ThemeService.canUndo
                     onActivated: { Services.ThemeService.undoManualEdit(); root.syncPicker() }
                 }
 
-                BarButton {
+                Components.BarButton {
                     label: "REDO"
                     tint: Config.ThemeConfig.colors.text
                     available: Services.ThemeService.canRedo
@@ -328,7 +285,7 @@ Item {
 
             Text {
                 text: "COLOR MATRIX"
-                font.pixelSize: 9
+                font.pixelSize: 11
                 font.bold: true
                 font.letterSpacing: 1
                 font.family: Config.SettingsConfig.fontFamily
@@ -388,9 +345,9 @@ Item {
 
                             Text {
                                 text: ("0" + tile.number).slice(-2)
-                                font.pixelSize: 10
+                                font.pixelSize: 14
                                 font.family: Config.HudConfig.fontDoto
-                                color: Config.ThemeConfig.colors.textDim
+                                color: Config.ThemeConfig.colors.text
                             }
                             Text {
                                 text: tile.token.symbol
@@ -403,7 +360,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
                                 text: tile.token.name
-                                font.pixelSize: 7
+                                font.pixelSize: 8
                                 font.family: Config.SettingsConfig.fontFamily
                                 color: Config.ThemeConfig.colors.textDim
                                 elide: Text.ElideRight
@@ -470,17 +427,10 @@ Item {
                     anchors.margins: 10
                     spacing: 12
 
+                    // The square and the hue strip only: the title sits on the
+                    // hex field's line, so the square starts flush with the top.
                     ColumnLayout {
                         spacing: 8
-
-                        Text {
-                            text: "PICK COLOR  -  " + root.tokenName(root.selectedToken).toUpperCase()
-                            font.pixelSize: 9
-                            font.bold: true
-                            font.letterSpacing: 1
-                            font.family: Config.SettingsConfig.fontFamily
-                            color: Config.ThemeConfig.colors.text
-                        }
 
                         RowLayout {
                             spacing: 8
@@ -489,8 +439,8 @@ Item {
                             Item {
                                 id: svArea
 
-                                Layout.preferredWidth: 120
-                                Layout.preferredHeight: 120
+                                Layout.preferredWidth: 156
+                                Layout.preferredHeight: 156
 
                                 // Saturation axis: white -> pure hue
                                 Rectangle {
@@ -540,7 +490,7 @@ Item {
                                 id: hueStrip
 
                                 Layout.preferredWidth: 20
-                                Layout.preferredHeight: 120
+                                Layout.preferredHeight: 156
                                 gradient: Gradient {
                                     orientation: Qt.Vertical
                                     GradientStop { position: 0.0;   color: "#ff0000" }
@@ -576,14 +526,20 @@ Item {
                         }
                     }
 
-                    // The draft: large hex, its other notations, how it reads
-                    // on the page, and the two ways out.
+                    // The draft: its title and large hex, its other notations,
+                    // how it reads on the page, and the two ways out.
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 6
 
+                        // Title and hex share the top line. The field is as wide
+                        // as "#rrggbb" needs (8 + 84 + 8); the title takes what is
+                        // left and wraps, never losing the token's name.
                         RowLayout {
                             Layout.fillWidth: true
+                            // A nested layout grows by default: the readouts must
+                            // stay directly under this line.
+                            Layout.fillHeight: false
                             spacing: 8
 
                             Rectangle {
@@ -594,8 +550,21 @@ Item {
                                 border.color: Config.ThemeConfig.colors.outline
                             }
 
-                            Rectangle {
+                            Text {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                text: "PICK COLOR - " + root.tokenName(root.selectedToken).toUpperCase()
+                                font.pixelSize: 9
+                                font.bold: true
+                                font.letterSpacing: 1
+                                font.family: Config.SettingsConfig.fontFamily
+                                color: Config.ThemeConfig.colors.text
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: false
+                                Layout.preferredWidth: 100
                                 Layout.preferredHeight: 34
                                 color: Config.ThemeConfig.colors.surface
                                 border.width: 1
@@ -653,22 +622,35 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        Item { Layout.fillHeight: true }
+                        Text {
+                            visible: root.currentHex !== root.committedHex
+                            text: "DRAFT - not applied yet"
+                            font.pixelSize: 8
+                            font.family: Config.SettingsConfig.fontFamily
+                            color: Config.ThemeConfig.colors.textDim
+                            elide: Text.ElideRight
+                        }
 
+                        // The two ways out, directly under the readouts.
                         RowLayout {
+                            Layout.fillHeight: false
                             spacing: 6
 
-                            BarButton {
+                            Components.BarButton {
                                 label: "APPLY"
                                 filled: true
                                 tint: Config.ThemeConfig.colors.primary
+                                // Nothing to apply while the draft is the theme's colour.
+                                available: root.selectedToken !== "" && root.currentHex !== root.committedHex
                                 onActivated: root.applyFromPicker()
                             }
-                            BarButton {
+                            Components.BarButton {
                                 label: "COPY HEX"
                                 onActivated: Services.ThemeService.copyText(root.currentHex)
                             }
                         }
+
+                        Item { Layout.fillHeight: true }
                     }
                 }
             }
@@ -827,7 +809,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "0123456789ABCDEF".charAt(index)
-                                    font.pixelSize: 6
+                                    font.pixelSize: 7
                                     font.family: Config.ControlConfig.fontNerd
                                     color: root.contrastColor(parent.color.toString())
                                 }
@@ -837,7 +819,8 @@ Item {
 
                     Item { Layout.fillHeight: true }
 
-                    // The accent roles by name
+                    // The accent roles by name. The words were token-coloured and
+                    // unreadable (3.3:1); the chip carries the colour now.
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 14
@@ -845,12 +828,22 @@ Item {
                         Repeater {
                             model: ["error", "warning", "success", "accent", "textDim"]
 
-                            Text {
-                                readonly property string label: modelData === "textDim" ? "TEXT DIM" : modelData.toUpperCase()
-                                text: label
-                                font.pixelSize: 8
-                                font.family: Config.ControlConfig.fontNerd
-                                color: Config.ThemeConfig.colors[modelData]
+                            Row {
+                                spacing: 4
+
+                                Rectangle {
+                                    width: 10
+                                    height: 10
+                                    color: Config.ThemeConfig.colors[modelData]
+                                    border.width: 1
+                                    border.color: Config.ThemeConfig.colors.outline
+                                }
+                                Text {
+                                    text: modelData === "textDim" ? "TEXT DIM" : modelData.toUpperCase()
+                                    font.pixelSize: 8
+                                    font.family: Config.ControlConfig.fontNerd
+                                    color: Config.ThemeConfig.colors.textDim
+                                }
                             }
                         }
                     }

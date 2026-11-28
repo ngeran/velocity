@@ -184,11 +184,14 @@ Rectangle {
         height: Config.PopupMetrics.px(32)
 
         // A soft plate behind the glyph/initial; icons sit on it too, so a
-        // transparent app icon still has an edge to hold.
+        // transparent app icon still has an edge to hold. On a toast the
+        // plate takes the card's own black — the card must read as one solid
+        // surface — so there only the edge does the framing.
         Rectangle {
             anchors.fill: parent
             radius: Config.PopupMetrics.px(9)
-            color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+            color: root.toast ? Config.ThemeConfig.colors.background
+                              : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
             border.width: Config.PopupMetrics.hairline(root)
             border.color: root.isCritical
                 ? Qt.rgba(root.errorColor.r, root.errorColor.g,

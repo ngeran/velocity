@@ -14,11 +14,13 @@
 // NotificationServer (Loader-hosted) claims org.freedesktop.Notifications,
 // tracks arrivals and maps them into the same model with real actions, image
 // and progress hints — no daemon, no dbus-send forks for actions. A one-shot
-// NameHasOwner probe at startup stays as the interlock: if something else
+// ownership probe at startup stays as the interlock: if another PROCESS
 // already owns the name (a manually started mako/dunst, …) we never construct
 // the server — two servers would fight — and log the stand-down; ingest for
-// such setups falls back to the IPC above. Scripts keep using
-// `notifications add`.
+// such setups falls back to the IPC above. Only the copy holding the
+// native-bus role (shell.qml's pin) ever constructs the server — and
+// re-claims the name after a config reload, when the owner is this process.
+// Scripts keep using `notifications add`.
 // =============================================================================
 
 pragma Singleton
@@ -109,11 +111,15 @@ Item {
     // WITHOUT an icon hint: IPC ingest, and every row restored from the store
     // (restored rows used to lose their icon forever).
     property var _iconMap: null
+    // Bumped on every invalidation below: a rebuild scheduled just before an
+    // invalidation must not publish its stale map over it.
+    property int _iconMapRev: 0
     function desktopIconFor(appName) {
-        if (root._iconMap === null) root._rebuildIconMap()
+        var map = root._iconMap
+        if (map === null) map = root._rebuildIconMap()
         var n = String(appName || "").toLowerCase()
         if (n === "") return ""
-        return root._iconMap[n] || ""
+        return map[n] || ""
     }
     function _rebuildIconMap() {
         var m = {}
@@ -128,15 +134,23 @@ Item {
                 if (e.name) m[String(e.name).toLowerCase()] = icon
             }
         } catch (ex) { console.warn("[NotificationService] icon map rebuild failed:", ex) }
-        root._iconMap = m
+        // The fresh map is RETURNED to the caller and only published later.
+        // This runs inside whichever binding first asked for an icon (a row's
+        // appIconSource); assigning _iconMap right here re-triggered that very
+        // binding mid-evaluation — "Binding loop detected for property
+        // appIconSource" on every row. callLater publishes once the bindings
+        // have settled (the deferral Osd.qml and PluginRegistry.qml use).
+        var rev = root._iconMapRev
+        Qt.callLater(function() { if (rev === root._iconMapRev) root._iconMap = m })
+        return m
     }
     Connections {
         target: DesktopEntries.applications
-        function onValuesChanged() { root._iconMap = null }
+        function onValuesChanged() { root._iconMapRev++; root._iconMap = null }
     }
     Connections {
         target: DesktopEntries
-        function onApplicationsChanged() { root._iconMap = null }
+        function onApplicationsChanged() { root._iconMapRev++; root._iconMap = null }
     }
 
     // Full resolution chain for a row's avatar: an absolute path becomes a
@@ -579,11 +593,27 @@ Item {
     }
 
     // ── native path (J1a/J1b) ───────────────────────────────────────────────
-    // One-shot bus-ownership interlock. Free (the normal case since J1b) → the
-    // Loader below constructs the NotificationServer and we own the bus.
-    // Owned → something ELSE is the notification server (a manually started
-    // mako/dunst, …); constructing ours would make two servers fight over the
-    // name, so we stand down — the active path is logged either way.
+    // One-shot bus-ownership interlock, resolved once per copy. Only the copy
+    // holding the native-bus role may construct the NotificationServer: this
+    // file loads as one instance per import specifier, and the `../services`
+    // copies (toasts, center) are state mirrors — one of those attaching
+    // would absorb every arrival a second time. The role is claimed by
+    // shell.qml's ownership pin (claimNativeBus): the copy that owns the IPC
+    // and the peeks.
+    //
+    // Role holder, name free (the normal case since J1b) → the Loader below
+    // constructs the NotificationServer and we own the bus.
+    // Role holder, name owned → WHO owns it decides:
+    //   this process → a config reload. Quickshell's C++ server is a
+    //     process-wide singleton that keeps the name across config
+    //     revisions, so after a hot reload the name is ours and only the QML
+    //     side has to be rebuilt: attaching IS the reload. (Read as "owned
+    //     elsewhere", this case used to stand the bar down on every save.)
+    //   another PID → something ELSE is the notification server (a manually
+    //     started mako/dunst, …); constructing ours would make two servers
+    //     fight over the name, so we stand down.
+    // No role → stand-down whatever the bus says. The active path is logged
+    // either way.
     // Unknown-until-resolved (P1.1): the pre-P1 form only resolved on a
     // well-formed reply, so a dead dbus-send (bus not up yet, binary gone)
     // left us stood down SILENTLY forever. Now exit, error and timeout all
@@ -591,13 +621,21 @@ Item {
     // the outcome is logged exactly once.
     property bool _busOwned: false
     property bool _probed: false
-    function _resolveProbe(owned) {
+    // The one copy allowed to own the native bus. Set by shell.qml's pin
+    // (claimNativeBus) while the shell loads — before any probe can resolve.
+    property bool nativeBusRole: false
+    function claimNativeBus() {
+        root.nativeBusRole = true
+        return true
+    }
+    // The interlock's single exit: decides once, logs once.
+    function _settleBus(attach, detail) {
         if (_probed) return
-        root._busOwned = owned
+        root._busOwned = !attach
         root._probed = true
-        console.log("[Notifications] " + (owned
-            ? "stand-down — org.freedesktop.Notifications owned elsewhere"
-            : "native NotificationServer active — owns org.freedesktop.Notifications"))
+        console.log("[Notifications] " + (attach
+            ? "native NotificationServer active — owns org.freedesktop.Notifications" + detail
+            : "stand-down — org.freedesktop.Notifications " + detail))
     }
     BoundedProcess {   // bounded: timeout/error/exit all resolve (P1.1)
         id: _busProbe
@@ -606,11 +644,40 @@ Item {
                   "/org/freedesktop/DBus", "org.freedesktop.DBus.NameHasOwner",
                   "string:org.freedesktop.Notifications"]
         onDone: function (out, err, code) {
-            root._resolveProbe(String(out).indexOf("boolean true") !== -1)
+            if (!root.nativeBusRole) {
+                root._settleBus(false, "not this copy's role (state mirror)")
+            } else if (String(out).indexOf("boolean true") === -1) {
+                root._settleBus(true, "")
+            } else {
+                _ownerProbe.running = true   // taken — by whom?
+            }
         }
         onLimit: function (reason) {
             console.log("[Notifications] bus probe " + reason + " — assuming free")
-            root._resolveProbe(false)
+            root._settleBus(root.nativeBusRole, "")
+        }
+    }
+    BoundedProcess {   // stage 2: the name is taken and the role is ours
+        id: _ownerProbe
+        timeoutMs: 5000
+        command: ["busctl", "--user", "--no-pager", "status",
+                  "org.freedesktop.Notifications"]
+        onDone: function (out, err, code) {
+            // `PID=<n>` leads the credentials block. No PID line means busctl
+            // could not name an owner — the name was released mid-probe, or
+            // the query itself failed: the unresolved case, claimed.
+            var m = /(^|\n)PID=(\d+)/.exec(String(out))
+            if (m && Number(m[2]) === Quickshell.processId)
+                root._settleBus(true, " (re-attached after reload — held by "
+                    + "this process, pid " + m[2] + ")")
+            else if (m)
+                root._settleBus(false, "owned elsewhere (pid " + m[2] + ")")
+            else
+                root._settleBus(true, " (owner unresolved — claiming)")
+        }
+        onLimit: function (reason) {
+            console.log("[Notifications] owner probe " + reason + " — assuming ours")
+            root._settleBus(true, " (owner unresolved — claiming)")
         }
     }
 

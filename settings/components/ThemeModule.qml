@@ -118,34 +118,6 @@ Item {
 
     // ---- small building blocks of this page ----------------------------------
 
-    // A text link that names its action (EXPORT FILE, SAVE, ...). Hover brightens.
-    component TextLink: Item {
-        id: link
-        property string label: ""
-        property color tint: Config.ThemeConfig.colors.secondary
-        signal activated()
-        implicitWidth: linkText.implicitWidth
-        implicitHeight: linkText.implicitHeight
-        Text {
-            id: linkText
-            text: link.label
-            font.pixelSize: 8
-            font.bold: true
-            font.letterSpacing: 1
-            font.family: Config.SettingsConfig.fontFamily
-            color: linkMouse.containsMouse ? Config.ThemeConfig.colors.text : link.tint
-            Behavior on color { ColorAnimation { duration: 120 } }
-        }
-        MouseArea {
-            id: linkMouse
-            anchors.fill: parent
-            anchors.margins: -3
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: link.activated()
-        }
-    }
-
     // One-line text field with a placeholder. Enter submits; leaving the field
     // does not (a name must not be saved just because focus moved on).
     component Field: Rectangle {
@@ -155,10 +127,11 @@ Item {
         signal submitted()
         // Focus the text, not the frame (CREATE and a nameless SAVE land here).
         function focusInput() { input.forceActiveFocus() }
-        implicitHeight: 26
+        // The height of a BarButton, so a dock row shares one baseline.
+        implicitHeight: 22
         color: Config.ThemeConfig.colors.background
         border.width: 1
-        border.color: input.activeFocus ? Config.ThemeConfig.colors.primary
+        border.color: input.activeFocus ? Config.ThemeConfig.colors.accent
                                         : Config.ThemeConfig.colors.outline
         TextInput {
             id: input
@@ -195,9 +168,9 @@ Item {
         signal activated()
         implicitWidth: tabText.implicitWidth + 16
         implicitHeight: 20
-        color: tab.selected ? Qt.alpha(Config.ThemeConfig.colors.primary, 0.12) : "transparent"
+        color: tab.selected ? Qt.alpha(Config.ThemeConfig.colors.accent, 0.12) : "transparent"
         border.width: 1
-        border.color: tab.selected ? Config.ThemeConfig.colors.primary
+        border.color: tab.selected ? Config.ThemeConfig.colors.accent
                                    : Config.ThemeConfig.colors.outline
         Text {
             id: tabText
@@ -207,7 +180,7 @@ Item {
             font.bold: true
             font.letterSpacing: 1
             font.family: Config.SettingsConfig.fontFamily
-            color: tab.selected ? Config.ThemeConfig.colors.primary
+            color: tab.selected ? Config.ThemeConfig.colors.text
                                 : Config.ThemeConfig.colors.textDim
         }
         MouseArea {
@@ -363,6 +336,10 @@ Item {
                                                                   : parent.height - 10
                             anchors.bottom: parent.bottom
                             color: modelData.color
+                            // A 1 px outline: the background token's bar is black,
+                            // and so is the strip behind it.
+                            border.width: 1
+                            border.color: Config.ThemeConfig.colors.outline
                         }
                     }
                 }
@@ -430,7 +407,7 @@ Item {
                               : (Services.ThemeService.customThemes || []).length + " SAVED"
                                 + (root.folderOnlyCount > 0
                                    ? " + " + root.folderOnlyCount + " IN FOLDER" : "")
-                        font.pixelSize: 7
+                        font.pixelSize: 8
                         font.letterSpacing: 1
                         font.family: Config.SettingsConfig.fontFamily
                         color: Config.ThemeConfig.colors.textDim
@@ -566,6 +543,9 @@ Item {
                             property string exportFmt: "json"
 
                             Layout.fillWidth: true
+                            // Lines up with the editor's 12 px insets.
+                            Layout.leftMargin: 12
+                            Layout.rightMargin: 12
                             spacing: 8
 
                             Rectangle {
@@ -574,17 +554,18 @@ Item {
                                 color: Config.ThemeConfig.colors.outlineVariant
                             }
 
+                            // The export format, then the two ways to export.
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 6
 
                                 Text {
                                     text: "THEME DOCK"
-                                    font.pixelSize: 9
+                                    font.pixelSize: 11
                                     font.bold: true
                                     font.letterSpacing: 1
                                     font.family: Config.SettingsConfig.fontFamily
-                                    color: Config.ThemeConfig.colors.textDim
+                                    color: Config.ThemeConfig.colors.text
                                 }
                                 Repeater {
                                     model: [{ k: "json", label: "JSON" },
@@ -598,31 +579,33 @@ Item {
                                     }
                                 }
                                 Item { Layout.fillWidth: true }
-                                TextLink {
+                                Components.BarButton {
                                     label: "EXPORT FILE"
                                     onActivated: Services.ThemeService.exportToFile(
                                                      dock.exportFmt, pathField.text)
                                 }
-                                TextLink {
+                                Components.BarButton {
                                     label: "EXPORT CLIP"
                                     onActivated: Services.ThemeService.exportToClipboard(dock.exportFmt)
                                 }
                             }
 
+                            // Save the live palette under a name, or go back to
+                            // the default theme.
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 8
 
                                 Field {
                                     id: nameField
-                                    // A wide name must not crowd the path field.
+                                    // A name is short; the buttons stay beside it.
                                     Layout.fillWidth: true
                                     Layout.maximumWidth: 260
                                     placeholder: "name your palette, then SAVE"
-                                    onSubmitted: saveLink.activated()
+                                    onSubmitted: saveButton.activated()
                                 }
-                                TextLink {
-                                    id: saveLink
+                                Components.BarButton {
+                                    id: saveButton
                                     label: "SAVE"
                                     onActivated: {
                                         var n = nameField.text.trim()
@@ -637,7 +620,7 @@ Item {
                                         }
                                     }
                                 }
-                                TextLink {
+                                Components.BarButton {
                                     label: "RESET TO DEFAULT"
                                     onActivated: {
                                         Services.ThemeService.applyPreset(
@@ -645,40 +628,43 @@ Item {
                                         manualEditor.editing = false
                                     }
                                 }
-                                Item { Layout.fillWidth: true }
-                                Field {
-                                    id: pathField
-                                    Layout.preferredWidth: 230
-                                    placeholder: "/path/to/theme.json|yaml|toml (empty = default)"
-                                    onSubmitted: Services.ThemeService.importFromPath(pathField.text)
-                                }
-                                TextLink {
-                                    label: "IMPORT FILE"
-                                    onActivated: Services.ThemeService.importFromPath(pathField.text)
-                                }
-                                TextLink {
-                                    label: "IMPORT CLIP"
-                                    onActivated: Services.ThemeService.importFromClipboard()
-                                }
                             }
 
+                            // Import a palette from a file or the clipboard;
+                            // rescan the Omarchy themes folder.
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 8
 
-                                Components.Pill {
-                                    text: "RESCAN OMARCHY THEMES"
-                                    accentStyle: true
+                                Field {
+                                    id: pathField
+                                    // A path is long: it takes the room the buttons leave.
+                                    Layout.fillWidth: true
+                                    placeholder: "/path/to/theme.json|yaml|toml (empty = default)"
+                                    onSubmitted: Services.ThemeService.importFromPath(pathField.text)
+                                }
+                                Components.BarButton {
+                                    label: "IMPORT FILE"
+                                    onActivated: Services.ThemeService.importFromPath(pathField.text)
+                                }
+                                Components.BarButton {
+                                    label: "IMPORT CLIP"
+                                    onActivated: Services.ThemeService.importFromClipboard()
+                                }
+                                Components.BarButton {
+                                    label: "RESCAN OMARCHY THEMES"
                                     onActivated: Services.ThemeService.scanOmarchyThemes()
                                 }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: Services.ThemeService.omarchyHint
-                                    font.pixelSize: 8
-                                    font.family: Config.SettingsConfig.fontFamily
-                                    color: Config.ThemeConfig.colors.textDim
-                                    elide: Text.ElideRight
-                                }
+                            }
+
+                            // What the last folder scan found.
+                            Text {
+                                Layout.fillWidth: true
+                                text: Services.ThemeService.omarchyHint
+                                font.pixelSize: 8
+                                font.family: Config.SettingsConfig.fontFamily
+                                color: Config.ThemeConfig.colors.textDim
+                                elide: Text.ElideRight
                             }
 
                             // What the last dock action did. An error wins over a status.

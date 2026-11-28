@@ -7,6 +7,12 @@ import "../services" as Services
 Item {
     visible: false
 
+    // The bridge is the service's only listener, so its copy of the singleton
+    // owns threshold evaluation and the on-disk "already announced" state
+    // (ZaiUsageService.alertRole). This lands during the shell's load; the
+    // first poll result only arrives once that load has finished.
+    Component.onCompleted: Services.ZaiUsageService.claimAlertRole()
+
     Connections {
         target: Services.ZaiUsageService
         ignoreUnknownSignals: true

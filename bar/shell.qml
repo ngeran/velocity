@@ -41,6 +41,13 @@ ShellRoot {
     // in this build (singletons construct on first dereference; a stored
     // reference never dereferences).
     property bool _notificationSvcPin: Services.NotificationService.peekKey !== ""
+    // The bus half of that pin, stated instead of left to construction order:
+    // this copy — and only this copy — may own org.freedesktop.Notifications.
+    // After a hot reload the process still holds the name from the previous
+    // config revision, so the ownership probe alone can no longer tell "ours"
+    // from "taken"; the role is what lets this copy re-attach and keeps the
+    // mirror copies from ever doing so (native-path block in the service).
+    property bool _notificationBusRole: Services.NotificationService.claimNativeBus()
 
     // =========================================================================
     // PLUGIN ENGINE — the host's side of the contract: hand the engine the

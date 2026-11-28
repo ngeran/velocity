@@ -25,7 +25,7 @@ Rectangle {
     property string sourceTag: ""
     // The list sets these; the defaults are one row of the presets column.
     property real cardWidth: 264
-    property real cardHeight: 60
+    property real cardHeight: 72
 
     signal clicked()
     signal editClicked()
@@ -52,7 +52,7 @@ Rectangle {
     readonly property var chips: {
         var c = Config.ThemeConfig.colors
         var list = []
-        if (root.isActive) list.push({ label: "ACTIVE", fg: c.accent, edge: c.accent })
+        if (root.isActive) list.push({ label: "ACTIVE", fg: c.text, edge: c.accent })
         var level = ThemeCore.contrastLabel(root.textContrast)
         list.push({ label: level, fg: level === "LOW" ? c.warning : c.textDim,
                     edge: level === "LOW" ? c.warning : c.outline })
@@ -189,68 +189,22 @@ Rectangle {
         // Actions, and the measured contrast at the right.
         RowLayout {
             Layout.fillWidth: true
-            spacing: 10
+            spacing: 6
 
-            Text {
-                text: "CLONE"
-                font.family: root.fUi
-                font.pixelSize: 7
-                font.bold: true
-                font.letterSpacing: 1
-                color: cloneMA.containsMouse ? Config.ThemeConfig.colors.info
-                                             : Config.ThemeConfig.colors.textDim
-                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
-
-                MouseArea {
-                    id: cloneMA
-
-                    anchors.fill: parent
-                    anchors.margins: -4   // slack around 7px type
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.cloneClicked()
-                }
+            BarButton {
+                label: "CLONE"
+                onActivated: root.cloneClicked()
             }
-
-            Text {
+            BarButton {
                 visible: root.showActions
-                text: "EDIT"
-                font.family: root.fUi
-                font.pixelSize: 7
-                font.bold: true
-                font.letterSpacing: 1
-                color: editMA.containsMouse ? Config.ThemeConfig.colors.primary
-                                            : Config.ThemeConfig.colors.textDim
-                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
-
-                MouseArea {
-                    id: editMA
-
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.editClicked()
-                }
+                label: "EDIT"
+                onActivated: root.editClicked()
             }
-
-            Text {
+            BarButton {
                 visible: root.showActions
-                text: "DEL"
-                font.family: root.fUi
-                font.pixelSize: 7
-                font.bold: true
-                font.letterSpacing: 1
-                color: delMA.containsMouse ? Config.ThemeConfig.colors.error
-                                           : Config.ThemeConfig.colors.textDim
-                Behavior on color { ColorAnimation { duration: Config.MotionConfig.animDurationFast } }
-
-                MouseArea {
-                    id: delMA
-
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.deleteClicked()
-                }
+                label: "DEL"
+                tint: Config.ThemeConfig.colors.error
+                onActivated: root.deleteClicked()
             }
 
             Item { Layout.fillWidth: true }
@@ -258,7 +212,7 @@ Rectangle {
             Text {
                 text: root.textContrast.toFixed(1) + ":1"
                 font.family: root.fMono
-                font.pixelSize: 7
+                font.pixelSize: 8
                 color: Config.ThemeConfig.colors.textDim
             }
         }

@@ -60,3 +60,4 @@ BarSettingsPane 1.0 BarSettingsPane.qml
 NotificationsPane 1.0 NotificationsPane.qml
 KeybindsPane 1.0 KeybindsPane.qml
 AboutPane 1.0 AboutPane.qml
+BarButton 1.0 BarButton.qml
