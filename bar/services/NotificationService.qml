@@ -654,7 +654,8 @@ Item {
         }
         onLimit: function (reason) {
             console.log("[Notifications] bus probe " + reason + " — assuming free")
-            root._settleBus(root.nativeBusRole, "")
+            root._settleBus(root.nativeBusRole,
+                            root.nativeBusRole ? "" : "not this copy's role (state mirror)")
         }
     }
     BoundedProcess {   // stage 2: the name is taken and the role is ours
